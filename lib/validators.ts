@@ -1,5 +1,6 @@
 import { BroadcastAttendanceFilter, EventPrivacyType, EventStatus, RsvpStatus } from "@prisma/client";
 import { z } from "zod";
+import { isReservedEventSlug, isReservedOrganisationSlug } from "@/lib/slug";
 import { isValidTimeZone } from "@/lib/timeZone";
 import { isUploadedImageUrl } from "@/lib/uploadUrl";
 import { BROADCAST_DESIGN_IDS, DEFAULT_BROADCAST_DESIGN } from "@/lib/email/broadcastDesigns";
@@ -110,7 +111,8 @@ export const createOrganisationSchema = z.object({
     .trim()
     .min(2, "Slug must be at least 2 characters")
     .max(64)
-    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens"),
+    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens")
+    .refine((slug) => !isReservedOrganisationSlug(slug), "That URL is reserved"),
   description: z.string().trim().max(2000).optional().default(""),
   logoUrl: z.literal(""),
 });
@@ -337,7 +339,8 @@ export const updateEventSlugSchema = z.object({
     .trim()
     .min(2, "Slug must be at least 2 characters")
     .max(64)
-    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens"),
+    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens")
+    .refine((slug) => !isReservedEventSlug(slug), "That URL is reserved"),
 });
 
 export const cloneEventSchema = z.object({
