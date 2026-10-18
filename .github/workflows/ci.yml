@@ -26,6 +26,8 @@ jobs:
           DATABASE_URL: postgresql://build:build@localhost:5432/swevents
           DIRECT_URL: postgresql://build:build@localhost:5432/swevents
       - run: npm run lint
+      # Route types (RouteContext, typed routes) are generated, not committed.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run test:unit
       - run: npm run build

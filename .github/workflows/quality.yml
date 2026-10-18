@@ -55,6 +55,8 @@ jobs:
       - run: npm run db:deploy
       - run: npm run db:verify
       - run: npm run lint
+      # Route types (RouteContext, typed routes) are generated, not committed.
+      - run: npx next typegen
       - run: npx tsc --noEmit
       - run: npm run test:unit
       - run: npm run test:coverage
