@@ -354,7 +354,7 @@ export function IdCardDesigner({
   );
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Section({ title, children }: { title: string; children: ReactNode }) {
   const id = useId();
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
@@ -364,7 +364,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function SwitchLine({ label, hint, checked, disabled, onCheckedChange }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onCheckedChange: (checked: boolean) => void }) {
+export function SwitchLine({ label, hint, checked, disabled, onCheckedChange }: { label: string; hint?: string; checked: boolean; disabled?: boolean; onCheckedChange: (checked: boolean) => void }) {
   const id = useId();
   return (
     <div className="flex min-h-11 items-center justify-between gap-3">
@@ -377,7 +377,7 @@ function SwitchLine({ label, hint, checked, disabled, onCheckedChange }: { label
   );
 }
 
-function ToggleField({ label, checked, onCheckedChange, children }: { label: string; checked: boolean; onCheckedChange: (checked: boolean) => void; children: ReactNode }) {
+export function ToggleField({ label, checked, onCheckedChange, children }: { label: string; checked: boolean; onCheckedChange: (checked: boolean) => void; children: ReactNode }) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -391,7 +391,7 @@ function ToggleField({ label, checked, onCheckedChange, children }: { label: str
 }
 
 /** A labelled colour choice: a swatch plus its name, so the choice never depends on colour alone. */
-function SwatchGroup<T extends string>({
+export function SwatchGroup<T extends string>({
   label,
   value,
   options,
@@ -433,7 +433,7 @@ function SwatchGroup<T extends string>({
   );
 }
 
-function ColourSection({ settings, branding, update }: { settings: IdCardPrintSettings; branding: BadgeBranding; update: (patch: Partial<IdCardPrintSettings>) => void }) {
+export function ColourSection({ settings, branding, update }: { settings: IdCardPrintSettings; branding: BadgeBranding; update: (patch: Partial<IdCardPrintSettings>) => void }) {
   const eventColour = eventAccentHex(branding.eventAccent);
   const colourOf = (key: string) => (key === "event" ? eventColour : key === "auto" ? null : BRAND[key as keyof typeof BRAND]);
   const palette = resolveBadgePalette(settings, branding.eventAccent);
@@ -505,7 +505,7 @@ function TemplateThumb({ template }: { template: IdCardPrintSettings["template"]
   );
 }
 
-function PaperSection({
+export function PaperSection({
   settings,
   onPaper,
   onCustom,
@@ -614,7 +614,7 @@ function AnswersSection({ settings, fields, update }: { settings: IdCardPrintSet
   );
 }
 
-function Inspector({
+export function Inspector({
   settings,
   branding,
   selected,
@@ -643,9 +643,9 @@ function Inspector({
     symbol: settings.showSymbol,
     photo: settings.showPhoto,
     sponsors: settings.showSponsors && branding.sponsorLogoUrls.length > 0,
-    // Member ID items; event badges don't print them.
-    idNumber: false,
-    validUntil: false,
+    // Member ID items; event badges never turn these on.
+    idNumber: settings.showIdNumber,
+    validUntil: settings.showValidUntil,
   };
   const place = (xMm: number, yMm: number) => update({ elementPositions: { ...settings.elementPositions, [selected]: { xMm: Math.round(xMm * 10) / 10, yMm: Math.round(yMm * 10) / 10 } } });
   const height = elementHeightForMove(settings, selected);
@@ -741,7 +741,7 @@ function Inspector({
   );
 }
 
-function NumberSlider({ label, unit, min, max, step, value, onChange }: { label: string; unit: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void }) {
+export function NumberSlider({ label, unit, min, max, step, value, onChange }: { label: string; unit: string; min: number; max: number; step: number; value: number; onChange: (value: number) => void }) {
   const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
@@ -758,7 +758,7 @@ function NumberSlider({ label, unit, min, max, step, value, onChange }: { label:
 }
 
 /** Measures the space and hands the card the largest scale that fits. */
-function FitArea({ widthMm, heightMm, children }: { widthMm: number; heightMm: number; children: (pxPerMm: number) => ReactNode }) {
+export function FitArea({ widthMm, heightMm, children }: { widthMm: number; heightMm: number; children: (pxPerMm: number) => ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
   useEffect(() => {
