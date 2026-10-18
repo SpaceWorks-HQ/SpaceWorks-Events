@@ -10,7 +10,7 @@ vi.mock("@/lib/rateLimit", () => ({ checkRateLimitById: async () => true, getCli
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 
 import { joinIdProgramme } from "@/app/actions/member-id-join";
-import { commitIdImport, createIdProgramme, deleteIdMember, deleteIdProgramme, emailIdCard, emailIdCards, saveIdProgrammeDesign, setIdMemberStatus, updateIdProgramme, uploadIdProgrammeWatermark } from "@/app/actions/member-ids";
+import { commitIdImport, createIdProgramme, deleteIdMember, deleteIdProgramme, emailIdCard, emailIdCards, saveIdProgrammeDesign, saveIdProgrammeFields, setIdMemberStatus, updateIdProgramme, uploadIdProgrammeWatermark } from "@/app/actions/member-ids";
 import { GET as bulkCards } from "@/app/api/exports/member-ids/[programmeId]/cards/route";
 import { GET as oneCard } from "@/app/api/exports/member-ids/[programmeId]/cards/[memberId]/route";
 import { GET as walletCard } from "@/app/api/exports/account/ids/[memberId]/route";
@@ -124,6 +124,20 @@ describe.sequential("member IDs", { timeout: 90_000 }, () => {
     await prisma.idMember.delete({ where: { id: request.id } });
     expect((await joinIdProgramme(joinForm(slug, { name: "Jo Iner", "field:role": "Volunteer" }))).ok).toBe(false);
     await prisma.idMember.create({ data: { ...request, fieldValues: { role: "Volunteer" } } });
+  });
+
+  it("returns the saved question keys so a second save keeps them", async () => {
+    as(ids.owner);
+    const created = await createIdProgramme({ organisationSlug: slugA, name: "Question keys" });
+    const id = created.ok ? created.data!.id : "";
+    const question = { label: "Joined on", type: "DATE" as const, required: false, options: [], placement: "BACK" as const };
+    const first = await saveIdProgrammeFields({ organisationSlug: slugA, programmeId: id, fields: [question] });
+    expect(first).toEqual({ ok: true, data: { keys: ["joined_on"] } });
+    // The designer sends the returned key back with an edited label.
+    const second = await saveIdProgrammeFields({ organisationSlug: slugA, programmeId: id, fields: [{ ...question, key: "joined_on", label: "Member since" }] });
+    expect(second).toEqual({ ok: true, data: { keys: ["joined_on"] } });
+    expect(await prisma.idProgrammeField.findMany({ where: { programmeId: id }, select: { key: true, label: true } })).toEqual([{ key: "joined_on", label: "Member since" }]);
+    await deleteIdProgramme({ organisationSlug: slugA, programmeId: id });
   });
 
   it("imports members with de-duplication", async () => {

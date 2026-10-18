@@ -181,8 +181,8 @@ const fieldInput = z.object({
 
 const fieldsInput = programmeInput.extend({ fields: z.array(fieldInput).max(MAX_PROGRAMME_FIELDS) }).strict();
 
-/** Replace the form's custom fields. Existing keys are kept so stored answers still match. */
-export async function saveIdProgrammeFields(input: unknown): Promise<ActionResult> {
+/** Replace the form's custom fields. Existing keys are kept so stored answers still match; returns each field's key, in order. */
+export async function saveIdProgrammeFields(input: unknown): Promise<ActionResult<{ keys: string[] }>> {
   const parsed = fieldsInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: `Each question needs a label (up to 60 characters); a form holds up to ${MAX_PROGRAMME_FIELDS}.` };
   const { fields } = parsed.data;
@@ -209,7 +209,7 @@ export async function saveIdProgrammeFields(input: unknown): Promise<ActionResul
   ]);
   await recordAuditEvent({ action: "ID_PROGRAMME_FIELDS_UPDATED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdProgramme", targetId: programme.id, metadata: { count: rows.length } });
   revalidate(access, programme.id);
-  return { ok: true };
+  return { ok: true, data: { keys: rows.map((row) => row.key) } };
 }
 
 const designInput = programmeInput.extend({ design: z.record(z.string(), z.unknown()) }).strict();
