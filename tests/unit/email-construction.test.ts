@@ -43,6 +43,16 @@ describe("email construction", () => {
     expect(`${message.html}${message.text}`).not.toMatch(/yuyu/i);
   });
 
+  it("leaves the hosted lockup out instead of linking localhost when no public address is set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "");
+    await sendRSVPConfirmation({ to: "person@example.test", eventTitle: "Meetup", status: RsvpStatus.WAITLISTED, checkInToken: "tok" });
+    vi.unstubAllEnvs();
+    const message = mocks.sendMail.mock.calls[0]?.[0];
+    expect(message.html).not.toContain("<img");
+    expect(message.html).not.toContain("localhost");
+    expect(message.html).toContain(">Space Works</span>");
+  });
+
   it("HTML-escapes capability URLs in links and visible content", async () => {
     await sendCollaboratorInvitation({
       to: "person@example.test",
