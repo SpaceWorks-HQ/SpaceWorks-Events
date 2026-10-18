@@ -267,7 +267,7 @@ export default async function TicketPage({ params }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <Button asChild variant="primary" size="lg" fullWidth>
               <a href={googleCalendarEventUrl(calendarEvent)} target="_blank" rel="noreferrer" aria-label={`Add ${title} to Google Calendar`}>
-                <CalendarPlus aria-hidden className="size-[18px]" />
+                <CalendarPlus aria-hidden className="size-[18px] shrink-0" />
                 Add to calendar
               </a>
             </Button>

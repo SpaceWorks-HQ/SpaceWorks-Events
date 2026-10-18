@@ -5,7 +5,7 @@ export function TicketDownloadButton(props: { downloadUrl: string }) {
   return (
     <Button asChild variant="secondary" size="lg" fullWidth>
       <a href={props.downloadUrl} download>
-        <Download aria-hidden className="size-[18px]" />
+        <Download aria-hidden className="size-[18px] shrink-0" />
         Save ticket
       </a>
     </Button>
