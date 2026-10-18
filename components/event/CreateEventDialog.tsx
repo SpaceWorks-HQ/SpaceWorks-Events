@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
 import { Plus, X } from "lucide-react";
 import { createEvent } from "@/app/actions/event";
+import { zonedInputToIso } from "@/lib/timeZone";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { SwitchRow } from "@/components/ui/choice";
@@ -85,18 +86,22 @@ export function CreateEventDialog(props: {
     e.preventDefault();
     if (activeStep !== 2) return;
     setError(null);
-    if (!start || start < new Date()) {
-      setError("Start time must be now or in the future.");
-      setActiveStep(1);
-      return;
-    }
-    if (!end || end <= start) {
-      setError("End time must be after start time.");
-      setActiveStep(1);
-      return;
-    }
     const form = e.currentTarget;
     const fd = new FormData(form);
+    // The picked wall-clock times belong to the chosen event timezone, not the browser's or the server's.
+    const timezone = String(fd.get("timezone") ?? "Asia/Kolkata");
+    const startDateTime = start ? zonedInputToIso(toDatetimeLocalValue(start), timezone) : null;
+    const endDateTime = end ? zonedInputToIso(toDatetimeLocalValue(end), timezone) : null;
+    if (!startDateTime || new Date(startDateTime) < new Date()) {
+      setError(startDateTime ? "Start time must be now or in the future." : "Choose a valid start time in the event timezone.");
+      setActiveStep(1);
+      return;
+    }
+    if (!endDateTime || new Date(endDateTime) <= new Date(startDateTime)) {
+      setError(endDateTime ? "End time must be after start time." : "Choose a valid end time in the event timezone.");
+      setActiveStep(1);
+      return;
+    }
     startTransition(async () => {
       const res = await createEvent({
         organisationSlug,
@@ -104,9 +109,9 @@ export function CreateEventDialog(props: {
         aboutHtml: String(fd.get("aboutHtml") ?? ""),
         tags: String(fd.get("tags") ?? ""),
         coverImageUrl: "",
-        startDateTime: String(fd.get("startDateTime") ?? ""),
-        endDateTime: String(fd.get("endDateTime") ?? ""),
-        timezone: String(fd.get("timezone") ?? "Asia/Kolkata"),
+        startDateTime,
+        endDateTime,
+        timezone,
         location: String(fd.get("location") ?? ""),
         mapLinkUrl: String(fd.get("mapLinkUrl") ?? ""),
         isOnline: isOnline,
@@ -263,8 +268,6 @@ export function CreateEventDialog(props: {
                     onChange={(e) => setEnd(fromDatetimeLocalValue(e.target.value))}
                   />
                 </Field>
-                <input type="hidden" name="startDateTime" value={start ? toDatetimeLocalValue(start) : ""} />
-                <input type="hidden" name="endDateTime" value={end ? toDatetimeLocalValue(end) : ""} />
                 <Field label="Timezone" required>
                   <Dropdown name="timezone" defaultValue="Asia/Kolkata">
                     {timezones.map((tz) => (
@@ -348,7 +351,9 @@ export function CreateEventDialog(props: {
                           setError("Please select both start and end times.");
                           return;
                         }
-                        if (start < new Date()) {
+                        const timezoneInput = formRef.current?.elements.namedItem("timezone") as HTMLSelectElement | null;
+                        const startInstant = zonedInputToIso(toDatetimeLocalValue(start), timezoneInput?.value || "Asia/Kolkata");
+                        if (!startInstant || new Date(startInstant) < new Date()) {
                           setError("Start time must be now or in the future.");
                           return;
                         }
