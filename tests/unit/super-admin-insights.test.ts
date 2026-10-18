@@ -98,5 +98,8 @@ describe("super-admin insight helpers", () => {
     expect(new Set(SECURITY_AUDIT_ACTIONS).size).toBe(SECURITY_AUDIT_ACTIONS.length);
     expect(SECURITY_AUDIT_ACTIONS).toContain("MFA_DISABLED");
     expect(SECURITY_AUDIT_ACTIONS).toContain("ATTENDEE_LIST_EXPORTED");
+    // Bulk badge sheets and member ID card exports carry personal data too.
+    expect(SECURITY_AUDIT_ACTIONS).toContain("BADGES_EXPORTED");
+    expect(SECURITY_AUDIT_ACTIONS).toContain("ID_CARDS_EXPORTED");
   });
 });
