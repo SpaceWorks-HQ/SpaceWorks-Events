@@ -1,38 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Description as DialogDescription } from "@radix-ui/react-dialog";
+import { getBadgeAttendeePhoto } from "@/app/actions/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import type { BadgeBranding } from "@/lib/badge/types";
 import { IdCardDesigner } from "./id-card/IdCardDesigner";
 import { QuickPrintSheet } from "./id-card/QuickPrintSheet";
-import type { IdCardAttendee, RegistrationField } from "./id-card/shared";
+import { type BadgeDesignSource, type IdCardAttendee, type RegistrationField, useIdCardSettings } from "./id-card/shared";
 
 /**
  * Badge printing at the check-in desk. With an attendee it opens the quick
  * print sheet (their badge plus one Print button); without one, or after
- * "Edit design", it opens the full designer.
+ * "Edit design", it opens the full designer (dashboard desks only).
  */
 export function IdCardPrintDialog(props: {
   open: boolean;
   onClose: () => void;
-  eventId: string;
-  eventTitle: string;
-  organisationName: string;
-  organisationLogoUrl: string | null;
+  source: BadgeDesignSource;
+  branding: BadgeBranding;
   attendee: IdCardAttendee | null;
   registrationFields: RegistrationField[];
 }) {
-  const { open, onClose, attendee } = props;
+  const { open, onClose, attendee, source } = props;
+  const { settings } = useIdCardSettings(source);
   const [designing, setDesigning] = useState(false);
   // Reset to the quick sheet whenever the dialog opens for someone new.
   // (The check-in page passes a fresh object each render, so compare the ticket.)
   const attendeeKey = attendee?.checkInQrToken ?? null;
   const [openedFor, setOpenedFor] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<{ key: string; url: string | null } | null>(null);
   if (open && attendeeKey !== openedFor) {
     setOpenedFor(attendeeKey);
     setDesigning(false);
   }
-  const showDesigner = !attendee || designing;
+
+  // Dashboard check-in results don't carry the photo; look it up only when the design shows one.
+  const rsvpId = attendee?.rsvpId;
+  const needsPhoto = open && settings.showPhoto && source.canSave && Boolean(rsvpId) && attendee?.photoUrl === undefined;
+  useEffect(() => {
+    if (!needsPhoto || !rsvpId || !attendeeKey) return;
+    let cancelled = false;
+    void getBadgeAttendeePhoto({ organisationSlug: source.organisationSlug, eventId: source.eventId, rsvpId })
+      .then((result) => {
+        if (!cancelled) setPhoto({ key: attendeeKey, url: result.ok ? result.data?.photoUrl ?? null : null });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [attendeeKey, needsPhoto, rsvpId, source.eventId, source.organisationSlug]);
+
+  const person = attendee && photo?.key === attendeeKey && attendee.photoUrl === undefined ? { ...attendee, photoUrl: photo.url } : attendee;
+  const showDesigner = source.canSave && (!person || designing);
   const close = () => {
     setDesigning(false);
     onClose();
@@ -51,22 +71,18 @@ export function IdCardPrintDialog(props: {
         </DialogDescription>
         {showDesigner ? (
           <IdCardDesigner
-            eventId={props.eventId}
-            eventTitle={props.eventTitle}
-            organisationName={props.organisationName}
-            organisationLogoUrl={props.organisationLogoUrl}
-            attendee={attendee}
+            source={source}
+            branding={props.branding}
+            attendee={person}
             registrationFields={props.registrationFields}
-            onClose={attendee ? () => setDesigning(false) : close}
+            onClose={person ? () => setDesigning(false) : close}
           />
-        ) : attendee ? (
+        ) : person ? (
           <QuickPrintSheet
-            eventId={props.eventId}
-            eventTitle={props.eventTitle}
-            organisationName={props.organisationName}
-            organisationLogoUrl={props.organisationLogoUrl}
-            attendee={attendee}
-            onEditDesign={() => setDesigning(true)}
+            source={source}
+            branding={props.branding}
+            attendee={person}
+            onEditDesign={source.canSave ? () => setDesigning(true) : null}
             onClose={close}
           />
         ) : null}

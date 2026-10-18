@@ -134,6 +134,7 @@ model User {
   eventCollaborations EventCollaborator[]
   eventCollaboratorInvitesUsed EventCollaboratorInvite[] @relation("EventCollaboratorInviteUsedBy")
   eventBroadcasts   EventBroadcast[]
+  badgeDesignsUpdated EventBadgeDesign[]
 }
 
 model Account {
@@ -321,6 +322,7 @@ model Event {
   faqs             EventFaq[]
   resources        EventResource[]
   broadcasts       EventBroadcast[]
+  badgeDesign      EventBadgeDesign?
 
   @@unique([organisationId, slug])
   @@index([organisationId])
@@ -449,6 +451,23 @@ model EventScheduleItem {
   series EventSeries @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
 
   @@index([eventSeriesId, sortOrder])
+}
+
+/// The ID card (badge) design for one event, shared by every check-in desk.
+/// `settings` is always normalised by `normalizeIdCardPrintSettings` before
+/// it is written and again when it is read.
+model EventBadgeDesign {
+  id          String   @id @default(cuid())
+  eventId     String   @unique
+  settings    Json
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event     Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([updatedById])
 }
 
 model EventPage {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { RsvpStatus } from "@prisma/client";
 import { useRouter } from "next/navigation";
-import { Check, CloudCheck, CloudOff, Download, Info, Printer, RefreshCw, Search, X } from "lucide-react";
+import { Check, CloudCheck, CloudOff, Info } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { Switch } from "@/components/ui/choice";
 import { Callout, Chip, ProgressBar, type ChipTone } from "@/components/ui/display";
@@ -12,7 +12,6 @@ import { Input, Textarea } from "@/components/ui/field";
 import { Tooltip } from "@/components/ui/menu";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn } from "@/lib/cn";
-import { DotFace } from "@/components/brand/DotFace";
 import {
   checkInByRsvpId,
   downloadOfflineCheckInRoster,
@@ -39,6 +38,8 @@ import {
 import { useToast } from "@/components/feedback/ToastProvider";
 import { CheckInQrScanner } from "@/components/checkin/CheckInQrScanner";
 import { IdCardPrintDialog } from "@/components/checkin/IdCardPrintDialog";
+import type { BadgeDesignSource, BadgeDesignSeed } from "@/components/checkin/id-card/shared";
+import type { BadgeBranding } from "@/lib/badge/types";
 import { shouldRefreshCheckIn } from "@/lib/checkInRefresh";
 import { buildCsv } from "@/lib/csv";
 import { InstallCheckInAppButton } from "@/components/checkin/InstallCheckInAppButton";
@@ -120,7 +121,6 @@ function playSuccessFeedback() {
 export function EventCheckInClient(props: {
   organisationSlug: string;
   organisationName: string;
-  organisationLogoUrl: string | null;
   eventId: string;
   eventTitle: string;
   /** A PIN-authorised public station. It is deliberately online-only. */
@@ -129,8 +129,18 @@ export function EventCheckInClient(props: {
   registrationFields: Array<{ key: string; label: string }>;
   stats: { confirmed: number; checkedIn: number };
   recent: CheckInRecentRow[];
+  /** The event's saved badge design and artwork. Dashboard desks may edit it; stations only print it. */
+  badge: { design: BadgeDesignSeed | null; branding: BadgeBranding; canSave: boolean };
 }) {
-  const { organisationSlug, organisationName, organisationLogoUrl, eventId, eventTitle, registrationFields, stats, recent, stationMode = false, eventSlug } = props;
+  const { organisationSlug, organisationName, eventId, eventTitle, registrationFields, stats, recent, stationMode = false, eventSlug, badge } = props;
+  const badgeSource = useMemo<BadgeDesignSource>(() => ({
+    eventId,
+    organisationSlug,
+    eventTitle,
+    organisationName,
+    design: badge.design,
+    canSave: badge.canSave && !stationMode,
+  }), [badge.canSave, badge.design, eventId, eventTitle, organisationName, organisationSlug, stationMode]);
   const router = useRouter();
   const { showToast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -614,7 +624,7 @@ export function EventCheckInClient(props: {
           {stationMode ? (
             <>
               <p className="text-sm font-semibold text-ink-muted">Venue check-in</p>
-              <h1 className="break-words font-display text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{eventTitle}</h1>
+              <h1 className="break-words font-display text-[26px] font-semibold leading-tight tracking-[-0.01em] text-ink">{eventTitle}</h1>
             </>
           ) : (
             <h2 className="text-h4 text-ink">Check-in desk</h2>
@@ -623,7 +633,7 @@ export function EventCheckInClient(props: {
         <div className="flex items-center gap-4">
           <div className="min-w-[132px]">
             <p className="font-display text-ink">
-              <span className="text-[28px] font-extrabold">{stats.checkedIn}</span>
+              <span className="text-[28px] font-semibold tabular-nums">{stats.checkedIn}</span>
               <span className="text-base font-semibold text-ink-muted"> / {stats.confirmed} confirmed</span>
             </p>
             <p className="text-caption text-ink-muted">{stats.confirmed > 0 ? `${rate}% checked in` : "No confirmed RSVPs yet"}</p>
@@ -648,7 +658,7 @@ export function EventCheckInClient(props: {
           </div>
           <div className="flex flex-wrap gap-2">
             <InstallCheckInAppButton />
-            <Button size="sm" variant="secondary" startIcon={<Download />} onClick={downloadOfflineRoster} disabled={pending || !isOnline}>
+            <Button size="sm" variant="secondary" onClick={downloadOfflineRoster} disabled={pending || !isOnline}>
               {offlineRoster ? "Refresh roster" : "Make available offline"}
             </Button>
             {offlineRoster ? (
@@ -657,7 +667,7 @@ export function EventCheckInClient(props: {
               </Button>
             ) : null}
             {queuedCount > 0 ? (
-              <Button size="sm" variant="primary" startIcon={<RefreshCw />} onClick={syncOfflineQueue} disabled={pending || !isOnline}>
+              <Button size="sm" variant="primary" onClick={syncOfflineQueue} disabled={pending || !isOnline}>
                 Sync {queuedCount}
               </Button>
             ) : null}
@@ -678,7 +688,7 @@ export function EventCheckInClient(props: {
             <Switch id="check-in-id-cards" checked={idCardPrintingEnabled} onCheckedChange={(enabled) => { setIdCardPrintingEnabled(enabled); if (!enabled) setIdCardOpen(false); }} aria-describedby="check-in-id-cards-help" />
             <label htmlFor="check-in-id-cards" className="text-label text-ink">ID card printing</label>
           </div>
-          {idCardPrintingEnabled ? <Button size="sm" variant="secondary" startIcon={<Printer />} onClick={() => { setIdCardAttendee(null); setIdCardOpen(true); }}>Set up cards</Button> : null}
+          {idCardPrintingEnabled && badgeSource.canSave ? <Button size="sm" variant="secondary" onClick={() => { setIdCardAttendee(null); setIdCardOpen(true); }}>Design badge</Button> : null}
         </div>
         <p id="check-in-id-cards-help" className="sr-only">Off by default. Enable it when this desk should offer cards after check-in.</p>
       </div>
@@ -712,20 +722,20 @@ export function EventCheckInClient(props: {
           {lastResult ? (
             <section
               role="status"
-              className={cn("flex flex-col gap-3 rounded-xl p-6", lastResult.kind === "already" ? "bg-emphasis text-ink" : "bg-success-solid text-white")}
+              className={cn("flex flex-col gap-3 rounded-xl p-6", lastResult.kind === "already" ? "bg-emphasis text-ink" : "bg-success-bg text-success-fg")}
             >
               {lastResult.kind === "already" ? (
                 <span aria-hidden className="flex size-14 items-center justify-center rounded-full bg-canvas">
                   <Info className="size-6" />
                 </span>
               ) : (
-                <span className="self-start rounded-[20px] bg-white p-3">
-                  <DotFace mood="wink" size={72} colors={{ O: "#18181B" }} />
+                <span className="flex size-14 items-center justify-center rounded-full bg-canvas text-ink">
+                  <Check aria-hidden className="size-7" />
                 </span>
               )}
               <div>
                 <p className="text-[15px] font-semibold">{lastResult.kind === "already" ? "Already checked in" : "Checked in"}</p>
-                <p className="break-words font-display text-[34px] font-extrabold leading-none tracking-[-0.03em]">{lastResult.displayName}</p>
+                <p className="break-words font-display text-[34px] font-semibold leading-none tracking-[-0.02em]">{lastResult.displayName}</p>
                 <p className="mt-2 text-sm opacity-90">
                   {lastResult.email ?? ""}
                   {lastResult.email && lastResult.checkedInAt ? " · " : ""}
@@ -734,11 +744,11 @@ export function EventCheckInClient(props: {
                 <CheckInDetailsList details={lastResult.checkInDetails} />
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" variant={lastResult.kind === "already" ? "secondary" : "inverse"} startIcon={<X />} onClick={() => setLastResult(null)}>
+                <Button size="sm" variant="secondary" onClick={() => setLastResult(null)}>
                   Next guest
                 </Button>
                 {idCardPrintingEnabled ? (
-                  <Button size="sm" variant="secondary" startIcon={<Printer />} onClick={() => showIdCard(lastResult)}>
+                  <Button size="sm" variant="primary" onClick={() => showIdCard(lastResult)}>
                     Print ID card
                   </Button>
                 ) : null}
@@ -762,7 +772,7 @@ export function EventCheckInClient(props: {
                   }
                 }}
               />
-              <Button variant="primary" startIcon={<Search />} onClick={runLookup} disabled={pending}>
+              <Button variant="primary" onClick={runLookup} disabled={pending}>
                 Search
               </Button>
             </div>
@@ -808,7 +818,7 @@ export function EventCheckInClient(props: {
           <DialogBody className="flex flex-col gap-2">
             {scanPreview ? (
               <>
-                <p className="font-display text-[24px] font-extrabold leading-tight text-ink">{scanPreview.displayName}</p>
+                <p className="font-display text-[24px] font-semibold leading-tight text-ink">{scanPreview.displayName}</p>
                 <p className="text-sm text-ink-muted">{scanPreview.email ?? "—"}</p>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   <StatusChip status={scanPreview.status} />
@@ -841,16 +851,17 @@ export function EventCheckInClient(props: {
         key={eventId}
         open={idCardOpen}
         onClose={() => setIdCardOpen(false)}
-        eventId={eventId}
-        eventTitle={eventTitle}
-        organisationName={organisationName}
-        organisationLogoUrl={organisationLogoUrl}
+        source={badgeSource}
+        branding={badge.branding}
         attendee={idCardAttendee ? {
+          rsvpId: idCardAttendee.rsvpId,
           displayName: idCardAttendee.displayName,
           email: idCardAttendee.email,
           checkInQrToken: idCardAttendee.checkInQrToken,
           checkInDetails: idCardAttendee.checkInDetails,
           registrationDetails: idCardAttendee.registrationDetails,
+          // Station responses carry the managed photo URL; dashboard desks look it up when needed.
+          photoUrl: (idCardAttendee as { photoUrl?: string | null }).photoUrl,
         } : null}
         registrationFields={registrationFields}
       />
@@ -885,7 +896,7 @@ export function EventCheckInClient(props: {
             <h2 id="recent-title" className="text-h4 text-ink">Recent check-ins</h2>
             {!stationMode ? <p className="text-caption text-ink-muted">Export includes the list on this page (up to 200). This page refreshes automatically while it is open.</p> : null}
           </div>
-          <Button size="sm" variant="secondary" startIcon={<Download />} onClick={downloadCsv} disabled={recent.length === 0}>
+          <Button size="sm" variant="secondary" onClick={downloadCsv} disabled={recent.length === 0}>
             Export CSV (shown below)
           </Button>
         </div>

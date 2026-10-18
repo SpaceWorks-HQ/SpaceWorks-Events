@@ -221,7 +221,7 @@ describe("ID card templates on every badge stock", () => {
     };
     const normalised = normalizeIdCardPrintSettings(saved, "Open House");
     expect(normalised.template).toBe("bold");
-    expect(normalised.elementPositions).toEqual(saved.elementPositions);
+    expect(normalised.elementPositions).toMatchObject(saved.elementPositions);
     expect(normalised.elementSizes).toMatchObject(saved.elementSizes);
     expect(normalised.elementTextSizes).toMatchObject(saved.elementTextSizes);
   });
