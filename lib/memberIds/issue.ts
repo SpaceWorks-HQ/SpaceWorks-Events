@@ -6,35 +6,41 @@ import { computeExpiry, formatIdNumber } from "./core";
 /*
  * Issuing cards. Approval gives a member an ID number (once; it is kept if
  * the card is later revoked and reinstated), an issue date and an expiry from
- * the programme's rule. Sequence numbers come from an atomic increment on the
- * programme row inside the caller's transaction, so concurrent approvals never
- * share a number; the unique (programme, idNumber) index is the final guard.
+ * the programme's rule. The programme row is locked first, so concurrent
+ * approvals run one after the other: the second sees the members the first
+ * already approved and leaves them (and their numbers) alone. Sequence numbers
+ * come from an increment on that row; the unique (programme, idNumber) index
+ * is the final guard. The work is set-based (a fixed number of statements
+ * however many members), so large imports fit in one transaction.
  */
 
 type Programme = { id: string; idPrefix: string; validUntil: Date | null; validityDays: number | null };
 
+/** Approve the pending or rejected members among `memberIds`; returns how many changed. Numbers follow join order, then `memberIds` order. */
 export async function approveMembers(tx: Prisma.TransactionClient, programme: Programme, memberIds: string[], now = new Date()) {
   if (memberIds.length === 0) return 0;
-  const members = await tx.idMember.findMany({
+  await tx.$queryRaw`SELECT "id" FROM "IdProgramme" WHERE "id" = ${programme.id} FOR UPDATE`;
+  const position = new Map(memberIds.map((id, index) => [id, index]));
+  const members = (await tx.idMember.findMany({
     where: { id: { in: memberIds }, programmeId: programme.id, status: { in: ["PENDING", "REJECTED"] } },
-    orderBy: { createdAt: "asc" },
-    select: { id: true, idNumber: true },
-  });
+    select: { id: true, idNumber: true, createdAt: true },
+  })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || position.get(a.id)! - position.get(b.id)!);
   if (members.length === 0) return 0;
-  const needNumbers = members.filter((member) => !member.idNumber).length;
-  let sequence = 0;
-  if (needNumbers > 0) {
-    const updated = await tx.idProgramme.update({ where: { id: programme.id }, data: { nextSequence: { increment: needNumbers } }, select: { nextSequence: true } });
-    sequence = updated.nextSequence - needNumbers;
+
+  const unnumbered = members.filter((member) => !member.idNumber);
+  if (unnumbered.length > 0) {
+    const updated = await tx.idProgramme.update({ where: { id: programme.id }, data: { nextSequence: { increment: unnumbered.length } }, select: { nextSequence: true } });
+    const first = updated.nextSequence - unnumbered.length;
+    const year = now.getUTCFullYear();
+    const numbers = unnumbered.map((_, index) => formatIdNumber(programme.idPrefix, year, first + index));
+    await tx.$executeRaw`
+      UPDATE "IdMember" AS m SET "idNumber" = v."idNumber"
+      FROM unnest(${unnumbered.map((member) => member.id)}::text[], ${numbers}::text[]) AS v("id", "idNumber")
+      WHERE m."id" = v."id" AND m."idNumber" IS NULL`;
   }
-  const year = now.getUTCFullYear();
-  const expiresAt = computeExpiry(programme, now);
-  for (const member of members) {
-    const idNumber = member.idNumber ?? formatIdNumber(programme.idPrefix, year, sequence++);
-    await tx.idMember.update({
-      where: { id: member.id },
-      data: { status: "APPROVED", idNumber, issuedAt: now, expiresAt, revokedAt: null, statusReason: null },
-    });
-  }
-  return members.length;
+  const { count } = await tx.idMember.updateMany({
+    where: { id: { in: members.map((member) => member.id) }, status: { in: ["PENDING", "REJECTED"] } },
+    data: { status: "APPROVED", issuedAt: now, expiresAt: computeExpiry(programme, now), revokedAt: null, statusReason: null },
+  });
+  return count;
 }

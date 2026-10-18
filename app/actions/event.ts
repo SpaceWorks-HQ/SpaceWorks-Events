@@ -10,7 +10,7 @@ import {
   getMembership,
   isUserEmailVerified,
 } from "@/lib/permissions";
-import { slugifyTitle, withSlugSuffix } from "@/lib/slug";
+import { isReservedEventSlug, slugifyTitle, withSlugSuffix } from "@/lib/slug";
 import {
   createEventSchema,
   cloneEventSchema,
@@ -172,6 +172,7 @@ export async function createEvent(
   let slug = baseSlug;
   let attempt = 0;
   while (
+    isReservedEventSlug(slug) ||
     await prisma.event.findUnique({
       where: {
         organisationId_slug: { organisationId: org.id, slug },
@@ -546,6 +547,7 @@ export async function cloneEvent(
   let slug = baseSlug;
   let attempt = 0;
   while (
+    isReservedEventSlug(slug) ||
     await prisma.event.findUnique({
       where: { organisationId_slug: { organisationId: org.id, slug } },
       select: { id: true },

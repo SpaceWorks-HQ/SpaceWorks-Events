@@ -12,7 +12,7 @@ import { buildBadgeScene, type BadgeTextOp } from "@/lib/badge/layout";
 import { renderBadgeSvg } from "@/lib/badge/renderPng";
 import type { BadgeBranding, IdCardAttendee } from "@/lib/badge/types";
 import { normalizeIdCardPrintSettings, watermarkSizePt } from "@/lib/idCardPrint";
-import { cardState, computeExpiry, deriveIdPrefix, formatIdNumber, memberDetails, parseDateInput, validateFieldValues, type ProgrammeFieldDef } from "@/lib/memberIds/core";
+import { cardState, computeExpiry, deriveIdPrefix, emailQueuedNotice, formatIdNumber, MEMBER_ID_EMAIL_DAILY_CAP, MEMBER_ID_EMAIL_NEW_ORG_DAILY_CAP, memberDetails, memberIdEmailDailyCap, parseDateInput, validateFieldValues, type ProgrammeFieldDef } from "@/lib/memberIds/core";
 import { applyMemberIdPreset, defaultMemberIdDesign, MEMBER_ID_PRESETS, normalizeMemberIdDesign, sideSettings } from "@/lib/memberIds/design";
 import { autoMap, googleSheetCsvUrl, parseCsv, planImport, toImportTable } from "@/lib/memberIds/importRows";
 import { memberCardScenes, renderMemberCard, renderMemberCardsZip } from "@/lib/memberIds/render";
@@ -155,6 +155,21 @@ describe("public verify view", () => {
     expect(verificationView({ ...base, status: "PENDING", expiresAt: null }, now)).toEqual({ state: "not-found" });
     expect(verificationView({ ...base, status: "REJECTED", expiresAt: null }, now)).toEqual({ state: "not-found" });
     expect(verificationView(null, now)).toEqual({ state: "not-found" });
+  });
+});
+
+describe("card email throttling", () => {
+  const now = new Date("2026-06-02T12:00:00Z");
+
+  it("gives organisations younger than a week a lower cap", () => {
+    expect(memberIdEmailDailyCap(new Date("2026-05-30T12:00:00Z"), now)).toBe(MEMBER_ID_EMAIL_NEW_ORG_DAILY_CAP);
+    expect(memberIdEmailDailyCap(new Date("2026-05-01T00:00:00Z"), now)).toBe(MEMBER_ID_EMAIL_DAILY_CAP);
+    expect(MEMBER_ID_EMAIL_NEW_ORG_DAILY_CAP).toBeLessThan(MEMBER_ID_EMAIL_DAILY_CAP);
+  });
+
+  it("tells the organiser what was skipped", () => {
+    expect(emailQueuedNotice({ count: 1, skippedRecent: 0, skippedLimit: 0 })).toBe("1 email queued. They go out within a minute or two.");
+    expect(emailQueuedNotice({ count: 3, skippedRecent: 2, skippedLimit: 1 })).toBe("3 emails queued. They go out within a minute or two. 2 cards skipped: already emailed. 1 card held back by today's sending limit; send again tomorrow.");
   });
 });
 

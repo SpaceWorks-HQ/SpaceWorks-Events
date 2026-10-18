@@ -46,8 +46,9 @@ function symbolForm(context: Context, variant: BadgeSymbolVariant) {
   return entry;
 }
 
-async function embedImage(context: Context, prepared: PreparedImage | null, cacheKey: string) {
+async function embedImage(context: Context, prepared: PreparedImage | null, cacheKey: string | null) {
   if (!prepared) return null;
+  if (cacheKey === null) return prepared.format === "png" ? context.pdf.embedPng(prepared.data) : context.pdf.embedJpg(prepared.data);
   let entry = context.images.get(cacheKey);
   if (!entry) {
     entry = prepared.format === "png" ? context.pdf.embedPng(prepared.data) : context.pdf.embedJpg(prepared.data);
@@ -96,8 +97,8 @@ async function drawScene(context: Context, page: PDFPage, scene: BadgeScene, ori
       if (tracking) page.pushOperators(setCharacterSpacing(0));
     } else if (op.kind === "image") {
       const box = { wMm: op.w, hMm: op.h, fit: op.fit, shape: op.shape, grayscale: op.grayscale, background: scene.background };
-      const prepared = await context.prepare(op.url, box);
-      const image = await embedImage(context, prepared, JSON.stringify([op.url, box]));
+      const prepared = await context.prepare(op.url, box, !op.photo);
+      const image = await embedImage(context, prepared, op.photo ? null : JSON.stringify([op.url, box]));
       if (!image || !prepared) continue;
       const at = op.fit === "cover" ? { x: op.x, y: op.y, w: op.w, h: op.h } : containBox(op, prepared.widthPx, prepared.heightPx);
       page.drawImage(image, { x: x(at.x), y: y(at.y + at.h), width: mmToPt(at.w), height: mmToPt(at.h), ...(op.opacity !== undefined ? { opacity: op.opacity } : {}) });

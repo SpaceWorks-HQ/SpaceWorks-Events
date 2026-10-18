@@ -132,3 +132,27 @@ export function memberDetails(fields: Array<Pick<ProgrammeFieldDef, "key" | "lab
     return [{ key: field.key, label: field.label, value: shown }];
   });
 }
+
+// --- Card emails -------------------------------------------------------------
+
+const DAY_MS = 86_400_000;
+/** A member gets at most one card email in this window. */
+export const MEMBER_ID_EMAIL_COOLDOWN_MS = DAY_MS;
+/** Card emails an organisation may queue in any 24 hours; organisations younger than a week get the lower cap. */
+export const MEMBER_ID_EMAIL_DAILY_CAP = 200;
+export const MEMBER_ID_EMAIL_NEW_ORG_DAILY_CAP = 50;
+const NEW_ORG_MS = 7 * DAY_MS;
+
+export function memberIdEmailDailyCap(organisationCreatedAt: Date, now: Date) {
+  return now.getTime() - organisationCreatedAt.getTime() < NEW_ORG_MS ? MEMBER_ID_EMAIL_NEW_ORG_DAILY_CAP : MEMBER_ID_EMAIL_DAILY_CAP;
+}
+
+/** The organiser's notice after queueing card emails, with what was skipped and why. */
+export function emailQueuedNotice(result: { count: number; skippedRecent: number; skippedLimit: number }) {
+  const plural = (n: number, word: string) => `${n} ${n === 1 ? word : `${word}s`}`;
+  return [
+    `${plural(result.count, "email")} queued. They go out within a minute or two.`,
+    result.skippedRecent ? `${plural(result.skippedRecent, "card")} skipped: already emailed.` : "",
+    result.skippedLimit ? `${plural(result.skippedLimit, "card")} held back by today's sending limit; send again tomorrow.` : "",
+  ].filter(Boolean).join(" ");
+}

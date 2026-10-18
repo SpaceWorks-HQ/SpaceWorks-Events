@@ -20,6 +20,8 @@ export type PreparedImage = { format: "png" | "jpeg"; data: Buffer; widthPx: num
 
 const RASTER_DPI = 300;
 const MAX_IMAGE_PX = 1200;
+/** Photos (the only cropped, "cover" images) never rasterise larger than this, so bulk renders stay small. */
+export const MAX_PHOTO_PX = 600;
 
 const pxFor = (mm: number) => Math.min(MAX_IMAGE_PX, Math.max(8, Math.ceil((mm / MM_PER_INCH) * RASTER_DPI)));
 
@@ -46,7 +48,7 @@ export async function prepareBadgeImage(
     let image = sharp(Buffer.from(file.body), { failOn: "error", limitInputPixels: 40_000_000 }).rotate();
     if (box.grayscale) image = image.grayscale();
     if (box.fit === "cover") {
-      const side = pxFor(Math.max(box.wMm, box.hMm));
+      const side = Math.min(MAX_PHOTO_PX, pxFor(Math.max(box.wMm, box.hMm)));
       let squared = await image.resize(side, side, { fit: "cover" }).ensureAlpha().png().toBuffer();
       if (box.shape !== "none") {
         squared = await sharp(squared).composite([{ input: roundedMask(side, box.shape), blend: "dest-in" }]).png().toBuffer();
@@ -65,10 +67,15 @@ export async function prepareBadgeImage(
   }
 }
 
-/** A cache so shared artwork (logos, sponsors) is read and encoded once per render. */
+/**
+ * A cache so shared artwork (logos, sponsors, watermark) is read and encoded
+ * once per render. Per-person photos (`shared: false`) bypass it, so a bulk
+ * render never holds every attendee's photo in memory.
+ */
 export function imageCache() {
   const entries = new Map<string, Promise<PreparedImage | null>>();
-  return (url: string, box: Parameters<typeof prepareBadgeImage>[1]) => {
+  return (url: string, box: Parameters<typeof prepareBadgeImage>[1], shared = true) => {
+    if (!shared) return prepareBadgeImage(url, box);
     const cacheKey = JSON.stringify([url, box]);
     let entry = entries.get(cacheKey);
     if (!entry) {

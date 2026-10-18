@@ -3,18 +3,13 @@ import { badgeAttendees, badgeBrandingFor, badgeDesignFor, countBadgeAttendees }
 import { isBadgeStatusFilter } from "@/lib/badge/filters";
 import { authorizeBadgeDownload, badgeRateLimited, download, jsonError, notFound, slugForFile } from "@/lib/badge/http";
 import { renderBadgeBatch } from "@/lib/badge/render";
+import { tryAcquireRenderSlot } from "@/lib/badge/renderSlot";
 import { BULK_BADGE_LIMIT } from "@/lib/badge/sheet";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ eventId: string }> };
-
-/**
- * One rendering at a time per server process: a full event's badges take
- * real memory, and small instances (512 MB) must not run several at once.
- */
-let bulkInProgress = false;
 
 /** All matching attendees' badges as one print-ready PDF (card pages or A4 sheets with crop marks). */
 export async function GET(request: Request, context: RouteContext) {
@@ -34,9 +29,9 @@ export async function GET(request: Request, context: RouteContext) {
   if (count > BULK_BADGE_LIMIT) {
     return jsonError(413, `This filter matches ${count} attendees. One download holds up to ${BULK_BADGE_LIMIT}; choose a narrower filter.`);
   }
-  if (bulkInProgress) return jsonError(429, "Another badge download is being prepared. Try again in a minute.");
+  const release = tryAcquireRenderSlot();
+  if (!release) return jsonError(429, "Another badge download is being prepared. Try again in a minute.");
 
-  bulkInProgress = true;
   try {
     const { event } = access;
     const pdf = await renderBadgeBatch({
@@ -58,6 +53,6 @@ export async function GET(request: Request, context: RouteContext) {
   } catch {
     return jsonError(500, "The badges couldn't be prepared. Please try again.");
   } finally {
-    bulkInProgress = false;
+    release();
   }
 }

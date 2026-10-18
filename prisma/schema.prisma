@@ -1048,6 +1048,8 @@ model IdProgramme {
   members      IdMember[]
 
   @@unique([organisationId, slug])
+  /// Target of IdMember's composite key, so a member can never sit in another organisation's programme.
+  @@unique([id, organisationId])
   @@index([organisationId, createdAt])
 }
 
@@ -1089,16 +1091,18 @@ model IdMember {
   revokedAt      DateTime?
   /// Organiser's note for a rejection or revocation. Never shown on the verify page.
   statusReason   String?
+  /// When the "your ID card" email was last queued; drives the resend cooldown and the daily cap.
+  lastEmailedAt  DateTime?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  programme IdProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  programme IdProgramme @relation(fields: [programmeId, organisationId], references: [id, organisationId], onDelete: Cascade)
   user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([programmeId, email])
   @@unique([programmeId, idNumber])
   @@index([programmeId, status, createdAt])
-  @@index([organisationId])
+  @@index([organisationId, lastEmailedAt])
   @@index([userId])
   @@index([email])
 }

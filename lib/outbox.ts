@@ -157,7 +157,7 @@ function containsCapability(kind: string, payload: Prisma.JsonValue) {
 }
 
 function messageId(id: string) {
-  return `<yuyu-${id}@outbox.invalid>`;
+  return `<swe-${id}@outbox.invalid>`;
 }
 
 function retryDelayMs(kind: string, attempts: number) {

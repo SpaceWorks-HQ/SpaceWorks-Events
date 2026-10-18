@@ -11,6 +11,7 @@ import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
+import { isReservedOrganisationSlug } from "@/lib/slug";
 
 export type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -169,27 +170,6 @@ export async function updateOrganisation(
   }
 }
 
-const RESERVED_SLUGS = new Set([
-  "dashboard",
-  "discover",
-  "login",
-  "search",
-  "super-admin",
-  "api",
-  "ticket",
-  "verify",
-  "join",
-  "new",
-  "org",
-  "event",
-  "series",
-  "members",
-  "settings",
-  "static",
-  "public",
-  "assets",
-]);
-
 export async function checkSlugAvailability(slug: string): Promise<boolean> {
   const sanitized = slug.toLowerCase().trim();
 
@@ -197,7 +177,7 @@ export async function checkSlugAvailability(slug: string): Promise<boolean> {
     return false;
   }
 
-  if (RESERVED_SLUGS.has(sanitized)) {
+  if (isReservedOrganisationSlug(sanitized)) {
     return false;
   }
 
