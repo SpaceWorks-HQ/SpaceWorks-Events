@@ -21,7 +21,7 @@ export function ReadinessCard({ title, summary, complete, items, organisationSlu
   return (
     <section aria-labelledby="overview-ready-title" className="flex flex-col gap-4 rounded-xl bg-tint-peach p-5 sm:p-6 lg:flex-row lg:items-center">
       <div className="flex min-w-0 items-center gap-4 lg:w-[300px] lg:shrink-0">
-        <MoodTile mood={complete ? "done" : "happy"} size={56} className="shrink-0" />
+        <MoodTile mood={complete ? "cheering" : "happy"} size={56} className={cn("yy-face shrink-0", complete && "yy-success-in")} />
         <div className="min-w-0">
           <h2 id="overview-ready-title" className="font-display text-[22px] font-semibold leading-tight text-ink">
             {title}
@@ -41,7 +41,7 @@ export function ReadinessCard({ title, summary, complete, items, organisationSlu
             </span>
             {item.action?.kind === "publish" ? <PublishEventButton organisationSlug={organisationSlug} eventSlug={eventSlug} /> : null}
             {item.action?.kind === "tab" ? (
-              <OpenTabButton tab={item.action.tab} sub={item.action.sub} className="inline-flex min-h-9 shrink-0 items-center rounded-full px-2 text-[13px] font-bold text-ink underline-offset-4 hover:underline">
+              <OpenTabButton tab={item.action.tab} sub={item.action.sub} className="inline-flex min-h-9 shrink-0 items-center rounded-control px-2 text-[13px] font-semibold text-ink underline-offset-4 hover:underline">
                 {item.action.label}
               </OpenTabButton>
             ) : null}

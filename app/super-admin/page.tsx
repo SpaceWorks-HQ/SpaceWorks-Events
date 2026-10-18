@@ -180,7 +180,7 @@ export default async function SuperAdminOverviewPage() {
         <MetricRows
           rows={attention.map((item) => ({
             label: <Link href={item.href} className="underline-offset-4 hover:text-ink hover:underline">{item.label}</Link>,
-            value: <span className={item.value > 0 ? "text-warning-fg" : "text-ink-muted"}>{item.value.toLocaleString()}</span>,
+            value: <span className={item.value > 0 ? "inline-flex min-w-7 justify-center rounded-full bg-highlight px-2 text-on-highlight" : "text-ink-muted"}>{item.value.toLocaleString()}</span>,
           }))}
         />
       </AdminPanel>

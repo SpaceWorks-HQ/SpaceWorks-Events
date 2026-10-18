@@ -247,7 +247,7 @@ function ShowIfSection({
       {enabled ? (
         <div className="flex flex-col gap-3 border-t border-line pt-3">
           {brokenRule ? (
-            <p className="flex items-start gap-1.5 text-caption text-warning-fg">
+            <p className="flex items-start gap-1.5 text-caption text-warning-solid">
               <AlertCircle aria-hidden className="mt-px size-4 shrink-0" />
               <span>The question this rule used is no longer above this one. Pick another, or turn the rule off.</span>
             </p>

@@ -172,7 +172,7 @@ export function FeedbackFormEditor(props: {
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="feedback-form-title" className="flex flex-wrap items-center gap-4 rounded-xl bg-tint-peach px-4 py-4 sm:px-5">
-        <MoodTile mood="love" size={52} className="shrink-0" />
+        <MoodTile mood="love" size={52} className="yy-face shrink-0" />
         <div className="min-w-0 flex-[1_1_220px]">
           {editingTitle ? (
             <div className="flex flex-wrap items-end gap-2">

@@ -44,7 +44,7 @@ export function SparklineCard(props: {
         <span className="text-sm text-ink-muted">{props.title}</span>
         <span className="font-display text-[22px] font-semibold tabular-nums leading-tight text-ink">{headline.toLocaleString()}</span>
         {delta != null ? (
-          <span className={cn("text-caption font-semibold", delta === 0 ? "text-ink-muted" : delta > 0 ? "text-success-fg" : "text-warning-fg")}>
+          <span className={cn("text-caption font-semibold", delta === 0 ? "text-ink-muted" : delta > 0 ? "text-success-solid" : "text-warning-solid")}>
             {delta > 0 ? "+" : ""}
             {delta.toLocaleString()}
           </span>

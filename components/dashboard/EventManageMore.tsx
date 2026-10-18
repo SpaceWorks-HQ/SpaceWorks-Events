@@ -137,7 +137,7 @@ export function EventManageMore(props: {
               className="tabular-nums text-sm"
             />
           </Field>
-          <p className="text-caption text-warning-fg">Changing it breaks links you&apos;ve already shared.</p>
+          <p className="text-caption text-warning-solid">Changing it breaks links you&apos;ve already shared.</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" onClick={doUpdateSlug} disabled={pending || slug.trim() === event.slug}>
               Update

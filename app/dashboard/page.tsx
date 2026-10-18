@@ -105,7 +105,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-5 md:flex-row md:items-center">
-        <MoodTile mood={home.mood} size={64} className="shrink-0" />
+        <MoodTile mood={home.mood} size={64} className="yy-face shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <HomeGreeting name={firstName} />
           <p className="text-body-ui text-ink-secondary">{home.summary}</p>

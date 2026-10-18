@@ -157,7 +157,7 @@ export function EditOrgForm(props: {
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line bg-subtle px-5 py-3.5 sm:px-6">
-        <span role="status" className="min-w-0 flex-1 text-sm text-warning-fg">
+        <span role="status" className="min-w-0 flex-1 text-sm text-warning-solid">
           {dirty ? "You have unsaved changes" : null}
         </span>
         <Button type="button" variant="quiet" onClick={discard} disabled={!dirty || pending}>

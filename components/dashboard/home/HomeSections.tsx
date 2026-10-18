@@ -175,7 +175,7 @@ export function LiveEventPanel({ live, now }: { live: NonNullable<DashboardHome[
             <ul className="flex flex-col">
               {live.door.map((entry) => (
                 <li key={entry.key} className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
-                  <MoodTile mood="wink" size={24} />
+                  <MoodTile mood="wink" size={24} className="yy-face" />
                   <span className="min-w-0 flex-1 truncate text-sm text-ink"><strong>{entry.who}</strong> checked in</span>
                   <span className="shrink-0 text-caption text-ink-muted">{formatRelativeTime(entry.at, live.timezone, now)}</span>
                 </li>
@@ -210,7 +210,7 @@ export function ActivityFeed({ activity, now }: { activity: HomeActivity[]; now:
         <ul className="flex flex-col">
           {activity.map((item) => (
             <li key={item.key} className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
-              <MoodTile mood={ACTIVITY[item.kind].mood} size={32} />
+              <MoodTile mood={ACTIVITY[item.kind].mood} size={32} className="yy-face" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-ink">
                   <strong>{item.who}</strong> {ACTIVITY[item.kind].text}
@@ -303,7 +303,7 @@ export function FirstRunSetup({ setup, name, compact = false }: { setup: NonNull
     <section aria-labelledby={compact ? "home-setup-steps" : "home-setup-title"} className="flex flex-col gap-6">
       {compact ? null : (
       <div className="flex flex-col items-start gap-6 rounded-xl bg-tint-peach p-6 sm:flex-row sm:items-center sm:p-8">
-        <MoodTile mood="happy" size={104} />
+        <MoodTile mood="happy" size={104} className="yy-face" />
         <div className="flex flex-col gap-2">
           <h2 id="home-setup-title" className="font-display text-[34px] font-semibold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[40px]">Welcome to Space Works Events, {name}</h2>
           <p className="max-w-[640px] text-body-l text-ink-secondary">Four small steps and your first event is ready to share.</p>

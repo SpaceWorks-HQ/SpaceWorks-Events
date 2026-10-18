@@ -334,7 +334,7 @@ export function OrgSetup({
   return (
     <section aria-labelledby="org-setup-title" className="flex flex-col gap-3.5">
       <div className="flex flex-col items-start gap-5 rounded-xl bg-tint-peach p-6 sm:flex-row sm:items-center">
-        <MoodTile mood="cheering" size={72} />
+        <MoodTile mood="cheering" size={72} className="yy-face" />
         <div className="flex flex-col gap-1">
           <h2 id="org-setup-title" className="font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">{name} is ready</h2>
           <p className="text-body-ui text-ink-secondary">A few steps and your community has its own page, events and team.</p>

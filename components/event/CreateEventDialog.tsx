@@ -37,7 +37,7 @@ function fromDatetimeLocalValue(value: string) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-const STEP_TITLES = ["Create Event: Basics", "Create Event: Schedule", "Create Event: Location"];
+const STEP_TITLES = ["New event: the basics", "New event: when it happens", "New event: where it happens"];
 const STEP_LABELS = ["Basics", "Schedule", "Location & platform"];
 
 function isRichTextEmpty(html: string) {
@@ -155,7 +155,7 @@ export function CreateEventDialog(props: {
           type="button"
           aria-label="Create event"
           onClick={handleOpen}
-          className="inline-flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-float transition-opacity hover:opacity-90"
+          className="inline-flex size-14 items-center justify-center rounded-full bg-primary text-on-primary shadow-float transition-colors hover:bg-primary-hover"
         >
           <Plus aria-hidden className="size-6" />
         </button>

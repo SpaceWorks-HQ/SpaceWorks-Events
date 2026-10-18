@@ -232,7 +232,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
                                 {session.hasConflict ? <Chip size="sm" tone="warning">Time overlap</Chip> : null}
                               </div>
                               <p className="text-sm text-ink-muted">Planned: {display(session.startDateTime, timeZone)} – {display(session.endDateTime, timeZone)}</p>
-                              <p className={cn("text-sm", session.cumulativeDelayMinutes ? "font-semibold text-warning-fg" : "text-ink-muted")}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</p>
+                              <p className={cn("text-sm", session.cumulativeDelayMinutes ? "font-semibold text-warning-solid" : "text-ink-muted")}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</p>
                               {session.speakerNames?.length ? <p className="text-sm text-ink-muted">Speakers: {session.speakerNames.join(", ")}</p> : null}
                             </div>
                             <div className="flex shrink-0 gap-1">
@@ -245,7 +245,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
                               Delay from this session (min)
                               <Input type="number" min={0} max={1440} defaultValue={session.delayMinutes} className="w-24" disabled={pending} onBlur={(event) => { const delay = Number(event.target.value); if (Number.isInteger(delay) && delay !== session.delayMinutes) updateDelay(session.id, delay); }} />
                             </label>
-                            {session.hasConflict ? <p className="text-caption text-warning-fg">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</p> : <p className="text-caption text-ink-muted">Affects only later sessions in {track.name}.</p>}
+                            {session.hasConflict ? <p className="text-caption text-warning-solid">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</p> : <p className="text-caption text-ink-muted">Affects only later sessions in {track.name}.</p>}
                           </div>
                         </>
                       )}

@@ -5,6 +5,8 @@ import { extendTailwindMerge } from "tailwind-merge";
 // font sizes so a later text colour doesn't silently drop the type style.
 const twMerge = extendTailwindMerge({
   extend: {
+    // `rounded-control` is the brand's 10px control radius (app/globals.css --radius-control).
+    theme: { radius: ["control"] },
     classGroups: {
       "font-size": [{ text: ["display-xl", "display-l", "display-m", "h1", "h2", "h3", "h4", "title", "body", "body-l", "body-ui", "label", "caption", "overline", "mono"] }],
     },
