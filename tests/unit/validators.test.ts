@@ -112,13 +112,15 @@ describe("RSVP validation", () => {
 });
 
 describe("event validation", () => {
+  // A fixed time of day one year ahead, so these tests never fall into the past.
+  const futureDay = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const baseEvent = {
     organisationSlug: "demo",
     title: "Launch night",
     description: "A useful description.",
     aboutHtml: "<p>A useful description.</p>",
-    startDateTime: "2026-10-01T18:00:00.000Z",
-    endDateTime: "2026-10-01T20:00:00.000Z",
+    startDateTime: `${futureDay}T18:00:00.000Z`,
+    endDateTime: `${futureDay}T20:00:00.000Z`,
     timezone: "UTC",
     isOnline: false,
     location: "Main auditorium",
@@ -128,7 +130,7 @@ describe("event validation", () => {
     expect(
       createEventSchema.safeParse({
         ...baseEvent,
-        endDateTime: "2026-10-01T17:00:00.000Z",
+        endDateTime: `${futureDay}T17:00:00.000Z`,
       }).success,
     ).toBe(false);
   });
