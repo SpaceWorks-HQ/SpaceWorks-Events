@@ -4,7 +4,7 @@ import { FeaturesPage } from "@/components/landing/features/FeaturesPage";
 
 export const metadata: Metadata = {
   title: "Features",
-  description: "Everything you need to run a free event: event pages, registration, check-in, programme, series, feedback and certificates, teams, privacy and a developer API.",
+  description: "Everything you need to run a free maker event: event pages, short links, registration, live tickets and check-in, ID cards, programme, series, feedback and certificates, teams, privacy and a developer API.",
 };
 
 export default async function Page() {

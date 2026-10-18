@@ -48,7 +48,7 @@ export async function GET() {
     headers: {
       ...privateHeaders,
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="yuyu-account-data-${generatedAt.toISOString().slice(0, 10)}.json"`,
+      "Content-Disposition": `attachment; filename="space-works-events-account-data-${generatedAt.toISOString().slice(0, 10)}.json"`,
     },
   });
 }

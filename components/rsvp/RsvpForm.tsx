@@ -62,7 +62,7 @@ function storageKey(params: {
   const suffix = params.eventInstanceId
     ? `i:${params.eventInstanceId}`
     : `e:${params.eventSlug ?? ""}`;
-  return `yuyu:rsvp:${params.orgSlug}:${suffix}`;
+  return `swe:rsvp:${params.orgSlug}:${suffix}`;
 }
 
 function safeJsonParse<T>(v: string | null): T | null {

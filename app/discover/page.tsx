@@ -6,7 +6,6 @@ import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
 import { Container } from "@/components/landing/primitives";
-import { DotFace } from "@/components/brand/DotFace";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
 import { controlClasses } from "@/components/ui/styles";
@@ -20,7 +19,7 @@ import { listedEventAudienceWhere } from "@/lib/eventVisibility";
 export const metadata: Metadata = {
   title: "Discover Events",
   description:
-    "Free events from communities on this Yuyu. Register in seconds, no account needed.",
+    "Free events from the communities on Space Works Events. Register in seconds, no account needed.",
 };
 
 const PAGE_SIZE = 12;
@@ -226,16 +225,16 @@ export default async function DiscoverPage({
     : sort === "popular" ? "Popular events" : "Upcoming events";
   const chipClasses = (active: boolean) =>
     cn(
-      "inline-flex min-h-8 items-center rounded-full border px-3.5 text-[13px] font-bold leading-[1.4] transition-colors",
-      active ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-canvas text-ink hover:bg-subtle",
+      "inline-flex min-h-8 items-center rounded-full border px-3.5 text-[13px] font-semibold leading-[1.4] transition-colors",
+      active ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink hover:bg-surface",
     );
 
   return (
     <div className="flex flex-col">
       {/* Title and search (Figma 125:2367) */}
       <Container className="flex flex-col gap-6 pb-8 pt-12 lg:pt-16">
-        <h1 className="text-display-m text-ink">Discover events</h1>
-        <p className="max-w-[720px] text-body-l text-ink-secondary">Free events from communities on this Yuyu. Register in seconds, no account needed.</p>
+        <h1 className="font-accent text-[34px] font-medium leading-[1.1] text-ink sm:text-[40px]">Discover events</h1>
+        <p className="max-w-[720px] text-body-l text-ink-secondary">Free workshops, meetups and build nights from the communities on Space Works Events. Register in seconds, no account needed.</p>
         <form action="/discover" method="get" role="search" className="flex flex-col gap-4">
           {sort !== "upcoming" ? <input type="hidden" name="sort" value={sort} /> : null}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -252,7 +251,7 @@ export default async function DiscoverPage({
                 className={cn(controlClasses, "h-[52px] rounded-full pl-[46px] pr-12 text-body [&::-webkit-search-cancel-button]:appearance-none")}
               />
               {q ? (
-                <Link href={clearSearchHref} aria-label="Clear search" className="absolute right-2 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-muted text-ink-muted hover:text-ink">
+                <Link href={clearSearchHref} aria-label="Clear search" className="absolute right-2 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-surface text-ink-muted hover:text-ink">
                   <X aria-hidden className="size-4" />
                 </Link>
               ) : null}
@@ -275,11 +274,11 @@ export default async function DiscoverPage({
               </summary>
               <fieldset className="mt-3 flex flex-wrap items-end gap-2.5">
                 <legend className="sr-only">Date range</legend>
-                <label className="flex w-[170px] flex-col rounded-[18px] border border-line-strong bg-canvas px-4 py-1.5 focus-within:border-[var(--yy-focus)]">
+                <label className="flex w-[170px] flex-col rounded-[18px] border border-line-strong bg-panel px-4 py-1.5 focus-within:border-[var(--yy-focus)]">
                   <span className="text-xs text-ink-muted">From</span>
                   <input name="from" type="date" defaultValue={sp.from ?? ""} className="bg-transparent text-[15px] text-ink outline-none" />
                 </label>
-                <label className="flex w-[170px] flex-col rounded-[18px] border border-line-strong bg-canvas px-4 py-1.5 focus-within:border-[var(--yy-focus)]">
+                <label className="flex w-[170px] flex-col rounded-[18px] border border-line-strong bg-panel px-4 py-1.5 focus-within:border-[var(--yy-focus)]">
                   <span className="text-xs text-ink-muted">To</span>
                   <input name="to" type="date" defaultValue={sp.to ?? ""} className="bg-transparent text-[15px] text-ink outline-none" />
                 </label>
@@ -301,15 +300,15 @@ export default async function DiscoverPage({
                 {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, totalItems)} of {totalItems}
               </p>
             ) : null}
-            <nav aria-label="Sort events" className="flex rounded-full bg-muted p-1">
+            <nav aria-label="Sort events" className="flex rounded-full border border-line bg-surface p-1">
               {(["upcoming", "popular"] as const).map((option) => (
                 <Link
                   key={option}
                   href={sortHref(option)}
                   aria-current={sort === option ? "true" : undefined}
                   className={cn(
-                    "inline-flex min-h-8 items-center rounded-full px-3.5 text-[13px] font-bold transition-colors",
-                    sort === option ? "bg-canvas text-ink shadow-segment" : "text-ink-secondary hover:text-ink",
+                    "inline-flex min-h-8 items-center rounded-full px-3.5 text-[13px] font-semibold transition-colors",
+                    sort === option ? "border border-line-strong bg-panel text-ink" : "border border-transparent text-ink-secondary hover:text-ink",
                   )}
                 >
                   {option === "upcoming" ? "Upcoming" : "Popular"}
@@ -320,10 +319,13 @@ export default async function DiscoverPage({
         </div>
 
         {pageItems.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 rounded-[20px] border border-line bg-canvas px-6 py-10 text-center">
-            <DotFace mood="sleepy" size={56} className="mb-1" />
+          <div className="flex flex-col items-center gap-2 rounded-[16px] border border-line bg-panel px-6 py-10 text-center">
+            <span aria-hidden className="relative mb-2 block size-14">
+              <span className="absolute inset-0 rounded-[14px] bg-sw-sky" />
+              <span className="absolute -right-2 -top-2 size-6 rounded-full bg-sw-citron" />
+            </span>
             <p className="text-label text-ink">Nothing matches just yet</p>
-            <p className="max-w-md text-body-ui text-ink-muted">Try clearing a filter or searching for something else.</p>
+            <p className="max-w-md text-body-ui text-ink-muted">Try a different search, or clear the filters to see every upcoming event.</p>
             {hasActiveFilters ? (
               <Button asChild variant="secondary" size="sm" className="mt-2">
                 <Link href="/discover">Clear filters</Link>
@@ -383,7 +385,7 @@ export default async function DiscoverPage({
                 key={p}
                 href={pageHref(p)}
                 aria-current={p === safePage ? "page" : undefined}
-                className={cn("inline-flex size-11 items-center justify-center rounded-full text-[15px] font-bold", p === safePage ? "bg-primary text-on-primary" : "text-ink-secondary hover:bg-muted")}
+                className={cn("inline-flex size-11 items-center justify-center rounded-full text-[15px] font-semibold", p === safePage ? "bg-primary text-on-primary" : "text-ink-secondary hover:bg-surface")}
               >
                 {p}
               </Link>

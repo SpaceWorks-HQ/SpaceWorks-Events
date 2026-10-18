@@ -53,7 +53,7 @@ function TicketField({ label, value, mono = false }: { label: string; value: str
   return (
     <div className="min-w-0">
       <dt className="text-overline text-ink-muted">{label}</dt>
-      <dd className={mono ? "truncate font-mono text-[13px] font-medium text-ink" : "truncate text-[15px] font-bold text-ink"}>{value}</dd>
+      <dd className={mono ? "truncate text-[14px] font-medium text-ink" : "truncate text-[15px] font-semibold text-ink"}>{value}</dd>
     </div>
   );
 }
@@ -131,7 +131,7 @@ export function NotFoundExperience() {
       <div className="flex flex-col items-center gap-3 text-center">
         <h1 className="max-w-[760px] text-h1 text-ink">This page isn’t on the programme</h1>
         <p className="max-w-[620px] text-body-ui text-ink-secondary sm:text-[17px]">
-          We scanned the ticket for <span className="font-mono text-[0.92em] text-ink">{shortPath}</span> and couldn’t find a match. It may have moved, expired, or never existed.
+          We scanned the ticket for <span className="font-medium text-ink">{shortPath}</span> and couldn’t find a match. It may have moved, expired, or never existed.
         </p>
       </div>
 
@@ -145,11 +145,11 @@ export function NotFoundExperience() {
           className="relative flex flex-col sm:flex-row"
         >
           {/* Main part (a drop-shadow wrapper, so the ripped edge keeps its shadow) */}
-          <div className={cn("relative min-w-0 flex-1", ripping ? "yy-ticket-shadow" : "")}>
-          <div className={cn("relative h-full overflow-hidden rounded-t-[20px] border border-line bg-canvas sm:rounded-l-[20px] sm:rounded-tr-none sm:border-r-0", ripping ? "yy-ripped-right" : "shadow-float")}>
-            <div className="bg-accent px-5 py-3.5 text-on-accent">
-              <p className="text-label opacity-90">Yuyu · Lost &amp; found</p>
-              <p className="font-display text-[24px] font-extrabold leading-tight tracking-[-0.02em] sm:text-[26px]">Page not found</p>
+          <div className="relative min-w-0 flex-1">
+          <div className={cn("relative h-full overflow-hidden rounded-t-[20px] border border-line bg-panel sm:rounded-l-[20px] sm:rounded-tr-none sm:border-r-0", ripping && "yy-ripped-right")}>
+            <div className="bg-primary px-5 py-3.5 text-on-primary">
+              <p className="text-label">Space Works Events · Lost &amp; found</p>
+              <p className="font-accent text-[22px] font-medium leading-tight sm:text-[24px]">Page not found</p>
             </div>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3 px-5 py-4">
               <div className="col-span-2">
@@ -168,8 +168,8 @@ export function NotFoundExperience() {
             style={{ opacity: torn ? 0 : 1, scaleY: perforationScale }}
             className="relative hidden w-0 border-l-2 border-dashed border-line-strong sm:block"
           >
-            <span className="absolute -left-[11px] -top-2.5 size-5 rounded-full bg-subtle" />
-            <span className="absolute -bottom-2.5 -left-[11px] size-5 rounded-full bg-subtle" />
+            <span className="absolute -left-[11px] -top-2.5 size-5 rounded-full bg-canvas" />
+            <span className="absolute -bottom-2.5 -left-[11px] size-5 rounded-full bg-canvas" />
           </motion.div>
 
           {/* Stub (drag right, or use the button, to tear it off) */}
@@ -181,11 +181,11 @@ export function NotFoundExperience() {
                   initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.35, delay: reduceMotion ? 0 : 0.4 }}
-                  className="flex h-full flex-col items-center justify-center gap-3 rounded-b-[20px] border border-dashed sm:ml-2 border-line-strong bg-tint-peach px-5 py-6 text-center sm:rounded-r-[20px] sm:rounded-bl-none"
+                  className="flex h-full flex-col items-center justify-center gap-3 rounded-b-[20px] border border-dashed border-line-strong bg-sw-citron px-5 sm:ml-2 py-6 text-center sm:rounded-r-[20px] sm:rounded-bl-none"
                 >
-                  <p className="text-overline text-ink-muted">Your stub says</p>
-                  <p className="font-display text-[20px] font-extrabold leading-tight text-ink">There’s plenty else on</p>
-                  <Button asChild variant="accent" size="sm">
+                  <p className="text-overline text-sw-ink">Your stub says</p>
+                  <p className="text-[20px] font-semibold leading-tight text-sw-ink">There’s plenty else on</p>
+                  <Button asChild variant="primary" size="sm">
                     <Link href="/discover">
                       Discover events
                       <ArrowRight aria-hidden className="size-4" />
@@ -211,12 +211,12 @@ export function NotFoundExperience() {
                         transition: { duration: 0.85, times: [0, 0.28, 1], ease: [0.3, 0, 0.5, 1] },
                       }}
                   className={cn(
-                    "relative flex h-full cursor-grab touch-pan-y flex-col items-center justify-center gap-2 overflow-hidden rounded-b-[20px] border border-line bg-canvas px-5 py-5 active:cursor-grabbing sm:rounded-r-[20px] sm:rounded-bl-none sm:border-l-0",
-                    ripping ? "yy-ripped-left" : "shadow-float",
+                    "relative flex h-full cursor-grab touch-pan-y flex-col items-center justify-center gap-2 overflow-hidden rounded-b-[20px] border border-line bg-panel px-5 py-5 active:cursor-grabbing sm:rounded-r-[20px] sm:rounded-bl-none sm:border-l-0",
+                    ripping && "yy-ripped-left",
                   )}
                 >
                   <div className="relative w-[104px] rounded-[10px] border border-line bg-white p-2">
-                    <svg viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`} className="block w-full text-[#18181B]" shapeRendering="crispEdges" aria-hidden>
+                    <svg viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`} className="block w-full text-[#142C2A]" shapeRendering="crispEdges" aria-hidden>
                       {qr.map(([x, y]) => (
                         <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill="currentColor" />
                       ))}
@@ -231,7 +231,7 @@ export function NotFoundExperience() {
                       />
                     ) : null}
                     <motion.span
-                      className="absolute left-1/2 top-1/2 whitespace-nowrap rounded-md border-[3px] border-danger-solid px-2 py-0.5 font-display text-[14px] font-extrabold uppercase tracking-[0.06em] text-danger-solid"
+                      className="absolute left-1/2 top-1/2 whitespace-nowrap rounded-md border-[3px] border-danger-solid px-2 py-0.5 text-[14px] font-semibold uppercase tracking-[0.06em] text-danger-solid"
                       initial={reduceMotion ? { x: "-50%", y: "-50%", rotate: -14, opacity: 1, scale: 1 } : { x: "-50%", y: "-50%", rotate: -30, opacity: 0, scale: 2.4 }}
                       animate={{ x: "-50%", y: "-50%", rotate: -14, opacity: 1, scale: 1 }}
                       transition={{ delay: reduceMotion ? 0 : 1.7, type: "spring", stiffness: 520, damping: 18 }}
@@ -247,7 +247,7 @@ export function NotFoundExperience() {
         </motion.div>
         {!torn ? (
           <div className="mt-2.5 flex justify-center">
-            <button type="button" onClick={tearOff} className="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-4 text-label text-ink-secondary transition-colors hover:bg-subtle hover:text-ink">
+            <button type="button" onClick={tearOff} className="inline-flex min-h-11 items-center gap-1.5 rounded-full border border-line-strong bg-panel px-4 text-label text-ink-secondary transition-colors hover:bg-surface hover:text-ink">
               <Scissors aria-hidden className="size-4" />
               Tear off the stub
             </button>
@@ -272,7 +272,7 @@ export function NotFoundExperience() {
 
   if (!needsChrome) return content;
   // Routes that normally draw their own chrome (dashboard, organiser pages,
-  // sign-in) lose it on a root 404, so give them the full Yuyu site chrome.
+  // sign-in) lose it on a root 404, so give them the full Space Works Events site chrome.
   return (
     <>
       <SiteHeader />

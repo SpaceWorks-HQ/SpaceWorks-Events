@@ -31,7 +31,7 @@ import { useAppColorMode } from "@/components/providers";
 import { Avatar, OrgLogo } from "@/components/ui/display";
 import { IconButton } from "@/components/ui/button";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Tooltip } from "@/components/ui/menu";
-import { YuyuWordmark } from "./SiteHeader";
+import { BrandHomeLink } from "./SiteHeader";
 
 const roleLabel: Record<ShellOrganisation["role"], string> = {
   OWNER: "Owner",
@@ -72,14 +72,14 @@ function NavItem({
         aria-current={active ? "page" : undefined}
         aria-label={collapsed ? children : undefined}
         className={cn(
-          "relative flex min-h-10 items-center gap-2.5 rounded-xl border border-transparent text-[15px] text-ink-secondary transition-colors hover:bg-emphasis/70 hover:text-ink [&_svg]:size-[18px] [&_svg]:shrink-0",
+          "relative flex min-h-11 items-center gap-2.5 rounded-[10px] text-[15px] text-ink transition-colors hover:bg-sidebar-hover [&_svg]:size-[18px] [&_svg]:shrink-0",
           collapsed ? "justify-center px-0" : "px-3",
-          indent && !collapsed && "pl-10 text-sm",
-          active && "border-line bg-canvas font-semibold text-ink shadow-[0_1px_2px_rgba(24,24,27,0.05)] hover:bg-canvas",
+          indent && !collapsed && "pl-6 text-sm",
+          active && "bg-sidebar-active font-semibold text-on-sidebar-active hover:bg-sidebar-active",
         )}
       >
-        <span aria-hidden className="inline-flex">{icon}</span>
-        {collapsed ? null : <span className="min-w-0 flex-1 truncate">{children}</span>}
+        {/* The expanded sidebar is text-only (brand spec D9); the collapsed rail has no room for words, so it keeps the icon. */}
+        {collapsed ? <span aria-hidden className="inline-flex">{icon}</span> : <span className="min-w-0 flex-1 truncate">{children}</span>}
         {badge}
       </Link>
     </RailTip>
@@ -119,7 +119,7 @@ function AccountMenu({ user, collapsed, onNavigate }: { user: ShellUser; collaps
         ref={triggerRef}
         aria-label={collapsed ? `Account menu for ${name}` : undefined}
         className={cn(
-          "flex min-h-12 w-full items-center gap-2.5 rounded-xl border border-line bg-canvas text-left transition-colors hover:bg-subtle data-[state=open]:bg-subtle",
+          "flex min-h-12 w-full items-center gap-2.5 rounded-[10px] border border-line bg-panel text-left transition-colors hover:bg-surface data-[state=open]:bg-surface",
           collapsed ? "justify-center p-1.5" : "p-2",
           pathname.startsWith("/account") && "ring-1 ring-line-strong",
         )}
@@ -182,13 +182,13 @@ function SidebarContents({
 
   return (
     <div className={cn("flex h-full flex-col gap-4 py-3.5", collapsed ? "px-2.5" : "px-3")}>
-      <div className={cn("flex items-center gap-2 pt-1", collapsed ? "flex-col" : "justify-between pl-2")}>
+      <div className={cn("flex gap-2 pt-1", collapsed ? "flex-col items-center" : "items-start justify-between pl-2")}>
         {collapsed ? (
-          <Link href="/dashboard" aria-label="Yuyu home" className="inline-flex rounded-md p-1">
-            <DotMark size={28} label={null} />
+          <Link href="/dashboard" aria-label="Space Works Events home" className="inline-flex rounded-md p-1">
+            <DotMark size={32} label={null} />
           </Link>
         ) : (
-          <YuyuWordmark href="/dashboard" />
+          <BrandHomeLink href="/dashboard" stacked />
         )}
         {onToggleCollapsed ? (
           <IconButton label={collapsed ? "Expand sidebar" : "Collapse sidebar"} size="sm" variant="quiet" onClick={onToggleCollapsed} aria-expanded={!collapsed}>
@@ -203,7 +203,7 @@ function SidebarContents({
             <MenuTrigger
               aria-label={collapsed ? `Switch organisation, current: ${current.name}` : undefined}
               className={cn(
-                "group w-full overflow-hidden rounded-xl border border-line bg-canvas text-left transition-colors hover:border-line-strong",
+                "group w-full overflow-hidden rounded-[10px] border border-line bg-panel text-left transition-colors hover:border-line-strong",
                 collapsed && "flex justify-center p-1.5",
               )}
             >
@@ -211,10 +211,9 @@ function SidebarContents({
                 <OrgLogo name={current.name} src={current.logoUrl} size="md" />
               ) : (
                 <>
-                  <span aria-hidden className="yy-dot-strip block h-5" />
-                  <span className="flex items-center gap-2.5 px-2.5 pb-2.5">
-                    <OrgLogo name={current.name} src={current.logoUrl} size="md" className="-mt-3 border-2 border-canvas" />
-                    <span className="min-w-0 flex-1 pt-1">
+                  <span className="flex min-h-[58px] items-center gap-2.5 px-2.5 py-2">
+                    <OrgLogo name={current.name} src={current.logoUrl} size="md" />
+                    <span className="min-w-0 flex-1">
                       <span className="block truncate text-[15px] font-semibold text-ink">{current.name}</span>
                       <span className="block text-caption text-ink-muted">{roleLabel[current.role]}</span>
                     </span>
@@ -272,7 +271,7 @@ function SidebarContents({
                 onClick={onNavigate}
                 aria-label={collapsed ? organisation.name : undefined}
                 className={cn(
-                  "relative flex min-h-10 items-center gap-2.5 rounded-xl text-[15px] text-ink-secondary transition-colors hover:bg-emphasis/70 hover:text-ink",
+                  "relative flex min-h-11 items-center gap-2.5 rounded-[10px] text-[15px] text-ink transition-colors hover:bg-sidebar-hover",
                   collapsed ? "justify-center" : "px-3",
                 )}
               >
@@ -294,8 +293,8 @@ function SidebarContents({
               onClick={onNavigate}
               aria-label={collapsed ? "View public page" : undefined}
               className={cn(
-                "inline-flex min-h-9 items-center gap-1 rounded-xl text-sm font-medium text-ink-secondary underline-offset-4 hover:text-ink",
-                collapsed ? "justify-center hover:bg-emphasis/70" : "px-3 hover:underline",
+                "inline-flex min-h-11 items-center gap-1 rounded-[10px] text-sm font-medium text-ink underline-offset-4",
+                collapsed ? "justify-center hover:bg-sidebar-hover" : "px-3 hover:underline",
               )}
             >
               {collapsed ? null : "View public page"}
@@ -310,8 +309,8 @@ function SidebarContents({
 }
 
 /**
- * Dashboard app shell (docs/DESIGN.md §4.13): a 224px sidebar on desktop that
- * collapses to a 68px icon rail (remembered in a cookie so the server renders
+ * Dashboard app shell (docs/DESIGN.md §4.13): a 256px Citron sidebar with
+ * text-only navigation on desktop that collapses to a 68px icon rail (remembered in a cookie so the server renders
  * the same width), and a top bar with a menu sheet below the md breakpoint.
  */
 export function AppShell({ user, organisations, initialCollapsed = false, children }: { user: ShellUser; organisations: ShellOrganisation[]; initialCollapsed?: boolean; children: ReactNode }) {
@@ -328,15 +327,15 @@ export function AppShell({ user, organisations, initialCollapsed = false, childr
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside
         className={cn(
-          "sticky top-0 hidden h-dvh shrink-0 overflow-y-auto overflow-x-hidden border-r border-line bg-subtle transition-[width] duration-200 ease-yy motion-reduce:transition-none md:block",
-          collapsed ? "w-[68px]" : "w-[224px]",
+          "sticky top-0 hidden h-dvh shrink-0 overflow-y-auto overflow-x-hidden border-r border-line bg-sidebar transition-[width] duration-200 ease-yy motion-reduce:transition-none md:block",
+          collapsed ? "w-[68px]" : "w-[256px]",
         )}
       >
         <SidebarContents user={user} organisations={organisations} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} />
       </aside>
 
-      <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-line bg-subtle/95 px-4 backdrop-blur-md md:hidden">
-        <YuyuWordmark href="/dashboard" />
+      <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-line bg-canvas px-4 md:hidden">
+        <BrandHomeLink href="/dashboard" />
         <DialogPrimitive.Root open={menuOpen} onOpenChange={setMenuOpen}>
           <DialogPrimitive.Trigger asChild>
             <IconButton label="Open navigation menu">
@@ -344,8 +343,8 @@ export function AppShell({ user, organisations, initialCollapsed = false, childr
             </IconButton>
           </DialogPrimitive.Trigger>
           <DialogPrimitive.Portal>
-            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(17,17,19,0.48)]" />
-            <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 w-[min(280px,86vw)] overflow-y-auto border-r border-line bg-subtle shadow-float focus:outline-none">
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(20,44,42,0.48)]" />
+            <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 w-[min(280px,86vw)] overflow-y-auto border-r border-line bg-sidebar shadow-float focus:outline-none">
               <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
               <DialogPrimitive.Description className="sr-only">Dashboard navigation</DialogPrimitive.Description>
               <DialogPrimitive.Close asChild>

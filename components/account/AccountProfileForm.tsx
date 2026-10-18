@@ -84,7 +84,7 @@ export function AccountProfileForm(props: {
         });
       }}
     >
-      <AccountCard id="account-profile" title="Profile" description="Your display name and photo across Yuyu.">
+      <AccountCard id="account-profile" title="Profile" description="Your display name and photo across Space Works Events.">
         <div className="flex flex-col gap-6">
           {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
           <div className="flex flex-col gap-4">

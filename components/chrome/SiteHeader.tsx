@@ -9,6 +9,7 @@ import { Menu as MenuIcon, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, IconButton } from "@/components/ui/button";
 import { DotLockup } from "@/components/brand/DotLockup";
+import { DotMark } from "@/components/brand/DotMark";
 import { ColorModeToggle } from "./ColorModeToggle";
 
 const primaryLinks = [
@@ -18,16 +19,32 @@ const primaryLinks = [
   { href: "/about", label: "About", guestOnly: false },
 ];
 
-/** The Yuyu horizontal lockup as a home link (site header, auth pages, app shell). */
-export function YuyuWordmark({ href = "/", size = "sm" }: { href?: string; size?: "sm" | "md" }) {
+/**
+ * The Space Works logo plus the product name "Events", as a home link (site
+ * header, auth pages, app shell, super admin). Below `sm` the symbol stands in
+ * for the horizontal lockup so the bar keeps room for its controls. `stacked`
+ * puts "Events" under the lockup, for the narrow dashboard sidebar.
+ */
+export function BrandHomeLink({ href = "/", stacked = false, className }: { href?: string; stacked?: boolean; className?: string }) {
+  if (stacked) {
+    return (
+      <Link href={href} aria-label="Space Works Events home" className={cn("inline-flex shrink-0 flex-col items-start gap-1.5 rounded-md", className)}>
+        <DotLockup size="sm" label={null} />
+        <span aria-hidden className="text-[15px] font-semibold leading-none text-ink">Events</span>
+      </Link>
+    );
+  }
   return (
-    <Link href={href} aria-label="Yuyu home" className="inline-flex items-center rounded-md">
-      <DotLockup size={size} label={null} />
+    <Link href={href} aria-label="Space Works Events home" className={cn("inline-flex shrink-0 items-center gap-3 rounded-md", className)}>
+      <DotMark size={32} label={null} className="sm:hidden" />
+      <DotLockup size="sm" label={null} className="hidden sm:inline-flex" />
+      <span aria-hidden className="h-6 w-px bg-line-strong" />
+      <span aria-hidden className="text-[17px] font-semibold leading-none text-ink">Events</span>
     </Link>
   );
 }
 
-/** Yuyu's own site header (docs/DESIGN.md §4.14): home, about, features, discover, legal. */
+/** The Space Works Events site header (docs/DESIGN.md §4.14): home, about, features, discover, legal. */
 export function SiteHeader() {
   const pathname = usePathname();
   const { status } = useSession();
@@ -37,9 +54,9 @@ export function SiteHeader() {
   const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-line bg-canvas">
       <nav aria-label="Main navigation" className="mx-auto flex h-[76px] max-w-[1160px] items-center gap-2 px-4 sm:gap-8 sm:px-6 xl:px-0">
-        <YuyuWordmark />
+        <BrandHomeLink />
         <ul className="hidden items-center gap-1 lg:flex">
           {links.map((link) => (
             <li key={link.href}>
@@ -47,8 +64,8 @@ export function SiteHeader() {
                 href={link.href}
                 aria-current={isActive(link.href) ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-9 items-center rounded-full px-3.5 text-label text-ink-secondary transition-colors hover:text-ink",
-                  isActive(link.href) && "bg-muted font-semibold text-ink",
+                  "inline-flex min-h-11 items-center rounded-full px-3.5 text-label text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
+                  isActive(link.href) && "bg-surface font-semibold text-ink",
                 )}
               >
                 {link.label}
@@ -87,12 +104,12 @@ export function SiteHeader() {
               </IconButton>
             </DialogPrimitive.Trigger>
             <DialogPrimitive.Portal>
-              <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(17,17,19,0.48)] lg:hidden" />
+              <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(20,44,42,0.48)] lg:hidden" />
               <DialogPrimitive.Content className="fixed inset-x-0 top-0 z-50 rounded-b-2xl border-b border-line bg-canvas p-4 shadow-float focus:outline-none lg:hidden">
                 <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
                 <DialogPrimitive.Description className="sr-only">Site navigation links</DialogPrimitive.Description>
                 <div className="mb-3 flex items-center justify-between">
-                  <YuyuWordmark />
+                  <BrandHomeLink />
                   <DialogPrimitive.Close asChild>
                     <IconButton label="Close navigation menu">
                       <X />
@@ -106,7 +123,7 @@ export function SiteHeader() {
                         href={link.href}
                         onClick={() => setMenuOpen(false)}
                         aria-current={isActive(link.href) ? "page" : undefined}
-                        className={cn("flex min-h-12 items-center rounded-md px-3 text-body font-medium text-ink", isActive(link.href) && "bg-emphasis font-semibold")}
+                        className={cn("flex min-h-12 items-center rounded-md px-3 text-body font-medium text-ink", isActive(link.href) && "bg-surface font-semibold")}
                       >
                         {link.label}
                       </Link>

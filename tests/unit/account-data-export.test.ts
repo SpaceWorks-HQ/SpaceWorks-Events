@@ -147,7 +147,7 @@ describe("account data export route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("application/json; charset=utf-8");
-    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="yuyu-account-data-\d{4}-\d{2}-\d{2}\.json"$/);
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="space-works-events-account-data-\d{4}-\d{2}-\d{2}\.json"$/);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
 
     expect(mocks.user.mock.calls[0][0].where).toEqual({ id: "user_1" });

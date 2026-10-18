@@ -3,7 +3,7 @@ import { LegalPage, type LegalSection } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
-  description: "What personal information this Yuyu instance collects, why, who can see it, how long it is kept and the choices you have.",
+  description: "What personal information this Space Works Events site collects, why, who can see it, how long it is kept and the choices you have.",
 };
 
 const sections: LegalSection[] = [
@@ -11,9 +11,10 @@ const sections: LegalSection[] = [
     id: "who-is-responsible",
     title: "Who is responsible",
     body: [
-      "Yuyu is open-source event software that anyone can run on their own server. In this policy, the “operator” is the organisation that runs this Yuyu instance, and “organisers” are the clubs, groups and teams that create events on it.",
-      "The operator is responsible for accounts, security and the running of this instance. Each organiser is responsible for the information it asks for and uses to run its own events, such as its registration questions, guest lists and event emails. Depending on where you live, the law may call the operator and the organiser a “controller” or a “data fiduciary” for that information.",
-      "The people who build the Yuyu software do not receive the information stored on this instance.",
+      "Space Works Events is open-source event software from Space Works that anyone can run on their own server. In this policy, the “operator” is the organisation that runs this Space Works Events site, and “organisers” are the clubs, groups and teams that create events on it.",
+      "The operator of this site is [Operator legal name — to be filled in by the operator], who can be contacted at [operator contact email — to be filled in by the operator].",
+      "The operator is responsible for accounts, security and the running of this site. Each organiser is responsible for the information it asks for and uses to run its own events, such as its registration questions, guest lists and event emails. Depending on where you live, the law may call the operator and the organiser a “controller” or a “data fiduciary” for that information.",
+      "The people who build the Space Works Events software do not receive the information stored on this site, unless they are also its operator.",
     ],
   },
   {
@@ -35,7 +36,7 @@ const sections: LegalSection[] = [
     body: [
       "We use this information to run the service: to create and secure your account, publish events, take registrations, manage capacity and waitlists, issue tickets, check guests in, send event emails, collect feedback, issue certificates, and investigate security or technical problems.",
       "We process it because it is needed to provide the service you asked for, because we and the organiser have a legitimate interest in running safe and well-organised events, because you gave your consent (for example, to an optional registration question), or because the law requires it.",
-      "Yuyu does not sell personal information, does not show ads, does not take payments and does not build advertising profiles. Waitlists are handled automatically in the order people registered, but no decision with legal or similarly significant effects is made about you by automated means.",
+      "Space Works Events does not sell personal information, does not show ads, does not take payments and does not build advertising profiles. Waitlists are handled automatically in the order people registered, but no decision with legal or similarly significant effects is made about you by automated means.",
     ],
   },
   {
@@ -44,8 +45,8 @@ const sections: LegalSection[] = [
     body: [
       "Organisers. People with the right role in the organisation hosting an event can see its guest list, registration answers, check-in records and feedback, and can download them as spreadsheets. Organisers decide who on their team has that access. Any member of an organisation may see the first names of recent guests on its dashboard.",
       "Door volunteers. Volunteers using a PIN-locked door station can look up and check in guests for that one event. They cannot download the guest list.",
-      "Connected tools. An organisation can connect its own tools through the Yuyu API. These can read event details and, if allowed, the display names, registration times and check-in times of confirmed guests. They never receive email addresses or registration answers.",
-      "The operator. The operator’s administrators can see account and organisation details to support and protect the instance. Registration answers, passwords and tickets are not shown in these tools.",
+      "Connected tools. An organisation can connect its own tools through the Space Works Events API. These can read event details and, if allowed, the display names, registration times and check-in times of confirmed guests. They never receive email addresses or registration answers.",
+      "The operator. The operator’s administrators can see account and organisation details to support and protect the site. Registration answers, passwords and tickets are not shown in these tools.",
       "The public. Public event pages show only what the organiser publishes, such as event details, speakers and, if the organiser chooses, the number of people registered. Guest names are never shown publicly. Public organisation pages show a member count, not member names. Ticket, invitation and password-reset pages are not listed in search engines.",
     ],
   },
@@ -53,7 +54,7 @@ const sections: LegalSection[] = [
     id: "service-providers",
     title: "Service providers and third parties",
     body: [
-      "The operator uses providers to run this instance, such as a hosting provider, file storage, a database, a cache used for rate limiting, an email provider and backups. These providers handle information only to provide their service.",
+      "The operator uses providers to run this site, such as a hosting provider, file storage, a database, a cache used for rate limiting, an email provider and backups. These providers handle information only to provide their service.",
       "Google. If you sign in with Google, Google shares your basic profile with us. Event pages with a venue show an embedded Google Map, and confirmation emails include an “Add to Google Calendar” link. When these load or are used, Google receives your IP address and the venue or event details under its own privacy policy.",
       "Gravatar. Your account page may show your Gravatar picture. To do this, your browser sends Gravatar a one-way hash of your email address.",
       "We may also share information where the law requires it, or to protect the safety and rights of people using the service.",
@@ -97,7 +98,7 @@ const sections: LegalSection[] = [
     id: "security",
     title: "Security",
     body: [
-      "Yuyu keeps each organisation’s data separate, limits access by role, stores passwords as strong one-way hashes, supports authenticator-app multi-factor authentication, encrypts sensitive settings, keeps files in private storage, limits repeated requests and records important actions.",
+      "Space Works Events keeps each organisation’s data separate, limits access by role, stores passwords as strong one-way hashes, supports authenticator-app multi-factor authentication, encrypts sensitive settings, keeps files in private storage, limits repeated requests and records important actions.",
       "Ticket, invitation and password-reset links work like keys. Do not share them. No system is perfectly secure. The operator is responsible for configuring its servers, backups and access securely, and for telling people about a data breach where the law requires it.",
     ],
   },
@@ -113,12 +114,12 @@ const sections: LegalSection[] = [
   {
     id: "children",
     title: "Children",
-    body: "Yuyu is not designed for children. If you are below the age at which you can consent to the use of your personal information where you live, a parent or guardian should register for you. Organisers running events for children are responsible for obtaining any parental consent the law requires.",
+    body: "Space Works Events is not designed for children. If you are below the age at which you can consent to the use of your personal information where you live, a parent or guardian should register for you. Organisers running events for children are responsible for obtaining any parental consent the law requires.",
   },
   {
     id: "international-transfers",
     title: "Where your information is stored",
-    body: "Your information is stored where the operator hosts this instance and its providers. If that is outside your country, the operator is responsible for protecting the transfer as the law requires.",
+    body: "Your information is stored where the operator hosts this site and its providers. If that is outside your country, the operator is responsible for protecting the transfer as the law requires.",
   },
   {
     id: "changes-to-this-policy",
@@ -128,7 +129,7 @@ const sections: LegalSection[] = [
   {
     id: "contact",
     title: "Contact",
-    body: "For questions or requests about your information, contact the operator of this instance. For anything about a particular event, contact the organiser shown on the event page.",
+    body: "For questions or requests about your information, contact the operator at [operator contact email — to be filled in by the operator]. For anything about a particular event, contact the organiser shown on the event page.",
   },
 ];
 
@@ -138,7 +139,7 @@ export default function PrivacyPage() {
       current="privacy"
       title="Privacy"
       updated="15 October 2026"
-      notice="This policy describes how Yuyu handles personal information. Each operator must add its own name, contact details, hosting providers, retention periods and the laws that apply to it, and should have it reviewed by a lawyer. It is not legal advice."
+      notice="This policy describes how Space Works Events handles personal information. Each operator must replace the bracketed placeholders with its own name and contact details, add its hosting providers, retention periods and the laws that apply to it, and should have it reviewed by a lawyer. It is not legal advice."
       sections={sections}
     />
   );

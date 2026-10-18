@@ -2,10 +2,10 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { SiteHeader, YuyuWordmark } from "./SiteHeader";
+import { SiteHeader, BrandHomeLink } from "./SiteHeader";
 import { SiteFooter } from "./SiteFooter";
 
-/** Yuyu's own pages: site header + footer, centred content. */
+/** Space Works Events public pages: site header + footer, centred content. */
 const SITE_PREFIXES = ["/about", "/features", "/discover", "/search", "/privacy", "/terms", "/join/", "/ticket/"];
 /** Pages that render their own complete chrome (app shell, kiosk, embed, split sign-in). */
 const OWN_CHROME_PREFIXES = ["/dashboard", "/account", "/super-admin", "/embed/", "/login"];
@@ -59,7 +59,7 @@ export function ChromeSwitch({ children }: { children: ReactNode }) {
       <>
         <a className="skip-link" href="#main-content">Skip to main content</a>
         <header className="px-4 py-5 sm:px-8">
-          <YuyuWordmark />
+          <BrandHomeLink />
         </header>
         <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center px-4 pb-16 pt-6 focus:outline-none sm:pt-12">
           {children}

@@ -4,7 +4,7 @@ import crypto from "crypto";
 import * as OTPAuth from "otpauth";
 import { prisma } from "@/lib/db";
 
-const ISSUER = "Yuyu Events";
+const ISSUER = "Space Works Events";
 
 function encryptionKey() {
   const raw = process.env.MFA_ENCRYPTION_KEY ?? "";

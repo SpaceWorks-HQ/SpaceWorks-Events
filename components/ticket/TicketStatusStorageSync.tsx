@@ -16,7 +16,7 @@ export function TicketStatusStorageSync(props: {
   useEffect(() => {
     try {
       for (const key of Object.keys(window.localStorage)) {
-        if (!key.startsWith("yuyu:rsvp:")) continue;
+        if (!key.startsWith("swe:rsvp:")) continue;
         const raw = window.localStorage.getItem(key);
         const saved = raw ? (JSON.parse(raw) as { ticketToken?: string; status?: RsvpStatus }) : null;
         if (saved?.ticketToken !== checkInToken || saved.status === status) continue;

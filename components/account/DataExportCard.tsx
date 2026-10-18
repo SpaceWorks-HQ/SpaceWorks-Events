@@ -10,7 +10,7 @@ export const ACCOUNT_DATA_EXPORT_URL = "/api/exports/account";
 
 function filenameFrom(header: string | null) {
   const match = header?.match(/filename="([^"]+)"/);
-  return match?.[1] ?? "yuyu-account-data.json";
+  return match?.[1] ?? "space-works-events-account-data.json";
 }
 
 /**

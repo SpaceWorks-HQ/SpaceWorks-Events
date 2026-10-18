@@ -195,8 +195,8 @@ export function FeedbackFormEditor(props: {
           )}
           <p className="text-body-ui text-ink-secondary">
             {isOpen
-              ? "The feedback link is open. Share it after the event; Yuyu never emails it on its own."
-              : "The feedback link is closed. Open it when you’re ready; Yuyu never emails it on its own."}
+              ? "The feedback link is open. Share it after the event; Space Works Events never emails it on its own."
+              : "The feedback link is closed. Open it when you’re ready; Space Works Events never emails it on its own."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

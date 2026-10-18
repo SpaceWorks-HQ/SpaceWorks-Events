@@ -293,7 +293,7 @@ export function OrganisationCards({ organisations }: { organisations: DashboardH
 export function FirstRunSetup({ setup, name, compact = false }: { setup: NonNullable<DashboardHome["setup"]>; name: string; compact?: boolean }) {
   const slug = setup.firstAdminSlug;
   const steps = [
-    { title: "Create your organisation", body: "Your community’s home on Yuyu. Events, members and settings live here.", done: setup.hasOrganisation, action: <Button asChild variant="primary"><Link href="/dashboard/org/new">Create organisation</Link></Button> },
+    { title: "Create your organisation", body: "Your community’s home on Space Works Events. Events, members and settings live here.", done: setup.hasOrganisation, action: <Button asChild variant="primary"><Link href="/dashboard/org/new">Create organisation</Link></Button> },
     { title: "Add your logo", body: "It appears on your organisation page and at the top of every event page.", done: setup.hasLogo, action: slug ? <Button asChild variant="secondary"><Link href={`/dashboard/${slug}/settings`}>Add logo</Link></Button> : null },
     { title: "Create your first event", body: "A date, a place and a capacity. You can add a programme and speakers later.", done: setup.hasEvent, action: slug ? <CreateEventDialog organisationSlug={slug} /> : null },
     { title: "Publish and share the link", body: "People register in seconds, as guests or with an account.", done: setup.hasPublished, action: slug ? <Button asChild variant="secondary"><Link href={`/dashboard/${slug}`}>Go to events</Link></Button> : null },
@@ -306,7 +306,7 @@ export function FirstRunSetup({ setup, name, compact = false }: { setup: NonNull
       <div className="flex flex-col items-start gap-6 rounded-2xl bg-tint-peach p-6 sm:flex-row sm:items-center sm:p-8">
         <DotFace mood="happy" size={104} />
         <div className="flex flex-col gap-2">
-          <h2 id="home-setup-title" className="font-display text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[40px]">Welcome to Yuyu, {name}</h2>
+          <h2 id="home-setup-title" className="font-display text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[40px]">Welcome to Space Works Events, {name}</h2>
           <p className="max-w-[640px] text-body-l text-ink-secondary">Four small steps and your first event is ready to share.</p>
         </div>
       </div>

@@ -30,7 +30,7 @@ export function CancelRsvpButton(props: {
       try {
         const keys = Object.keys(localStorage);
         for (const key of keys) {
-          if (key.startsWith("yuyu:rsvp:")) {
+          if (key.startsWith("swe:rsvp:")) {
             try {
               const val = localStorage.getItem(key);
               const parsed = val ? (JSON.parse(val) as { ticketToken?: string }) : null;
