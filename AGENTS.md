@@ -8,20 +8,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Yuyu agent guide
+# Space Works Events agent guide
 
 ## Project at a glance
 
-Yuyu is a self-hosted, multi-tenant platform for organizing and running free events. Yuyu does not support paid events, ticket sales, payments, refunds, or event revenue. Event registration and attendance are always free for attendees. It uses Next.js 16 App
+Space Works Events is a self-hosted, multi-tenant platform for organizing and running free events, built by Space Works (derived from Yuyu by Abhiram N J; see `NOTICE`). It does not support paid events, ticket sales, payments, refunds, or event revenue. Event registration and attendance are always free for attendees. It uses Next.js 16 App
 Router, React 19, TypeScript, PostgreSQL with Prisma 6, Auth.js v5, Tailwind
 CSS 4 with Radix primitives, Redis, S3-compatible private storage, Nodemailer,
-Vitest, and Playwright. Deployment supports Docker standalone output and the Helm chart in
-`charts/yuyu/`.
+Vitest, and Playwright. Deployment supports Docker standalone output, the Render free-tier Blueprint
+(`render.yaml`, see `docs/DEPLOYMENT_CLOUD.md`), and the Helm chart in
+`charts/spaceworks-events/`.
 
 The product currently includes organisations and member roles, public/private
 events and RRULE-based series, custom RSVP forms and waitlists, event short
-links, QR tickets with live check-in updates and offline check-in, badge
-printing, feedback and layered certificates, designed broadcast and
+links, QR tickets with live check-in updates and offline check-in, ID card /
+badge generation (server-saved designs, colour and logos, PDF/PNG and bulk
+sheets in `lib/badge/`), feedback and layered certificates, designed broadcast and
 transactional email, a personal account area (registrations, organisations,
 data export), and a separate super-admin operations, insights, and
 instance-settings area, plus a tenant-bound machine API. Treat this as a production-oriented application:
@@ -51,8 +53,24 @@ field, constraint, or cascade from a component alone.
 | `prisma/` | Prisma schema and ordered migrations |
 | `tests/` | Unit, PostgreSQL integration, and Playwright suites |
 | `scripts/` | Production checks, schema checks, storage migration, and standalone helpers |
-| `charts/yuyu/` | Helm deployment chart and migration job |
+| `charts/spaceworks-events/` | Helm deployment chart and migration job |
+| `deploy/cloudflare-cron/` | Cloudflare Worker that runs the outbox every minute on free hosting |
 | `docs/` | Product, security, development, and operational handbook |
+
+## Design system
+
+The UI follows the Space Works brand ([SpaceWorks-HQ/SpaceWorks-Design](https://github.com/SpaceWorks-HQ/SpaceWorks-Design)
+is the source of truth; `docs/DESIGN.md` maps it onto this app). Colours come
+only from the tokens in `app/styles/tokens.css` via the Tailwind utilities in
+`app/globals.css` (`bg-canvas`, `bg-panel`, `bg-primary`, `bg-sidebar`,
+`bg-highlight`, `sw-*` brand colours, …); never hard-code hex in components.
+Gilroy everywhere, Unbounded (`font-accent`) for one short phrase per public
+layout only. Teal for primary actions, Workshop Orange only as a fill with an
+ink label (never orange text), Citron sidebar with text-only nav, no shadows on
+cards, 44px controls with 10px radius, status pills always carry a word. Logos
+come from `components/brand/SpaceWorksLogo.tsx` (masters in
+`public/brand/logo/`, never recoloured). Write "Space Works" in copy, never
+"SpaceWorks"; no "Oops" or "Something went wrong".
 
 ## Working conventions
 
@@ -182,25 +200,24 @@ were not run and why.
 
 Other sessions may edit this tree in parallel. Commit with explicit paths, and
 do not sweep in or revert other sessions' uncommitted files. The user manual
-(`docs/manual/`, `docs/Yuyu-User-Manual.pdf`) is committed only when asked.
+(`docs/manual/`) is committed only when asked.
 
 ### Branching: one branch per feature
 
 Every new feature gets its own branch; never commit a feature straight onto the
-integration branch (currently `v1-design-overhaul`; `main` and `staging` are
-release branches and are only changed when asked).
+integration branch (`main`, which Render deploys; change it only through a
+reviewed pull request).
 
 - Branch from the latest integration branch: `git switch -c feat/<short-name>`
   (use `fix/<short-name>` for a standalone bug fix). One feature per branch.
 - Commit the work there, with checks passing (lint, TypeScript, relevant tests,
   plus the stronger checks above where they apply).
-- Merge back with a merge commit so the feature stays visible in history:
-  `git switch v1-design-overhaul && git merge --no-ff feat/<short-name>`,
-  then re-run the checks on the merged result.
+- Open a pull request into `main` (or merge locally with `git merge --no-ff`
+  when asked), then re-run the checks on the merged result.
 - Push the integration branch and the feature branch only when asked. Delete a
   merged feature branch only when asked.
 - When other sessions are working in parallel, prefer a separate worktree per
-  feature branch (`git worktree add ../yuyu-<short-name> -b feat/<short-name>`)
+  feature branch (`git worktree add ../spaceworks-events-<short-name> -b feat/<short-name>`)
   so branches don't switch under someone else's uncommitted work.
 
 ## Deployment-sensitive changes
