@@ -141,10 +141,11 @@ export function BadgesPanel({
     }
   };
 
-  const previewScale = Math.min(300 / settings.widthMm, 220 / settings.heightMm);
+  // 260 px wide at most, so the preview and its padding fit a 375 px phone.
+  const previewScale = Math.min(260 / settings.widthMm, 220 / settings.heightMm);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
       <BadgeFontFaces />
       <section aria-labelledby="badge-attendees-title" className="order-2 flex min-w-0 flex-col gap-4 rounded-[16px] border border-line bg-panel p-4 sm:p-5 lg:order-none">
         <div className="flex flex-wrap items-end justify-between gap-3">
