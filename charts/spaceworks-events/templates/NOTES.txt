@@ -1,7 +1,7 @@
-Yuyu has been installed.
+Space Works Events has been installed.
 
 The runtime configuration is read from the existing Secret:
   {{ .Values.existingSecret }}
 
 Check rollout status:
-  kubectl rollout status deployment/{{ include "yuyu.fullname" . }} --namespace {{ .Release.Namespace }}
+  kubectl rollout status deployment/{{ include "spaceworks-events.fullname" . }} --namespace {{ .Release.Namespace }}

@@ -14,7 +14,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   use: {
     // Use IPv4 explicitly: on this workstation localhost/::1 is served by a
-    // separate development app while Yuyu is bound on 127.0.0.1.
+    // separate development app while Space Works Events is bound on 127.0.0.1.
     baseURL: testBaseUrl,
     trace: "on-first-retry",
   },

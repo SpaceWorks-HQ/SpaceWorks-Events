@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: yuyu_staging
-      POSTGRES_USER: yuyu
+      POSTGRES_DB: swevents_staging
+      POSTGRES_USER: swevents
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yuyu -d yuyu_staging"]
+      test: ["CMD-SHELL", "pg_isready -U swevents -d swevents_staging"]
       interval: 10s
       timeout: 5s
       retries: 10

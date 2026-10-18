@@ -141,7 +141,7 @@ export async function sha256(file) {
 
 function archivePaths(timestamp = new Date()) {
   const stamp = timestamp.toISOString().replace(/[:.]/g, "-");
-  const name = `yuyu-backup-${stamp}.dump`;
+  const name = `spaceworks-events-backup-${stamp}.dump`;
   return { archive: path.join(backupDirectory, name), metadata: path.join(backupDirectory, `${name}.json`) };
 }
 
@@ -155,7 +155,7 @@ async function requiredBackupSpace(environment) {
   return Math.max(minimumFreeBytes, Math.ceil(Number(sizeText) * 1.2) + minimumFreeBytes);
 }
 
-function validS3Prefix(prefix = "yuyu-backups") {
+function validS3Prefix(prefix = "spaceworks-events-backups") {
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$/.test(prefix) || prefix.includes("..") || prefix.startsWith("/")) fail("Invalid S3 prefix.");
   return prefix.replace(/\/$/, "");
 }

@@ -11,25 +11,25 @@ describe("database backup command safety", () => {
   });
 
   it("requires TLS PostgreSQL URLs and returns only the database name", () => {
-    expect(backup.databaseDetails("postgresql://user:secret@db.example/yuyu?sslmode=verify-full").databaseName).toBe("yuyu");
-    expect(() => backup.databaseDetails("postgresql://user:secret@db.example/yuyu")).toThrow("must require TLS");
-    expect(() => backup.databaseDetails("https://example.com/yuyu?sslmode=require")).toThrow("PostgreSQL");
+    expect(backup.databaseDetails("postgresql://user:secret@db.example/swevents?sslmode=verify-full").databaseName).toBe("swevents");
+    expect(() => backup.databaseDetails("postgresql://user:secret@db.example/swevents")).toThrow("must require TLS");
+    expect(() => backup.databaseDetails("https://example.com/swevents?sslmode=require")).toThrow("PostgreSQL");
   });
 
   it("returns useful reviewed errors without exposing unexpected provider details", () => {
     expect(backup.backupFailureMessage(new backup.BackupOperationError("DATABASE_URL is required."))).toBe("DATABASE_URL is required.");
-    expect(backup.backupFailureMessage(new Error("postgresql://user:password@private.example/yuyu"))).not.toContain("postgresql://");
+    expect(backup.backupFailureMessage(new Error("postgresql://user:password@private.example/swevents"))).not.toContain("postgresql://");
   });
 
   it("identifies development and local restore targets", () => {
-    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@localhost/yuyu?sslmode=require")).toBe(true);
-    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@db.example/yuyu_test?sslmode=require")).toBe(true);
-    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@db.example/yuyu?sslmode=require")).toBe(false);
+    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@localhost/swevents?sslmode=require")).toBe(true);
+    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@db.example/swevents_test?sslmode=require")).toBe(true);
+    expect(backup.isUnsafeRestoreDatabase("postgresql://user:secret@db.example/swevents?sslmode=require")).toBe(false);
   });
 
   it("uses an owner-only temporary password file instead of forwarding DATABASE_URL", async () => {
     await mkdir(backup.backupDirectory, { recursive: true });
-    const details = backup.databaseDetails("postgresql://backup-user:very-secret@db.example:5433/yuyu?sslmode=verify-full");
+    const details = backup.databaseDetails("postgresql://backup-user:very-secret@db.example:5433/swevents?sslmode=verify-full");
     const connection = await backup.createDatabaseEnvironment(details);
     try {
       expect(connection.environment.DATABASE_URL).toBeUndefined();
@@ -39,7 +39,7 @@ describe("database backup command safety", () => {
       const passfile = connection.environment.PGPASSFILE;
       expect(passfile).toContain(".pgpass-");
       if (!passfile) throw new Error("Expected PGPASSFILE.");
-      await expect(readFile(passfile, "utf8")).resolves.toBe("db.example:5433:yuyu:backup-user:very-secret\n");
+      await expect(readFile(passfile, "utf8")).resolves.toBe("db.example:5433:swevents:backup-user:very-secret\n");
     } finally {
       await connection.dispose();
     }

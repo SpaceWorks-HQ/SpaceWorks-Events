@@ -1,6 +1,6 @@
 apiVersion: v2
-name: yuyu
-description: Production Helm chart for the Yuyu events application
+name: spaceworks-events
+description: Production Helm chart for Space Works Events
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
