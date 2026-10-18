@@ -94,6 +94,11 @@ export function RegistrationCard(props: {
 
   const savedLabel = saved ? statusLabels[saved.status ?? "CONFIRMED"] ?? { chip: "Registered", tone: "neutral" as const, action: "View registration" } : null;
   const registerLabel = state.full ? "Join the waitlist" : state.approvalRequired ? "Request to join" : "Register — it's free";
+  const registerNote = state.full
+    ? "Free to attend. You'll join the waitlist, and we'll email you if a place opens up."
+    : state.approvalRequired
+      ? "Free to attend. The organiser approves each request; we'll email your ticket once you're in."
+      : "Free to attend. We'll email your ticket.";
   const spotsLeft = capacity != null && confirmedCount != null ? Math.max(0, capacity - confirmedCount) : null;
 
   const primaryAction = state.cancelled ? null : saved && savedLabel ? (
@@ -152,7 +157,7 @@ export function RegistrationCard(props: {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent size="md" style={accentStyle(accentColor)} className="yy-accent-scope">
-          <DialogHeader title={`Register for ${eventTitle}`} description="Free to attend. We'll email your ticket." />
+          <DialogHeader title={`Register for ${eventTitle}`} description={registerNote} />
           <DialogBody className="pb-6">
             <RsvpForm
               orgSlug={orgSlug}
