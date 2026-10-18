@@ -155,6 +155,9 @@ function FieldsBuilder({ organisationSlug, programmeId, initial }: { organisatio
     try {
       const result = await saveIdProgrammeFields({ organisationSlug, programmeId, fields: fields.map((field) => ({ ...field, label: field.label.trim(), options: field.options.map((option) => option.trim()).filter(Boolean) })) });
       if (result.ok) {
+        // New questions now have keys: keep them, so the next save updates these questions instead of replacing them.
+        const keys = result.data?.keys ?? [];
+        setFields((current) => current.map((field, index) => (keys[index] ? { ...field, key: keys[index] } : field)));
         setNotice({ tone: "success", text: "Questions saved." });
         router.refresh();
       } else setNotice({ tone: "danger", text: result.error });

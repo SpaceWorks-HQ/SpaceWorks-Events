@@ -27,27 +27,30 @@ function Thumb({ preset }: { preset: MemberIdPreset }) {
 
 export function PresetPicker({ value, onChange }: { value: MemberIdPreset; onChange: (preset: MemberIdPreset) => void }) {
   return (
-    <div role="radiogroup" aria-label="Card design" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {MEMBER_ID_PRESETS.map((preset) => {
-        const active = preset === value;
-        return (
-          <button
-            key={preset}
-            type="button"
-            role="radio"
-            aria-checked={active}
-            title={MEMBER_ID_PRESET_INFO[preset].hint}
-            onClick={() => onChange(preset)}
-            className={cn(
-              "flex min-h-11 flex-col items-center gap-1.5 rounded-[10px] border bg-canvas p-2 text-center transition-colors hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
-              active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary)]" : "border-line",
-            )}
-          >
-            <span className="grid h-[54px] place-items-center"><Thumb preset={preset} /></span>
-            <span className="text-[12px] font-semibold leading-tight text-ink">{MEMBER_ID_PRESET_INFO[preset].label}</span>
-          </button>
-        );
-      })}
+    // Four across only when the picker itself is wide enough: the designer's side panel is not, and "Community" spilled out of its tile.
+    <div className="@container">
+      <div role="radiogroup" aria-label="Card design" className="grid grid-cols-2 gap-2 @md:grid-cols-4">
+        {MEMBER_ID_PRESETS.map((preset) => {
+          const active = preset === value;
+          return (
+            <button
+              key={preset}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              title={MEMBER_ID_PRESET_INFO[preset].hint}
+              onClick={() => onChange(preset)}
+              className={cn(
+                "flex min-h-11 flex-col items-center gap-1.5 rounded-[10px] border bg-canvas p-2 text-center transition-colors hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary",
+                active ? "border-primary shadow-[inset_0_0_0_1px_var(--color-primary)]" : "border-line",
+              )}
+            >
+              <span className="grid h-[54px] place-items-center"><Thumb preset={preset} /></span>
+              <span className="text-[12px] font-semibold leading-tight text-ink">{MEMBER_ID_PRESET_INFO[preset].label}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

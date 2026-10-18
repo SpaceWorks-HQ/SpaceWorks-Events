@@ -79,6 +79,10 @@ function side(preset: MemberIdPreset, which: MemberIdSide, context: MemberIdDesi
     const symbolAbove = at.symbol.yMm < at.footer.yMm - 1;
     at.footer = { ...at.footer, yMm: Math.round((at.footer.yMm - lift) * 10) / 10 };
     if (symbolAbove) at.symbol = { ...at.symbol, yMm: Math.round((at.symbol.yMm - lift) * 10) / 10 };
+    // The back prints no name or email: start the ID number and answers where the name would be,
+    // so the answers placed on the back clear the symbol and note at the bottom.
+    const up = at.idNumber.yMm - at.name.yMm;
+    for (const item of ["idNumber", "validUntil", "details"] as const) at[item] = { ...at[item], yMm: Math.round((at[item].yMm - up) * 10) / 10 };
   }
   return {
     ...base,

@@ -238,6 +238,21 @@ describe("member ID cards", { timeout: 60_000 }, () => {
     expect(back.ops[0]).toMatchObject({ kind: "image", url: watermarkUrl, opacity: 0.08 });
   });
 
+  it("keeps three answers on the back clear of the symbol and note, on every preset", async () => {
+    const { measurer } = await loadBadgeFonts();
+    const backFields = ["blood", "joined", "emergency"].map((key) => ({ key, label: key, type: "TEXT" as const, placement: "BACK" as const }));
+    const attendee = { ...person, registrationDetails: backFields.map((field) => ({ key: field.key, label: "Blood group", value: "O+" })) };
+    for (const preset of MEMBER_ID_PRESETS) {
+      const settings = sideSettings(defaultMemberIdDesign(context, preset), "back", backFields);
+      const scene = buildBadgeScene({ settings, attendee, branding: { ...branding, watermarkUrl: null }, measurer });
+      const answers = scene.ops.filter((op): op is BadgeTextOp => op.kind === "text" && op.text === "O+");
+      expect(answers, preset).toHaveLength(3);
+      const lastBaseline = Math.max(...answers.map((op) => op.baseline));
+      const bottomRowTop = Math.min(settings.elementPositions.symbol.yMm, settings.elementPositions.footer.yMm);
+      expect(lastBaseline, preset).toBeLessThan(bottomRowTop);
+    }
+  });
+
   it("renders a two-page PDF (front, back) and a front-only PDF when the back is off", async () => {
     const input = { design: defaultMemberIdDesign(context), fields, branding };
     const pdf = await renderMemberCard(input, person, "pdf", { title: "Card" });

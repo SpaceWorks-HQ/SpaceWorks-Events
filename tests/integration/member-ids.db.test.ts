@@ -10,7 +10,7 @@ vi.mock("@/lib/rateLimit", () => ({ checkRateLimitById: async () => true, getCli
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 
 import { joinIdProgramme } from "@/app/actions/member-id-join";
-import { commitIdImport, createIdProgramme, deleteIdMember, deleteIdProgramme, emailIdCard, emailIdCards, saveIdProgrammeDesign, setIdMemberStatus, updateIdProgramme, uploadIdProgrammeWatermark } from "@/app/actions/member-ids";
+import { commitIdImport, createIdProgramme, deleteIdMember, deleteIdProgramme, emailIdCard, emailIdCards, saveIdProgrammeDesign, saveIdProgrammeFields, setIdMemberStatus, updateIdProgramme, uploadIdProgrammeWatermark } from "@/app/actions/member-ids";
 import { GET as bulkCards } from "@/app/api/exports/member-ids/[programmeId]/cards/route";
 import { GET as oneCard } from "@/app/api/exports/member-ids/[programmeId]/cards/[memberId]/route";
 import { GET as walletCard } from "@/app/api/exports/account/ids/[memberId]/route";
@@ -124,6 +124,20 @@ describe.sequential("member IDs", { timeout: 90_000 }, () => {
     await prisma.idMember.delete({ where: { id: request.id } });
     expect((await joinIdProgramme(joinForm(slug, { name: "Jo Iner", "field:role": "Volunteer" }))).ok).toBe(false);
     await prisma.idMember.create({ data: { ...request, fieldValues: { role: "Volunteer" } } });
+  });
+
+  it("returns the saved question keys so a second save keeps them", async () => {
+    as(ids.owner);
+    const created = await createIdProgramme({ organisationSlug: slugA, name: "Question keys" });
+    const id = created.ok ? created.data!.id : "";
+    const question = { label: "Joined on", type: "DATE" as const, required: false, options: [], placement: "BACK" as const };
+    const first = await saveIdProgrammeFields({ organisationSlug: slugA, programmeId: id, fields: [question] });
+    expect(first).toEqual({ ok: true, data: { keys: ["joined_on"] } });
+    // The designer sends the returned key back with an edited label.
+    const second = await saveIdProgrammeFields({ organisationSlug: slugA, programmeId: id, fields: [{ ...question, key: "joined_on", label: "Member since" }] });
+    expect(second).toEqual({ ok: true, data: { keys: ["joined_on"] } });
+    expect(await prisma.idProgrammeField.findMany({ where: { programmeId: id }, select: { key: true, label: true } })).toEqual([{ key: "joined_on", label: "Member since" }]);
+    await deleteIdProgramme({ organisationSlug: slugA, programmeId: id });
   });
 
   it("imports members with de-duplication", async () => {
@@ -366,6 +380,19 @@ describe.sequential("member IDs", { timeout: 90_000 }, () => {
     expect(await uploadIdProgrammeWatermark(form)).toEqual({ ok: true, data: { url: null } });
     const audit = await prisma.auditEvent.findFirst({ where: { action: "ID_PROGRAMME_WATERMARK_UPDATED", targetId: ids.programmeA } });
     expect(audit).toMatchObject({ actorUserId: ids.admin, organisationId: ids.orgA, metadata: { removed: true } });
+  });
+
+  it("deletes the stored watermark image when it is removed", async () => {
+    as(ids.owner);
+    const watermarkKey = `organisations/${ids.orgA}/member-id-watermarks/${randomUUID()}.webp`;
+    await prisma.asset.create({ data: { key: watermarkKey, contentType: "image/webp", provider: "database", fileData: new Uint8Array([1]), organisationId: ids.orgA } });
+    await prisma.idProgramme.update({ where: { id: ids.programmeA }, data: { watermarkUrl: `/api/uploads/${watermarkKey}` } });
+    const form = new FormData();
+    form.set("organisationSlug", slugA);
+    form.set("programmeId", ids.programmeA);
+    form.set("remove", "1");
+    expect(await uploadIdProgrammeWatermark(form)).toEqual({ ok: true, data: { url: null } });
+    expect(await prisma.asset.count({ where: { key: watermarkKey } })).toBe(0);
   });
 
   it("keeps every member inside its programme's organisation at the database layer", async () => {
