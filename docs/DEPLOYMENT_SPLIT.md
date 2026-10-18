@@ -31,7 +31,7 @@ UDP 443; keep all data/service ports private. Caddy obtains the API HTTPS
 certificate. Use DNS-only API records initially so Caddy sees the real client IP.
 
 Run the [curl installer](DEPLOYMENT_VPS.md#guided-installation), or run
-`bash scripts/setup-vps.sh` from a reviewed checkout with Docker already installed.
+`sudo bash scripts/setup-vps.sh` from a reviewed checkout.
 Choose **2 = Netlify frontend + VPS backend**. Enter the API hostname, distinct
 frontend hostname, admin email and SMTP details. The generated external files are:
 

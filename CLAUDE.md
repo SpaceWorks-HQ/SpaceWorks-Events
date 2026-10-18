@@ -20,7 +20,10 @@ separate super-admin step-up, checked in every super-admin page; write-only,
 encrypted instance SMTP/Google settings; tenant-bound machine API credentials;
 image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`;
 server-generated ID cards (`lib/badge/`, org-isolated, storage-key-only
-images); and Docker/Render/Helm deployment with PostgreSQL (Supabase), Redis
+images); the one-line curl VPS installer (`install.sh`, `scripts/*vps*`: asks
+everything before changing the host, never regenerates secrets, rolls back failed
+updates; bundled PostgreSQL, Redis and Silo storage); and Docker/Render/Helm
+deployment with PostgreSQL (Supabase), Redis
 (Upstash), S3 (Cloudflare R2), and SMTP (Brevo on port 2525).
 
 Before changing framework behaviour, consult the relevant Next.js 16 guide in

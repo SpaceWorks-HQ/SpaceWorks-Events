@@ -233,6 +233,7 @@ scripts. Consequently:
 
 Follow [Production operations](production-operations.md) for backup storage,
 restore acknowledgement, retention, monitoring, and incident requirements.
-The VPS stack builds these targets from a reviewed checkout; it does not
-download releases automatically, install Docker, or provide split frontend/backend images.
-Use `bash scripts/setup-vps.sh` for the guided first installation.
+The VPS stack builds these targets on the server from a pinned source release; it
+does not pull prebuilt application images. The [one-line installer](DEPLOYMENT_VPS.md#guided-installation)
+downloads the release, installs Docker if needed and runs the guided setup;
+`sudo bash scripts/setup-vps.sh` does the same from a reviewed checkout.

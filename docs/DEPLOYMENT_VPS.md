@@ -15,11 +15,12 @@ with the transport and privacy requirements of this Events application. Use
 
 ## Before you start
 
-- A Linux VPS. The curl installer can install Docker Engine + Compose on fresh
-  Ubuntu/Debian; other distributions need Docker installed first. Start with **2 vCPU,
-  4 GB RAM and 30 GB SSD** for a small installation, with extra space for uploads
-  and backups. These are starting estimates, not load-tested capacity limits;
-  building the image can need additional memory or swap.
+- A 64-bit (x86_64 or arm64) Linux VPS: Ubuntu/Debian, Fedora/RHEL/Alma/Rocky,
+  Arch or openSUSE. The installer installs Docker Engine + Compose when missing.
+  Start with **2 vCPU, 4 GB RAM and 30 GB SSD** for a small installation, with
+  extra space for uploads and backups. These are starting estimates, not
+  load-tested capacity limits. Building the image needs about 4 GB of memory; the
+  installer offers a swap file on smaller servers.
 - A domain, such as `events.example.com`, whose DNS A record points to the VPS.
   Add an AAAA record only if IPv6 reaches this host too. Start with DNS-only
   records; the supplied proxy assumes clients connect directly to Caddy.
@@ -35,35 +36,46 @@ with the transport and privacy requirements of this Events application. Use
 
 ## Guided installation
 
-Use a reviewed, published source ref containing `install.sh`:
+As root or a user with `sudo`:
 
 ```bash
-SWE_REF=<reviewed-commit-or-tag>
-curl -fsSL "https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/$SWE_REF/install.sh" -o install.sh
-sudo bash install.sh --ref "$SWE_REF"
+curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/main/install.sh | bash
 ```
 
-The bootstrap resolves the ref to one commit, downloads that pinned archive and
-runs its guided setup. For a checkout with Docker already installed, run
-`bash scripts/setup-vps.sh` instead. Choose mode 1 for the whole application on
-the VPS, or mode 2 for [Netlify + VPS](DEPLOYMENT_SPLIT.md).
+The bootstrap checks for Linux, the architecture, root or sudo and `curl`/`tar`,
+resolves `main` (or `--ref`) to one commit and downloads that archive into
+temporary storage. The release's `scripts/setup-vps.sh` then checks disk space and
+ports 80/443 and asks every question first: mode 1 (everything on the VPS) or
+mode 2 ([Netlify + VPS](DEPLOYMENT_SPLIT.md)), hostnames, super-admin email,
+verified sender and SMTP relay (password hidden; Brevo is prefilled on port 2525).
+Invalid answers are asked again. On a server with less than 4 GB of memory it
+offers a 4 GB swap file. It reports what the hostname resolves to and shows one
+summary of every answer and host change. **Nothing changes before you confirm.**
 
-Setup collects domains, admin email, external configuration directory, verified
-sender and authenticated SMTP settings (password hidden). It shows a summary
-before installing packages, generating secrets, building images or starting
-services. It applies migrations, waits for healthy services and runs the VPS
-checks. DNS, firewall policy, SMTP provisioning and off-server backups remain
-operator tasks. Root is needed only when installing host packages or writing the
-default `/opt` and `/etc` paths; Docker itself grants privileged host access.
+After confirmation it creates the swap file if accepted, installs Docker from the
+distribution family's official source if missing, copies the release to
+`/opt/spaceworks-events/releases/<commit>`, generates configuration in
+`/etc/spaceworks-events`, builds the images, applies migrations, waits for healthy
+services and runs the VPS checks. `current` then points at the release and
+`/opt/spaceworks-events/install.conf` records the configuration directory and the
+repository to update from. `--dir` changes the installation directory, `--ref`
+installs a branch, tag or commit, and `--repo owner/name` a fork; pass options as
+`curl … | bash -s -- --dir /srv/spaceworks-events`. To keep secrets somewhere
+other than `/etc/spaceworks-events`, set the variable on the `bash` side of the
+pipe: `curl … | SWE_CONFIG_DIR=/srv/events-config bash`. Running `curl … | sudo bash`
+as root works too. DNS, firewall policy, SMTP provisioning and off-server backups
+remain operator tasks.
 
-Source releases live in `/opt/spaceworks-events/releases/<commit>` and `current`
-points to the successfully installed release. Configuration stays outside the
-source in `/etc/spaceworks-events`. A cancelled or failed setup retains its source
-for inspection; fix the reported issue and rerun the script from that directory.
-If configuration was already generated, use the manual build/start/check commands
-below rather than running setup again. No command deletes existing volumes.
+Answers are stored in single-quoted env files, so the sender, SMTP login and
+password cannot contain `'` or `\`; the installer asks again if they do.
 
-For explicit commands or an automated deployment, follow the manual steps below.
+If setup stops after confirmation (a failed build, a full disk), fix the cause and
+run the one-liner again: it offers to **resume** that release without generating
+new secrets. Only one install, update, backup or restore runs at a time.
+
+From a reviewed checkout, `sudo bash scripts/setup-vps.sh` asks the same questions
+and runs the stack from that checkout instead of `/opt/spaceworks-events`. For
+explicit commands or automation, follow the manual steps below.
 
 ## 1. Get a reviewed release and generate configuration
 
@@ -165,21 +177,29 @@ no Cloudflare Worker or host cron.
 
 ## Upgrades and rollback
 
-For a curl-installed release, download a reviewed installer as above, then run:
+Run the one-liner again and choose **1) Update to the latest release** (or pass
+`--update` to skip the menu). The menu also offers **2) Back up now** and
+**3) Check status and health**. The updater:
 
-```bash
-sudo bash install.sh --ref <new-reviewed-commit-or-tag> --update
-```
+1. stops if the installation already runs the latest commit;
+2. shows the current and new release and asks for confirmation;
+3. backs up the database and configuration (`scripts/vps-backup.sh --no-objects`);
+4. changes only `SWE_VERSION` in `compose.env`, builds the new images while the site
+   keeps running, runs preflight, applies migrations and verifies the schema;
+5. recreates the services, waits for them to be healthy and runs the VPS checks;
+6. points `current` at the new release and keeps the three newest releases and
+   their images.
 
-The updater asks for the existing configuration directory, requires confirmation
-that off-server backups and migrations were reviewed, saves a local pre-upgrade
-database dump and configuration archive, builds the new images, runs preflight,
-applies migrations, verifies the schema and recreates/checks services. It changes
-only `SWE_VERSION` in the existing Compose settings. It retains encryption keys,
-credentials, volumes, previous sources and images. It does not roll back database
-migrations automatically. Local archives contain sensitive data and still need
-encrypted off-server retention. For split hosting, deploy the identical commit to
-Netlify after the backend update.
+If any step after the backup fails, it restores the previous `compose.env` and
+starts the previous release's retained images. **Migrations that already ran are
+not reversed**; review migrations before updating, and restore the pre-update
+backup if an older release cannot run on the newer schema. For automation, unpack
+the new release with its commit in a `.release` file and run
+`sudo bash <new release>/scripts/update-vps.sh --yes`; it is copied into
+`releases/` like any other update. For split hosting, deploy
+the identical commit to Netlify after the backend update.
+
+For a checkout-based installation, follow the manual steps below.
 
 Back up first and record the current commit and image version. Review database
 migrations for compatibility before changing the running installation.
@@ -213,50 +233,80 @@ runtime key stable across ordinary builds and upgrades.
 
 ## Backups and recovery
 
-Persistent volumes hold PostgreSQL, Redis, object storage and Caddy certificates.
-Back up **both database and uploaded objects**, plus the external configuration.
-Use encrypted host disks, encrypted off-server archives, retention, backup-failure
-alerts and regular restore drills. For the production recovery baseline, configure daily off-server backups and
-PostgreSQL WAL archiving/PITR or provider-managed recovery separately, and test
-restores before launch; this Compose file does not configure those services. Super-admin backup settings describe
-posture and do not create backups.
-
-For a small installation, a maintenance-window backup can stop writers, create a
-logical database dump, stop the data services and take a consistent VPS/provider
-snapshot of all Docker volumes and the external configuration, then restart.
-The dump below writes into an owner-only directory outside Git:
+Persistent volumes hold PostgreSQL, Redis, Silo object storage and Caddy
+certificates. Back up **both database and uploaded objects**, plus the external
+configuration:
 
 ```bash
-umask 077
-mkdir -p "$SWE_CONFIG_DIR/backups"
-scripts/vps-compose.sh stop proxy scheduler app
-scripts/vps-compose.sh exec -T postgres pg_dump -U swevents -d swevents -Fc \
-  > "$SWE_CONFIG_DIR/backups/swevents-$(date -u +%Y%m%dT%H%M%SZ).dump"
-# After checking that the dump succeeded:
-scripts/vps-compose.sh stop postgres redis storage
-# Take the encrypted volume/config snapshot using your backup provider now.
-scripts/vps-compose.sh up -d
+sudo bash /opt/spaceworks-events/current/scripts/vps-backup.sh
 ```
 
-Check command exit codes before continuing. If backup fails, restart services
-and resolve the failure; do not label the backup successful. Copy backups off
-this VPS and verify restore on an isolated host, including images, encrypted
-settings, registrations and sign-in. Restoring snapshots replaces live data:
-stop all writers and follow a reviewed recovery procedure. Never run
-`scripts/vps-compose.sh down --volumes` on an installation you want to retain.
-See [Production operations](production-operations.md) for incident and retention
-requirements and the existing operator-initiated archive tools.
+The services keep running. The script writes `/etc/spaceworks-events/backups/<UTC time>/`
+with a consistent `database.dump` (checked with `pg_restore --list`), `config.tar.gz`
+(every secret, including `MFA_ENCRYPTION_KEY` and the CA) and `objects/` (every
+uploaded file, mirrored from Silo). `--no-objects` skips the files; updates and
+restores use it. It keeps the newest seven full and seven database-only backups
+(`SWE_BACKUP_KEEP` changes that), and never removes the backup being restored.
+Schedule it, for example with a root cron entry
+`30 3 * * * bash /opt/spaceworks-events/current/scripts/vps-backup.sh`, and copy each
+backup off this server, encrypted, the same day. A backup on the same VPS is not a
+backup of the VPS.
+
+To restore on the same installation:
+
+```bash
+sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh /etc/spaceworks-events/backups/<time>
+```
+
+It shows what will be replaced and asks you to type `RESTORE`. It backs up the
+current database first, stops the app, Caddy and the scheduler, and replaces the
+database in one transaction. It then copies the backup's files back into Silo
+(newer files stay), runs migrations if the backup came from an older release,
+starts everything and runs the VPS checks.
+
+On a **new server**, restore the configuration before anything else, because the
+database holds data encrypted with its keys. Do not run a fresh install: it would
+generate different keys. Copy the backup directory to the server (here
+`/root/<time>`). Then, as root, unpack the release named in its `version` file and
+record it as an unfinished installation:
+
+```bash
+backup=/root/<time>
+commit=$(curl -fsSL -H 'Accept: application/vnd.github.sha' \
+  "https://api.github.com/repos/SpaceWorks-HQ/SpaceWorks-Events/commits/$(sed 's/^vps-//' "$backup/version")")
+release=/opt/spaceworks-events/releases/$commit
+mkdir -p "$release"
+curl -fsSL "https://codeload.github.com/SpaceWorks-HQ/SpaceWorks-Events/tar.gz/$commit" | tar -xz -C "$release" --strip-components=1
+echo "$commit" > "$release/.release"
+install -d -m 0700 /etc/spaceworks-events
+tar -xzf "$backup/config.tar.gz" -C /etc/spaceworks-events
+printf "SWE_CONFIG_DIR='/etc/spaceworks-events'\nSWE_PENDING_RELEASE='%s'\n" "$commit" > /opt/spaceworks-events/install.conf
+command -v docker >/dev/null || bash "$release/scripts/install-docker.sh"
+```
+
+Run the one-liner and choose **Resume**. It builds and starts that release with
+the restored keys. Then run `vps-restore.sh "$backup"` and point DNS at the new
+server. Later updates work as usual.
+
+For the production recovery baseline, also configure encrypted off-server
+retention, backup-failure alerts, PostgreSQL WAL archiving/PITR or
+provider-managed recovery, and regular restore drills on an isolated host; this
+Compose file does not configure those. Super-admin backup settings describe
+posture and do not create backups. Never run `scripts/vps-compose.sh down --volumes`
+on an installation you want to retain. See [Production operations](production-operations.md)
+for incident and retention requirements.
 
 ## Certificate renewal and monitoring
 
 Caddy renews public HTTPS certificates automatically while DNS and ports remain
 reachable. Internal service certificates last **one year**. Schedule renewal
-well before expiry with the ops image built from your deployed checkout:
+well before expiry with the ops image of the running release. As root:
 
 ```bash
-docker run --rm --user "$(id -u):$(id -g)" \
-  --volume "$SWE_CONFIG_DIR:/config" \
-  swevents-ops:bootstrap node docker/vps/setup.mjs renew-certificates
+cd /opt/spaceworks-events/current   # or your checkout
+export SWE_CONFIG_DIR=/etc/spaceworks-events
+(. "$SWE_CONFIG_DIR/compose.env"; docker run --rm --volume "$SWE_CONFIG_DIR:/config" \
+  "swevents-ops:$SWE_VERSION" node docker/vps/setup.mjs renew-certificates)
 scripts/vps-compose.sh up -d --force-recreate postgres redis storage app proxy scheduler
 scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
 ```
