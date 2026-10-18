@@ -1,24 +1,25 @@
-# Contributing to Yuyu
+# Contributing to Space Works Events
 
-Thanks for helping make free community events easier to run. Yuyu is built in
-the open at [github.com/twilighty-abhi/yuyu](https://github.com/twilighty-abhi/yuyu).
+Thanks for helping make free maker and community events easier to run. Space Works
+Events is built in the open at
+[github.com/SpaceWorks-HQ/SpaceWorks-Events](https://github.com/SpaceWorks-HQ/SpaceWorks-Events).
 
 ## Ways to help
 
-- **Report a bug.** [Open an issue](https://github.com/twilighty-abhi/yuyu/issues/new)
+- **Report a bug.** [Open an issue](https://github.com/SpaceWorks-HQ/SpaceWorks-Events/issues/new)
   with what you expected, what happened, and the steps to repeat it. Include your
-  browser or device and, for self-hosted installs, the Yuyu version.
+  browser or device and, for self-hosted installs, the version you run.
 - **Suggest an idea.** Start a thread in
-  [Discussions](https://github.com/twilighty-abhi/yuyu/discussions). Describe the
+  [Discussions](https://github.com/SpaceWorks-HQ/SpaceWorks-Events/discussions). Describe the
   problem your community has before the solution you have in mind.
 - **Send a pull request.** For anything larger than a small fix, open an issue or
   discussion first so we can agree on the approach.
 
 ## Security issues
 
-Please **don't** report vulnerabilities in a public issue. Contact the maintainer
-privately through GitHub (the repository owner's profile) and allow time for a fix
-before disclosing. The security model is described in
+Please **don't** report vulnerabilities in a public issue. Use GitHub's private
+vulnerability reporting on the repository (Security → Report a vulnerability) and
+allow time for a fix before disclosing. The security model is described in
 [docs/SECURITY.md](docs/SECURITY.md).
 
 ## Local setup
@@ -50,13 +51,19 @@ Never commit `.env` or real secrets.
 
    Changes to authorization, mutations, public routes, the API or deployment need
    the stronger checks in [docs/TESTING.md](docs/TESTING.md).
-4. UI changes follow [docs/DESIGN.md](docs/DESIGN.md). Check light and dark mode
-   and a 360px-wide screen. Don't restyle organiser logos, covers or colours with
-   Yuyu's brand.
+4. UI changes follow [docs/DESIGN.md](docs/DESIGN.md) and the Space Works brand:
+   sentence case, clear and warm copy, teal for actions, and no "Oops" or
+   "Something went wrong". Check light and dark mode and a 360px-wide screen.
+   Don't restyle organiser logos, covers or colours with the Space Works brand.
 5. Database changes need a reviewed Prisma migration.
 6. Describe what changed and how you tested it in the pull request.
 
+## Licence
+
+By contributing, you agree that your contributions are licensed under the
+[GNU AGPL-3.0-or-later](LICENSE), the same licence as the project.
+
 ## Product boundaries
 
-Yuyu is for **free** events. Contributions that add payments, ticket sales, ads or
-third-party trackers won't be accepted.
+Space Works Events is for **free** events. Contributions that add payments,
+ticket sales, ads or third-party trackers won't be accepted.
