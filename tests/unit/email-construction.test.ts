@@ -54,6 +54,19 @@ describe("email construction", () => {
     expect(message.html).not.toContain('href="https://events.test/join/token?one=1&two=2"');
   });
 
+  it("sends co-organiser invitations in the branded layout", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://events.test");
+    await sendCollaboratorInvitation({ to: "person@example.test", eventTitle: "Maker <Night>", inviteUrl: "https://events.test/join/event-collaborator/tok" });
+    vi.unstubAllEnvs();
+    const message = mocks.sendMail.mock.calls[0]?.[0];
+    expect(message.subject).toBe("Co-organiser invitation: Maker <Night>");
+    expect(message.html).toContain('<img src="https://events.test/brand/email-lockup.png"');
+    expect(message.html).toContain("This email was sent by Space Works Events.");
+    expect(message.html).toContain("Maker &lt;Night&gt;");
+    expect(message.html).toContain('href="https://events.test/join/event-collaborator/tok" style="background-color: #006E63;');
+    expect(message.text).toContain("https://events.test/join/event-collaborator/tok");
+  });
+
   it("attaches a portable calendar invite to confirmed RSVP emails", async () => {
     await sendRSVPConfirmation({
       to: "person@example.test",
