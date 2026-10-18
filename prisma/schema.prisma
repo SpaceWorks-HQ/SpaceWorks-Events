@@ -4,7 +4,12 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Runtime queries use DATABASE_URL, which may be a transaction pooler
+  // (Supabase Supavisor :6543 with ?pgbouncer=true). Migrations need a direct
+  // or session-mode connection, so Prisma CLI uses DIRECT_URL. Set it equal to
+  // DATABASE_URL when there is no pooler (local development, CI).
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum MembershipRole {
