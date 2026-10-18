@@ -17,6 +17,9 @@ beforeEach(() => {
   });
   delete process.env.CI;
   delete process.env.ALLOW_INSECURE_PRODUCTION_TESTS;
+  // Optional settings a CI job or developer shell may export (e.g. a plaintext
+  // DIRECT_URL for the test database) must not leak into the fixture.
+  for (const name of ["DIRECT_URL", "TRUSTED_PROXY_HOPS", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_FORCE_PATH_STYLE"]) delete process.env[name];
 });
 
 afterEach(() => {
