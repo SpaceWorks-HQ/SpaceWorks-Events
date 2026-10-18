@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { SpaceWorksEventsLogo } from "@/components/brand/SpaceWorksLogo";
+import { SpaceWorksEventsLogo, SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { GITHUB_URL, LICENSE_URL } from "@/lib/openSource";
-
 
 const publicLinks = [
   { label: "Discover", href: "/discover" },
@@ -79,7 +78,8 @@ export function EventFooter() {
   return (
     <footer className="mt-auto border-t border-line bg-canvas">
       <div className="mx-auto flex max-w-[1160px] flex-col gap-3 px-4 py-6 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <Link href="/" className="inline-flex items-center gap-2 hover:text-ink">
+        <Link href="/" className="inline-flex items-center gap-2 self-start hover:text-ink">
+          <SpaceWorksLogo variant="app-icon" height={18} label={null} />
           <span>Free event, powered by Space Works</span>
         </Link>
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -99,6 +99,7 @@ export function EmbedCredit() {
   return (
     <footer className="flex justify-center px-4 py-5">
       <a href="/" target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-ink">
+        <SpaceWorksLogo variant="app-icon" height={18} label={null} />
         <span>Free event, powered by Space Works</span>
       </a>
     </footer>

@@ -174,7 +174,7 @@ export default async function TicketPage({ params }: Props) {
     <>
       <header className="bg-accent px-6 py-5 text-on-accent">
         <p className="text-sm font-semibold opacity-90">{orgName}</p>
-        <h1 className="mt-1 break-words font-display text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-on-accent">{title}</h1>
+        <h1 className="mt-1 break-words text-[26px] font-semibold leading-tight tracking-[-0.02em] text-on-accent">{title}</h1>
       </header>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 px-6 py-5">
         <div>
@@ -246,7 +246,7 @@ export default async function TicketPage({ params }: Props) {
           // Once checked in, the QR is never rendered again: the card shows its torn, checked-in state.
           <LiveTicketCard main={ticketMain} stub={isCheckedIn ? null : <TicketQrPanel token={rsvp.checkInToken} />} timeZone={timeZone} />
         ) : (
-          <article className="overflow-hidden rounded-xl border border-line bg-canvas shadow-raised">
+          <article className="overflow-hidden rounded-xl border border-line bg-panel">
             {ticketMain}
             <div className="px-6 pb-6">
               <Callout tone={rsvp.status === "REJECTED" ? "danger" : "info"}>

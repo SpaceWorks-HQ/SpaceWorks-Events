@@ -196,7 +196,7 @@ export function EventWebsiteShell(p: Props) {
                 <ul className="grid gap-3 sm:grid-cols-3">
                   {p.highlights.map((highlight, index) => (
                     <li key={highlight.id} className={index === 0 ? "rounded-lg bg-accent-soft p-4" : "rounded-lg bg-muted p-4"}>
-                      <p className={index === 0 ? "font-display text-[22px] font-extrabold leading-tight text-accent-text" : "font-display text-[19px] font-extrabold leading-tight text-ink"}>{highlight.title}</p>
+                      <p className={index === 0 ? "text-[22px] font-semibold leading-tight text-accent-text" : "text-[19px] font-semibold leading-tight text-ink"}>{highlight.title}</p>
                       {highlight.description ? <p className="mt-1 text-sm text-ink-secondary">{highlight.description}</p> : null}
                     </li>
                   ))}
@@ -244,7 +244,7 @@ export function EventWebsiteShell(p: Props) {
               <ul className="grid gap-3 sm:grid-cols-2">
                 {p.speakers.map((speaker) => (
                   <li key={speaker.id}>
-                    <Link href={`/${p.orgSlug}/${p.event.slug}/speakers/${speaker.slug}`} className="flex items-center gap-3 rounded-lg border border-line bg-canvas p-3.5 transition-colors hover:bg-subtle">
+                    <Link href={`/${p.orgSlug}/${p.event.slug}/speakers/${speaker.slug}`} className="flex items-center gap-3 rounded-lg border border-line bg-panel p-3.5 transition-colors hover:bg-subtle">
                       <Avatar name={speaker.name} src={speaker.photoUrl} size="lg" tone="accent" />
                       <span className="min-w-0">
                         <span className="block truncate text-[15px] font-bold text-ink">{speaker.name}</span>
@@ -282,9 +282,9 @@ export function EventWebsiteShell(p: Props) {
                   return (
                     <li key={sponsor.id}>
                       {sponsor.websiteUrl ? (
-                        <a href={sponsor.websiteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg border border-line bg-canvas p-3.5 transition-colors hover:bg-subtle">{body}</a>
+                        <a href={sponsor.websiteUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg border border-line bg-panel p-3.5 transition-colors hover:bg-subtle">{body}</a>
                       ) : (
-                        <div className="flex items-center gap-3 rounded-lg border border-line bg-canvas p-3.5">{body}</div>
+                        <div className="flex items-center gap-3 rounded-lg border border-line bg-panel p-3.5">{body}</div>
                       )}
                     </li>
                   );

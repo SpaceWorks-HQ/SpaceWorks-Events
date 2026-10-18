@@ -112,7 +112,7 @@ export function RegistrationCard(props: {
 
   return (
     <>
-      <section ref={cardRef} aria-labelledby="join-title" className="flex flex-col gap-4 rounded-xl border border-line bg-canvas p-5 shadow-raised">
+      <section ref={cardRef} aria-labelledby="join-title" className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5">
         <div className="flex items-center justify-between gap-2">
           <h2 id="join-title" className="text-h3 text-ink">{props.title ?? "Join this event"}</h2>
           {saved && savedLabel ? <Chip tone={savedLabel.tone}>{savedLabel.chip}</Chip> : state.full && state.open ? <Chip tone="warning">Full</Chip> : null}
@@ -135,7 +135,7 @@ export function RegistrationCard(props: {
         </Button>
       </section>
 
-      <Link href={`/${organisation.slug}`} className="mt-3 flex items-center gap-3 rounded-lg border border-line bg-canvas p-4 transition-colors hover:bg-subtle">
+      <Link href={`/${organisation.slug}`} className="mt-3 flex items-center gap-3 rounded-lg border border-line bg-panel p-4 transition-colors hover:bg-subtle">
         <OrgLogo name={organisation.name} src={organisation.logoUrl} size="md" />
         <span className="min-w-0 flex-1">
           <span className="block text-caption text-ink-muted">Hosted by</span>

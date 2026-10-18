@@ -240,9 +240,9 @@ function Label() {
     <span className="absolute inset-x-5 bottom-4 flex items-end justify-between gap-3 text-left" style={{ color: INK }}>
       <span>
         <span className="block text-[11px] font-bold uppercase tracking-[0.16em] opacity-60">{LETTER.overline}</span>
-        <span className="mt-0.5 block max-w-[220px] font-accent text-[16px] font-medium leading-tight">{LETTER.title}</span>
+        <span className="mt-0.5 block font-accent text-[16px] font-medium leading-tight">{LETTER.title}</span>
       </span>
-      <span className="shrink-0 text-[12px] font-semibold opacity-60 transition-opacity group-hover:opacity-100">Open the letter →</span>
+      <span className="hidden shrink-0 text-[12px] font-semibold opacity-60 transition-opacity group-hover:opacity-100 sm:inline">Open the letter →</span>
     </span>
   );
 }

@@ -61,7 +61,7 @@ export function SiteHeader() {
                 href={link.href}
                 aria-current={isActive(link.href) ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-11 items-center rounded-full px-3.5 text-label text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
+                  "inline-flex min-h-11 items-center rounded-[10px] px-3.5 text-label text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
                   isActive(link.href) && "bg-surface font-semibold text-ink",
                 )}
               >
@@ -102,7 +102,7 @@ export function SiteHeader() {
             </DialogPrimitive.Trigger>
             <DialogPrimitive.Portal>
               <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(20,44,42,0.48)] lg:hidden" />
-              <DialogPrimitive.Content className="fixed inset-x-0 top-0 z-50 rounded-b-2xl border-b border-line bg-canvas p-4 shadow-float focus:outline-none lg:hidden">
+              <DialogPrimitive.Content className="fixed inset-x-0 top-0 z-50 rounded-b-xl border-b border-line bg-canvas p-4 shadow-float focus:outline-none lg:hidden">
                 <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
                 <DialogPrimitive.Description className="sr-only">Site navigation links</DialogPrimitive.Description>
                 <div className="mb-3 flex items-center justify-between">

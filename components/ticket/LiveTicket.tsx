@@ -125,11 +125,11 @@ export function LiveTicketCard(props: { main: ReactNode; stub: ReactNode | null;
 
   return (
     <article className="relative">
-      <div className={cn("relative rounded-xl", ripping ? null : "shadow-raised")}>
+      <div className="relative rounded-xl">
         <div className={ripping ? "yy-ticket-shadow" : undefined}>
           <div
             className={cn(
-              "relative overflow-hidden rounded-t-xl border border-line bg-canvas",
+              "relative overflow-hidden rounded-t-xl border border-line bg-panel",
               sealed ? "rounded-b-xl" : "border-b-0",
               ripping ? "yy-ripped-bottom" : null,
             )}
@@ -137,8 +137,8 @@ export function LiveTicketCard(props: { main: ReactNode; stub: ReactNode | null;
             {main}
             {sealed ? null : (
               <>
-                <span aria-hidden className="absolute -bottom-3 -left-2 size-5 rounded-full border border-line bg-subtle" />
-                <span aria-hidden className="absolute -bottom-3 -right-2 size-5 rounded-full border border-line bg-subtle" />
+                <span aria-hidden className="absolute -bottom-3 -left-2 size-5 rounded-full border border-line bg-canvas" />
+                <span aria-hidden className="absolute -bottom-3 -right-2 size-5 rounded-full border border-line bg-canvas" />
               </>
             )}
           </div>
@@ -152,10 +152,10 @@ export function LiveTicketCard(props: { main: ReactNode; stub: ReactNode | null;
               exit={reduceMotion ? { opacity: 0, transition: { duration: 0.12 } } : STUB_FALL}
             >
               <div className={ripping ? "yy-ticket-shadow" : undefined}>
-                <div className={cn("relative overflow-hidden rounded-b-xl border border-t-0 border-line bg-canvas", ripping ? "yy-ripped-top" : null)}>
+                <div className={cn("relative overflow-hidden rounded-b-xl border border-t-0 border-line bg-panel", ripping ? "yy-ripped-top" : null)}>
                   <div aria-hidden className="mx-6 border-t-2 border-dashed border-line" />
-                  <span aria-hidden className="absolute -left-2 -top-2 size-5 rounded-full border border-line bg-subtle" />
-                  <span aria-hidden className="absolute -right-2 -top-2 size-5 rounded-full border border-line bg-subtle" />
+                  <span aria-hidden className="absolute -left-2 -top-2 size-5 rounded-full border border-line bg-canvas" />
+                  <span aria-hidden className="absolute -right-2 -top-2 size-5 rounded-full border border-line bg-canvas" />
                   {stub}
                 </div>
               </div>
@@ -177,11 +177,11 @@ export function LiveTicketCard(props: { main: ReactNode; stub: ReactNode | null;
               initial={reduceMotion || !justCheckedIn ? false : { scale: 0, rotate: -25 }}
               animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: 0.7, type: "spring", stiffness: 420, damping: 16 }}
-              className="mb-1 grid size-16 place-items-center rounded-full bg-success-solid text-white"
+              className="mb-1 grid size-16 place-items-center rounded-full bg-success-solid text-on-success"
             >
               <Check className="size-9" strokeWidth={3} />
             </motion.span>
-            <p className="font-display text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-ink">You&apos;re checked in</p>
+            <p className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-ink">You&apos;re checked in</p>
             {time ? <p className="text-[15px] font-bold text-ink-secondary">at {time}</p> : null}
             <p className="text-body-ui text-ink-secondary">Enjoy the event</p>
           </motion.div>

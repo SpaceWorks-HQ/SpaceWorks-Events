@@ -25,7 +25,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     where: { slug: orgSlug },
     select: { name: true, description: true },
   });
-  if (!org) return { title: "Organisation" };
+  if (!org) return { title: "Page not found" };
   const description =
     org.description?.slice(0, 160) || `Events by ${org.name}`;
   return {
@@ -144,7 +144,7 @@ export default async function OrganisationPage({ params }: Props) {
   return (
     <div className="flex flex-col gap-10">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-7">
-        <OrgLogo name={org.name} src={org.logoUrl} size="xl" className="size-20 rounded-[22px] text-2xl sm:size-28 sm:rounded-[28px] sm:text-4xl" />
+        <OrgLogo name={org.name} src={org.logoUrl} size="xl" className="size-20 rounded-[16px] text-2xl sm:size-28 sm:rounded-[16px] sm:text-4xl" />
         <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h1 className="text-display-m min-w-0 break-words text-ink">{org.name}</h1>
@@ -158,7 +158,7 @@ export default async function OrganisationPage({ params }: Props) {
             {org.description || "Community, events, and updates—check back soon for what’s next."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            {upcomingCount > 0 ? <Chip className="bg-tint-peach text-warning-fg">{upcomingCount} upcoming</Chip> : null}
+            {upcomingCount > 0 ? <Chip className="bg-sw-citron text-sw-ink">{upcomingCount} upcoming</Chip> : null}
             {merged.length > 0 ? <Chip>{merged.length} {merged.length === 1 ? "event" : "events"} hosted</Chip> : null}
             <CopyOrganisationUrl slug={org.slug} />
           </div>

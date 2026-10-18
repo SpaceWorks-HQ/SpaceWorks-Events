@@ -125,7 +125,7 @@ export default async function InstanceEventPage({ params }: Props) {
       </article>
 
       <aside>
-        <section aria-labelledby="join-title" className="flex flex-col gap-4 rounded-xl border border-line bg-canvas p-5 shadow-raised md:sticky md:top-24">
+        <section aria-labelledby="join-title" className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 md:sticky md:top-24">
           <div className="flex items-center justify-between gap-2">
             <h2 id="join-title" className="text-h3 text-ink">Join on {formatDayShort(instance.startDateTime, timeZone)}</h2>
             {showRsvp && full ? <Chip tone="warning">Full</Chip> : null}
