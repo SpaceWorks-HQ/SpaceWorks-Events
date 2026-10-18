@@ -107,6 +107,7 @@ export default async function IdProgrammePage({ params, searchParams }: Props) {
   } else if (tab === "design") {
     content = (
       <MemberIdDesigner
+        key={programme.id}
         organisationSlug={organisation.slug}
         programmeId={programme.id}
         context={{ programmeName: programme.name, organisationName: organisation.name }}

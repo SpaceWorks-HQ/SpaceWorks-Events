@@ -118,8 +118,15 @@ export function MemberIdDesigner({
     }
   };
 
+  // Leaving the designer (another tab, another page) inside the debounce window
+  // saves the pending edit now instead of dropping it.
+  // `save` reads only refs and this programme's ids, so the mount-time closure is safe here.
   useEffect(() => () => {
-    if (timer.current) window.clearTimeout(timer.current);
+    if (!timer.current) return;
+    window.clearTimeout(timer.current);
+    timer.current = null;
+    void save();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once, on unmount
   }, []);
 
   const commit = (next: MemberIdDesign) => {
@@ -127,7 +134,10 @@ export function MemberIdDesigner({
     setDesign(next);
     setStatus("pending");
     if (timer.current) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => void save(), SAVE_DELAY_MS);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      void save();
+    }, SAVE_DELAY_MS);
   };
 
   const current = design[side];
