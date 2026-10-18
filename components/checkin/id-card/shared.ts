@@ -104,7 +104,9 @@ function ensureEntry(source: BadgeDesignSource): Entry {
       timer: null,
       source,
     };
-    entries.set(source.eventId, entry);
+    // Only the browser keeps entries. On the server this map would outlive the
+    // request and every later render would show the first design it saw.
+    if (typeof window !== "undefined") entries.set(source.eventId, entry);
   }
   return entry;
 }
