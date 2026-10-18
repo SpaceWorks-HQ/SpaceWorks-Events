@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { RsvpStatus } from "@prisma/client";
 import { ArrowRight, Share2 } from "lucide-react";
 import { RsvpForm } from "@/components/rsvp/RsvpForm";
@@ -77,7 +76,6 @@ export function RegistrationCard(props: {
   const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null } = props;
   const storageKey = eventInstanceId ? `swe:rsvp:${orgSlug}:i:${eventInstanceId}` : `swe:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
   const [saved, setSaved] = useSavedRsvp(storageKey, viewerRsvp);
-  const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [shared, setShared] = useState(false);
   const [cardVisible, setCardVisible] = useState(true);
@@ -172,8 +170,6 @@ export function RegistrationCard(props: {
                 // Same as before: close the dialog and let the card switch to the ticket link.
                 if (ticketToken) setSaved({ token: ticketToken, status });
                 setDialogOpen(false);
-                // Re-read the going count and spots left, which now include this registration.
-                router.refresh();
               }}
             />
           </DialogBody>
