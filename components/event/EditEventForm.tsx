@@ -127,7 +127,10 @@ export function EditEventForm(props: {
       setError("Choose a valid start time in the event timezone.");
       return;
     }
-    if (new Date(startDateTime) < new Date()) {
+    const startChanged =
+      Math.floor(new Date(startDateTime).getTime() / 60_000) !==
+      Math.floor(new Date(event.startDateTime).getTime() / 60_000);
+    if (startChanged && new Date(startDateTime) < new Date()) {
       setError("Start time must be now or in the future.");
       return;
     }
