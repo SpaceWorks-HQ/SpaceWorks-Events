@@ -26,6 +26,16 @@ The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Rend
 6. Build an immutable image with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` supplied as a BuildKit secret (Render: as the service environment variable, which Render passes as a build arg), inject that same value at runtime, run the authenticated `/api/health/db` readiness probe, and verify the outbox scheduler.
 7. Confirm alert delivery and record the release, backup point, migration version, and rollback owner.
 
+## Breaking changes from Yuyu
+
+Space Works Events is deployed fresh; it does not read state written by a Yuyu instance. Moving an existing Yuyu database or clients across is not supported without re-issuing the following:
+
+- **Machine API tokens** use the `swe_v1_` prefix. `yuyu_v1_` tokens are rejected; create new API clients.
+- **Check-in station PINs** are encrypted under the HKDF info `swe-check-in-station-pin-v2`. Stored Yuyu station PINs no longer decrypt; set station PINs again.
+- **Browser keys** were renamed from `yuyu.`/`yuyu:` to `swe.`/`swe:`: the check-in station cookie (`swe.check-in-station.v2`), the colour-mode cookie and storage key (`swe.color-mode`, `swe:color-mode`), saved RSVP state (`swe:rsvp:*`) and the check-in desk's badge settings (`swe:checkin:id-card:*`). Browsers start with defaults. The Auth.js session and super-admin MFA cookie names are unchanged.
+- **Redis** publishes live check-in updates on `swe:ticket-checkin:<rsvpId>`. Do not share a Redis instance between a Yuyu and a Space Works Events deployment.
+- **Outbox email** `Message-ID`s are `<swe-<id>@outbox.invalid>`.
+
 ## Domain changes
 
 When replacing the current hostname, update the two canonical URL variables, OAuth callback/origin settings, DNS, TLS, CDN/WAF, scheduler, monitoring targets, and any trusted host configuration in one deployment. Rebuild the application because public environment values are embedded at build time. Preserve an HTTPS redirect from the old host so shared event, ticket, certificate, and invitation links continue to work; users may need to sign in again because cookies are host-specific.

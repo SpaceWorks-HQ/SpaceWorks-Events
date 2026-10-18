@@ -69,7 +69,7 @@ describe("outbox delivery", () => {
     await expect(deliverOutboxBatch()).resolves.toEqual({ sent: 1, failed: 0 });
     expect(mocks.rsvp).toHaveBeenCalledWith(expect.objectContaining({
       checkInToken: "ticket-secret",
-      messageId: "<yuyu-msg_1@outbox.invalid>",
+      messageId: "<swe-msg_1@outbox.invalid>",
     }));
     expect(mocks.deleteMany).toHaveBeenCalledWith({ where: expect.objectContaining({ id: "msg_1", status: OutboxStatus.PROCESSING, lockedAt: expect.any(Date) }) });
     expect(mocks.updateMany).not.toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: OutboxStatus.SENT }) }));
@@ -204,7 +204,7 @@ describe("event broadcast delivery", () => {
     expect(sent.bodyText).toContain("at Hall A. Ticket: ");
     expect(sent.bodyText).toContain("/ticket/ticket-secret");
     expect(sent.bodyHtml).toContain("Hi Priya, Mixer starts");
-    expect(sent.messageId).toBe("<yuyu-msg_1@outbox.invalid>");
+    expect(sent.messageId).toBe("<swe-msg_1@outbox.invalid>");
     expect(mocks.updateMany).toHaveBeenLastCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: OutboxStatus.SENT }) }));
     expect(mocks.deleteMany).not.toHaveBeenCalled();
   });
