@@ -1,3 +1,8 @@
+if (process.env.DEPLOYMENT_MODE === "backend" && !/^[a-f0-9]{64}$/.test(process.env.FRONTEND_GATEWAY_SECRET ?? "")) {
+  console.error("Split backend requires FRONTEND_GATEWAY_SECRET.");
+  process.exit(1);
+}
+
 const required = [
   "DATABASE_URL",
   "AUTH_SECRET",

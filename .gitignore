@@ -101,3 +101,13 @@ scripts/seed-t4gcc-summit-2026.cjs
 
 # Local design-hook state (Impeccable).
 .impeccable/
+
+# Generated rendering workspace (templates/configuration remain committed).
+/frontend/app/
+/frontend/components/
+/frontend/lib/
+/frontend/public/
+/frontend/.next/
+/frontend/postcss.config.mjs
+/frontend/node_modules/
+/frontend/next-env.d.ts

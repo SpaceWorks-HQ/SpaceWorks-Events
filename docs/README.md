@@ -4,7 +4,7 @@
 
 Everything you need to understand, run and change Space Works Events, the free, open-source event platform from Space Works. These pages describe what the product does today, how to operate it, and what's planned. If a page and the code ever disagree, the code and Prisma migrations win, and the page needs fixing.
 
-New here? Start with [Features](FEATURES.md) for what it does, then [Local development](DEVELOPMENT.md) to run it. To go live on free plans, follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md).
+New here? Start with [Features](FEATURES.md) for what it does, then [Local development](DEVELOPMENT.md) to run it. To host everything on one server, follow [Complete Docker VPS deployment](DEPLOYMENT_VPS.md). To go live on free plans, follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md).
 
 ## Product and engineering
 
@@ -29,6 +29,8 @@ New here? Start with [Features](FEATURES.md) for what it does, then [Local devel
 | [Production release](PRODUCTION_RELEASE.md) | Mandatory pre-deployment checklist |
 | [Production operations](production-operations.md) | Deployments, probes, schedulers, backups, incidents, and privacy operations |
 | [Container image publishing](CONTAINER_IMAGES.md) | GitHub Actions setup, build secrets, publication to GitHub Container Registry, and release handoff |
+| [Netlify frontend + VPS backend](DEPLOYMENT_SPLIT.md) | Separate frontend workspace, private API gateway, setup and verification |
+| [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS and scheduler on one VPS; setup, checks, upgrades and backups |
 | [Production Docker deployment](DEPLOYMENT_DOCKER.md) | Current single-host/container deployment, migrations, upgrades, and image limitations |
 | [Isolated staging deployment](DEPLOYMENT_STAGING.md) | Single-VM Docker Compose staging/test setup behind host Nginx |
 | [Helm chart](../charts/spaceworks-events/README.md) | Kubernetes installation, migration hook, secrets, probes, and ingress configuration |

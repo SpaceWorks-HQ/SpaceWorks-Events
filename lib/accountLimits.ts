@@ -1,0 +1,1 @@
+export const ACCOUNT_REGISTRATIONS_LIMIT = 50;

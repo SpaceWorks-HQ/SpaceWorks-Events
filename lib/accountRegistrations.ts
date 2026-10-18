@@ -8,12 +8,13 @@ import { formatDateBlock, formatDayShort, formatTimeRange } from "@/lib/format/d
 import type { ChipTone } from "@/components/ui/display";
 
 /** Per-section cap. Upcoming and Past are each bounded; nothing here is unbounded. */
-export const ACCOUNT_REGISTRATIONS_LIMIT = 50;
+import { ACCOUNT_REGISTRATIONS_LIMIT } from "./accountLimits";
+export { ACCOUNT_REGISTRATIONS_LIMIT } from "./accountLimits";
 export const ACCOUNT_CERTIFICATES_LIMIT = 50;
 
 /* ---------- Pure helpers (unit-tested) ---------- */
 
-export type RegistrationStatusView = { label: string; tone: ChipTone };
+export type RegistrationStatusView = { label: string; tone: ChipTone; };
 
 /** The single attendee-facing status for one RSVP. A check-in outranks the RSVP status. */
 export function registrationStatus(status: RsvpStatus, checkedInAt: Date | null): RegistrationStatusView {
@@ -41,14 +42,14 @@ export function isUpcoming(endDateTime: Date, now: Date): boolean {
  * Split occurrences into Upcoming (soonest first) and Past (most recent first),
  * each capped. Pure so the ordering rule is tested without a database.
  */
-export function splitRegistrations<T extends { start: Date; end: Date }>(rows: readonly T[], now: Date, limit = ACCOUNT_REGISTRATIONS_LIMIT) {
+export function splitRegistrations<T extends { start: Date; end: Date; }>(rows: readonly T[], now: Date, limit = ACCOUNT_REGISTRATIONS_LIMIT) {
   const upcoming = rows.filter((row) => isUpcoming(row.end, now)).sort((a, b) => a.start.getTime() - b.start.getTime());
   const past = rows.filter((row) => !isUpcoming(row.end, now)).sort((a, b) => b.start.getTime() - a.start.getTime());
   return { upcoming: upcoming.slice(0, limit), past: past.slice(0, limit) };
 }
 
 /** Attendees may withdraw until check-in, while the occurrence has not ended and was not declined. */
-export function canCancelRegistration(row: { status: RsvpStatus; checkedInAt: Date | null; end: Date }, now: Date): boolean {
+export function canCancelRegistration(row: { status: RsvpStatus; checkedInAt: Date | null; end: Date; }, now: Date): boolean {
   return !row.checkedInAt && row.status !== RsvpStatus.REJECTED && isUpcoming(row.end, now);
 }
 
@@ -109,14 +110,14 @@ const rsvpSelect = {
   eventInstance: { select: instanceSelect },
 } satisfies Prisma.RSVPSelect;
 
-type RsvpRow = Prisma.RSVPGetPayload<{ select: typeof rsvpSelect }>;
+type RsvpRow = Prisma.RSVPGetPayload<{ select: typeof rsvpSelect; }>;
 
 /** Serializable, client-safe row. The ticket token travels only inside `ticketHref`/`cancelToken`, never as display text. */
 export type AccountRegistrationRow = {
   id: string;
   title: string;
   organisationName: string;
-  dateBlock: { month: string; day: string };
+  dateBlock: { month: string; day: string; };
   dateLabel: string;
   timeLabel: string;
   location: string | null;
@@ -278,13 +279,13 @@ export async function loadAccountRegistrations(userId: string, now: Date = new D
   const inviteOnlySeriesIds = [...new Set(rsvps.flatMap((r) => (r.eventInstance?.series.privacyType === EventPrivacyType.INVITE_ONLY ? [r.eventInstance.series.id] : [])))];
   const [eventInvites, seriesInvites] = email
     ? await Promise.all([
-        inviteOnlyEventIds.length
-          ? prisma.eventInvite.findMany({ where: { email, eventId: { in: inviteOnlyEventIds } }, select: { eventId: true } })
-          : Promise.resolve([]),
-        inviteOnlySeriesIds.length
-          ? prisma.seriesInvite.findMany({ where: { email, eventSeriesId: { in: inviteOnlySeriesIds } }, select: { eventSeriesId: true } })
-          : Promise.resolve([]),
-      ])
+      inviteOnlyEventIds.length
+        ? prisma.eventInvite.findMany({ where: { email, eventId: { in: inviteOnlyEventIds } }, select: { eventId: true } })
+        : Promise.resolve([]),
+      inviteOnlySeriesIds.length
+        ? prisma.seriesInvite.findMany({ where: { email, eventSeriesId: { in: inviteOnlySeriesIds } }, select: { eventSeriesId: true } })
+        : Promise.resolve([]),
+    ])
     : [[], []];
   const invitedEventIds = new Set(eventInvites.map((invite) => invite.eventId));
   const invitedSeriesIds = new Set(seriesInvites.map((invite) => invite.eventSeriesId));
@@ -301,12 +302,12 @@ export async function loadAccountRegistrations(userId: string, now: Date = new D
     certificates: certificates.flatMap((response): AccountCertificateRow[] =>
       response.certificateToken
         ? [{
-            id: response.id,
-            title: response.form.event.title,
-            organisationName: response.form.event.organisation.name,
-            issuedLabel: formatDayShort(response.submittedAt, safeTimeZone(response.form.event.timezone), now),
-            certificateHref: `/api/feedback/certificate/${response.certificateToken}`,
-          }]
+          id: response.id,
+          title: response.form.event.title,
+          organisationName: response.form.event.organisation.name,
+          issuedLabel: formatDayShort(response.submittedAt, safeTimeZone(response.form.event.timezone), now),
+          certificateHref: `/api/feedback/certificate/${response.certificateToken}`,
+        }]
         : [],
     ),
   };

@@ -7,7 +7,7 @@ Ubuntu host as the TLS reverse proxy.
 
 It is deliberately **not** a real production topology. The staging template
 sets `CI=true` and `ALLOW_INSECURE_PRODUCTION_TESTS=1`, allowing non-TLS
-PostgreSQL, Redis, and MinIO traffic on the private Docker network. Never use
+PostgreSQL, Redis, and Silo storage traffic on the private Docker network. Never use
 those values for production or real user data.
 
 ## Server layout
@@ -35,14 +35,22 @@ three encryption/authentication keys as documented in [Configuration](CONFIGURAT
 Start infrastructure services:
 
 ```bash
-docker compose --env-file .env.staging -f compose.staging.yml up -d postgres redis minio mailpit
+docker compose --env-file .env.staging -f compose.staging.yml up -d postgres redis silo mailpit
 ```
 
-Initialize the private MinIO bucket:
+Initialize the private storage bucket in [Silo](https://github.com/pgsty/silo),
+the maintained, S3-compatible fork of the archived MinIO:
 
 ```bash
-docker compose --env-file .env.staging -f compose.staging.yml up minio-init
+docker compose --env-file .env.staging -f compose.staging.yml up silo-init
 ```
+
+**Staging hosts created before the switch from MinIO to Silo:** set
+`S3_ENDPOINT="http://silo:9000"` in `.env.staging`. Silo reads MinIO's data
+format, so to keep the old uploads, copy the `minio_data` volume into `silo_data`
+before starting `silo` (for example
+`docker run --rm -v <project>_minio_data:/from:ro -v <project>_silo_data:/to alpine cp -a /from/. /to/`).
+Start with `--remove-orphans` so the old `minio` containers are removed.
 
 Run database migrations:
 
@@ -75,7 +83,7 @@ curl -I http://127.0.0.1:3001/api/health
 curl -I https://staging.events.example.com/api/health
 ```
 
-PostgreSQL, Redis, and MinIO intentionally have no host ports. Mailpit's UI is
+PostgreSQL, Redis, and Silo intentionally have no host ports. Mailpit's UI is
 bound only to `127.0.0.1:8025`; access it through an SSH tunnel when needed.
 
 ## Nginx on the host

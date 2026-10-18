@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { gateCheckInForStatus, parseCheckInPayload } from "@/lib/checkIn";
 import { prisma } from "@/lib/db";
@@ -25,6 +26,8 @@ import {
   type RegistrationDetail,
 } from "@/lib/checkInDetails";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 export type CheckInResultData = {
   rsvpId: string;
   displayName: string;
@@ -39,14 +42,14 @@ export type CheckInResultData = {
 };
 
 export type CheckInPreviewData = CheckInResultData & {
-  gate: { ok: true } | { ok: false; reason: string; needsForce: boolean; blocked?: boolean };
+  gate: { ok: true; } | { ok: false; reason: string; needsForce: boolean; blocked?: boolean; };
 };
 
 function revalidateAfterCheckIn(
   orgSlug: string,
   rsvp: {
     eventId: string | null;
-    event: { slug: string } | null;
+    event: { slug: string; } | null;
     eventInstanceId: string | null;
   },
 ) {
@@ -95,7 +98,7 @@ async function requireOrgMemberForEvent(
 }
 
 function attendeeLabel(r: {
-  user: { name: string | null; email: string | null } | null;
+  user: { name: string | null; email: string | null; } | null;
   guestName?: string | null;
   guestEmail: string | null;
 }) {
@@ -352,7 +355,7 @@ export type OfflineCheckInRosterRow = LookupRow & {
 
 export async function downloadOfflineCheckInRoster(
   input: unknown,
-): Promise<ActionResult<{ generatedAt: string; rows: OfflineCheckInRosterRow[] }>> {
+): Promise<ActionResult<{ generatedAt: string; rows: OfflineCheckInRosterRow[]; }>> {
   const parsed = offlineCheckInRosterSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid offline roster request." };
@@ -391,7 +394,7 @@ export async function downloadOfflineCheckInRoster(
 
 export async function syncOfflineCheckIns(
   input: unknown,
-): Promise<ActionResult<{ syncedIds: string[]; alreadyCheckedInIds: string[]; failed: { rsvpId: string; error: string }[] }>> {
+): Promise<ActionResult<{ syncedIds: string[]; alreadyCheckedInIds: string[]; failed: { rsvpId: string; error: string; }[]; }>> {
   const parsed = syncOfflineCheckInsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Invalid offline check-in queue." };
@@ -408,7 +411,7 @@ export async function syncOfflineCheckIns(
   const rsvpById = new Map(rsvps.map((rsvp) => [rsvp.id, rsvp]));
   const syncedIds: string[] = [];
   const alreadyCheckedInIds: string[] = [];
-  const failed: { rsvpId: string; error: string }[] = [];
+  const failed: { rsvpId: string; error: string; }[] = [];
   const seenRsvpIds = new Set<string>();
 
   for (const checkIn of checkIns) {
@@ -450,11 +453,11 @@ export async function syncOfflineCheckIns(
     } else if (committed.state === "already-checked-in") {
       alreadyCheckedInIds.push(rsvp.id);
     } else {
-        const currentGate = committed.state === "ineligible" ? gateCheckInForStatus(committed.status, checkIn.force) : null;
-        failed.push({
-          rsvpId: rsvp.id,
-          error: committed.state === "missing" ? "RSVP not found for this event." : currentGate?.ok ? "Check-in could not be completed." : currentGate!.reason,
-        });
+      const currentGate = committed.state === "ineligible" ? gateCheckInForStatus(committed.status, checkIn.force) : null;
+      failed.push({
+        rsvpId: rsvp.id,
+        error: committed.state === "missing" ? "RSVP not found for this event." : currentGate?.ok ? "Check-in could not be completed." : currentGate!.reason,
+      });
     }
   }
 
@@ -468,7 +471,7 @@ export async function syncOfflineCheckIns(
 
 export async function lookupAttendeesForCheckIn(
   input: unknown,
-): Promise<ActionResult<{ rows: LookupRow[] }>> {
+): Promise<ActionResult<{ rows: LookupRow[]; }>> {
   const parsed = attendeeLookupSchema.safeParse(input);
   if (!parsed.success) {
     return {

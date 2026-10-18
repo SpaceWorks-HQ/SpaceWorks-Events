@@ -24,7 +24,9 @@ Cloudflare Worker in `deploy/cloudflare-cron` is the independent per-minute
 outbox scheduler from step 4 below. Steps 1–2 are then automatic; still
 review migrations and take a backup before merging one.
 
-For a non-Kubernetes container host, follow the current
+For a complete single-host stack, follow the
+[Docker VPS guide](DEPLOYMENT_VPS.md) and `compose.production.yml`. For an app
+container with separately provided services, follow the
 [production Docker deployment guide](DEPLOYMENT_DOCKER.md). The repository's
 root Compose file is development-only, and `compose.staging.yml` is not a
 production topology. Kubernetes operators should use the

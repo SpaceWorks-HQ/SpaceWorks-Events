@@ -1,12 +1,10 @@
+import { loadAccountOrganisationsView } from "@/lib/views/app__account__organisations__page";
 import type { Metadata } from "next";
-import { requireAuth } from "@/lib/permissions";
 import { AccountOrganisations } from "@/components/account/organisations/AccountOrganisations";
-import { loadAccountOrganisations } from "@/components/account/organisations/data";
 
 export const metadata: Metadata = { title: "Your organisations" };
 
 export default async function AccountOrganisationsPage() {
-  const session = await requireAuth();
-  const data = await loadAccountOrganisations(session.user.id);
+  const { data } = await loadAccountOrganisationsView();
   return <AccountOrganisations data={data} />;
 }

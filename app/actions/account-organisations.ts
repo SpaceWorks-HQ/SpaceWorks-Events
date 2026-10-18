@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -8,6 +9,8 @@ import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const leaveOrganisationSchema = z.object({
   organisationSlug: z.string().trim().min(1).max(100),

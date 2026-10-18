@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { EventPermission } from "@prisma/client";
@@ -17,6 +18,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { enqueueEventInvite } from "@/lib/outbox";
 import { startOutboxWorker } from "@/lib/outboxWorker";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -89,7 +92,7 @@ export async function addEventInvite(input: unknown): Promise<ActionResult> {
       typeof e === "object" &&
       e !== null &&
       "code" in e &&
-      (e as { code: string }).code === "P2002"
+      (e as { code: string; }).code === "P2002"
     ) {
       return { ok: false, error: "That email is already invited." };
     }
@@ -190,7 +193,7 @@ export async function addSeriesInvite(input: unknown): Promise<ActionResult> {
       typeof e === "object" &&
       e !== null &&
       "code" in e &&
-      (e as { code: string }).code === "P2002"
+      (e as { code: string; }).code === "P2002"
     ) {
       return { ok: false, error: "That email is already invited." };
     }

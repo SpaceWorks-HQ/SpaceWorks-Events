@@ -94,4 +94,32 @@ This per-request nonce makes application pages dynamically rendered. There is de
 
 ## Deployment shape
 
-`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are external production dependencies.
+`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage, Caddy and the recovery scheduler alongside the application; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The default deployment shares one Next.js runtime. The [split deployment](DEPLOYMENT_SPLIT.md) builds a separate rendering workspace for Netlify; guarded view readers, authentication persistence, domain actions, HTTP APIs and jobs run on the VPS.
+
+
+### Separate rendering workspace
+
+`lib/views/` owns guarded page/panel readers; existing pages render their DTOs.
+`scripts/generate-frontend-catalog.mjs` creates the fixed registry of those readers
+and existing `app/actions` exports. `scripts/prepare-frontend.mjs` builds the ignored
+`frontend/app`, `components`, `lib` and `public` trees from shared sources, replacing
+readers/actions with typed server gateway calls. Edit shared sources and generator
+templates, never generated copies. CI/build verifies the catalog is current and
+audits frontend dependency traces to reject Prisma engines, Redis, SMTP and S3.
+
+The backend peer route authenticates a 32-byte service credential and exact
+frontend Origin, accepts bounded tagged data, and dispatches only explicit registry
+entries. Every reader/action still checks the user's cookie-backed identity and
+permissions. Panel readers reload permissions from org slug/event id; forwarded
+permission claims are rejected. Views use explicit selects/DTOs and reject known
+secret fields. Dates, maps, sets, files and duplicate FormData values retain their
+types; functions and class instances cannot cross the wire. The action response
+carries local navigation, host-only cookies and request-scoped invalidations to
+the frontend. Cookie/sign-in HTTP handlers proxy through the frontend origin.
+
+Only an authenticated peer may forward the platform-verified browser IP. Backend
+Caddy overwrites its ordinary client-IP header. Public proxy callers cannot reach
+peer, scheduler or readiness endpoints, including encoded path variants. All
+calls fail closed on gateway/rate-limit failures. Ticket SSE uses its bearer URL
+directly at the VPS with exact frontend-origin CORS and the existing state-only
+projection; frontend polling remains the fallback.

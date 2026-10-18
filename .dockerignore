@@ -26,3 +26,11 @@ render.yaml
 # through BuildKit secret mounts; never bake them into an image layer.
 NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
 
+
+# Generated separate frontend and its instance-specific build output.
+frontend/app
+frontend/components
+frontend/lib
+frontend/public
+frontend/.next
+frontend/node_modules

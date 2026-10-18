@@ -1,8 +1,6 @@
+import { loadDiscoverView } from "@/lib/views/app__discover__page";
 import Link from "next/link";
 import { CalendarRange, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
-import { EventPrivacyType, EventStatus, Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
 import { MoodTile } from "@/components/brand/MoodTile";
 import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
@@ -13,9 +11,7 @@ import { controlClasses } from "@/components/ui/styles";
 import { cn } from "@/lib/cn";
 import { INK_ACCENT } from "@/lib/theme/accent";
 import { describeRecurrence, recurrenceChip } from "@/lib/format/recurrence";
-import { parseDiscoveryDateRange } from "@/lib/dateFilter";
 import { paginationWindow } from "@/lib/pagination";
-import { listedEventAudienceWhere } from "@/lib/eventVisibility";
 
 export const metadata: Metadata = {
   title: "Discover Events",
@@ -24,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 const PAGE_SIZE = 12;
-const MAX_DISCOVERY_PAGES = 100;
+
 const MAX_QUERY_LENGTH = 120;
 
 type SearchParams = Promise<{
@@ -35,29 +31,10 @@ type SearchParams = Promise<{
   page?: string;
 }>;
 
-/** YYYY-MM-DD for a UTC date (discovery date filters are whole UTC days). */
-function isoDay(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-/** "This week" (today + 6 days) and "This month" (today to month end) as from/to presets. */
-function datePresets(now = new Date()) {
-  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const weekEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 6));
-  const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
-  return {
-    week: { from: isoDay(today), to: isoDay(weekEnd) },
-    month: { from: isoDay(today), to: isoDay(monthEnd) },
-  };
-}
-
 function buildQueryString(params: Record<string, string | undefined>): string {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) {
-    if (v) p.set(k, v);
-  }
-  const s = p.toString();
-  return s ? `?${s}` : "";
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
+  return query.size ? `?${query}` : "";
 }
 
 export default async function DiscoverPage({
@@ -65,178 +42,21 @@ export default async function DiscoverPage({
 }: {
   searchParams: SearchParams;
 }) {
-  const sp = await searchParams;
-  const session = await auth();
-  const getStartedHref = session?.user ? "/dashboard" : "/login";
-  const sort = sp.sort === "popular" ? "popular" : "upcoming";
-  const q = (sp.q?.trim() || "").slice(0, MAX_QUERY_LENGTH);
-  const page = Math.min(MAX_DISCOVERY_PAGES, Math.max(1, parseInt(sp.page ?? "1", 10) || 1));
+  const { sort, q, clearSearchHref, dateChips, activeRange, dateRangeError, sp, resultsLabel, totalItems, startIdx, pageItems, hasActiveFilters, goingByEvent, totalPages, safePage, getStartedHref } = await loadDiscoverView({ searchParams });
 
-  const { fromDate, toExclusive, error: dateRangeError } = parseDiscoveryDateRange(sp.from, sp.to);
-
-  const eventWhere = {
-    status: EventStatus.PUBLISHED,
-    AND: listedEventAudienceWhere,
-    page: { is: { isPublished: true } },
-    endDateTime: { gte: new Date() },
-    ...(q
-      ? {
-          OR: [
-            { title: { contains: q, mode: "insensitive" as const } },
-            { description: { contains: q, mode: "insensitive" as const } },
-            { tags: { has: q.toLowerCase() } },
-            { organisation: { name: { contains: q, mode: "insensitive" as const } } },
-          ],
-        }
-      : {}),
-    ...(!dateRangeError && (fromDate || toExclusive) && {
-      startDateTime: {
-        ...(fromDate ? { gte: fromDate } : {}),
-        ...(toExclusive ? { lt: toExclusive } : {}),
-      },
-    }),
-  } as const;
-
-  const instanceWhere = {
-    series: {
-      status: EventStatus.PUBLISHED,
-      privacyType: EventPrivacyType.PUBLIC,
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" as const } },
-              { description: { contains: q, mode: "insensitive" as const } },
-              { organisation: { name: { contains: q, mode: "insensitive" as const } } },
-            ],
-          }
-        : {}),
-    },
-    endDateTime: { gte: new Date() },
-    ...(!dateRangeError && (fromDate || toExclusive) && {
-      startDateTime: {
-        ...(fromDate ? { gte: fromDate } : {}),
-        ...(toExclusive ? { lt: toExclusive } : {}),
-      },
-    }),
-  };
-
-  // Get total counts for pagination
-  const [eventCount, instanceCount] = await Promise.all([
-    prisma.event.count({ where: eventWhere }),
-    prisma.eventInstance.count({ where: instanceWhere }),
-  ]);
-  const totalItems = eventCount + instanceCount;
-  const totalPages = Math.min(MAX_DISCOVERY_PAGES, Math.max(1, Math.ceil(totalItems / PAGE_SIZE)));
-  const safePage = Math.min(page, totalPages);
-  const startIdx = (safePage - 1) * PAGE_SIZE;
-  const validFrom = dateRangeError ? null : fromDate;
-  const validToExclusive = dateRangeError ? null : toExclusive;
-  const searchPattern = `%${q}%`;
-  // The columns hold UTC wall-clock timestamps without a zone. Compare them with UTC wall-clock
-  // values: NOW() and bound Date parameters (timestamptz) would shift by the session time zone.
-  const utc = (date: Date) => Prisma.sql`(${date}::timestamptz AT TIME ZONE 'UTC')`;
-  const now = new Date();
-  const eventFilters = [
-    Prisma.sql`e."status" = ${EventStatus.PUBLISHED}::"EventStatus"`,
-    Prisma.sql`(e."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType" OR (e."privacyType" = ${EventPrivacyType.APPROVAL_REQUIRED}::"EventPrivacyType" AND e."listedPublicly" = TRUE))`,
-    Prisma.sql`EXISTS (SELECT 1 FROM "EventPage" ep WHERE ep."eventId" = e."id" AND ep."isPublished" = TRUE)`,
-    Prisma.sql`e."endDateTime" >= ${utc(now)}`,
-    ...(q ? [Prisma.sql`(e."title" ILIKE ${searchPattern} OR e."description" ILIKE ${searchPattern} OR ${q.toLowerCase()} = ANY(e."tags") OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = e."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
-    ...(validFrom ? [Prisma.sql`e."startDateTime" >= ${utc(validFrom)}`] : []),
-    ...(validToExclusive ? [Prisma.sql`e."startDateTime" < ${utc(validToExclusive)}`] : []),
-  ];
-  const instanceFilters = [
-    Prisma.sql`s."status" = ${EventStatus.PUBLISHED}::"EventStatus"`,
-    Prisma.sql`s."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType"`,
-    Prisma.sql`i."endDateTime" >= ${utc(now)}`,
-    ...(q ? [Prisma.sql`(s."title" ILIKE ${searchPattern} OR s."description" ILIKE ${searchPattern} OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = s."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
-    ...(validFrom ? [Prisma.sql`i."startDateTime" >= ${utc(validFrom)}`] : []),
-    ...(validToExclusive ? [Prisma.sql`i."startDateTime" < ${utc(validToExclusive)}`] : []),
-  ];
-  const ordering = sort === "popular"
-    ? Prisma.sql`"popularity" DESC, "startDateTime" ASC, "id" ASC`
-    : Prisma.sql`"startDateTime" ASC, "id" ASC`;
-  const indexRows = await prisma.$queryRaw<Array<{ kind: "event" | "instance"; id: string }>>(Prisma.sql`
-    WITH candidates AS (
-      SELECT 'event'::text AS "kind", e."id", e."startDateTime",
-        (SELECT COUNT(*)::int FROM "RSVP" r WHERE r."eventId" = e."id" AND r."status" = 'CONFIRMED'::"RsvpStatus") AS "popularity"
-      FROM "Event" e
-      WHERE ${Prisma.join(eventFilters, " AND ")}
-      UNION ALL
-      SELECT 'instance'::text AS "kind", i."id", i."startDateTime",
-        (SELECT COUNT(*)::int FROM "RSVP" r WHERE r."eventInstanceId" = i."id" AND r."status" = 'CONFIRMED'::"RsvpStatus") AS "popularity"
-      FROM "EventInstance" i
-      INNER JOIN "EventSeries" s ON s."id" = i."eventSeriesId"
-      WHERE ${Prisma.join(instanceFilters, " AND ")}
-    )
-    SELECT "kind", "id" FROM candidates
-    ORDER BY ${ordering}
-    LIMIT ${PAGE_SIZE} OFFSET ${startIdx}
-  `);
-  const eventIds = indexRows.filter((row) => row.kind === "event").map((row) => row.id);
-  const instanceIds = indexRows.filter((row) => row.kind === "instance").map((row) => row.id);
-  const [events, instances] = await Promise.all([
-    prisma.event.findMany({ where: { id: { in: eventIds } }, include: { organisation: { select: { slug: true, name: true } }, page: { select: { accentColor: true } } } }),
-    prisma.eventInstance.findMany({ where: { id: { in: instanceIds } }, include: { series: { include: { organisation: { select: { slug: true, name: true } } } } } }),
-  ]);
-  // Confirmed counts only for events whose organiser shows registration counts publicly.
-  const countedEventIds = events.filter((event) => event.showRegistrationCount).map((event) => event.id);
-  const goingRows = countedEventIds.length > 0
-    ? await prisma.rSVP.groupBy({ by: ["eventId"], where: { eventId: { in: countedEventIds }, status: "CONFIRMED" }, _count: { _all: true } })
-    : [];
-  const goingByEvent = new Map(goingRows.map((row) => [row.eventId, row._count._all]));
-  const eventsById = new Map(events.map((event) => [event.id, event]));
-  const instancesById = new Map(instances.map((instance) => [instance.id, instance]));
-  type PageItem =
-    | { kind: "event"; id: string; orgSlug: string; event: (typeof events)[number] }
-    | { kind: "instance"; id: string; orgSlug: string; instance: (typeof instances)[number] };
-  const pageItems: PageItem[] = [];
-  for (const row of indexRows) {
-    if (row.kind === "event") {
-      const event = eventsById.get(row.id);
-      if (event) pageItems.push({ kind: "event", id: `e-${event.id}`, orgSlug: event.organisation.slug, event });
-      continue;
-    }
-    const instance = instancesById.get(row.id);
-    if (instance) pageItems.push({ kind: "instance", id: `i-${instance.id}`, orgSlug: instance.series.organisation.slug, instance });
-  }
-
-  const hasActiveFilters = q || sp.from || sp.to || sort !== "upcoming";
-
-  // Build base params for pagination links (preserving current filters)
   const baseParams = {
     ...(q ? { q } : {}),
     ...(sort !== "upcoming" ? { sort } : {}),
     ...(sp.from ? { from: sp.from } : {}),
     ...(sp.to ? { to: sp.to } : {}),
   };
-
   const pageHref = (target: number) => `/discover${buildQueryString({ ...baseParams, page: String(target) })}`;
   const sortHref = (target: "upcoming" | "popular") => `/discover${buildQueryString({ ...(q ? { q } : {}), ...(sp.from ? { from: sp.from } : {}), ...(sp.to ? { to: sp.to } : {}), ...(target !== "upcoming" ? { sort: target } : {}) })}`;
-  const clearSearchHref = `/discover${buildQueryString({ ...(sort !== "upcoming" ? { sort } : {}), ...(sp.from ? { from: sp.from } : {}), ...(sp.to ? { to: sp.to } : {}) })}`;
-  const presets = datePresets();
-  const rangeHref = (range: { from: string; to: string } | null) => `/discover${buildQueryString({ ...(q ? { q } : {}), ...(sort !== "upcoming" ? { sort } : {}), ...(range ? { from: range.from, to: range.to } : {}) })}`;
-  const activeRange = !sp.from && !sp.to
-    ? "all"
-    : sp.from === presets.week.from && sp.to === presets.week.to
-      ? "week"
-      : sp.from === presets.month.from && sp.to === presets.month.to
-        ? "month"
-        : "custom";
-  const dateChips = [
-    { key: "all", label: "All", href: rangeHref(null) },
-    { key: "week", label: "This week", href: rangeHref(presets.week) },
-    { key: "month", label: "This month", href: rangeHref(presets.month) },
-  ] as const;
-  const resultsLabel = q
-    ? `${totalItems} ${totalItems === 1 ? "event matches" : "events match"} “${q}”`
-    : sort === "popular" ? "Popular events" : "Upcoming events";
   const chipClasses = (active: boolean) =>
     cn(
       "inline-flex min-h-8 items-center rounded-full border px-3.5 text-[13px] font-semibold leading-[1.4] transition-colors",
       active ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink hover:bg-surface",
     );
-
   return (
     <div className="flex flex-col">
       {/* Title and search (Figma 125:2367) */}

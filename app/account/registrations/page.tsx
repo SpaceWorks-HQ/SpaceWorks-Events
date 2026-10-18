@@ -1,6 +1,6 @@
+import { loadAccountRegistrationsView } from "@/lib/views/app__account__registrations__page";
 import type { Metadata } from "next";
-import { requireAuth } from "@/lib/permissions";
-import { ACCOUNT_REGISTRATIONS_LIMIT, loadAccountRegistrations } from "@/lib/accountRegistrations";
+import { ACCOUNT_REGISTRATIONS_LIMIT } from "@/lib/accountLimits";
 import { AccountSection, CertificateList, RegistrationList } from "@/components/account/registrations/RegistrationSections";
 import { DataExportCard } from "@/components/account/DataExportCard";
 
@@ -14,10 +14,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AccountRegistrationsPage() {
-  // The page authenticates itself; the account layout is not an authorization boundary.
-  const session = await requireAuth();
-  const { upcoming, past, certificates } = await loadAccountRegistrations(session.user.id);
-
+  const { upcoming, past, certificates } = await loadAccountRegistrationsView();
   return (
     <div className="flex min-w-0 flex-col gap-6">
       <AccountSection id="upcoming" title="Upcoming" description="Events you've registered for that haven't ended yet, soonest first.">

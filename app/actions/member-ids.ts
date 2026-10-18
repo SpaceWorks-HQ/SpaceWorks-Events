@@ -1,7 +1,8 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent, recordThrottledAuditEvent } from "@/lib/audit";
@@ -30,6 +31,8 @@ import { removeMemberIdImages, storeMemberIdImage } from "@/lib/memberIds/upload
 import { slugifyTitle } from "@/lib/slug";
 import type { ActionResult } from "./org";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 /*
  * Organiser actions for member IDs. Each one: signs in, rate-limits, checks
  * the caller is an OWNER or ADMIN of the organisation in the request, then
@@ -44,7 +47,7 @@ const orgInput = z.object({ organisationSlug: z.string().trim().min(1).max(120) 
 const programmeInput = orgInput.extend({ programmeId: z.string().trim().min(1).max(128) });
 const idList = z.array(z.string().trim().min(1).max(128)).min(1).max(MAX_BULK);
 
-type Manage = { ok: true; access: MemberIdsAccess } | { ok: false; error: string };
+type Manage = { ok: true; access: MemberIdsAccess; } | { ok: false; error: string; };
 
 async function requireManage(organisationSlug: string, bucket: "action" | "upload" | "broadcast" = "action"): Promise<Manage> {
   const session = await auth();
@@ -72,7 +75,7 @@ function revalidate(access: MemberIdsAccess, programmeId?: string) {
 
 async function uniqueSlug(organisationId: string, name: string, excludeId?: string) {
   const base = slugifyTitle(name).slice(0, 60) || "ids";
-  for (let n = 0; n < 50; n += 1) {
+  for (let n = 0;n < 50;n += 1) {
     const slug = n === 0 ? base : `${base}-${n + 1}`;
     const clash = await prisma.idProgramme.findFirst({ where: { organisationId, slug, ...(excludeId ? { id: { not: excludeId } } : {}) }, select: { id: true } });
     if (!clash) return slug;
@@ -84,7 +87,7 @@ async function uniqueSlug(organisationId: string, name: string, excludeId?: stri
 
 const createInput = orgInput.extend({ name: z.string().trim().min(2).max(80), preset: z.enum(MEMBER_ID_PRESETS).optional() }).strict();
 
-export async function createIdProgramme(input: unknown): Promise<ActionResult<{ id: string }>> {
+export async function createIdProgramme(input: unknown): Promise<ActionResult<{ id: string; }>> {
   const parsed = createInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Give the programme a name of 2 to 80 characters." };
   const manage = await requireManage(parsed.data.organisationSlug);
@@ -182,7 +185,7 @@ const fieldInput = z.object({
 const fieldsInput = programmeInput.extend({ fields: z.array(fieldInput).max(MAX_PROGRAMME_FIELDS) }).strict();
 
 /** Replace the form's custom fields. Existing keys are kept so stored answers still match; returns each field's key, in order. */
-export async function saveIdProgrammeFields(input: unknown): Promise<ActionResult<{ keys: string[] }>> {
+export async function saveIdProgrammeFields(input: unknown): Promise<ActionResult<{ keys: string[]; }>> {
   const parsed = fieldsInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: `Each question needs a label (up to 60 characters); a form holds up to ${MAX_PROGRAMME_FIELDS}.` };
   const { fields } = parsed.data;
@@ -214,7 +217,7 @@ export async function saveIdProgrammeFields(input: unknown): Promise<ActionResul
 
 const designInput = programmeInput.extend({ design: z.record(z.string(), z.unknown()) }).strict();
 
-export async function saveIdProgrammeDesign(input: unknown): Promise<ActionResult<{ updatedAt: string }>> {
+export async function saveIdProgrammeDesign(input: unknown): Promise<ActionResult<{ updatedAt: string; }>> {
   const parsed = designInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "That card design couldn't be read." };
   if (Buffer.byteLength(JSON.stringify(parsed.data.design), "utf8") > MEMBER_ID_DESIGN_MAX_BYTES) return { ok: false, error: "That card design is too large to save." };
@@ -228,7 +231,7 @@ export async function saveIdProgrammeDesign(input: unknown): Promise<ActionResul
   return { ok: true, data: { updatedAt: saved.updatedAt.toISOString() } };
 }
 
-export async function uploadIdProgrammeWatermark(formData: FormData): Promise<ActionResult<{ url: string | null }>> {
+export async function uploadIdProgrammeWatermark(formData: FormData): Promise<ActionResult<{ url: string | null; }>> {
   const organisationSlug = String(formData.get("organisationSlug") ?? "");
   const programmeId = String(formData.get("programmeId") ?? "");
   const context = await requireProgramme(organisationSlug, programmeId, "upload");
@@ -263,7 +266,7 @@ const memberFields = z.object({
 
 const addInput = programmeInput.extend(memberFields.shape).extend({ approve: z.boolean() }).strict();
 
-export async function addIdMember(input: unknown): Promise<ActionResult<{ id: string }>> {
+export async function addIdMember(input: unknown): Promise<ActionResult<{ id: string; }>> {
   const parsed = addInput.safeParse(input);
   if (!parsed.success || !isEmail(parsed.data.email)) return { ok: false, error: "Enter a name and a valid email address." };
   const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId);
@@ -314,7 +317,7 @@ export async function updateIdMember(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function uploadIdMemberPhoto(formData: FormData): Promise<ActionResult<{ url: string }>> {
+export async function uploadIdMemberPhoto(formData: FormData): Promise<ActionResult<{ url: string; }>> {
   const memberId = String(formData.get("memberId") ?? "");
   const context = await requireProgramme(String(formData.get("organisationSlug") ?? ""), String(formData.get("programmeId") ?? ""), "upload");
   if (!context.ok) return context;
@@ -364,7 +367,7 @@ const statusInput = programmeInput.extend({
 const STATUS_AUDIT = { approve: "ID_MEMBERS_APPROVED", reject: "ID_MEMBERS_REJECTED", revoke: "ID_MEMBERS_REVOKED", reinstate: "ID_MEMBERS_REINSTATED" } as const;
 
 /** Approve, reject, revoke or reinstate one or more members of this programme. */
-export async function setIdMemberStatus(input: unknown): Promise<ActionResult<{ count: number }>> {
+export async function setIdMemberStatus(input: unknown): Promise<ActionResult<{ count: number; }>> {
   const parsed = statusInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose up to 500 members and try again." };
   const { action, memberIds, reason } = parsed.data;
@@ -387,7 +390,7 @@ export async function setIdMemberStatus(input: unknown): Promise<ActionResult<{ 
 const renewInput = programmeInput.extend({ memberIds: idList.optional() }).strict();
 
 /** Restart validity from today, under the programme's current rule, for approved cards. */
-export async function renewIdMembers(input: unknown): Promise<ActionResult<{ count: number }>> {
+export async function renewIdMembers(input: unknown): Promise<ActionResult<{ count: number; }>> {
   const parsed = renewInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose up to 500 members and try again." };
   const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId);
@@ -405,7 +408,7 @@ export async function renewIdMembers(input: unknown): Promise<ActionResult<{ cou
 
 const emailInput = programmeInput.extend({ memberIds: idList.optional() }).strict();
 
-export type EmailCardsResult = { count: number; skippedRecent: number; skippedLimit: number };
+export type EmailCardsResult = { count: number; skippedRecent: number; skippedLimit: number; };
 
 function emailOutcome(result: MemberIdEmailQueueResult): ActionResult<EmailCardsResult> {
   if (result.matched === 0) return { ok: false, error: "No valid cards to send. Approve members first." };
@@ -453,7 +456,7 @@ const sourceInput = programmeInput.extend({
   ]),
 }).strict();
 
-export type ImportPreview = { headers: string[]; rows: string[][]; mapping: ImportTarget[]; truncated: boolean };
+export type ImportPreview = { headers: string[]; rows: string[][]; mapping: ImportTarget[]; truncated: boolean; };
 
 /** Step 1: read a CSV upload or a public Google Sheet into headers and rows, with a suggested mapping. */
 export async function readIdImportSource(input: unknown): Promise<ActionResult<ImportPreview>> {
@@ -485,7 +488,7 @@ const commitInput = programmeInput.extend({
   approve: z.boolean(),
 }).strict();
 
-export type ImportResult = { created: number; approved: number; duplicates: number; skipped: Array<{ row: number; reason: string }> };
+export type ImportResult = { created: number; approved: number; duplicates: number; skipped: Array<{ row: number; reason: string; }>; };
 
 /** Step 2: create members from the mapped rows. Emails already in the programme are skipped. */
 export async function commitIdImport(input: unknown): Promise<ActionResult<ImportResult>> {

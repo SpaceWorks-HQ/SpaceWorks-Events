@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { requireOrgRole } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
@@ -9,6 +10,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import type { ActionResult } from "./org";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { hasRecentAuthentication } from "@/lib/reauth";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const schema = z.object({
   organisationSlug: z.string().trim().min(1).max(120),
@@ -26,7 +29,7 @@ async function resolve(input: unknown) {
   return { ok: true as const, organisation, userId, event };
 }
 
-export async function createOrRotateCheckInStation(input: unknown): Promise<ActionResult<{ pin: string }>> {
+export async function createOrRotateCheckInStation(input: unknown): Promise<ActionResult<{ pin: string; }>> {
   const ctx = await resolve(input);
   if (!ctx.ok) return ctx;
   const pin = createStationPin();
@@ -50,7 +53,7 @@ export async function disableCheckInStation(input: unknown): Promise<ActionResul
   return { ok: true };
 }
 
-export async function revealCheckInStationPin(input: unknown): Promise<ActionResult<{ pin: string }>> {
+export async function revealCheckInStationPin(input: unknown): Promise<ActionResult<{ pin: string; }>> {
   const ctx = await resolve(input);
   if (!ctx.ok) return ctx;
   if (!ctx.event.checkInStationPinEncrypted) return { ok: false, error: "No active venue station PIN." };

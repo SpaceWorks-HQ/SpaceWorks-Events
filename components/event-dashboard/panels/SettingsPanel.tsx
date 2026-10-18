@@ -1,18 +1,12 @@
-import { prisma } from "@/lib/db";
+import { loadSettingsPanel } from "@/lib/views/components__event-dashboard__panels__SettingsPanel";
 import { toEventClientDto } from "@/lib/eventDto";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePanel";
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
 import { NoPermission } from "./shared";
 
-export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext }) {
-  const { event, permissions, organisation } = ctx;
-  const [collaborators, pending] = permissions.canManageCollaborators
-    ? await Promise.all([
-        prisma.eventCollaborator.findMany({ where: { eventId: event.id }, include: { user: { select: { name: true, email: true } } }, orderBy: { createdAt: "asc" } }),
-        prisma.eventCollaboratorInvite.findMany({ where: { eventId: event.id, usedAt: null, expiresAt: { gt: ctx.now } }, select: { id: true, email: true, expiresAt: true, permissions: true }, orderBy: { createdAt: "desc" } }),
-      ])
-    : [[], []];
+export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
+  const { permissions, organisation, event, collaborators, pending } = await loadSettingsPanel({ ctx });
   return (
     <div className="flex flex-col gap-5">
       {permissions.canManageCollaborators ? (

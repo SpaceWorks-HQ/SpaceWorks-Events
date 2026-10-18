@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -12,19 +13,21 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 export type ActionResult<T = void> =
-  | { ok: true; data?: T }
+  | { ok: true; data?: T; }
   | {
-      ok: false;
-      error: string;
-      fieldErrors?: Record<string, string[]>;
-      /** e.g. check-in requires staff override for this RSVP status */
-      needsForce?: boolean;
-    };
+    ok: false;
+    error: string;
+    fieldErrors?: Record<string, string[]>;
+    /** e.g. check-in requires staff override for this RSVP status */
+    needsForce?: boolean;
+  };
 
 export async function createOrganisation(
   input: unknown,
-): Promise<ActionResult<{ slug: string }>> {
+): Promise<ActionResult<{ slug: string; }>> {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, error: "You must be signed in." };
@@ -83,7 +86,7 @@ export async function createOrganisation(
       typeof e === "object" &&
       e !== null &&
       "code" in e &&
-      (e as { code: string }).code === "P2002"
+      (e as { code: string; }).code === "P2002"
     ) {
       return {
         ok: false,
@@ -172,7 +175,7 @@ export async function updateOrganisation(
 /** Format, reserved-word and uniqueness check for the create form; `error` explains an unusable slug. */
 export async function checkSlugAvailability(
   slug: string,
-): Promise<{ available: boolean; error?: string }> {
+): Promise<{ available: boolean; error?: string; }> {
   const parsed = createOrganisationSchema.shape.slug.safeParse(String(slug ?? "").toLowerCase());
   if (!parsed.success) {
     return { available: false, error: parsed.error.issues[0]?.message ?? "That URL can't be used" };

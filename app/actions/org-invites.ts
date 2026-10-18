@@ -1,7 +1,8 @@
 "use server";
 
 import crypto from "crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getMembership, isOrgAdmin } from "@/lib/permissions";
@@ -11,13 +12,15 @@ import { flattenZodErrors } from "./utils";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 function randomToken(): string {
   // 32 chars of base64url-ish entropy, no padding.
   return crypto.randomBytes(24).toString("base64url");
 }
 
 export async function createOrgInvite(input: unknown): Promise<
-  ActionResult<{ token: string; inviteId: string }>
+  ActionResult<{ token: string; inviteId: string; }>
 > {
   const session = await auth();
   if (!session?.user?.id) {
@@ -51,7 +54,7 @@ export async function createOrgInvite(input: unknown): Promise<
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   // Retry on token collision (very unlikely, but unique constraint exists).
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0;attempt < 3;attempt++) {
     const token = randomToken();
     try {
       const invite = await prisma.organisationInvite.create({
@@ -72,7 +75,7 @@ export async function createOrgInvite(input: unknown): Promise<
         typeof e === "object" &&
         e !== null &&
         "code" in e &&
-        (e as { code: string }).code === "P2002"
+        (e as { code: string; }).code === "P2002"
       ) {
         continue;
       }

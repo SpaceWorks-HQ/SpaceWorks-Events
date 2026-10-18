@@ -1,7 +1,6 @@
+import { loadOrgSettingsView } from "@/lib/views/app__dashboard__orgSlug__settings__page";
 import Link from "next/link";
 import { ExternalLink, KeyRound } from "lucide-react";
-import { prisma } from "@/lib/db";
-import { canDeleteOrg, requireOrgRole } from "@/lib/permissions";
 import { EditOrgForm } from "@/components/org/EditOrgForm";
 import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { DeleteOrganisationButton } from "@/components/dashboard/DeleteOrganisationButton";
@@ -12,7 +11,7 @@ import { cn } from "@/lib/cn";
 
 import type { Metadata } from "next";
 
-type Props = { params: Promise<{ orgSlug: string }> };
+type Props = { params: Promise<{ orgSlug: string; }>; };
 
 export const metadata: Metadata = {
   title: "Settings",
@@ -22,37 +21,7 @@ export const metadata: Metadata = {
 const sectionCard = "rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export default async function OrgSettingsPage({ params }: Props) {
-  const { orgSlug } = await params;
-  const { organisation, membership } = await requireOrgRole(orgSlug, "ADMIN");
-
-  const org = await prisma.organisation.findUnique({
-    where: { id: organisation.id },
-    select: { name: true, description: true, logoUrl: true, slug: true },
-  });
-
-  if (!org) {
-    // requireOrgRole guarantees the org exists; this is defensive.
-    return <p className="text-body-ui text-ink-muted">Organisation not found.</p>;
-  }
-
-  const isOwner = membership.role === "OWNER";
-  const canDelete = canDeleteOrg(membership);
-  // Owner-only, tenant-scoped counts. "Active" means the client is enabled and
-  // holds at least one credential that is neither revoked nor expired.
-  const now = new Date();
-  const [totalApiClients, activeApiClients] = isOwner
-    ? await Promise.all([
-        prisma.apiClient.count({ where: { organisationId: organisation.id } }),
-        prisma.apiClient.count({
-          where: {
-            organisationId: organisation.id,
-            status: "ACTIVE",
-            credentials: { some: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } },
-          },
-        }),
-      ])
-    : [0, 0];
-
+  const { org, isOwner, canDelete, totalApiClients, activeApiClients } = await loadOrgSettingsView({ params });
   return (
     <div className="flex flex-col gap-7">
       <OrgPageHeader

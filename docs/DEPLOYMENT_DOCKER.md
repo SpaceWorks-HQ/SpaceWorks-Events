@@ -8,10 +8,12 @@ Kubernetes. For Kubernetes, use the [Helm chart](../charts/spaceworks-events/REA
 For the default free-tier setup (Render, Supabase, Upstash, Cloudflare R2,
 Brevo), follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md) instead.
 
-Space Works Events does **not** currently provide a production `docker compose up` installer.
-The root `docker-compose.yml` is for local PostgreSQL development, and
-`compose.staging.yml` deliberately enables insecure CI/staging exceptions. Do
-not use either file for production or real attendee data.
+For the complete single-VPS stack, use **[Host the complete stack on a VPS](DEPLOYMENT_VPS.md)**
+and `compose.production.yml`. It includes PostgreSQL, Redis, private storage,
+HTTPS, migrations and scheduling. This page covers the alternative: an application
+container with separately supplied production services. The root
+`docker-compose.yml` remains development-only; `compose.staging.yml` deliberately
+enables insecure test exceptions. Neither is a production setup.
 
 ## Production topology
 
@@ -218,6 +220,8 @@ goes through a transaction pooler (for example Supabase on port 6543 with
 
 ## Current image-packaging limitations
 
+The separate `ops` target packages setup, preflight, schema and archive tools
+for the [VPS deployment](DEPLOYMENT_VPS.md); it is not an application server.
 The `runner` image does not contain operational scripts. The `migrator` image
 contains Prisma migrations but not the storage migration, backup, or restore
 scripts. Consequently:
@@ -229,5 +233,7 @@ scripts. Consequently:
 
 Follow [Production operations](production-operations.md) for backup storage,
 restore acknowledgement, retention, monitoring, and incident requirements.
-An image-only production installer and bundled production Compose stack are
-future deployment work, not current repository capabilities.
+The VPS stack builds these targets on the server from a pinned source release; it
+does not pull prebuilt application images. The [one-line installer](DEPLOYMENT_VPS.md#guided-installation)
+downloads the release, installs Docker if needed and runs the guided setup;
+`sudo bash scripts/setup-vps.sh` does the same from a reviewed checkout.

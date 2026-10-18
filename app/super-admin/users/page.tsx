@@ -1,14 +1,14 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminUsersView } from "@/lib/views/app__super-admin__users__page";
 import Link from "next/link";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/db";
 import { cn } from "@/lib/cn";
 import { AdminPager, AdminSearchForm, NameCell } from "@/components/super-admin/AdminPanel";
 import { Chip, PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; filter?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; filter?: string; }>;
 };
 
 const filters = {
@@ -16,50 +16,15 @@ const filters = {
   unverified: { label: "Unverified email", where: { emailVerified: null } },
   "no-mfa": { label: "Without MFA", where: { mfaEnabledAt: null } },
   mfa: { label: "With MFA", where: { mfaEnabledAt: { not: null } } },
-} satisfies Record<string, { label: string; where: Prisma.UserWhereInput }>;
+} satisfies Record<string, { label: string; where: Prisma.UserWhereInput; }>;
 
 type FilterKey = keyof typeof filters;
 
 export default async function SuperAdminUsersPage({ searchParams }: Props) {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const sp = await searchParams;
-  const q = (sp.q ?? "").trim();
-  const filter: FilterKey = sp.filter && sp.filter in filters ? (sp.filter as FilterKey) : "all";
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
-  const take = 50;
-  const skip = page * take;
-
-  const users = await prisma.user.findMany({
-    where: {
-      ...filters[filter].where,
-      ...(q
-        ? {
-            OR: [
-              { email: { contains: q, mode: "insensitive" } },
-              { name: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take,
-    skip,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      emailVerified: true,
-      mfaEnabledAt: true,
-      createdAt: true,
-      _count: {
-        select: { memberships: true, accounts: true, sessions: true, rsvps: true },
-      },
-    },
-  });
+  const { q, filter, users, page } = await loadSuperAdminUsersView({ searchParams });
 
   const filterHref = (key: FilterKey) => `/super-admin/users?q=${encodeURIComponent(q)}${key === "all" ? "" : `&filter=${key}`}`;
-
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Users" description="Every account on this instance, with verification, MFA, memberships, sign-in accounts, sessions, and RSVPs." />

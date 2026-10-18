@@ -23,7 +23,7 @@ test.afterAll(async () => {
 });
 
 test("login rejects bad credentials, honors local return paths, and clears revoked sessions", async ({ page, context }) => {
-  await context.setExtraHTTPHeaders({ "cf-connecting-ip": "192.0.2.231" });
+  await context.setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.231" });
   await page.goto("/login?callbackUrl=%2Faccount%2Fsecurity");
   await page.getByRole("textbox", { name: /^Email/ }).fill(email);
   await page.locator('input[type="password"]:visible').fill("incorrect-password");
@@ -43,7 +43,7 @@ test("login rejects bad credentials, honors local return paths, and clears revok
 });
 
 test("unverified accounts cannot sign in", async ({ page, context }) => {
-  await context.setExtraHTTPHeaders({ "cf-connecting-ip": "192.0.2.232" });
+  await context.setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.232" });
   await prisma.user.update({ where: { id: userId }, data: { emailVerified: null } });
   try {
     await page.goto("/login");
@@ -57,9 +57,9 @@ test("unverified accounts cannot sign in", async ({ page, context }) => {
   }
 });
 
-test("credential callback requires CSRF proof", async ({ request }) => {
+test("credential callback requires CSRF proof", async ({ request, baseURL }) => {
   const response = await request.post("/api/auth/callback/credentials", {
-    headers: { "cf-connecting-ip": "192.0.2.233" },
+    headers: { [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.233", origin: baseURL! },
     form: { email, password },
     maxRedirects: 0,
   });
@@ -69,7 +69,7 @@ test("credential callback requires CSRF proof", async ({ request }) => {
 
 
 test("password login challenges for MFA and accepts an authenticator code", async ({ page, context }) => {
-  await context.setExtraHTTPHeaders({ "cf-connecting-ip": "192.0.2.234" });
+  await context.setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.234" });
   const secret = new OTPAuth.Secret({ size: 20 });
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", Buffer.from(process.env.MFA_ENCRYPTION_KEY!, "base64"), iv);
@@ -92,7 +92,7 @@ test("password login challenges for MFA and accepts an authenticator code", asyn
 });
 
 test("reset links change the password once and revoke sessions", async ({ page, context }) => {
-  await context.setExtraHTTPHeaders({ "cf-connecting-ip": "192.0.2.235" });
+  await context.setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.235" });
   const token = randomBytes(32).toString("hex");
   await prisma.verificationToken.create({ data: { identifier: `reset:${email}`, token: createHash("sha256").update(token).digest("hex"), expires: new Date(Date.now() + 60_000) } });
   const before = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true } });
@@ -111,7 +111,7 @@ test("reset links change the password once and revoke sessions", async ({ page, 
 });
 
 test("email verification activates an account through a single-use confirmation", async ({ page, context }) => {
-  await context.setExtraHTTPHeaders({ "cf-connecting-ip": "192.0.2.236" });
+  await context.setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.236" });
   const token = randomBytes(32).toString("hex");
   await prisma.user.update({ where: { id: userId }, data: { emailVerified: null } });
   await prisma.verificationToken.create({ data: { identifier: `email-verification:${userId}`, token: createHash("sha256").update(token).digest("hex"), expires: new Date(Date.now() + 60_000) } });

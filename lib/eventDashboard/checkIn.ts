@@ -46,7 +46,7 @@ export async function loadCheckInDesk(ctx: EventDashboardContext): Promise<Check
   return {
     confirmed: counts.confirmed,
     checkedIn: counts.checkedIn,
-    stationEnabled: Boolean(event.checkInStationPinHash),
+    stationEnabled: event.stationEnabled,
     canManageStation: permissions.isAdmin,
     canExportAttendance: permissions.isAdmin || Boolean(exportGrant),
     stationUrl: `${origin}/${organisation.slug}/${event.slug}/check-in`,

@@ -1,21 +1,11 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
-import { hashEventCollaboratorToken } from "@/lib/eventCollaboratorToken";
+import { loadJoinEventCollaboratorView } from "@/lib/views/app__join__event-collaborator__token__page";
 import { AcceptInviteButton } from "@/components/invites/AcceptInviteButton";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Co-organiser invitation", robots: { index: false, follow: false }, referrer: "no-referrer" };
 
-export default async function JoinEventCollaboratorPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const session = await auth();
-  const url = `/join/event-collaborator/${encodeURIComponent(token)}`;
-  if (!session?.user?.id) redirect(`/login?callbackUrl=${encodeURIComponent(url)}`);
-  const invite = await prisma.eventCollaboratorInvite.findUnique({
-    where: { tokenHash: hashEventCollaboratorToken(token) },
-    select: { email: true, usedAt: true, expiresAt: true, event: { select: { title: true } }, series: { select: { title: true } } },
-  });
+export default async function JoinEventCollaboratorPage({ params }: { params: Promise<{ token: string; }>; }) {
+  const { token, session, invite } = await loadJoinEventCollaboratorView({ params });
   if (!invite || invite.usedAt || invite.expiresAt <= new Date() || !session.user.email || session.user.email.trim().toLowerCase() !== invite.email.trim().toLowerCase()) {
     return (
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-2 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">

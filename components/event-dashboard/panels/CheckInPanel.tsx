@@ -1,11 +1,11 @@
+import { loadCheckInPanel } from "@/lib/views/components__event-dashboard__panels__CheckInPanel";
 import Link from "next/link";
 import { Download, IdCard, ScanLine } from "lucide-react";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { loadCheckInDesk } from "@/lib/eventDashboard/checkIn";
 import { Button } from "@/components/ui/button";
 import { Chip } from "@/components/ui/display";
 import { cn } from "@/lib/cn";
-import { doorsStatus, seatDots, type DoorsTone } from "@/components/event-dashboard/check-in/doors";
+import { type DoorsTone } from "@/components/event-dashboard/check-in/doors";
 import { DoorStationControls } from "@/components/event-dashboard/check-in/DoorStationControls";
 import { NoPermission } from "./shared";
 
@@ -24,15 +24,10 @@ const DOOR_RULES = [
 
 const cardClass = "flex min-w-0 flex-col gap-3 rounded-xl border border-line bg-panel p-5";
 
-export async function CheckInPanel({ ctx }: { ctx: EventDashboardContext }) {
-  const { event, permissions, organisation, now } = ctx;
+export async function CheckInPanel({ ctx }: { ctx: EventDashboardContext; }) {
+  const { permissions } = ctx;
   if (!permissions.canCheckIn) return <NoPermission>You do not have permission to operate check-in.</NoPermission>;
-
-  const desk = await loadCheckInDesk(ctx);
-  const checkInHref = `/dashboard/${organisation.slug}/event/${event.id}/check-in`;
-  const doors = doorsStatus({ start: event.startDateTime, end: event.endDateTime, timezone: event.timezone, now, cancelled: event.status === "CANCELLED" });
-  const { seats, lit } = seatDots(desk.checkedIn, desk.confirmed);
-
+  const { event, organisation, desk, checkInHref, doors, seats, lit } = await loadCheckInPanel({ ctx });
   return (
     <div className="flex flex-col gap-5">
       <section aria-labelledby="checkin-desk-title" className="yy-dark-band flex flex-col gap-7 rounded-xl bg-[var(--yy-inverse-surface)] p-6 text-ink sm:p-7 lg:flex-row lg:items-center">

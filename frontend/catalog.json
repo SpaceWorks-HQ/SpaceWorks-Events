@@ -1,0 +1,1031 @@
+{
+  "readers": [
+    {
+      "module": "lib/views/app__about__page",
+      "name": "loadView",
+      "id": "app__about__page:loadView"
+    },
+    {
+      "module": "lib/views/app__account__ids__page",
+      "name": "loadAccountIdsView",
+      "id": "app__account__ids__page:loadAccountIdsView"
+    },
+    {
+      "module": "lib/views/app__account__layout",
+      "name": "loadAccountShell",
+      "id": "app__account__layout:loadAccountShell"
+    },
+    {
+      "module": "lib/views/app__account__organisations__page",
+      "name": "loadAccountOrganisationsView",
+      "id": "app__account__organisations__page:loadAccountOrganisationsView"
+    },
+    {
+      "module": "lib/views/app__account__page",
+      "name": "loadAccountView",
+      "id": "app__account__page:loadAccountView"
+    },
+    {
+      "module": "lib/views/app__account__registrations__page",
+      "name": "loadAccountRegistrationsView",
+      "id": "app__account__registrations__page:loadAccountRegistrationsView"
+    },
+    {
+      "module": "lib/views/app__account__security__page",
+      "name": "loadAccountSecurityView",
+      "id": "app__account__security__page:loadAccountSecurityView"
+    },
+    {
+      "module": "lib/views/app__auth__login__page",
+      "name": "loadLoginView",
+      "id": "app__auth__login__page:loadLoginView"
+    },
+    {
+      "module": "lib/views/app__dashboard__layout",
+      "name": "loadDashboardShell",
+      "id": "app__dashboard__layout:loadDashboardShell"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__event__eventId__check-in__badges__page",
+      "name": "loadEventBadgesView",
+      "id": "app__dashboard__orgSlug__event__eventId__check-in__badges__page:loadEventBadgesView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__event__eventId__check-in__page",
+      "name": "loadEventCheckInView",
+      "id": "app__dashboard__orgSlug__event__eventId__check-in__page:loadEventCheckInView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__event__eventId__page",
+      "name": "loadEventManageView",
+      "id": "app__dashboard__orgSlug__event__eventId__page:loadEventManageView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__event__eventId__schedule__page",
+      "name": "loadEventScheduleManageView",
+      "id": "app__dashboard__orgSlug__event__eventId__schedule__page:loadEventScheduleManageView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__ids__page",
+      "name": "loadMemberIdsView",
+      "id": "app__dashboard__orgSlug__ids__page:loadMemberIdsView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__ids__programmeId__page",
+      "name": "loadIdProgrammeView",
+      "id": "app__dashboard__orgSlug__ids__programmeId__page:loadIdProgrammeView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__layout",
+      "name": "loadOrgSlugShell",
+      "id": "app__dashboard__orgSlug__layout:loadOrgSlugShell"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__members__page",
+      "name": "loadOrgMembersView",
+      "id": "app__dashboard__orgSlug__members__page:loadOrgMembersView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__page",
+      "name": "loadRouteMetadata",
+      "id": "app__dashboard__orgSlug__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__page",
+      "name": "loadOrgDashboardView",
+      "id": "app__dashboard__orgSlug__page:loadOrgDashboardView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__series__seriesId__page",
+      "name": "loadSeriesManageView",
+      "id": "app__dashboard__orgSlug__series__seriesId__page:loadSeriesManageView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__settings__api__page",
+      "name": "loadApiAccessView",
+      "id": "app__dashboard__orgSlug__settings__api__page:loadApiAccessView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__settings__page",
+      "name": "loadOrgSettingsView",
+      "id": "app__dashboard__orgSlug__settings__page:loadOrgSettingsView"
+    },
+    {
+      "module": "lib/views/app__dashboard__page",
+      "name": "loadDashboardView",
+      "id": "app__dashboard__page:loadDashboardView"
+    },
+    {
+      "module": "lib/views/app__discover__page",
+      "name": "loadDiscoverView",
+      "id": "app__discover__page:loadDiscoverView"
+    },
+    {
+      "module": "lib/views/app__features__page",
+      "name": "loadView",
+      "id": "app__features__page:loadView"
+    },
+    {
+      "module": "lib/views/app__join__event-collaborator__token__page",
+      "name": "loadJoinEventCollaboratorView",
+      "id": "app__join__event-collaborator__token__page:loadJoinEventCollaboratorView"
+    },
+    {
+      "module": "lib/views/app__join__org__token__page",
+      "name": "loadJoinOrganisationView",
+      "id": "app__join__org__token__page:loadJoinOrganisationView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__check-in__page",
+      "name": "loadVenueCheckInStationView",
+      "id": "app__orgSlug__eventSlug__check-in__page:loadVenueCheckInStationView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__feedback__page",
+      "name": "loadRouteMetadata",
+      "id": "app__orgSlug__eventSlug__feedback__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__feedback__page",
+      "name": "loadFeedbackView",
+      "id": "app__orgSlug__eventSlug__feedback__page:loadFeedbackView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__opengraph-image",
+      "name": "loadOpenGraphImage",
+      "id": "app__orgSlug__eventSlug__opengraph-image:loadOpenGraphImage"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__page",
+      "name": "loadRouteMetadata",
+      "id": "app__orgSlug__eventSlug__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__page",
+      "name": "loadEventView",
+      "id": "app__orgSlug__eventSlug__page:loadEventView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__schedule__page",
+      "name": "loadEventScheduleView",
+      "id": "app__orgSlug__eventSlug__schedule__page:loadEventScheduleView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__sessions__sessionSlug__page",
+      "name": "loadSessionView",
+      "id": "app__orgSlug__eventSlug__sessions__sessionSlug__page:loadSessionView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__eventSlug__speakers__speakerSlug__page",
+      "name": "loadSpeakerView",
+      "id": "app__orgSlug__eventSlug__speakers__speakerSlug__page:loadSpeakerView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__i__instanceId__opengraph-image",
+      "name": "loadOpenGraphImage",
+      "id": "app__orgSlug__i__instanceId__opengraph-image:loadOpenGraphImage"
+    },
+    {
+      "module": "lib/views/app__orgSlug__i__instanceId__page",
+      "name": "loadRouteMetadata",
+      "id": "app__orgSlug__i__instanceId__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__orgSlug__i__instanceId__page",
+      "name": "loadInstanceEventView",
+      "id": "app__orgSlug__i__instanceId__page:loadInstanceEventView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__i__instanceId__schedule__page",
+      "name": "loadInstanceScheduleView",
+      "id": "app__orgSlug__i__instanceId__schedule__page:loadInstanceScheduleView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__ids__page",
+      "name": "loadOrganisationIdsView",
+      "id": "app__orgSlug__ids__page:loadOrganisationIdsView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__ids__programmeSlug__page",
+      "name": "loadRouteMetadata",
+      "id": "app__orgSlug__ids__programmeSlug__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__orgSlug__ids__programmeSlug__page",
+      "name": "loadJoinIdProgrammeView",
+      "id": "app__orgSlug__ids__programmeSlug__page:loadJoinIdProgrammeView"
+    },
+    {
+      "module": "lib/views/app__orgSlug__layout",
+      "name": "loadOrganiserShell",
+      "id": "app__orgSlug__layout:loadOrganiserShell"
+    },
+    {
+      "module": "lib/views/app__orgSlug__page",
+      "name": "loadRouteMetadata",
+      "id": "app__orgSlug__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__orgSlug__page",
+      "name": "loadOrganisationView",
+      "id": "app__orgSlug__page:loadOrganisationView"
+    },
+    {
+      "module": "lib/views/app__page",
+      "name": "loadView",
+      "id": "app__page:loadView"
+    },
+    {
+      "module": "lib/views/app__super-admin-mfa__page",
+      "name": "loadSuperAdminMfaView",
+      "id": "app__super-admin-mfa__page:loadSuperAdminMfaView"
+    },
+    {
+      "module": "lib/views/app__super-admin__activity__page",
+      "name": "loadSuperAdminActivityView",
+      "id": "app__super-admin__activity__page:loadSuperAdminActivityView"
+    },
+    {
+      "module": "lib/views/app__super-admin__audit__page",
+      "name": "loadSuperAdminAuditView",
+      "id": "app__super-admin__audit__page:loadSuperAdminAuditView"
+    },
+    {
+      "module": "lib/views/app__super-admin__auth__page",
+      "name": "loadSuperAdminAuthView",
+      "id": "app__super-admin__auth__page:loadSuperAdminAuthView"
+    },
+    {
+      "module": "lib/views/app__super-admin__email__page",
+      "name": "loadSuperAdminEmailView",
+      "id": "app__super-admin__email__page:loadSuperAdminEmailView"
+    },
+    {
+      "module": "lib/views/app__super-admin__events__page",
+      "name": "loadSuperAdminEventsView",
+      "id": "app__super-admin__events__page:loadSuperAdminEventsView"
+    },
+    {
+      "module": "lib/views/app__super-admin__invites__page",
+      "name": "loadSuperAdminInvitesView",
+      "id": "app__super-admin__invites__page:loadSuperAdminInvitesView"
+    },
+    {
+      "module": "lib/views/app__super-admin__layout",
+      "name": "loadSuperAdminShell",
+      "id": "app__super-admin__layout:loadSuperAdminShell"
+    },
+    {
+      "module": "lib/views/app__super-admin__monitoring__page",
+      "name": "loadSuperAdminMonitoringView",
+      "id": "app__super-admin__monitoring__page:loadSuperAdminMonitoringView"
+    },
+    {
+      "module": "lib/views/app__super-admin__operations__page",
+      "name": "loadSuperAdminOperationsView",
+      "id": "app__super-admin__operations__page:loadSuperAdminOperationsView"
+    },
+    {
+      "module": "lib/views/app__super-admin__orgs__orgId__page",
+      "name": "loadSuperAdminOrgDetailView",
+      "id": "app__super-admin__orgs__orgId__page:loadSuperAdminOrgDetailView"
+    },
+    {
+      "module": "lib/views/app__super-admin__orgs__page",
+      "name": "loadSuperAdminOrgsView",
+      "id": "app__super-admin__orgs__page:loadSuperAdminOrgsView"
+    },
+    {
+      "module": "lib/views/app__super-admin__page",
+      "name": "loadSuperAdminOverviewView",
+      "id": "app__super-admin__page:loadSuperAdminOverviewView"
+    },
+    {
+      "module": "lib/views/app__super-admin__security__page",
+      "name": "loadSuperAdminSecurityView",
+      "id": "app__super-admin__security__page:loadSuperAdminSecurityView"
+    },
+    {
+      "module": "lib/views/app__super-admin__settings__page",
+      "name": "loadSuperAdminSettingsView",
+      "id": "app__super-admin__settings__page:loadSuperAdminSettingsView"
+    },
+    {
+      "module": "lib/views/app__super-admin__storage__page",
+      "name": "loadSuperAdminStorageView",
+      "id": "app__super-admin__storage__page:loadSuperAdminStorageView"
+    },
+    {
+      "module": "lib/views/app__super-admin__users__page",
+      "name": "loadSuperAdminUsersView",
+      "id": "app__super-admin__users__page:loadSuperAdminUsersView"
+    },
+    {
+      "module": "lib/views/app__super-admin__users__userId__page",
+      "name": "loadSuperAdminUserDetailView",
+      "id": "app__super-admin__users__userId__page:loadSuperAdminUserDetailView"
+    },
+    {
+      "module": "lib/views/app__ticket__token__page",
+      "name": "loadRouteMetadata",
+      "id": "app__ticket__token__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__ticket__token__page",
+      "name": "loadTicketView",
+      "id": "app__ticket__token__page:loadTicketView"
+    },
+    {
+      "module": "lib/views/app__verify__token__page",
+      "name": "loadVerifyView",
+      "id": "app__verify__token__page:loadVerifyView"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__AnalyticsPanel",
+      "name": "loadAnalyticsPanel",
+      "id": "components__event-dashboard__panels__AnalyticsPanel:loadAnalyticsPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__CheckInPanel",
+      "name": "loadCheckInPanel",
+      "id": "components__event-dashboard__panels__CheckInPanel:loadCheckInPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__EmailsPanel",
+      "name": "loadEmailsPanel",
+      "id": "components__event-dashboard__panels__EmailsPanel:loadEmailsPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__EventPagePanel",
+      "name": "loadEventPagePanel",
+      "id": "components__event-dashboard__panels__EventPagePanel:loadEventPagePanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__FeedbackPanel",
+      "name": "loadFeedbackPanel",
+      "id": "components__event-dashboard__panels__FeedbackPanel:loadFeedbackPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__GuestsPanel",
+      "name": "loadGuestsPanel",
+      "id": "components__event-dashboard__panels__GuestsPanel:loadGuestsPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__OverviewPanel",
+      "name": "loadOverviewPanel",
+      "id": "components__event-dashboard__panels__OverviewPanel:loadOverviewPanel"
+    },
+    {
+      "module": "lib/views/components__event-dashboard__panels__SettingsPanel",
+      "name": "loadSettingsPanel",
+      "id": "components__event-dashboard__panels__SettingsPanel:loadSettingsPanel"
+    },
+    {
+      "module": "lib/views/frontend-gates",
+      "name": "loadSuperAdminGate",
+      "id": "frontend-gates:loadSuperAdminGate"
+    }
+  ],
+  "actions": [
+    {
+      "module": "app/actions/account-organisations",
+      "name": "leaveOrganisation",
+      "id": "account-organisations:leaveOrganisation"
+    },
+    {
+      "module": "app/actions/account",
+      "name": "updateAccountProfile",
+      "id": "account:updateAccountProfile"
+    },
+    {
+      "module": "app/actions/account",
+      "name": "updateAccountPassword",
+      "id": "account:updateAccountPassword"
+    },
+    {
+      "module": "app/actions/api-clients",
+      "name": "createApiClient",
+      "id": "api-clients:createApiClient"
+    },
+    {
+      "module": "app/actions/api-clients",
+      "name": "createApiCredential",
+      "id": "api-clients:createApiCredential"
+    },
+    {
+      "module": "app/actions/api-clients",
+      "name": "revokeApiCredential",
+      "id": "api-clients:revokeApiCredential"
+    },
+    {
+      "module": "app/actions/api-clients",
+      "name": "updateApiClientScopes",
+      "id": "api-clients:updateApiClientScopes"
+    },
+    {
+      "module": "app/actions/api-clients",
+      "name": "setApiClientStatus",
+      "id": "api-clients:setApiClientStatus"
+    },
+    {
+      "module": "app/actions/auth",
+      "name": "signUpWithPassword",
+      "id": "auth:signUpWithPassword"
+    },
+    {
+      "module": "app/actions/auth",
+      "name": "confirmEmailVerification",
+      "id": "auth:confirmEmailVerification"
+    },
+    {
+      "module": "app/actions/auth",
+      "name": "resendEmailVerification",
+      "id": "auth:resendEmailVerification"
+    },
+    {
+      "module": "app/actions/badge",
+      "name": "getBadgeDesign",
+      "id": "badge:getBadgeDesign"
+    },
+    {
+      "module": "app/actions/badge",
+      "name": "saveBadgeDesign",
+      "id": "badge:saveBadgeDesign"
+    },
+    {
+      "module": "app/actions/badge",
+      "name": "getBadgeAttendeePhoto",
+      "id": "badge:getBadgeAttendeePhoto"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "countBroadcastRecipients",
+      "id": "broadcasts:countBroadcastRecipients"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "previewEventBroadcast",
+      "id": "broadcasts:previewEventBroadcast"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "sendEventBroadcast",
+      "id": "broadcasts:sendEventBroadcast"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "sendEventBroadcastTest",
+      "id": "broadcasts:sendEventBroadcastTest"
+    },
+    {
+      "module": "app/actions/certificate",
+      "name": "uploadCertificateBackground",
+      "id": "certificate:uploadCertificateBackground"
+    },
+    {
+      "module": "app/actions/certificate",
+      "name": "uploadCertificateAsset",
+      "id": "certificate:uploadCertificateAsset"
+    },
+    {
+      "module": "app/actions/certificate",
+      "name": "previewCertificate",
+      "id": "certificate:previewCertificate"
+    },
+    {
+      "module": "app/actions/checkin-station",
+      "name": "createOrRotateCheckInStation",
+      "id": "checkin-station:createOrRotateCheckInStation"
+    },
+    {
+      "module": "app/actions/checkin-station",
+      "name": "disableCheckInStation",
+      "id": "checkin-station:disableCheckInStation"
+    },
+    {
+      "module": "app/actions/checkin-station",
+      "name": "revealCheckInStationPin",
+      "id": "checkin-station:revealCheckInStationPin"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "previewCheckInByToken",
+      "id": "checkin:previewCheckInByToken"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "checkInByToken",
+      "id": "checkin:checkInByToken"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "undoCheckIn",
+      "id": "checkin:undoCheckIn"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "downloadOfflineCheckInRoster",
+      "id": "checkin:downloadOfflineCheckInRoster"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "syncOfflineCheckIns",
+      "id": "checkin:syncOfflineCheckIns"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "lookupAttendeesForCheckIn",
+      "id": "checkin:lookupAttendeesForCheckIn"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "previewCheckInByRsvpId",
+      "id": "checkin:previewCheckInByRsvpId"
+    },
+    {
+      "module": "app/actions/checkin",
+      "name": "checkInByRsvpId",
+      "id": "checkin:checkInByRsvpId"
+    },
+    {
+      "module": "app/actions/event-collaborators",
+      "name": "createEventCollaboratorInvite",
+      "id": "event-collaborators:createEventCollaboratorInvite"
+    },
+    {
+      "module": "app/actions/event-collaborators",
+      "name": "revokeEventCollaborator",
+      "id": "event-collaborators:revokeEventCollaborator"
+    },
+    {
+      "module": "app/actions/event-collaborators",
+      "name": "updateEventCollaboratorPermissions",
+      "id": "event-collaborators:updateEventCollaboratorPermissions"
+    },
+    {
+      "module": "app/actions/event-collaborators",
+      "name": "cancelEventCollaboratorInvite",
+      "id": "event-collaborators:cancelEventCollaboratorInvite"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "uploadEventSpeakerPhoto",
+      "id": "event-website:uploadEventSpeakerPhoto"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "uploadEventSponsorLogo",
+      "id": "event-website:uploadEventSponsorLogo"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveEventPage",
+      "id": "event-website:saveEventPage"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveHighlight",
+      "id": "event-website:saveHighlight"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveSpeaker",
+      "id": "event-website:saveSpeaker"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveSponsor",
+      "id": "event-website:saveSponsor"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveResource",
+      "id": "event-website:saveResource"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveFaq",
+      "id": "event-website:saveFaq"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveVenue",
+      "id": "event-website:saveVenue"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveScheduleTrack",
+      "id": "event-website:saveScheduleTrack"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "deleteScheduleTrack",
+      "id": "event-website:deleteScheduleTrack"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "reorderScheduleTracks",
+      "id": "event-website:reorderScheduleTracks"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "saveSession",
+      "id": "event-website:saveSession"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "setEventSessionDelay",
+      "id": "event-website:setEventSessionDelay"
+    },
+    {
+      "module": "app/actions/event-website",
+      "name": "deleteWebsiteContent",
+      "id": "event-website:deleteWebsiteContent"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "uploadEventCoverImage",
+      "id": "event:uploadEventCoverImage"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "createEvent",
+      "id": "event:createEvent"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "updateEvent",
+      "id": "event:updateEvent"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "deleteEvent",
+      "id": "event:deleteEvent"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "updateEventSlug",
+      "id": "event:updateEventSlug"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "cloneEvent",
+      "id": "event:cloneEvent"
+    },
+    {
+      "module": "app/actions/event",
+      "name": "publishEvent",
+      "id": "event:publishEvent"
+    },
+    {
+      "module": "app/actions/feedback-form",
+      "name": "applyFeedbackTemplate",
+      "id": "feedback-form:applyFeedbackTemplate"
+    },
+    {
+      "module": "app/actions/feedback-form",
+      "name": "saveFeedbackSettings",
+      "id": "feedback-form:saveFeedbackSettings"
+    },
+    {
+      "module": "app/actions/feedback-form",
+      "name": "saveFeedbackField",
+      "id": "feedback-form:saveFeedbackField"
+    },
+    {
+      "module": "app/actions/feedback-form",
+      "name": "deleteFeedbackField",
+      "id": "feedback-form:deleteFeedbackField"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "setNewUserRegistrationEnabled",
+      "id": "instance-settings:setNewUserRegistrationEnabled"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "saveInstanceServiceSettings",
+      "id": "instance-settings:saveInstanceServiceSettings"
+    },
+    {
+      "module": "app/actions/instance",
+      "name": "deliverInstanceOutbox",
+      "id": "instance:deliverInstanceOutbox"
+    },
+    {
+      "module": "app/actions/instance",
+      "name": "purgeExpiredVerificationTokens",
+      "id": "instance:purgeExpiredVerificationTokens"
+    },
+    {
+      "module": "app/actions/instance",
+      "name": "retryFailedOutboxMessages",
+      "id": "instance:retryFailedOutboxMessages"
+    },
+    {
+      "module": "app/actions/instance",
+      "name": "recordBackupRestoreVerification",
+      "id": "instance:recordBackupRestoreVerification"
+    },
+    {
+      "module": "app/actions/invite-acceptance",
+      "name": "acceptOrganisationInvite",
+      "id": "invite-acceptance:acceptOrganisationInvite"
+    },
+    {
+      "module": "app/actions/invite-acceptance",
+      "name": "acceptEventCollaboratorInvite",
+      "id": "invite-acceptance:acceptEventCollaboratorInvite"
+    },
+    {
+      "module": "app/actions/invites",
+      "name": "addEventInvite",
+      "id": "invites:addEventInvite"
+    },
+    {
+      "module": "app/actions/invites",
+      "name": "removeEventInvite",
+      "id": "invites:removeEventInvite"
+    },
+    {
+      "module": "app/actions/invites",
+      "name": "addSeriesInvite",
+      "id": "invites:addSeriesInvite"
+    },
+    {
+      "module": "app/actions/invites",
+      "name": "removeSeriesInvite",
+      "id": "invites:removeSeriesInvite"
+    },
+    {
+      "module": "app/actions/media",
+      "name": "uploadOrganisationLogo",
+      "id": "media:uploadOrganisationLogo"
+    },
+    {
+      "module": "app/actions/media",
+      "name": "uploadEventPageLogo",
+      "id": "media:uploadEventPageLogo"
+    },
+    {
+      "module": "app/actions/media",
+      "name": "uploadAccountProfileImage",
+      "id": "media:uploadAccountProfileImage"
+    },
+    {
+      "module": "app/actions/member-id-join",
+      "name": "joinIdProgramme",
+      "id": "member-id-join:joinIdProgramme"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "createIdProgramme",
+      "id": "member-ids:createIdProgramme"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "updateIdProgramme",
+      "id": "member-ids:updateIdProgramme"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "deleteIdProgramme",
+      "id": "member-ids:deleteIdProgramme"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "saveIdProgrammeFields",
+      "id": "member-ids:saveIdProgrammeFields"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "saveIdProgrammeDesign",
+      "id": "member-ids:saveIdProgrammeDesign"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "uploadIdProgrammeWatermark",
+      "id": "member-ids:uploadIdProgrammeWatermark"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "addIdMember",
+      "id": "member-ids:addIdMember"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "updateIdMember",
+      "id": "member-ids:updateIdMember"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "uploadIdMemberPhoto",
+      "id": "member-ids:uploadIdMemberPhoto"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "deleteIdMember",
+      "id": "member-ids:deleteIdMember"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "setIdMemberStatus",
+      "id": "member-ids:setIdMemberStatus"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "renewIdMembers",
+      "id": "member-ids:renewIdMembers"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "emailIdCards",
+      "id": "member-ids:emailIdCards"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "emailIdCard",
+      "id": "member-ids:emailIdCard"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "readIdImportSource",
+      "id": "member-ids:readIdImportSource"
+    },
+    {
+      "module": "app/actions/member-ids",
+      "name": "commitIdImport",
+      "id": "member-ids:commitIdImport"
+    },
+    {
+      "module": "app/actions/membership",
+      "name": "updateMemberRole",
+      "id": "membership:updateMemberRole"
+    },
+    {
+      "module": "app/actions/membership",
+      "name": "removeMember",
+      "id": "membership:removeMember"
+    },
+    {
+      "module": "app/actions/membership",
+      "name": "deleteOrganisation",
+      "id": "membership:deleteOrganisation"
+    },
+    {
+      "module": "app/actions/org-invites",
+      "name": "createOrgInvite",
+      "id": "org-invites:createOrgInvite"
+    },
+    {
+      "module": "app/actions/org-invites",
+      "name": "revokeOrgInvite",
+      "id": "org-invites:revokeOrgInvite"
+    },
+    {
+      "module": "app/actions/org",
+      "name": "createOrganisation",
+      "id": "org:createOrganisation"
+    },
+    {
+      "module": "app/actions/org",
+      "name": "updateOrganisation",
+      "id": "org:updateOrganisation"
+    },
+    {
+      "module": "app/actions/org",
+      "name": "checkSlugAvailability",
+      "id": "org:checkSlugAvailability"
+    },
+    {
+      "module": "app/actions/password-reset",
+      "name": "requestPasswordReset",
+      "id": "password-reset:requestPasswordReset"
+    },
+    {
+      "module": "app/actions/password-reset",
+      "name": "confirmPasswordReset",
+      "id": "password-reset:confirmPasswordReset"
+    },
+    {
+      "module": "app/actions/registration-form",
+      "name": "upsertEventRegistrationField",
+      "id": "registration-form:upsertEventRegistrationField"
+    },
+    {
+      "module": "app/actions/registration-form",
+      "name": "deleteEventRegistrationField",
+      "id": "registration-form:deleteEventRegistrationField"
+    },
+    {
+      "module": "app/actions/registration-form",
+      "name": "reorderEventRegistrationFields",
+      "id": "registration-form:reorderEventRegistrationFields"
+    },
+    {
+      "module": "app/actions/rsvp-admin",
+      "name": "addManualRsvp",
+      "id": "rsvp-admin:addManualRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-admin",
+      "name": "updateRsvpRegistration",
+      "id": "rsvp-admin:updateRsvpRegistration"
+    },
+    {
+      "module": "app/actions/rsvp-admin",
+      "name": "deleteRsvp",
+      "id": "rsvp-admin:deleteRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-admin",
+      "name": "restoreRsvp",
+      "id": "rsvp-admin:restoreRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-cancel",
+      "name": "cancelRsvp",
+      "id": "rsvp-cancel:cancelRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-lifecycle",
+      "name": "approveRsvp",
+      "id": "rsvp-lifecycle:approveRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-lifecycle",
+      "name": "rejectRsvp",
+      "id": "rsvp-lifecycle:rejectRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-lifecycle",
+      "name": "promoteFromWaitlist",
+      "id": "rsvp-lifecycle:promoteFromWaitlist"
+    },
+    {
+      "module": "app/actions/rsvp",
+      "name": "submitRsvp",
+      "id": "rsvp:submitRsvp"
+    },
+    {
+      "module": "app/actions/schedule",
+      "name": "saveScheduleItem",
+      "id": "schedule:saveScheduleItem"
+    },
+    {
+      "module": "app/actions/schedule",
+      "name": "setScheduleDelay",
+      "id": "schedule:setScheduleDelay"
+    },
+    {
+      "module": "app/actions/security",
+      "name": "beginMfaEnrollment",
+      "id": "security:beginMfaEnrollment"
+    },
+    {
+      "module": "app/actions/security",
+      "name": "confirmMfaEnrollment",
+      "id": "security:confirmMfaEnrollment"
+    },
+    {
+      "module": "app/actions/security",
+      "name": "disableMfa",
+      "id": "security:disableMfa"
+    },
+    {
+      "module": "app/actions/security",
+      "name": "revokeAllSessions",
+      "id": "security:revokeAllSessions"
+    },
+    {
+      "module": "app/actions/series",
+      "name": "createEventSeries",
+      "id": "series:createEventSeries"
+    },
+    {
+      "module": "app/actions/series",
+      "name": "updateEventSeriesMeta",
+      "id": "series:updateEventSeriesMeta"
+    },
+    {
+      "module": "app/actions/series",
+      "name": "deleteEventSeries",
+      "id": "series:deleteEventSeries"
+    },
+    {
+      "module": "app/actions/shortLink",
+      "name": "createEventShortLink",
+      "id": "shortLink:createEventShortLink"
+    },
+    {
+      "module": "app/actions/shortLink",
+      "name": "regenerateEventShortLink",
+      "id": "shortLink:regenerateEventShortLink"
+    },
+    {
+      "module": "app/actions/super-admin-mfa",
+      "name": "verifySuperAdminMfa",
+      "id": "super-admin-mfa:verifySuperAdminMfa"
+    }
+  ]
+}

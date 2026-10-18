@@ -1,49 +1,13 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
-import { isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
+import { loadSuperAdminAuthView } from "@/lib/views/app__super-admin__auth__page";
 import { AccountCreationControl } from "@/components/super-admin/AccountCreationControl";
 import { AdminPanel } from "@/components/super-admin/AdminPanel";
 import { PageHeader, StatTile } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminAuthPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const [accountsCount, sessionsCount, tokensCount, accountCreationEnabled] = await Promise.all([
-    prisma.account.count(),
-    prisma.session.count(),
-    prisma.verificationToken.count(),
-    isNewUserRegistrationEnabled(),
-  ]);
-
-  const [accounts, sessions, tokens] = await Promise.all([
-    prisma.account.findMany({
-      orderBy: { id: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        provider: true,
-        type: true,
-        providerAccountId: true,
-        user: { select: { id: true, email: true } },
-      },
-    }),
-    prisma.session.findMany({
-      orderBy: { expires: "desc" },
-      take: 50,
-      select: {
-        id: true,
-        expires: true,
-        user: { select: { id: true, email: true } },
-      },
-    }),
-    prisma.verificationToken.findMany({
-      orderBy: { expires: "desc" },
-      take: 50,
-      select: { identifier: true, expires: true },
-    }),
-  ]);
-
+  const { accountsCount, sessionsCount, tokensCount, accountCreationEnabled, accounts, sessions, tokens } = await loadSuperAdminAuthView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Auth" description="Account creation, sign-in accounts, sessions, and verification tokens." />

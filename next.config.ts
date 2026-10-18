@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   allowedDevOrigins,
   experimental: {
+    ...(process.env.SWE_DISABLE_BUILD_CACHE === "1" ? { turbopackFileSystemCacheForBuild: false } : {}),
     serverActions: {
       // The default is same-origin only. Configure this explicitly when a
       // trusted CDN/reverse proxy terminates requests on another hostname.

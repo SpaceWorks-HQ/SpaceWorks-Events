@@ -4,6 +4,7 @@ import Redis from "ioredis";
 export type Bucket =
   | "global"
   | "action"
+  | "frontendAction"
   | "create"
   | "auth"
   | "signup"
@@ -25,9 +26,10 @@ export type Bucket =
   | "ticketEvents"
   | "shortLink";
 
-const limits: Record<Bucket, { max: number; windowMs: number }> = {
+const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   global: { max: 300, windowMs: 60_000 },
   action: { max: 180, windowMs: 60_000 },
+  frontendAction: { max: 180, windowMs: 60_000 },
   create: { max: 20, windowMs: 60 * 60_000 },
   auth: { max: 10, windowMs: 60_000 },
   signup: { max: 5, windowMs: 60 * 60_000 },
@@ -55,7 +57,7 @@ const limits: Record<Bucket, { max: number; windowMs: number }> = {
 };
 
 // Local fallback store
-type Entry = { count: number; resetAt: number };
+type Entry = { count: number; resetAt: number; };
 const memoryStore = new Map<string, Entry>();
 
 let redisClient: Redis | null = null;
@@ -85,11 +87,11 @@ function getRedisClient(): Redis | null {
       connectTimeout: 1000,
       lazyConnect: true,
     });
-    
+
     redisClient.on("error", () => {
       console.warn("[rateLimit] Redis client error");
     });
-    
+
     return redisClient;
   } catch {
     console.error("[rateLimit] Redis client initialization failed");
@@ -161,7 +163,7 @@ export async function checkRateLimit(
 /** Check a bucket using a privacy-safe, caller-provided subject key. */
 export async function checkRateLimitById(bucket: Bucket, id: string): Promise<boolean> {
   const redis = getRedisClient();
-  
+
   if (!redis) {
     if (process.env.NODE_ENV === "production" && !allowTestMemoryFallback()) return false;
     return checkRateLimitMemory(bucket, id);

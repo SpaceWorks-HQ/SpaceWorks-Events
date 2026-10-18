@@ -1,64 +1,12 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminInvitesView } from "@/lib/views/app__super-admin__invites__page";
 import { AdminPanel, NameCell } from "@/components/super-admin/AdminPanel";
 import { PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminInvitesPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const [orgInvites, eventInvites, seriesInvites] = await Promise.all([
-    prisma.organisationInvite.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      select: {
-        id: true,
-        token: true,
-        role: true,
-        createdAt: true,
-        expiresAt: true,
-        usedAt: true,
-        organisation: { select: { id: true, slug: true, name: true } },
-        createdBy: { select: { email: true } },
-        usedBy: { select: { email: true } },
-      },
-    }),
-    prisma.eventInvite.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-        event: {
-          select: {
-            id: true,
-            slug: true,
-            title: true,
-            organisation: { select: { id: true, slug: true, name: true } },
-          },
-        },
-      },
-    }),
-    prisma.seriesInvite.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 200,
-      select: {
-        id: true,
-        email: true,
-        createdAt: true,
-        series: {
-          select: {
-            id: true,
-            slug: true,
-            title: true,
-            organisation: { select: { id: true, slug: true, name: true } },
-          },
-        },
-      },
-    }),
-  ]);
-
+  const { orgInvites, eventInvites, seriesInvites } = await loadSuperAdminInvitesView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Invites" description="Organisation invite links and event and series invites across the instance." />

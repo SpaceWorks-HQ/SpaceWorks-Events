@@ -6,7 +6,8 @@ import {
   EventPermission,
   SponsorTier,
 } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -20,6 +21,8 @@ import { createSafeWebpDerivative } from "@/lib/imageValidation";
 import { getPublicUrl, uploadFile } from "@/lib/storage";
 import type { ActionResult } from "./org";
 import { isOrganisationUploadUrl, isUploadedImageUrl } from "@/lib/uploadUrl";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const http = z
   .string()
@@ -76,7 +79,7 @@ async function context(
   });
   return event ? { session, org, event } : null;
 }
-function paths(orgSlug: string, event: { id: string; slug: string }) {
+function paths(orgSlug: string, event: { id: string; slug: string; }) {
   revalidatePath(`/${orgSlug}/${event.slug}`);
   revalidatePath(`/${orgSlug}/${event.slug}/schedule`);
   revalidatePath(`/dashboard/${orgSlug}/event/${event.id}`);
@@ -88,7 +91,7 @@ function fail(message: string): ActionResult {
 
 export async function uploadEventSpeakerPhoto(
   formData: FormData,
-): Promise<ActionResult<{ url: string }>> {
+): Promise<ActionResult<{ url: string; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (!(await isUserEmailVerified(session.user.id)))
@@ -144,7 +147,7 @@ export async function uploadEventSpeakerPhoto(
 /** Sponsor logos follow the same validation, private storage, and WebP re-encoding path as speaker photos. */
 export async function uploadEventSponsorLogo(
   formData: FormData,
-): Promise<ActionResult<{ url: string }>> {
+): Promise<ActionResult<{ url: string; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (!(await isUserEmailVerified(session.user.id)))
@@ -642,11 +645,11 @@ export async function reorderScheduleTracks(input: unknown): Promise<ActionResul
   return { ok: true };
 }
 
-const sessionFail = (error: string): ActionResult<{ conflictingSessions: Array<{ id: string; title: string }> }> => ({ ok: false, error });
+const sessionFail = (error: string): ActionResult<{ conflictingSessions: Array<{ id: string; title: string; }>; }> => ({ ok: false, error });
 
 export async function saveSession(
   input: unknown,
-): Promise<ActionResult<{ conflictingSessions: Array<{ id: string; title: string }> }>> {
+): Promise<ActionResult<{ conflictingSessions: Array<{ id: string; title: string; }>; }>> {
   const parsed = target
     .extend({
       id: z.string().min(1).optional(),
@@ -714,8 +717,8 @@ export async function saveSession(
     const session = parsed.data.id
       ? await tx.eventSession.update({ where: { id: parsed.data.id }, data })
       : await tx.eventSession.create({
-          data: { eventId: c.event.id, ...data },
-        });
+        data: { eventId: c.event.id, ...data },
+      });
     await tx.eventSessionSpeaker.deleteMany({
       where: { eventSessionId: session.id },
     });
@@ -725,8 +728,8 @@ export async function saveSession(
           eventSessionId: session.id,
           speakerId,
           sortOrder,
-      })),
-    });
+        })),
+      });
     return session;
   });
   const conflicts = await prisma.eventSession.findMany({

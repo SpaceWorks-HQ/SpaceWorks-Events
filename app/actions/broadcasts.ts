@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { canManageEvents, getMembership } from "@/lib/permissions";
@@ -15,9 +16,11 @@ import { buildBroadcastEmail } from "@/lib/email";
 import { enqueueEventBroadcastRecipients, enqueueEventBroadcastTest } from "@/lib/outbox";
 import { startOutboxWorker } from "@/lib/outboxWorker";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 type BroadcastContext =
-  | { ok: false; error: string }
-  | { ok: true; org: { id: string; slug: string }; event: { id: string; title: string } };
+  | { ok: false; error: string; }
+  | { ok: true; org: { id: string; slug: string; }; event: { id: string; title: string; }; };
 
 /**
  * Broadcasts are organisation-admin operations, like every other RSVP
@@ -34,13 +37,13 @@ async function requireBroadcastContext(userId: string, organisationSlug: string,
 }
 
 /** Editor output is reduced to the supported subset; an empty result means the organiser only entered formatting. */
-function cleanBody(body: string): { ok: true; body: string } | { ok: false; error: string } {
+function cleanBody(body: string): { ok: true; body: string; } | { ok: false; error: string; } {
   const sanitized = sanitizeBroadcastHtml(body);
   if (!broadcastHtmlToText(sanitized).trim()) return { ok: false, error: "The message is empty." };
   return { ok: true, body: sanitized };
 }
 
-export async function countBroadcastRecipients(input: unknown): Promise<ActionResult<{ count: number }>> {
+export async function countBroadcastRecipients(input: unknown): Promise<ActionResult<{ count: number; }>> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "You must be signed in." };
@@ -55,7 +58,7 @@ export async function countBroadcastRecipients(input: unknown): Promise<ActionRe
 }
 
 /** The exact email a recipient would receive, rendered with example values for the dashboard preview. */
-export async function previewEventBroadcast(input: unknown): Promise<ActionResult<{ subject: string; html: string; text: string }>> {
+export async function previewEventBroadcast(input: unknown): Promise<ActionResult<{ subject: string; html: string; text: string; }>> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "You must be signed in." };
@@ -99,7 +102,7 @@ export async function previewEventBroadcast(input: unknown): Promise<ActionResul
   return { ok: true, data: email };
 }
 
-export async function sendEventBroadcast(input: unknown): Promise<ActionResult<{ recipientCount: number; broadcastId: string }>> {
+export async function sendEventBroadcast(input: unknown): Promise<ActionResult<{ recipientCount: number; broadcastId: string; }>> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "You must be signed in." };
@@ -164,7 +167,7 @@ export async function sendEventBroadcast(input: unknown): Promise<ActionResult<{
   }
 }
 
-export async function sendEventBroadcastTest(input: unknown): Promise<ActionResult<{ to: string }>> {
+export async function sendEventBroadcastTest(input: unknown): Promise<ActionResult<{ to: string; }>> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "You must be signed in." };

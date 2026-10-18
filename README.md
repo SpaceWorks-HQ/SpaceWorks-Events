@@ -12,7 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="#run-it-for-free">Run it for free</a> ·
+  <a href="#host-it-on-a-vps-with-docker">Host on a VPS</a> ·
+  <a href="#run-it-for-free">Free cloud hosting</a> ·
   <a href="#quick-start-local">Quick start</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
@@ -123,9 +124,87 @@ The full list lives in [Features](docs/FEATURES.md).
   </tr>
 </table>
 
+## Host it on a VPS with Docker
+
+**Yes — the complete application runs on your own VPS, installed with one line.**
+The production Docker Compose stack runs the UI and backend, **PostgreSQL 16**,
+**Redis 7**, private **[Silo](https://github.com/pgsty/silo)** object storage (the
+maintained, S3-compatible fork of the archived MinIO) for images and files,
+automatic public HTTPS with Caddy, database migrations and an email-queue
+scheduler. Only a domain and an authenticated SMTP relay are external; Render,
+Supabase, Upstash and Cloudflare are optional hosting choices.
+
+### Install in one line
+
+On a 64-bit Linux server (Ubuntu/Debian, Fedora/RHEL/Alma/Rocky, Arch or openSUSE),
+as root or a user with `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/main/install.sh | bash
+```
+
+It checks the server, pins the latest `main` commit and asks every question first:
+everything on the VPS or a Netlify frontend, hostnames, the super-admin email and
+your SMTP relay (Brevo is prefilled on port 2525). Invalid answers are asked again.
+One summary lists every choice and host change, and **nothing changes until you
+confirm it**. Then it installs Docker if needed (offering swap on servers under
+4 GB), generates every secret and internal TLS certificate without printing them,
+builds the images, migrates and checks that each service is healthy.
+
+**Before you start:** 2 vCPU, 4 GB RAM and 30 GB SSD for a small instance, a
+hostname whose DNS A record points at the server, inbound ports 80 and 443, an SMTP
+relay on a verified sending domain, and your super-admin email.
+
+### Update, back up and check
+
+Run the same command again. An existing installation shows a menu:
+
+1. **Update to the latest release** — backs up the database and configuration,
+   builds the new images while the site keeps running, migrates and restarts. If
+   the new release is not healthy, the previous one is restored automatically.
+2. **Back up now** — database, configuration and uploaded files, into
+   `/etc/spaceworks-events/backups/`. Copy backups off the server; they hold every secret.
+3. **Check status and health** — services, disk, newest backup and live checks.
+4. **Cancel** (the default).
+
+Releases live in `/opt/spaceworks-events/releases/<commit>` with `current` pointing
+at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--ref` for
+a branch, tag or commit, `--repo` for a fork, `--dir` for another location and
+`--update` to skip the menu; `bash install.sh --help` lists them. A restore is a
+deliberate step: `sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh <backup>`.
+
+The installer does not change DNS or firewall rules, provision SMTP or copy backups
+off the server. The **[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers manual
+installation from a checkout, updates, rollback, backups and restores, internal
+certificate renewal and monitoring. Use `compose.production.yml`; the development
+and staging Compose files are not production setups.
+
+### Can the frontend live on Netlify and the backend on the VPS?
+
+**Yes.** Choose mode 2 in the installer. Docker runs authentication, the API,
+business actions, PostgreSQL, Redis, private file storage and jobs on your VPS.
+The separate `frontend/` workspace renders the shared Next.js UI on Netlify and
+calls the VPS through a private server gateway. Browser API requests use the
+frontend origin; ticket live updates stream directly from the VPS.
+
+The installer writes a separate `frontend.env` containing only the frontend's
+URLs, gateway credential and its own stable Server Actions key. Add those settings
+to Netlify, set **Package directory = `frontend`**, leave **Base directory at the
+repository root**, and use `frontend/netlify.toml`. Deploy the same source revision
+on both hosts. Follow the [Netlify + VPS guide](docs/DEPLOYMENT_SPLIT.md) for DNS,
+OAuth, exact environment settings, development and verification.
+
+The [SpaceWorks reference](https://github.com/SpaceWorks-HQ/SpaceWorks) uses a
+Vite/Django split. Events preserves its Next.js server rendering and uses explicit,
+authenticated backend contracts for this arrangement.
+
+For a Docker app with managed dependencies, use the
+[Docker deployment guide](docs/DEPLOYMENT_DOCKER.md). For Kubernetes, use the
+[Helm chart](charts/spaceworks-events/README.md).
+
 ## Run it for free
 
-The default production setup runs entirely on free plans. One Docker service on Render serves the app;
+The optional cloud production setup runs on free plans. One Docker service on Render serves the app;
 everything else is a managed free tier, and a Cloudflare Worker keeps the instance awake and sends the
 email queue every minute.
 
@@ -168,8 +247,8 @@ In five steps (the [free-tier cloud guide](docs/DEPLOYMENT_CLOUD.md) has every c
    [cron Worker](docs/DEPLOYMENT_CLOUD.md#8-cloudflare-dns-and-the-cron-worker), then
    [sign in as super admin](docs/DEPLOYMENT_CLOUD.md#9-first-super-admin-login) and turn on MFA.
 
-Prefer your own servers? There's a [Docker guide](docs/DEPLOYMENT_DOCKER.md), a [Helm chart](charts/spaceworks-events/README.md)
-and a [release checklist](docs/PRODUCTION_RELEASE.md).
+Prefer your own server? Follow the [complete Docker VPS guide](docs/DEPLOYMENT_VPS.md)
+and the [release checklist](docs/PRODUCTION_RELEASE.md).
 
 ## Quick start (local)
 
@@ -226,6 +305,8 @@ Rebuild the README artwork with `npm run readme:art`.
 | [Machine API v1](docs/API.md) | Connect another system |
 | [Security](docs/SECURITY.md) | Review authentication, isolation and privacy |
 | [Testing](docs/TESTING.md) | Run the suites and quality gates |
+| [Netlify frontend + VPS backend](docs/DEPLOYMENT_SPLIT.md) | Split hosting, private gateway, frontend settings and verification |
+| [Complete Docker VPS deployment](docs/DEPLOYMENT_VPS.md) | Host the app and data services on one server; operate and update the stack |
 | [Free-tier cloud deployment](docs/DEPLOYMENT_CLOUD.md) | Go live on Render, Supabase, Upstash, R2 and Brevo |
 | [Production release](docs/PRODUCTION_RELEASE.md) and [operations](docs/production-operations.md) | Ship and run it |
 

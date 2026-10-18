@@ -1,11 +1,7 @@
+import { loadEventScheduleView } from "@/lib/views/app__orgSlug__eventSlug__schedule__page";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { ContentVisibility } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { effectiveEventProgram } from "@/lib/eventProgram";
-import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { accentStyle } from "@/lib/theme/accent";
-import { formatDayLong, formatTime, formatTimeZoneName } from "@/lib/format/datetime";
+import { formatDayLong, formatTime } from "@/lib/format/datetime";
 import { Breadcrumb } from "@/components/event/Breadcrumb";
 import { Chip, EmptyState } from "@/components/ui/display";
 import { cn } from "@/lib/cn";
@@ -13,17 +9,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Event programme" };
 
-export default async function EventSchedulePage({ params }: { params: Promise<{ orgSlug: string; eventSlug: string }> }) {
-  const { orgSlug, eventSlug } = await params;
-  const org = await prisma.organisation.findUnique({ where: { slug: orgSlug } });
-  if (!org) notFound();
-  const event = await prisma.event.findUnique({ where: { organisationId_slug: { organisationId: org.id, slug: eventSlug } }, include: { page: { select: { isPublished: true, accentColor: true } }, scheduleTracks: { orderBy: { sortOrder: "asc" }, include: { sessions: { where: { visibility: ContentVisibility.PUBLISHED }, orderBy: [{ startDateTime: "asc" }, { sortOrder: "asc" }], include: { speakers: { where: { speaker: { visibility: ContentVisibility.PUBLISHED } }, include: { speaker: { select: { name: true } } }, orderBy: { sortOrder: "asc" } } } } } } } });
-  if (!event) notFound();
-  const access = await resolvePublicEventAccess({ organisationId: org.id, eventId: event.id, status: event.status, privacyType: event.privacyType, websiteReleased: event.page?.isPublished ?? false });
-  if (!access.allowed) notFound();
-  const tracks = event.scheduleTracks.map((track) => ({ ...track, sessions: effectiveEventProgram(track.sessions) })).filter((track) => track.sessions.length > 0);
-  const zone = formatTimeZoneName(event.startDateTime, event.timezone);
-
+export default async function EventSchedulePage({ params }: { params: Promise<{ orgSlug: string; eventSlug: string; }>; }) {
+  const { event, org, zone, tracks } = await loadEventScheduleView({ params });
   return (
     <div style={accentStyle(event.page?.accentColor)} className="yy-accent-scope flex flex-col gap-6">
       <Breadcrumb items={[{ label: event.title, href: `/${org.slug}/${event.slug}` }, { label: "Programme" }]} />

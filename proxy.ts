@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import crypto from "crypto";
+import { isIP } from "node:net";
+import { pageSecurity } from "@/lib/pageSecurity";
+import { CLIENT_IP_HEADER, GATEWAY_HEADER, isFrontendPeer } from "@/lib/frontend/peer";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 function tooMany(apiV1 = false) {
@@ -19,28 +21,17 @@ function tooManyText() {
   });
 }
 
-function allowedEmbedAncestors() {
-  return Array.from(new Set(
-    (process.env.ALLOWED_EMBED_ORIGINS ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .flatMap((value) => {
-        try {
-          const url = new URL(value);
-          return url.origin === value && ["https:", "http:"].includes(url.protocol) ? [value] : [];
-        } catch {
-          return [];
-        }
-      }),
-  ));
-}
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  // Only the dedicated, public embed route may be placed in another site's
-  // frame. Every normal application page remains protected from clickjacking.
-  const isEmbedPage = /^\/embed\/[^/]+\/[^/]+$/.test(pathname);
-  const embedAncestors = isEmbedPage ? allowedEmbedAncestors() : [];
+  // The peer credential authenticates only the frontend service, never a user.
+  // Only an authenticated peer may supply the original browser address.
+  if (request.headers.has(GATEWAY_HEADER)) {
+    if (!isFrontendPeer(request.headers)) return new NextResponse("Not found", { status: 404 });
+    const ip = request.headers.get(CLIENT_IP_HEADER)?.trim();
+    const header = process.env.TRUSTED_PROXY_IP_HEADER;
+    if (header && ["x-real-ip", "x-forwarded-for", "cf-connecting-ip"].includes(header)) request.headers.set(header, ip && isIP(ip) ? ip : "unknown");
+  }
+  if (process.env.DEPLOYMENT_MODE === "backend" && !pathname.startsWith("/api/") && !/\/(opengraph-image|twitter-image)(?:\/|$)/.test(pathname)) return new NextResponse("Not found", { status: 404 });
 
   // Server Actions post to page URLs, not /api. Apply one distributed ceiling
   // before any action-specific subject/IP limits run in the action itself.
@@ -95,42 +86,16 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api")) {
-    const response = NextResponse.next();
+    const response = NextResponse.next({ request: { headers: new Headers(request.headers) } });
+    if (process.env.FRONTEND_GATEWAY_SECRET && /^\/api\/ticket\/[^/]+\/(events|status)$/.test(pathname) && request.headers.get("origin") === process.env.NEXT_PUBLIC_BASE_URL) {
+      response.headers.set("Access-Control-Allow-Origin", process.env.NEXT_PUBLIC_BASE_URL!);
+      response.headers.append("Vary", "Origin");
+    }
     response.headers.set("X-Frame-Options", "DENY");
     return response;
   }
 
-  const nonce = crypto.randomBytes(16).toString("base64");
-  const isDevelopment = process.env.NODE_ENV === "development";
-  const csp = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-    `frame-ancestors ${isEmbedPage && embedAncestors.length > 0 ? embedAncestors.join(" ") : "'none'"}`,
-    "frame-src https://maps.google.com https://www.google.com",
-    "form-action 'self'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data: https:",
-    "connect-src 'self' https:",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDevelopment ? " 'unsafe-eval'" : ""}`,
-    // MUI/Emotion emits runtime style tags and attributes. A nonce combined
-    // with unsafe-inline causes browsers to ignore unsafe-inline entirely.
-    // Scripts remain protected by a per-request nonce and strict-dynamic.
-    "style-src 'self' 'unsafe-inline'",
-    ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
-  ].join("; ");
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("Content-Security-Policy", csp);
-  requestHeaders.set("x-nonce", nonce);
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
-  response.headers.set("Content-Security-Policy", csp);
-  // Cloudflare Email Address Obfuscation injects an unsigned decoder script
-  // after this CSP has been generated. Its script is intentionally blocked by
-  // the per-request nonce policy, so instruct intermediaries not to transform
-  // application HTML.
-  response.headers.set("Cache-Control", "no-transform");
-  if (!isEmbedPage) response.headers.set("X-Frame-Options", "DENY");
-  return response;
+  return pageSecurity(request);
 }
 
 export const config = {

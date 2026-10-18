@@ -1,17 +1,14 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminOperationsView } from "@/lib/views/app__super-admin__operations__page";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { OutboxStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
 import { InstanceOperationsControls } from "@/components/super-admin/InstanceOperationsControls";
-import { OUTBOX_SCHEDULER_HEARTBEAT_KEY } from "@/lib/operationalHeartbeat";
 import { redactSensitiveText } from "@/lib/redactSensitiveText";
-import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
 import { AdminPanel } from "@/components/super-admin/AdminPanel";
 import { Callout, Chip, EmptyState, PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
-function StatusChip(props: { ok: boolean; ready: string; missing: string }) {
+function StatusChip(props: { ok: boolean; ready: string; missing: string; }) {
   return <Chip tone={props.ok ? "success" : "warning"} icon={props.ok ? <CheckCircle2 /> : <AlertTriangle />} className="whitespace-normal">{props.ok ? props.ready : props.missing}</Chip>;
 }
 
@@ -29,55 +26,8 @@ function safeErrorSummary(value: string | null) {
 }
 
 export default async function SuperAdminOperationsPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const now = new Date();
-  const heartbeat = (prisma as unknown as {
-    operationalHeartbeat?: Pick<typeof prisma.operationalHeartbeat, "findUnique">;
-  }).operationalHeartbeat;
-  const [outboxGroups, expiredTokens, lastRestoreDrill, oldestPending, schedulerHeartbeat, failedMessages, instanceSettings] = await Promise.all([
-    prisma.outboxMessage.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.verificationToken.count({ where: { expires: { lt: now } } }),
-    prisma.auditEvent.findFirst({
-      where: { action: "BACKUP_RESTORE_VERIFIED" },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    }),
-    prisma.outboxMessage.findFirst({
-      where: { status: OutboxStatus.PENDING },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-    heartbeat
-      ? heartbeat.findUnique({
-          where: { key: OUTBOX_SCHEDULER_HEARTBEAT_KEY },
-          select: {
-            lastStartedAt: true,
-            lastSucceededAt: true,
-            lastSent: true,
-            lastFailed: true,
-            lastError: true,
-          },
-        })
-      : Promise.resolve(null),
-    prisma.outboxMessage.findMany({
-      where: { status: OutboxStatus.FAILED },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: { id: true, kind: true, attempts: true, lastError: true, createdAt: true },
-    }),
-    prisma.instanceSetting.findUnique({ where: { id: INSTANCE_SETTINGS_ID } }),
-  ]);
-  const outbox = new Map(outboxGroups.map((row) => [row.status, row._count._all]));
-  const backupProvider = instanceSettings?.backupProvider ?? env?.BACKUP_PROVIDER;
-  const backupRetentionDays = instanceSettings?.backupRetentionDays ?? env?.BACKUP_RETENTION_DAYS;
-  const reportedBackupAt = instanceSettings?.backupLastSuccessAt ?? (env?.BACKUP_LAST_SUCCESS_AT ? new Date(env.BACKUP_LAST_SUCCESS_AT) : null);
-  const backupFresh = reportedBackupAt != null && now.getTime() - reportedBackupAt.getTime() < 26 * 3_600_000;
-  const schedulerFresh = schedulerHeartbeat?.lastSucceededAt != null
-    && now.getTime() - schedulerHeartbeat.lastSucceededAt.getTime() < 3 * 60_000;
-
-  const failedCount = outbox.get(OutboxStatus.FAILED) ?? 0;
-
+  const { prerequisites, backupProvider, backupFresh, backupRetentionDays, reportedBackupAt, lastRestoreDrill, outbox, failedCount, expiredTokens, schedulerFresh, schedulerHeartbeat, oldestPending, failedMessages } = await loadSuperAdminOperationsView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Operations" description="Backup posture, queue health, retention jobs, and safe maintenance controls for this deployment." />
@@ -97,10 +47,10 @@ export default async function SuperAdminOperationsPage() {
         </AdminPanel>
         <AdminPanel title="Service prerequisites">
           <div className="flex flex-col items-start gap-2">
-            <StatusChip ok={Boolean(env?.REDIS_URL)} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
-            <StatusChip ok={Boolean(process.env.CRON_SECRET)} ready="Outbox scheduler secret configured" missing="Outbox scheduler secret missing" />
-            <StatusChip ok={Boolean(process.env.HEALTHCHECK_SECRET)} ready="Readiness probe protected" missing="Readiness probe secret missing" />
-            <StatusChip ok={Boolean(instanceSettings?.smtpHost || instanceSettings?.smtpService || env?.SMTP_HOST || env?.SMTP_SERVICE)} ready="Transactional email configured" missing="Transactional email not configured" />
+            <StatusChip ok={prerequisites.redis} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
+            <StatusChip ok={prerequisites.scheduler} ready="Outbox scheduler secret configured" missing="Outbox scheduler secret missing" />
+            <StatusChip ok={prerequisites.readiness} ready="Readiness probe protected" missing="Readiness probe secret missing" />
+            <StatusChip ok={prerequisites.smtp} ready="Transactional email configured" missing="Transactional email not configured" />
           </div>
         </AdminPanel>
       </div>

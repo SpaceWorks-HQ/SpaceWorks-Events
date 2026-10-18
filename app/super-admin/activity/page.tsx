@@ -1,9 +1,9 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminActivityView } from "@/lib/views/app__super-admin__activity__page";
 import Link from "next/link";
-import { EventStatus, RsvpStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { ACTIVITY_SERIES, loadDailyActivity, loadTopOrganisationsByRsvps } from "@/lib/superAdminData";
-import { compareWindows, fillDailySeries, formatChange, formatShare, sumPoints, windowStart, DAY_MS } from "@/lib/superAdminInsights";
+import { RsvpStatus } from "@prisma/client";
+import { ACTIVITY_SERIES } from "@/lib/superAdminSeries";
+import { compareWindows, formatChange, formatShare, sumPoints } from "@/lib/superAdminInsights";
 import { SparklineCard } from "@/components/super-admin/Sparkline";
 import { AdminPanel, MetricRows, NameCell } from "@/components/super-admin/AdminPanel";
 import { EmptyState, PageHeader } from "@/components/ui/display";
@@ -29,36 +29,8 @@ const rsvpStatusLabels: Record<RsvpStatus, string> = {
 };
 
 export default async function SuperAdminActivityPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const now = new Date();
-  // Two windows (previous + current) so growth can be compared from one query.
-  const since = windowStart(WINDOW_DAYS * 2, now);
-  const currentSince = windowStart(WINDOW_DAYS, now);
-  const nextWeek = new Date(now.getTime() + 7 * DAY_MS);
-
-  const [dailyRows, rsvpStatuses, topOrgs, upcoming, emptyOrgCount, emptyOrgs] = await Promise.all([
-    loadDailyActivity(since),
-    prisma.rSVP.groupBy({ by: ["status"], _count: { _all: true } }),
-    loadTopOrganisationsByRsvps(currentSince).catch(() => []),
-    prisma.event.findMany({
-      where: { status: EventStatus.PUBLISHED, startDateTime: { gte: now, lt: nextWeek } },
-      orderBy: { startDateTime: "asc" },
-      take: 15,
-      select: { id: true, title: true, startDateTime: true, capacity: true, organisation: { select: { id: true, name: true } }, _count: { select: { rsvps: true } } },
-    }),
-    prisma.organisation.count({ where: { events: { none: {} }, eventSeries: { none: {} } } }),
-    prisma.organisation.findMany({
-      where: { events: { none: {} }, eventSeries: { none: {} } },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: { id: true, name: true, slug: true, createdAt: true, _count: { select: { memberships: true } } },
-    }),
-  ]);
-
-  const series = fillDailySeries(dailyRows, ACTIVITY_SERIES, WINDOW_DAYS * 2, now);
-  const rsvpTotal = rsvpStatuses.reduce((total, row) => total + row._count._all, 0);
-
+  const { series, rsvpStatuses, rsvpTotal, topOrgs, upcoming, emptyOrgCount, emptyOrgs } = await loadSuperAdminActivityView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Activity" description={`Growth and usage across the instance over the last ${WINDOW_DAYS} days (UTC days).`} />

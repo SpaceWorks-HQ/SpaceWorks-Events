@@ -1,17 +1,12 @@
+import { loadGuestsPanel } from "@/lib/views/components__event-dashboard__panels__GuestsPanel";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { loadAttendees, loadEventInvites, loadRegistrationFields } from "@/lib/eventDashboard/data";
 import { EventInvitePanel } from "@/components/invites/EventInvitePanel";
 import { SubTabs } from "../SubTabs";
 import { GuestsPeople } from "./GuestsPeople";
 import { NoPermission } from "./shared";
 
-export async function GuestsPanel({ ctx }: { ctx: EventDashboardContext }) {
-  const { event, permissions, organisation } = ctx;
-  const [attendees, fields, invites] = await Promise.all([
-    permissions.canManageRegistrations ? loadAttendees(event.id, ctx.origin) : Promise.resolve({ attendees: [], truncated: false }),
-    loadRegistrationFields(event.id),
-    permissions.canManageInvitations ? loadEventInvites(event.id) : Promise.resolve([]),
-  ]);
+export async function GuestsPanel({ ctx }: { ctx: EventDashboardContext; }) {
+  const { permissions, organisation, event, attendees, fields, invites } = await loadGuestsPanel({ ctx });
   return (
     <SubTabs
       label="Guests sections"

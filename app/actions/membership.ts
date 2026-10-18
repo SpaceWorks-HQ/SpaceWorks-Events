@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -18,6 +19,8 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { hasRecentAuthentication } from "@/lib/reauth";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 export async function updateMemberRole(
   input: unknown,

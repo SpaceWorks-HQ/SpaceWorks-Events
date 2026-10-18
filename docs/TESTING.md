@@ -107,3 +107,74 @@ For every release, prioritize tests around:
 5. Ticket eligibility, online/offline check-in, undo, and the live ticket tear (with and without Redis, and behind the production reverse proxy).
 6. Anonymous feedback and certificate-enabled feedback.
 7. Upload rejection, object storage, outbox delivery, and retention.
+
+## Production VPS stack
+
+For the full single-host deployment, follow [VPS deployment](DEPLOYMENT_VPS.md).
+Use a disposable VPS or an isolated Compose project for deployment tests, with
+fresh generated credentials. Do not reuse a production configuration directory.
+
+```bash
+scripts/vps-compose.sh config --quiet
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs preflight
+scripts/vps-compose.sh up -d --wait --wait-timeout 180
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
+```
+
+On a disposable stack only, the additional smoke test creates and rolls back
+an audited organisation and checks an object upload/download/delete roundtrip,
+anonymous storage rejection, plain-text database rejection and page rendering:
+
+```bash
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/smoke.mjs
+```
+
+The final check verifies real database TLS and the runtime role, the schema,
+authenticated Redis over TLS, bucket access and protected readiness. Also verify
+anonymous storage rejection, plain-text database rejection, repeated migrations,
+setup refusing existing credentials and internal-certificate renewal. Validate
+Caddy configuration and complete public HTTPS, sign-in, mail, upload and streaming
+checks on a reachable test domain before deploying to production.
+
+### The curl installer
+
+`tests/unit/vps-installer.test.ts` covers argument validation, answer validators
+and configuration generation. Changes to `install.sh` or `scripts/*vps*` also
+need a run on a disposable host. Use a fresh VM, or a privileged systemd container
+whose `/var/lib/docker` is a volume (in nested Docker, also set
+`"features": {"containerd-snapshotter": false}` in its `/etc/docker/daemon.json`).
+Push the branch, then as a sudo user:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/<branch>/install.sh | bash -s -- --ref <branch>
+```
+
+Check that invalid answers are asked again, that cancelling at the summary changes
+nothing, and that the stack passes `check.mjs` and `smoke.mjs`. Rerun the
+one-liner for each menu entry. Push a second commit and update to it. Then take a
+backup, change a row and delete an uploaded object, and run `vps-restore.sh`; both
+must come back. Force a failed update (a release whose `check.mjs` fails after
+preflight): `compose.env`, `current` and the running images must return to the
+previous release. Interrupt a first setup after confirmation and rerun the
+one-liner: it must offer to resume.
+
+
+## Separate frontend / VPS backend
+
+Run `npm run test:e2e:split` with Docker and Node.js 22. It creates disposable
+PostgreSQL/Redis containers, migrates, builds both workspaces, starts production
+servers on loopback ports 3100/3200, and runs the browser suite plus split-specific
+tenant/MFA/gateway checks. The frontend runs with an independent Server Actions
+key and without backend data, authentication, mail or storage credentials.
+It removes its own containers/volumes on completion; allow both ports to be free.
+Plaintext dependency URLs and HTTP are limited to the existing explicit CI test
+override. Production still requires TLS. It does not test a live Netlify adapter,
+external SMTP/OAuth, S3 uploads or host package installation. The VPS guide covers
+those live acceptance checks and the separate TLS/storage smoke checks.
+
+Run `npm run test:e2e:vps` for the same disposable-dependency browser checks against
+the original single-runtime production application. The split-only scenarios are
+skipped in that mode.
+
+The CI `hosting` matrix runs both deployment browser suites on Node.js 22 with
+disposable containers; it needs no production hosting credentials.

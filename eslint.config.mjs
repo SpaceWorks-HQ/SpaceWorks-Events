@@ -17,6 +17,11 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Separately packaged Cloudflare Worker (own package.json and tooling).
     "deploy/**",
+    "frontend/app/**",
+    "frontend/components/**",
+    "frontend/lib/**",
+    "frontend/public/**",
+    "frontend/.next/**",
     // Local Claude Code state, including agent worktrees (full repo copies).
     ".claude/**",
   ]),

@@ -5,7 +5,7 @@ export type EventClientDto = Omit<Event,
   "checkInStationPinHash" | "checkInStationPinEncrypted" | "checkInStationSecretVersion"
 >;
 
-export function toEventClientDto(event: Event): EventClientDto {
+export function toEventClientDto(event: Omit<Event, "checkInStationPinHash" | "checkInStationPinEncrypted" | "checkInStationSecretVersion">): EventClientDto {
   return {
     id: event.id,
     organisationId: event.organisationId,

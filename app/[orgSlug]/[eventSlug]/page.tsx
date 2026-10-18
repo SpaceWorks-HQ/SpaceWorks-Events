@@ -1,14 +1,7 @@
-import { notFound } from "next/navigation";
+import { loadRouteMetadata } from "@/lib/views/app__orgSlug__eventSlug__page";
+import { loadEventView } from "@/lib/views/app__orgSlug__eventSlug__page";
 import type { Metadata } from "next";
-import { ContentVisibility, EventPrivacyType } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { auth } from "@/lib/auth";
-import {
-  isEventPublished,
-  shouldIndexPublicEvent,
-} from "@/lib/eventVisibility";
-import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
-import { countConfirmedForEvent } from "@/lib/rsvpCapacity";
+import { EventPrivacyType } from "@prisma/client";
 import { EventWebsiteShell } from "@/components/event/EventWebsiteShell";
 import { normalizeSections } from "@/components/event-dashboard/event-page/summary";
 import { effectiveEventProgram } from "@/lib/eventProgram";
@@ -16,138 +9,12 @@ import { plainTextToSafeHtml, sanitizeRichText } from "@/lib/richText";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { toFieldDefinition } from "@/lib/registrationFields";
 
-type Props = { params: Promise<{ orgSlug: string; eventSlug: string }> };
+type Props = { params: Promise<{ orgSlug: string; eventSlug: string; }>; };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { orgSlug, eventSlug } = await params;
-  const org = await prisma.organisation.findUnique({
-    where: { slug: orgSlug },
-  });
-  const event = org
-    ? await prisma.event.findUnique({
-        where: {
-          organisationId_slug: { organisationId: org.id, slug: eventSlug },
-        },
-      })
-    : null;
-  const page = event
-    ? await prisma.eventPage.findUnique({
-        where: { eventId: event.id },
-        select: { isPublished: true },
-      })
-    : null;
-  if (
-    !event ||
-    !page?.isPublished ||
-    !isEventPublished(event.status) ||
-    event.privacyType === EventPrivacyType.INVITE_ONLY
-  )
-    return { title: "Event", robots: { index: false, follow: false } };
-  const description = event.description.slice(0, 160) || event.title;
-  return {
-    title: event.title,
-    description,
-    alternates: { canonical: `/${org!.slug}/${event.slug}` },
-    robots: shouldIndexPublicEvent(event.status, event.privacyType, event.listedPublicly)
-      ? undefined
-      : { index: false, follow: false },
-    openGraph: {
-      title: event.title,
-      description,
-      type: "website",
-      // Without a cover, leave `images` out so the generated share card (opengraph-image.tsx) is used.
-      ...(event.coverImageUrl ? { images: [{ url: event.coverImageUrl }] } : {}),
-    },
-  };
-}
+export async function generateMetadata({ params }: Props): Promise<Metadata> { return loadRouteMetadata({ params }); }
 
 export default async function EventPage({ params }: Props) {
-  const { orgSlug, eventSlug } = await params;
-  const org = await prisma.organisation.findUnique({
-    where: { slug: orgSlug },
-  });
-  if (!org) notFound();
-  const event = await prisma.event.findUnique({
-    where: { organisationId_slug: { organisationId: org.id, slug: eventSlug } },
-  });
-  if (!event) notFound();
-  const release = await prisma.eventPage.findUnique({
-    where: { eventId: event.id },
-    select: { isPublished: true },
-  });
-  const access = await resolvePublicEventAccess({
-    organisationId: org.id,
-    eventId: event.id,
-    status: event.status,
-    privacyType: event.privacyType,
-    websiteReleased: release?.isPublished ?? false,
-  });
-  if (!access.allowed) notFound();
-  const preview = access.preview;
-  // Preview grants access to an unreleased event page, but it still mirrors the
-  // public content surface: drafts must never be rendered as published content.
-  const published = { visibility: ContentVisibility.PUBLISHED };
-  const [
-    page,
-    highlights,
-    sessions,
-    speakers,
-    sponsors,
-    faqs,
-    resources,
-    form,
-    confirmed,
-    viewerRsvp,
-  ] = await Promise.all([
-    prisma.eventPage.findUnique({
-      where: { eventId: event.id },
-      include: { sections: { orderBy: { sortOrder: "asc" } } },
-    }),
-    prisma.eventHighlight.findMany({
-      where: { eventId: event.id, ...published },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.eventSession.findMany({
-      where: { eventId: event.id, ...published },
-      include: {
-        track: true,
-        speakers: {
-          where: { speaker: { visibility: ContentVisibility.PUBLISHED } },
-          include: { speaker: true },
-        },
-      },
-      orderBy: [{ startDateTime: "asc" }, { sortOrder: "asc" }],
-    }),
-    prisma.eventSpeaker.findMany({
-      where: { eventId: event.id, ...published },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.eventSponsor.findMany({
-      where: { eventId: event.id, ...published },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.eventFaq.findMany({
-      where: { eventId: event.id, ...published },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.eventResource.findMany({
-      where: { eventId: event.id, ...published, externalUrl: { not: null } },
-      orderBy: { sortOrder: "asc" },
-    }),
-    prisma.eventRegistrationForm.findUnique({
-      where: { eventId: event.id },
-      include: { fields: { orderBy: { sortOrder: "asc" } } },
-    }),
-    countConfirmedForEvent(event.id),
-    auth().then((session) =>
-      session?.user?.id
-        ? prisma.rSVP.findFirst({
-            where: { eventId: event.id, userId: session.user.id },
-            select: { checkInToken: true, status: true },
-          })
-        : null,
-    ),
-  ]);
+  const { org, preview, event, page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp } = await loadEventView({ params });
   return (
     <EventWebsiteShell
       orgSlug={org.slug}

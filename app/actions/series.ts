@@ -1,7 +1,8 @@
 "use server";
 
 import { EventStatus, RsvpStatus } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { buildRecurrenceIcs, materializeInstances } from "@/lib/recurrence";
@@ -16,6 +17,8 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 function revalidateAllSeriesPaths(
   orgSlug: string,
@@ -32,7 +35,7 @@ function revalidateAllSeriesPaths(
 
 export async function createEventSeries(
   input: unknown,
-): Promise<ActionResult<{ id: string }>> {
+): Promise<ActionResult<{ id: string; }>> {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, error: "You must be signed in." };

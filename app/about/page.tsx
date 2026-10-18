@@ -1,5 +1,5 @@
+import { loadView } from "@/lib/views/app__about__page";
 import type { Metadata } from "next";
-import { auth } from "@/lib/auth";
 import { AboutPage } from "@/components/landing/about/AboutPage";
 
 export const metadata: Metadata = {
@@ -8,6 +8,6 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const session = await auth();
+  const { session } = await loadView();
   return <AboutPage getStartedHref={session?.user ? "/dashboard" : "/login"} />;
 }

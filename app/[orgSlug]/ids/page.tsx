@@ -1,27 +1,17 @@
+import { loadOrganisationIdsView } from "@/lib/views/app__orgSlug__ids__page";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { EmptyState } from "@/components/ui/display";
-import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ orgSlug: string }> };
+type Props = { params: Promise<{ orgSlug: string; }>; };
 
 export const metadata: Metadata = { title: "ID cards", robots: { index: false, follow: false } };
 
 /** An organisation's ID programmes that are taking requests. */
 export default async function OrganisationIdsPage({ params }: Props) {
-  const { orgSlug } = await params;
-  const organisation = await prisma.organisation.findUnique({
-    where: { slug: orgSlug },
-    select: {
-      name: true,
-      idProgrammes: { where: { status: "ACTIVE", registrationOpen: true }, orderBy: { createdAt: "desc" }, take: 50, select: { name: true, slug: true, description: true } },
-    },
-  });
-  if (!organisation) notFound();
-
+  const { organisation, orgSlug } = await loadOrganisationIdsView({ params });
   return (
     <div className="mx-auto flex w-full max-w-[640px] flex-col gap-6">
       <header>

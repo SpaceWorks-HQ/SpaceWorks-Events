@@ -2,7 +2,8 @@
 
 import crypto from "node:crypto";
 import { ApiClientStatus } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -13,6 +14,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { apiScopeSchema } from "@/lib/api/v1/scopes";
 import { generateApiCredential } from "@/lib/api/v1/credentials";
 import type { ActionResult } from "./org";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const orgSlug = z.string().trim().min(1).max(120);
 const clientId = z.string().trim().min(1).max(128);
@@ -34,8 +37,8 @@ const updateScopesSchema = z.object({ organisationSlug: orgSlug, apiClientId: cl
 const setStatusSchema = z.object({ organisationSlug: orgSlug, apiClientId: clientId, status: z.nativeEnum(ApiClientStatus) }).strict();
 
 type OwnerAccess =
-  | { error: string }
-  | { userId: string; organisation: { id: string; slug: string } };
+  | { error: string; }
+  | { userId: string; organisation: { id: string; slug: string; }; };
 
 async function requireOwner(organisationSlug: string): Promise<OwnerAccess> {
   const session = await auth();
@@ -52,7 +55,7 @@ async function requireOwner(organisationSlug: string): Promise<OwnerAccess> {
   return { userId: session.user.id, organisation } as const;
 }
 
-function parseExpiry(value: string | null | undefined): { value: Date | null } | { error: string } {
+function parseExpiry(value: string | null | undefined): { value: Date | null; } | { error: string; } {
   if (!value) return { value: null } as const;
   const date = new Date(value);
   if (date <= new Date()) return { error: "Credential expiry must be in the future." } as const;
@@ -63,7 +66,7 @@ function newCredentialId() {
   return `cr${crypto.randomBytes(16).toString("hex")}`;
 }
 
-export async function createApiClient(input: unknown): Promise<ActionResult<{ token: string }>> {
+export async function createApiClient(input: unknown): Promise<ActionResult<{ token: string; }>> {
   const parsed = createClientSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter valid API client details." };
   const access = await requireOwner(parsed.data.organisationSlug);
@@ -97,7 +100,7 @@ export async function createApiClient(input: unknown): Promise<ActionResult<{ to
   return { ok: true, data: { token: generated.token } };
 }
 
-export async function createApiCredential(input: unknown): Promise<ActionResult<{ token: string }>> {
+export async function createApiCredential(input: unknown): Promise<ActionResult<{ token: string; }>> {
   const parsed = createCredentialSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter valid credential details." };
   const access = await requireOwner(parsed.data.organisationSlug);

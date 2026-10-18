@@ -1,7 +1,8 @@
 "use server";
 
 import { Prisma, RegistrationFieldType } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import type { ActionResult } from "@/app/actions/org";
 import { prisma } from "@/lib/db";
@@ -13,9 +14,11 @@ import { getFeedbackTemplate } from "@/lib/feedbackTemplates";
 import { certificateTemplateInputSchema } from "@/lib/certificateTemplate";
 import { certificateImagesAreOwned } from "@/lib/certificateAssets";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 const base = z.object({ organisationSlug: z.string().trim().min(1).max(120), eventId: z.string().trim().min(1).max(128) });
 
-async function access(input: { organisationSlug: string; eventId: string }) {
+async function access(input: { organisationSlug: string; eventId: string; }) {
   const { organisation, userId } = await requireOrgRole(input.organisationSlug, "ADMIN");
   if (await isActionRateLimited("feedback", userId)) return { error: "Too many feedback form changes. Try again shortly." } as const;
   const event = await prisma.event.findFirst({ where: { id: input.eventId, organisationId: organisation.id }, select: { id: true, slug: true } });
@@ -41,7 +44,7 @@ const feedbackTemplateSchema = base.extend({
  * Replaces only unanswered draft questions. Historical feedback retains its
  * immutable field snapshot, so a template can never reinterpret responses.
  */
-export async function applyFeedbackTemplate(input: unknown): Promise<ActionResult<{ fields: Array<{ id: string; key: string; label: string; type: RegistrationFieldType; required: boolean; options: string[] }> }>> {
+export async function applyFeedbackTemplate(input: unknown): Promise<ActionResult<{ fields: Array<{ id: string; key: string; label: string; type: RegistrationFieldType; required: boolean; options: string[]; }>; }>> {
   const parsed = feedbackTemplateSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose a feedback template." };
   const template = getFeedbackTemplate(parsed.data.templateId);
@@ -97,7 +100,7 @@ export async function applyFeedbackTemplate(input: unknown): Promise<ActionResul
   };
 }
 
-export async function saveFeedbackSettings(input: unknown): Promise<ActionResult<{ formId: string }>> {
+export async function saveFeedbackSettings(input: unknown): Promise<ActionResult<{ formId: string; }>> {
   const parsed = base.extend({ isOpen: z.boolean(), title: z.string().trim().min(1).max(120), thankYouMessage: z.string().trim().min(1).max(500), certificateEnabled: z.boolean(), certificateTemplate: certificateTemplateInputSchema.nullable().optional() }).strict().safeParse(input);
   if (!parsed.success) return { ok: false, error: "Check the feedback settings." };
   const context = await access(parsed.data);
@@ -129,7 +132,7 @@ const fieldSchema = base.extend({
   options: z.array(z.string().trim().min(1).max(200)).max(50).transform((items) => [...new Set(items)]).default([]),
 }).strict();
 
-export async function saveFeedbackField(input: unknown): Promise<ActionResult<{ fieldId: string }>> {
+export async function saveFeedbackField(input: unknown): Promise<ActionResult<{ fieldId: string; }>> {
   const parsed = fieldSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Check the field details." };
   const context = await access(parsed.data);
@@ -162,12 +165,12 @@ export async function saveFeedbackField(input: unknown): Promise<ActionResult<{ 
     revalidatePath(feedbackPath(context.organisation.slug, context.event.slug));
     return { ok: true, data: result };
   } catch (error: unknown) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") return { ok: false, error: "That field key is already in use." };
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string; }).code === "P2002") return { ok: false, error: "That field key is already in use." };
     return { ok: false, error: "Could not save field." };
   }
 }
 
-export async function deleteFeedbackField(input: unknown): Promise<ActionResult<{ deleted: true }>> {
+export async function deleteFeedbackField(input: unknown): Promise<ActionResult<{ deleted: true; }>> {
   const parsed = base.extend({ fieldId: z.string().trim().min(1).max(128) }).strict().safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request." };
   const context = await access(parsed.data);

@@ -9,6 +9,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
+COPY frontend/package.json ./frontend/package.json
 # `npm ci` runs the Prisma postinstall hook, which needs the schema available.
 COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
@@ -21,6 +22,15 @@ WORKDIR /app
 COPY prisma ./prisma
 COPY scripts/prisma.mjs ./scripts/prisma.mjs
 CMD ["node", "scripts/prisma.mjs", "migrate", "deploy"]
+
+# Operator-only image for VPS setup, preflight, schema checks and backups.
+# Never serve requests from this image or publish it as the application image.
+FROM migrator AS ops
+USER root
+RUN apk add --no-cache openssl postgresql16-client
+COPY scripts ./scripts
+COPY docker/vps ./docker/vps
+CMD ["node", "scripts/check-production-env.mjs"]
 
 # Prisma CLI only, pinned to the lockfile's version, so the runner can apply
 # migrations on start (MIGRATE_ON_START=1) on platforms without a release job,
@@ -48,6 +58,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# This stage starts fresh; avoid writing a compiler cache that the runner never uses.
+ENV SWE_DISABLE_BUILD_CACHE=1
 
 RUN npx prisma generate
 # The key is consumed by Next.js while compiling Server Actions. Every image

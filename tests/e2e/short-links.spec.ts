@@ -77,7 +77,7 @@ test("unknown and unpublished codes are an ordinary not-found", async ({ request
 });
 
 async function signIn(page: Page, email: string, ip: string) {
-  await page.context().setExtraHTTPHeaders({ "cf-connecting-ip": ip });
+  await page.context().setExtraHTTPHeaders({ [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: ip });
   // Settle the Auth.js CSRF cookie first: on a fresh context the login page's
   // parallel /api/auth requests can each mint one, and a lost race fails the
   // first sign-in with MissingCSRF.

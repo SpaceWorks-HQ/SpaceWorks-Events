@@ -1,10 +1,5 @@
-import { notFound } from "next/navigation";
+import { loadSeriesManageView } from "@/lib/views/app__dashboard__orgSlug__series__seriesId__page";
 import Link from "next/link";
-import { prisma } from "@/lib/db";
-import { EventPermission } from "@prisma/client";
-import { getRequestOrigin } from "@/lib/publicUrl";
-import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
-import { canViewEventDashboard } from "@/lib/eventAccess";
 import { EditSeriesForm } from "@/components/series/EditSeriesForm";
 import { SeriesInvitePanel } from "@/components/invites/SeriesInvitePanel";
 import { GuestsPeople } from "@/components/event-dashboard/panels/GuestsPeople";
@@ -18,8 +13,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Manage event series", robots: { index: false, follow: false } };
 
-type Props = { params: Promise<{ orgSlug: string; seriesId: string }> };
-const MAX_BROWSER_ATTENDEES = 250;
+type Props = { params: Promise<{ orgSlug: string; seriesId: string; }>; };
+
 
 function eventDateInput(date: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
@@ -28,70 +23,7 @@ function eventDateInput(date: Date, timeZone: string) {
 }
 
 export default async function SeriesManagePage({ params }: Props) {
-  const { orgSlug, seriesId } = await params;
-  const access = await requireOrgDashboardAccess(orgSlug);
-  const { organisation } = access;
-
-  const series = await prisma.eventSeries.findFirst({
-    where: { id: seriesId, organisationId: organisation.id },
-    include: {
-      instances: {
-        orderBy: { startDateTime: "asc" },
-        take: 20,
-      },
-      scheduleItems: { orderBy: { sortOrder: "asc" } },
-    },
-  });
-  if (!series) notFound();
-  if (!access.membership && !(await canViewEventDashboard({ userId: access.userId, organisationId: organisation.id, eventSeriesId: series.id }))) notFound();
-  const isAdmin = Boolean(access.membership && isOrgAdmin(access.membership.role));
-  const currentGrant = isAdmin ? null : await prisma.eventCollaborator.findFirst({
-    where: { eventSeriesId: series.id, userId: access.userId },
-    select: { permissions: true },
-  });
-  const granted = (permission: EventPermission) => isAdmin || Boolean(currentGrant?.permissions.includes(permission));
-  // Match the server actions: RSVP lifecycle and series edits are organisation-admin operations,
-  // invites and the schedule also accept the matching collaborator grant.
-  const canManageRegistrations = isAdmin;
-  const canManageInvites = granted(EventPermission.MANAGE_INVITATIONS);
-  const canManageSchedule = granted(EventPermission.PUBLISH_AND_SCHEDULE);
-
-  const invites = canManageInvites
-    ? await prisma.seriesInvite.findMany({
-        where: { eventSeriesId: series.id },
-        orderBy: { createdAt: "desc" },
-      })
-    : [];
-
-  const firstInstanceId = series.instances[0]?.id;
-  const rsvps = firstInstanceId && canManageRegistrations
-    ? await prisma.rSVP.findMany({
-        where: { eventInstanceId: firstInstanceId },
-        include: { user: { select: { id: true, name: true, email: true } } },
-        orderBy: { createdAt: "desc" },
-        take: MAX_BROWSER_ATTENDEES + 1,
-      })
-    : [];
-
-  const origin = await getRequestOrigin();
-  const now = new Date();
-  const canDownloadReports = Boolean(access.membership && isOrgAdmin(access.membership.role));
-  const finishedInstances = series.instances.filter((instance) => instance.endDateTime < now);
-  const attendeesTruncated = rsvps.length > MAX_BROWSER_ATTENDEES;
-  const attendees = rsvps.slice(0, MAX_BROWSER_ATTENDEES).map((r) => ({
-    id: r.id,
-    status: r.status,
-    createdAt: r.createdAt.toISOString(),
-    guestEmail: r.guestEmail,
-    guestName: r.guestName,
-    user: r.user
-      ? { id: r.user.id, name: r.user.name, email: r.user.email }
-      : null,
-    checkedInAt: r.checkedInAt?.toISOString() ?? null,
-    ticketUrl: `${origin}/ticket/${r.checkInToken}`,
-    rawAnswers: [],
-  }));
-
+  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated } = await loadSeriesManageView({ params });
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={series.title} description="Manage this recurring event and its upcoming occurrences." />

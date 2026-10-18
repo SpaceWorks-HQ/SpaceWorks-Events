@@ -1,7 +1,8 @@
 "use server";
 
 import { EventPrivacyType, EventStatus } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -28,6 +29,8 @@ import { z } from "zod";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
 import { richTextToPlainText, sanitizeRichText } from "@/lib/richText";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024;
 const publishEventSchema = z
   .object({
@@ -38,7 +41,7 @@ const publishEventSchema = z
 
 export async function uploadEventCoverImage(
   formData: FormData,
-): Promise<ActionResult<{ url: string }>> {
+): Promise<ActionResult<{ url: string; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (!(await isUserEmailVerified(session.user.id)))
@@ -111,7 +114,7 @@ function validationError(error: Parameters<typeof flattenZodErrors>[0]) {
 
 export async function createEvent(
   input: unknown,
-): Promise<ActionResult<{ id: string; slug: string }>> {
+): Promise<ActionResult<{ id: string; slug: string; }>> {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, error: "You must be signed in." };
@@ -441,7 +444,7 @@ export async function deleteEvent(input: unknown): Promise<ActionResult> {
 
 export async function updateEventSlug(
   input: unknown,
-): Promise<ActionResult<{ slug: string }>> {
+): Promise<ActionResult<{ slug: string; }>> {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, error: "You must be signed in." };
@@ -513,7 +516,7 @@ export async function updateEventSlug(
 
 export async function cloneEvent(
   input: unknown,
-): Promise<ActionResult<{ eventId: string }>> {
+): Promise<ActionResult<{ eventId: string; }>> {
   const session = await auth();
   if (!session?.user?.id) {
     return { ok: false, error: "You must be signed in." };
