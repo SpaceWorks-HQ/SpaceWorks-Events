@@ -126,67 +126,58 @@ The full list lives in [Features](docs/FEATURES.md).
 
 ## Host it on a VPS with Docker
 
-**Yes — the complete application can run on your own VPS.** The production Docker
-Compose stack runs the UI and backend, PostgreSQL, Redis, private S3-compatible
-file storage, automatic public HTTPS, database migrations and an independent
-email-queue scheduler. Only a domain and an authenticated SMTP relay are external;
-Render, Supabase, Upstash and Cloudflare are optional hosting choices.
+**Yes — the complete application runs on your own VPS, installed with one line.**
+The production Docker Compose stack runs the UI and backend, **PostgreSQL 16**,
+**Redis 7**, private **[Silo](https://github.com/pgsty/silo)** object storage (the
+maintained, S3-compatible fork of the archived MinIO) for images and files,
+automatic public HTTPS with Caddy, database migrations and an email-queue
+scheduler. Only a domain and an authenticated SMTP relay are external; Render,
+Supabase, Upstash and Cloudflare are optional hosting choices.
 
-Start with a Linux VPS, a domain pointing at it and authenticated SMTP. Plan around
-2 vCPU, 4 GB RAM and 30 GB SSD for a small instance, plus uploads and backups;
-image builds can need extra memory. Only ports 80/443 are published.
+### Install in one line
 
-The curl installer offers **everything on the VPS** or **Netlify frontend + VPS
-backend**. It collects hostnames, admin email and SMTP settings, shows a summary,
-then installs Docker on a fresh Ubuntu/Debian VPS if needed, generates secrets and
-internal TLS certificates, builds containers, migrates and checks readiness.
-
-Use a published, reviewed commit or tag in both places below:
+On a 64-bit Linux server (Ubuntu/Debian, Fedora/RHEL/Alma/Rocky, Arch or openSUSE),
+as root or a user with `sudo`:
 
 ```bash
-SWE_REF=<reviewed-commit-or-tag>
-curl -fsSL "https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/$SWE_REF/install.sh" -o install.sh
-sudo bash install.sh --ref "$SWE_REF"
+curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/main/install.sh | bash
 ```
 
-The selected ref must contain this installer; local, unpublished changes are not
-available at that URL. From a checked-out release with Docker already installed,
-run `bash scripts/setup-vps.sh`. Existing installations use `--update`; setup
-refuses to replace their secrets. The installer does not change DNS, firewall
-rules or provision an SMTP provider or off-server backup destination.
+It checks the server, pins the latest `main` commit and asks every question first:
+everything on the VPS or a Netlify frontend, hostnames, the super-admin email and
+your SMTP relay (Brevo is prefilled on port 2525). Invalid answers are asked again.
+One summary lists every choice and host change, and **nothing changes until you
+confirm it**. Then it installs Docker if needed (offering swap on servers under
+4 GB), generates every secret and internal TLS certificate without printing them,
+builds the images, migrates and checks that each service is healthy.
 
-For a manual first installation from that checkout:
+**Before you start:** 2 vCPU, 4 GB RAM and 30 GB SSD for a small instance, a
+hostname whose DNS A record points at the server, inbound ports 80 and 443, an SMTP
+relay on a verified sending domain, and your super-admin email.
 
-```bash
-SWE_VERSION="vps-$(git rev-parse --short HEAD)"
-export SWE_CONFIG_DIR=/etc/spaceworks-events
-sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$SWE_CONFIG_DIR"
+### Update, back up and check
 
-docker build --target ops --tag swevents-ops:bootstrap .
-docker run --rm --user "$(id -u):$(id -g)" \
-  --volume "$SWE_CONFIG_DIR:/config" \
-  swevents-ops:bootstrap node docker/vps/setup.mjs \
-  events.example.com admin@example.com "$SWE_VERSION"
-# Edit the external app.env: set EMAIL_FROM and SMTP_* to your relay's values.
-scripts/vps-compose.sh config --quiet
-scripts/vps-compose.sh build ops migrator app
-scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs preflight
-scripts/vps-compose.sh up -d
-scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
-```
+Run the same command again. An existing installation shows a menu:
 
-Replace the hostname, admin email and reviewed revision before running. Setup
-generates secrets and internal TLS certificates without printing them; migrations
-run in a separate service before the app starts. Open your HTTPS domain, create
-and verify the configured admin account, and enable authenticator MFA. Test email,
-uploads and ticket check-in before taking real registrations.
+1. **Update to the latest release** — backs up the database and configuration,
+   builds the new images while the site keeps running, migrates and restarts. If
+   the new release is not healthy, the previous one is restored automatically.
+2. **Back up now** — database, configuration and uploaded files, into
+   `/etc/spaceworks-events/backups/`. Copy backups off the server; they hold every secret.
+3. **Check status and health** — services, disk, newest backup and live checks.
+4. **Cancel** (the default).
 
-The **[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers prerequisites, first
-installation, health checks, updates, rollback, internal certificate renewal and
-backups. Keep encrypted copies of the configuration, database and uploaded files
-off-server. Persistent Docker volumes do not provide backups or automatic PITR.
-Use `compose.production.yml`; the development and staging Compose files are not
-production setups.
+Releases live in `/opt/spaceworks-events/releases/<commit>` with `current` pointing
+at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--ref` for
+a branch, tag or commit, `--repo` for a fork, `--dir` for another location and
+`--update` to skip the menu; `bash install.sh --help` lists them. A restore is a
+deliberate step: `sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh <backup>`.
+
+The installer does not change DNS or firewall rules, provision SMTP or copy backups
+off the server. The **[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers manual
+installation from a checkout, updates, rollback, backups and restores, internal
+certificate renewal and monitoring. Use `compose.production.yml`; the development
+and staging Compose files are not production setups.
 
 ### Can the frontend live on Netlify and the backend on the VPS?
 

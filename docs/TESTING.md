@@ -136,6 +136,28 @@ setup refusing existing credentials and internal-certificate renewal. Validate
 Caddy configuration and complete public HTTPS, sign-in, mail, upload and streaming
 checks on a reachable test domain before deploying to production.
 
+### The curl installer
+
+`tests/unit/vps-installer.test.ts` covers argument validation, answer validators
+and configuration generation. Changes to `install.sh` or `scripts/*vps*` also
+need a run on a disposable host. Use a fresh VM, or a privileged systemd container
+whose `/var/lib/docker` is a volume (in nested Docker, also set
+`"features": {"containerd-snapshotter": false}` in its `/etc/docker/daemon.json`).
+Push the branch, then as a sudo user:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/<branch>/install.sh | bash -s -- --ref <branch>
+```
+
+Check that invalid answers are asked again, that cancelling at the summary changes
+nothing, and that the stack passes `check.mjs` and `smoke.mjs`. Rerun the
+one-liner for each menu entry. Push a second commit and update to it. Then take a
+backup, change a row and delete an uploaded object, and run `vps-restore.sh`; both
+must come back. Force a failed update (a release whose `check.mjs` fails after
+preflight): `compose.env`, `current` and the running images must return to the
+previous release. Interrupt a first setup after confirmation and rerun the
+one-liner: it must offer to resume.
+
 
 ## Separate frontend / VPS backend
 

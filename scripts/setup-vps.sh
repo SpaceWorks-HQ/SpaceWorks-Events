@@ -41,11 +41,12 @@ start_stack() {
 }
 
 finish() {
-  local origin public_host
+  local origin public_host scripts_dir="$SWE_REPO_DIR/scripts"
   if [[ $managed = 1 ]]; then
     activate_release "$SWE_REPO_DIR"
     conf_set "$(install_conf)" SWE_RELEASE "$revision"
     conf_set "$(install_conf)" SWE_PENDING_RELEASE ''
+    scripts_dir="$SWE_DIR/current/scripts"
   fi
   origin=$(conf_get "$SWE_CONFIG_DIR/compose.env" PUBLIC_ORIGIN)
   public_host=$(conf_get "$SWE_CONFIG_DIR/compose.env" PUBLIC_HOST)
@@ -60,7 +61,7 @@ Next steps
   1. Open $origin/login and sign up with the super-admin email, verify it,
      enable authenticator MFA, then open /super-admin.
   2. Send a test email, upload an event cover and register for a private test event.
-  3. Back up: sudo bash $SWE_REPO_DIR/scripts/vps-backup.sh, then copy the backup off this server.
+  3. Back up: sudo bash $scripts_dir/vps-backup.sh, then copy the backup off this server.
 EOF
   if [[ -f "$SWE_CONFIG_DIR/frontend.env" ]]; then
     cat <<EOF
@@ -185,7 +186,7 @@ if [[ $managed = 1 ]]; then
 fi
 cd "$SWE_REPO_DIR"
 install -d -m 0700 "$SWE_CONFIG_DIR"
-say 'Generating secrets and internal certificates.'
+say 'Building the operator tools image (a few minutes), then generating secrets and internal certificates.'
 docker build --quiet --target ops --tag "swevents-ops:$version" . >/dev/null
 docker run --rm --volume "$SWE_CONFIG_DIR:/config" "swevents-ops:$version" \
   node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host"
