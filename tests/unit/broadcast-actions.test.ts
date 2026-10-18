@@ -157,6 +157,7 @@ describe("event broadcast actions", () => {
       eventId: "event_1",
       subject: "Doors open at 6",
       body: cleanedBody,
+      design: "classic",
       recipientName: "Admin",
     } } });
 

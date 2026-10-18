@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  DeleteObjectsCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -16,7 +17,7 @@ export type UploadInput = {
 };
 
 const ORGANISATION_DERIVATIVE_KEY =
-  /^organisations\/([A-Za-z0-9_-]{1,128})\/(certificate-backgrounds|event-covers|event-speakers|event-sponsors|organisation-logos|event-page-logos)\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
+  /^organisations\/([A-Za-z0-9_-]{1,128})\/(certificate-backgrounds|certificate-assets|event-covers|event-speakers|event-sponsors|organisation-logos|event-page-logos|member-id-photos|member-id-watermarks)\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
 const USER_DERIVATIVE_KEY =
   /^users\/([A-Za-z0-9_-]{1,128})\/profile-images\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.webp$/i;
 
@@ -136,6 +137,37 @@ export async function downloadFile(key: string) {
         contentType: asset.contentType || "application/octet-stream",
       }
     : null;
+}
+
+/**
+ * Remove stored derivatives (object and Asset row). Keys that aren't
+ * application derivatives are ignored. Callers treat this as best effort:
+ * the database row that referenced the file is already gone.
+ */
+export async function deleteFiles(keys: string[]) {
+  const valid = [...new Set(keys.filter(isPublicDerivativeKey))];
+  if (valid.length === 0) return;
+  const stored = await prisma.asset.findMany({
+    where: { key: { in: valid }, provider: "s3" },
+    select: { key: true },
+  });
+  if (stored.length > 0) {
+    if (!storageConfigured())
+      throw new Error("Private object storage is not configured.");
+    const s3 = client();
+    for (let start = 0; start < stored.length; start += 1000) {
+      await s3.send(
+        new DeleteObjectsCommand({
+          Bucket: process.env.S3_BUCKET!,
+          Delete: {
+            Objects: stored.slice(start, start + 1000).map(({ key }) => ({ Key: key })),
+            Quiet: true,
+          },
+        }),
+      );
+    }
+  }
+  await prisma.asset.deleteMany({ where: { key: { in: valid } } });
 }
 
 export function getPublicUrl(key: string): string {

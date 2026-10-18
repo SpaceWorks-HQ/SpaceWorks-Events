@@ -2,18 +2,18 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: yuyu
-      POSTGRES_PASSWORD: yuyu_dev
-      POSTGRES_DB: yuyu_dev
+      POSTGRES_USER: swevents
+      POSTGRES_PASSWORD: swevents_dev
+      POSTGRES_DB: swevents_dev
     ports:
       - "5432:5432"
     volumes:
-      - yuyu_pgdata:/var/lib/postgresql/data
+      - swevents_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U yuyu -d yuyu_dev"]
+      test: ["CMD-SHELL", "pg_isready -U swevents -d swevents_dev"]
       interval: 5s
       timeout: 5s
       retries: 5
 
 volumes:
-  yuyu_pgdata:
+  swevents_pgdata:

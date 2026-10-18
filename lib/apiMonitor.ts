@@ -24,11 +24,11 @@ function bucketKey(ms: number): string {
 }
 
 function getStore(): Store {
-  const g = globalThis as unknown as { __yuyuApiMonitor?: Store };
-  if (!g.__yuyuApiMonitor) {
-    g.__yuyuApiMonitor = { startedAtMs: Date.now(), routes: {} };
+  const g = globalThis as unknown as { __sweApiMonitor?: Store };
+  if (!g.__sweApiMonitor) {
+    g.__sweApiMonitor = { startedAtMs: Date.now(), routes: {} };
   }
-  return g.__yuyuApiMonitor;
+  return g.__sweApiMonitor;
 }
 
 function getRoute(store: Store, routeId: string): ApiRouteStats {

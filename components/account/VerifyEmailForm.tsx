@@ -2,11 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Alert from "@mui/material/Alert";
-import Button from "@mui/material/Button";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { confirmEmailVerification } from "@/app/actions/auth";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
 
 export function VerifyEmailForm({ token }: { token: string }) {
   const router = useRouter();
@@ -14,13 +12,15 @@ export function VerifyEmailForm({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <Stack spacing={2.5}>
-      <Typography color="text.secondary">
+    <div className="flex w-full flex-col gap-5">
+      <p className="text-body-ui text-ink-secondary">
         Confirming your email activates your account and lets you create events.
-      </Typography>
-      {error ? <Alert severity="error">{error}</Alert> : null}
+      </p>
+      {error ? <Callout tone="danger" role="alert" className="text-left">{error}</Callout> : null}
       <Button
-        variant="contained"
+        variant="primary"
+        size="lg"
+        fullWidth
         disabled={pending}
         onClick={() => {
           setError(null);
@@ -37,8 +37,8 @@ export function VerifyEmailForm({ token }: { token: string }) {
           });
         }}
       >
-        {pending ? "Verifying…" : "Verify email"}
+        {pending ? "Confirming…" : "Confirm email"}
       </Button>
-    </Stack>
+    </div>
   );
 }

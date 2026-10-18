@@ -2,10 +2,7 @@
 
 import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Alert from "@mui/material/Alert";
+import { Check, X } from "lucide-react";
 import {
   createOrganisation,
   checkSlugAvailability,
@@ -13,6 +10,12 @@ import {
 } from "@/app/actions/org";
 import { uploadOrganisationLogo } from "@/app/actions/media";
 import { ImageUploadPicker } from "@/components/forms/ImageUploadPicker";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Field, Input, PrefixInput, Textarea } from "@/components/ui/field";
+
+/** Host shown before the slug, e.g. `events.example.org/`. Inlined at build time, so server and client agree. */
+const SITE_PREFIX = `${(process.env.NEXT_PUBLIC_BASE_URL ?? "").replace(/^https?:\/\//, "").replace(/\/$/, "")}/`;
 
 export function CreateOrgForm() {
   const router = useRouter();
@@ -23,6 +26,7 @@ export function CreateOrgForm() {
   const [slugState, setSlugState] = useState<
     "idle" | "checking" | "available" | "taken"
   >("idle");
+  const [slugError, setSlugError] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -33,8 +37,9 @@ export function CreateOrgForm() {
 
     const timer = setTimeout(async () => {
       try {
-        const available = await checkSlugAvailability(trimmed);
-        setSlugState(available ? "available" : "taken");
+        const result = await checkSlugAvailability(trimmed);
+        setSlugState(result.available ? "available" : "taken");
+        setSlugError(result.error ?? null);
       } catch (err) {
         if (process.env.NODE_ENV === "development")
           console.error("Failed to check slug availability", err);
@@ -54,17 +59,25 @@ export function CreateOrgForm() {
     setSlugState(val.trim() ? "checking" : "idle");
   };
 
-  let helperText = "Lowercase, alphanumeric and dashes, e.g. my-community";
+  let helperText: React.ReactNode = "Lowercase, alphanumeric and dashes, e.g. my-community";
   let isError = false;
-  let isSuccess = false;
 
   if (slugState === "checking") {
-    helperText = "Checking availability...";
+    helperText = "Checking availability…";
   } else if (slugState === "available") {
-    helperText = "✨ URL slug is available!";
-    isSuccess = true;
+    helperText = (
+      <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
+        <Check aria-hidden className="size-3.5" />
+        URL slug is available!
+      </span>
+    );
   } else if (slugState === "taken") {
-    helperText = "❌ This URL slug is already taken or reserved.";
+    helperText = (
+      <span className="inline-flex items-center gap-1">
+        <X aria-hidden className="size-3.5" />
+        {slugError ?? "That URL can't be used"}
+      </span>
+    );
     isError = true;
   }
 
@@ -72,10 +85,8 @@ export function CreateOrgForm() {
     pending || slugState === "checking" || slugState === "taken" || !slug;
 
   return (
-    <Stack
-      component="form"
-      spacing={2.5}
-      sx={{ width: "100%" }}
+    <form
+      className="flex w-full flex-col gap-5"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -88,7 +99,7 @@ export function CreateOrgForm() {
             logoUrl: "",
           });
           if (!res.ok) {
-            setError(res.error);
+            setError(res.fieldErrors?.slug?.[0] ?? res.fieldErrors?.name?.[0] ?? res.error);
             return;
           }
           if (res.data?.slug) {
@@ -125,57 +136,38 @@ export function CreateOrgForm() {
         });
       }}
     >
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <TextField
-        name="name"
-        label="Organisation name"
-        required
-        fullWidth
-        autoFocus
-      />
-      <TextField
-        name="slug"
-        label="URL slug"
-        required
-        fullWidth
-        value={slug}
-        onChange={handleSlugChange}
-        error={isError}
-        helperText={helperText}
-        slotProps={{
-          formHelperText: {
-            sx: {
-              color: isSuccess
-                ? "#7CF5B6"
-                : isError
-                  ? "error.main"
-                  : "text.secondary",
-              fontWeight: isSuccess || isError ? 500 : 400,
-            },
-          },
-        }}
-      />
-      <TextField
-        name="description"
-        label="Description"
-        fullWidth
-        multiline
-        minRows={3}
-      />
-      <ImageUploadPicker
-        label="Logo"
-        placeholder="Your logo will appear here."
-        onChange={(file) => setLogoFile(file)}
-      />
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={isSubmitDisabled}
-        size="large"
-        sx={{ textTransform: "none", borderRadius: 2, py: 1.25 }}
-      >
-        Create organisation
-      </Button>
-    </Stack>
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      <Field label="Name" required>
+        <Input name="name" autoFocus />
+      </Field>
+      <Field label="Web address" required helperText={isError ? undefined : helperText} error={isError ? helperText : undefined}>
+        <PrefixInput
+          prefix={SITE_PREFIX}
+          name="slug"
+          value={slug}
+          onChange={handleSlugChange}
+          autoCapitalize="none"
+          spellCheck={false}
+        />
+      </Field>
+      <Field label="Description" optional>
+        <Textarea name="description" rows={3} />
+      </Field>
+      <div className="flex flex-col gap-1.5">
+        <p className="text-label text-ink">
+          Logo<span className="ml-1.5 font-normal text-ink-muted">Optional</span>
+        </p>
+        <ImageUploadPicker
+          label="Logo"
+          placeholder="Your logo will appear here."
+          onChange={(file) => setLogoFile(file)}
+        />
+      </div>
+      <div>
+        <Button type="submit" variant="primary" size="lg" disabled={isSubmitDisabled} loading={pending}>
+          Create organisation
+        </Button>
+      </div>
+    </form>
   );
 }

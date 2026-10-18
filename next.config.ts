@@ -6,6 +6,10 @@ const allowedActionOrigins = process.env.ALLOWED_ACTION_ORIGINS
   .filter(Boolean);
 const allowedDevOrigins = Array.from(new Set([
   "127.0.0.1",
+  // Development only: Cloudflare quick tunnels for testing on a phone. Without
+  // this, Next.js blocks the app's scripts on the tunnel host and the page
+  // (and its install prompt) only half works.
+  "*.trycloudflare.com",
   ...(process.env.NEXT_DEV_ALLOWED_ORIGINS
     ?.split(",")
     .map((origin) => origin.trim())

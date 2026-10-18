@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { EventPrivacyType, EventStatus } from "@prisma/client";
+import { EventStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { withApiMonitoring } from "@/lib/apiMonitor";
+import { listedEventAudienceWhere } from "@/lib/eventVisibility";
 
 export const GET = withApiMonitoring("GET /api/search", async (request: Request) => {
   const { searchParams } = new URL(request.url);
@@ -23,7 +24,7 @@ export const GET = withApiMonitoring("GET /api/search", async (request: Request)
   const events = await prisma.event.findMany({
     where: {
       status: EventStatus.PUBLISHED,
-      privacyType: EventPrivacyType.PUBLIC,
+      AND: listedEventAudienceWhere,
       page: { is: { isPublished: true } },
       OR: [
         { title: { contains: q, mode: "insensitive" } },

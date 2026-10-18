@@ -4,16 +4,18 @@
 
 This guide describes the Docker deployment that the repository supports today.
 It is intended for a single host or another container platform that does not use
-Kubernetes. For Kubernetes, use the [Helm chart](../charts/yuyu/README.md).
+Kubernetes. For Kubernetes, use the [Helm chart](../charts/spaceworks-events/README.md).
+For the default free-tier setup (Render, Supabase, Upstash, Cloudflare R2,
+Brevo), follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md) instead.
 
-Yuyu does **not** currently provide a production `docker compose up` installer.
+Space Works Events does **not** currently provide a production `docker compose up` installer.
 The root `docker-compose.yml` is for local PostgreSQL development, and
 `compose.staging.yml` deliberately enables insecure CI/staging exceptions. Do
 not use either file for production or real attendee data.
 
 ## Production topology
 
-Run the Yuyu application container behind a TLS-terminating reverse proxy or
+Run the Space Works Events application container behind a TLS-terminating reverse proxy or
 load balancer. Supply these production services separately:
 
 - PostgreSQL with TLS, encryption at rest, point-in-time recovery, and tested
@@ -25,31 +27,38 @@ load balancer. Supply these production services separately:
 - a CDN/WAF or reverse proxy that overwrites the configured trusted client-IP
   header.
 
+The live ticket page holds a Server-Sent Events stream at
+`/api/ticket/:token/events`. Configure the reverse proxy not to buffer
+`text/event-stream` responses (nginx: `proxy_buffering off` for
+`/api/ticket/`; the route also sends `X-Accel-Buffering: no`) and to allow idle
+reads of at least 30 seconds. Redis pub/sub carries check-in notifications
+between application replicas.
+
 The application image contains only the application. It does not run
 PostgreSQL, Redis, object storage, TLS termination, or SMTP. Keep the container
 port private and expose it only through the trusted proxy.
 
 ## Build immutable images
 
-For automated builds and Docker Hub publishing after successful GitHub Actions
-checks, follow [Build and publish to Docker Hub](DOCKERHUB_ACTIONS.md).
+For automated builds and GitHub Container Registry publishing after successful GitHub Actions
+checks, follow [Container image publishing](CONTAINER_IMAGES.md).
 The commands below are the manual alternative.
 
 Build the application and migration targets from the same reviewed commit and
 give both the same immutable release version:
 
 ```bash
-export YUYU_VERSION=1.0.0
+export SWE_VERSION=1.0.0
 
 docker build \
   --target migrator \
-  --tag registry.example.com/yuyu-migrator:${YUYU_VERSION} \
+  --tag ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION} \
   .
 
 docker build \
   --target runner \
   --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" \
-  --tag registry.example.com/yuyu:${YUYU_VERSION} \
+  --tag ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION} \
   .
 ```
 
@@ -57,9 +66,12 @@ Export `NEXT_PUBLIC_BASE_URL` with the production HTTPS origin before building.
 It is compiled into the image and must match the runtime canonical URL.
 
 The Server Actions key is passed through a BuildKit secret mount and is required
-only by the application build. Supply the
+only by the application build. (Builders without BuildKit secrets, such as
+Render, may pass it as a `--build-arg` of the same name instead; the value
+then stays in the builder stage's metadata and cache but never reaches the
+runner image.) Supply the
 same stable value to the running application. Build it in trusted CI without
-printing it, and do not publish or reuse the key between independent Yuyu
+printing it, and do not publish or reuse the key between independent Space Works Events
 instances. Rotating it invalidates outstanding Server Action forms.
 
 Push immutable version tags to a private registry. Do not deploy a mutable
@@ -74,13 +86,13 @@ preferred; an owner-only environment file is the minimum single-host option.
 
 ```bash
 umask 077
-touch /secure/path/yuyu.env
+touch /secure/path/swevents.env
 ```
 
 At minimum, verify that:
 
 - `AUTH_URL` and `NEXT_PUBLIC_BASE_URL` are the same public HTTPS origin;
-- `DATABASE_URL` requires TLS;
+- `DATABASE_URL` (and `DIRECT_URL`, when set) requires TLS;
 - `REDIS_URL` starts with `rediss://`;
 - a custom `S3_ENDPOINT`, when used, starts with `https://`;
 - the S3 bucket is private;
@@ -93,7 +105,7 @@ At minimum, verify that:
 Run the preflight from a trusted release checkout before deploying:
 
 ```bash
-node --env-file=/secure/path/yuyu.env scripts/check-production-env.mjs
+node --env-file=/secure/path/swevents.env scripts/check-production-env.mjs
 ```
 
 Do not expose the contents of the environment file in logs, shell tracing, or a
@@ -105,14 +117,14 @@ For a new empty database, run the one-shot migration image before starting the
 application:
 
 ```bash
-docker pull registry.example.com/yuyu-migrator:${YUYU_VERSION}
-docker pull registry.example.com/yuyu:${YUYU_VERSION}
+docker pull ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION}
+docker pull ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
 
 docker run --rm \
-  --env-file /secure/path/yuyu.env \
-  registry.example.com/yuyu-migrator:${YUYU_VERSION}
+  --env-file /secure/path/swevents.env \
+  ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION}
 
-node --env-file=/secure/path/yuyu.env scripts/verify-production-schema.mjs
+node --env-file=/secure/path/swevents.env scripts/verify-production-schema.mjs
 ```
 
 Start the application on a loopback-only port when the reverse proxy runs on
@@ -120,11 +132,11 @@ the host:
 
 ```bash
 docker run -d \
-  --name yuyu \
+  --name swevents \
   --restart unless-stopped \
-  --env-file /secure/path/yuyu.env \
+  --env-file /secure/path/swevents.env \
   --publish 127.0.0.1:3000:3000 \
-  registry.example.com/yuyu:${YUYU_VERSION}
+  ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
 ```
 
 If the proxy is another container, use a private Docker network instead of a
@@ -163,18 +175,18 @@ Use this order for every release:
 Example container replacement after a successful migration:
 
 ```bash
-docker stop yuyu
-docker rename yuyu yuyu-previous
+docker stop swevents
+docker rename swevents swevents-previous
 
 docker run -d \
-  --name yuyu \
+  --name swevents \
   --restart unless-stopped \
-  --env-file /secure/path/yuyu.env \
+  --env-file /secure/path/swevents.env \
   --publish 127.0.0.1:3000:3000 \
-  registry.example.com/yuyu:${YUYU_VERSION}
+  ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
 ```
 
-Remove `yuyu-previous` only after the new release is healthy. Reverting the
+Remove `swevents-previous` only after the new release is healthy. Reverting the
 application image does not reverse a database migration; migrations must be
 reviewed for backward compatibility and restored from a verified backup when a
 database rollback is genuinely required.
@@ -190,11 +202,25 @@ Use `/api/health` for dependency-free liveness. Use the bearer-protected
 `/api/health/db` endpoint for readiness. Never expose either bearer secret in
 monitoring URLs or logs.
 
+## Migrating on start (platforms without a release job)
+
+The `runner` image bundles a pinned Prisma CLI and the migrations. With
+`MIGRATE_ON_START=1`, its entrypoint (`scripts/docker-entrypoint.sh`) runs
+`prisma migrate deploy` before starting the server and exits non-zero if a
+migration fails. Use this only where no separate release step exists (the
+Render free plan); with several replicas, keep the separate migrator step so
+one release applies migrations exactly once.
+
+Migrations connect through `DIRECT_URL` and fall back to `DATABASE_URL`. Set
+`DIRECT_URL` to a direct or session-mode connection whenever `DATABASE_URL`
+goes through a transaction pooler (for example Supabase on port 6543 with
+`pgbouncer=true`). This applies to the migrator image as well.
+
 ## Current image-packaging limitations
 
-The `runner` image does not contain the Prisma CLI or operational scripts. The
-`migrator` image contains Prisma migrations but not the storage migration,
-backup, or restore scripts. Consequently:
+The `runner` image does not contain operational scripts. The `migrator` image
+contains Prisma migrations but not the storage migration, backup, or restore
+scripts. Consequently:
 
 - run `npm run storage:migrate` from a trusted checkout when legacy
   database-backed assets still exist; and

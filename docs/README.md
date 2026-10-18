@@ -1,11 +1,17 @@
-# Yuyu documentation
+# Space Works Events documentation
 
-This directory is the source of truth for the current product, its operation, and future plans. The code and Prisma migrations take precedence if a document becomes stale.
+[Back to the project README](../README.md)
+
+Everything you need to understand, run and change Space Works Events, the free, open-source event platform from Space Works. These pages describe what the product does today, how to operate it, and what's planned. If a page and the code ever disagree, the code and Prisma migrations win, and the page needs fixing.
+
+New here? Start with [Features](FEATURES.md) for what it does, then [Local development](DEVELOPMENT.md) to run it. To go live on free plans, follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md).
 
 ## Product and engineering
 
 | Document | Purpose |
 | --- | --- |
+| [Design system](DESIGN.md) | V1 visual design brief: tokens, the dot-sign brand (§2.3), typography, components, motion, page patterns, dark mode, and voice |
+| [Contributing](../CONTRIBUTING.md) | How to report bugs, suggest ideas, and prepare a pull request |
 | [Features](FEATURES.md) | Current user-facing and administrative capabilities |
 | [Architecture](ARCHITECTURE.md) | System boundaries, request flows, data model, and background work |
 | [Local development](DEVELOPMENT.md) | Installation, database setup, and everyday commands |
@@ -19,12 +25,13 @@ This directory is the source of truth for the current product, its operation, an
 
 | Document | Purpose |
 | --- | --- |
+| [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md) | Step-by-step production on Render, Supabase, Upstash, Cloudflare R2, Brevo, and a Cloudflare Worker cron (the default deployment) |
 | [Production release](PRODUCTION_RELEASE.md) | Mandatory pre-deployment checklist |
 | [Production operations](production-operations.md) | Deployments, probes, schedulers, backups, incidents, and privacy operations |
-| [Docker Hub publishing](DOCKERHUB_ACTIONS.md) | GitHub Actions setup, build secrets, image publication, and release handoff |
+| [Container image publishing](CONTAINER_IMAGES.md) | GitHub Actions setup, build secrets, publication to GitHub Container Registry, and release handoff |
 | [Production Docker deployment](DEPLOYMENT_DOCKER.md) | Current single-host/container deployment, migrations, upgrades, and image limitations |
 | [Isolated staging deployment](DEPLOYMENT_STAGING.md) | Single-VM Docker Compose staging/test setup behind host Nginx |
-| [Helm chart](../charts/yuyu/README.md) | Kubernetes installation, migration hook, secrets, probes, and ingress configuration |
+| [Helm chart](../charts/spaceworks-events/README.md) | Kubernetes installation, migration hook, secrets, probes, and ingress configuration |
 | [Future phases](FUTURE_PHASES.md) | Work that is not currently implemented |
 
 ## Recommended reading order

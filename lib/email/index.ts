@@ -2,6 +2,11 @@ import type { RsvpStatus } from "@prisma/client";
 import { getEmailTransport } from "./transporter";
 import { calendarInviteFilename, createCalendarInvite, googleCalendarEventUrl } from "@/lib/calendarInvite";
 import { safeTimeZone } from "@/lib/timeZone";
+import { EMAIL_BUTTON_STYLE, EMAIL_COLORS, emailLayout } from "./brand";
+import { DEFAULT_BROADCAST_DESIGN, inlineBroadcastStyles, isBroadcastDesign, renderBroadcastDesign, type BroadcastBrand, type BroadcastDesignId } from "./broadcastDesigns";
+
+const HEADING_STYLE = `margin-top: 0; color: ${EMAIL_COLORS.ink}; font-size: 20px; font-weight: 600;`;
+const BODY_STYLE = `font-size: 16px; line-height: 1.5; color: ${EMAIL_COLORS.inkMuted}; margin-bottom: 24px;`;
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]!);
@@ -77,27 +82,15 @@ export async function sendRSVPConfirmation(params: {
     statusMessage = "Your RSVP is pending organizer approval. We will let you know once it's reviewed.";
   }
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>RSVP ${statusText}: ${safeTitle}</title>
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;">
-        <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
-          <div style="background-color: #6750A4; padding: 24px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">Yuyu Events</h1>
-          </div>
-          <div style="padding: 32px;">
-            <h2 style="margin-top: 0; color: #6750A4; font-size: 20px; font-weight: 600;">RSVP Status: ${statusText}</h2>
-            <p style="font-size: 16px; line-height: 1.5; color: #49454f; margin-bottom: 24px;">
+  const html = emailLayout(`RSVP ${statusText}: ${safeTitle}`, `
+            <h2 style="${HEADING_STYLE}">RSVP Status: ${statusText}</h2>
+            <p style="${BODY_STYLE}">
               ${salutation.html}<br><br>
               Thank you for registering for <strong>${safeTitle}</strong>. ${statusMessage}
             </p>
             ${eventDetails ? `
-              <div style="margin: 24px 0; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #f8f9fa;">
-                <h3 style="margin: 0 0 12px; color: #6750A4; font-size: 16px;">Event details</h3>
+              <div style="margin: 24px 0; padding: 20px; border: 1px solid ${EMAIL_COLORS.line}; border-radius: 16px; background-color: ${EMAIL_COLORS.cream};">
+                <h3 style="margin: 0 0 12px; color: ${EMAIL_COLORS.ink}; font-size: 16px; font-weight: 600;">Event details</h3>
                 <p style="margin: 8px 0; font-size: 14px; line-height: 1.5;"><strong>Starts:</strong> ${escapeHtml(eventDetails.startsAt)}</p>
                 <p style="margin: 8px 0; font-size: 14px; line-height: 1.5;"><strong>Ends:</strong> ${escapeHtml(eventDetails.endsAt)}</p>
                 ${eventDetails.location ? `<p style="margin: 8px 0; font-size: 14px; line-height: 1.5;"><strong>Location:</strong> ${escapeHtml(eventDetails.location)}</p>` : ""}
@@ -105,38 +98,29 @@ export async function sendRSVPConfirmation(params: {
             ` : ""}
             ${safeCalendarUrl ? `
               <div style="text-align: center; margin: 24px 0;">
-                <a href="${safeCalendarUrl}" style="background-color: #6750A4; color: #ffffff; padding: 14px 28px; border-radius: 100px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <a href="${safeCalendarUrl}" style="${EMAIL_BUTTON_STYLE}">
                   Add to Google Calendar
                 </a>
-                <p style="font-size: 12px; color: #79747e; margin: 12px 0 0;">An .ics calendar invite is also attached for other calendar apps.</p>
+                <p style="font-size: 12px; color: ${EMAIL_COLORS.inkMuted}; margin: 12px 0 0;">An .ics calendar invite is also attached for other calendar apps.</p>
               </div>
             ` : ""}
             ${
               ticketUrl && params.status === "CONFIRMED"
                 ? `
               <div style="text-align: center; margin: 32px 0;">
-                <a href="${safeTicketUrl}" style="background-color: #6750A4; color: #ffffff; padding: 14px 28px; border-radius: 100px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <a href="${safeTicketUrl}" style="${EMAIL_BUTTON_STYLE}">
                   View Your Ticket & QR Code
                 </a>
               </div>
-              <p style="font-size: 14px; text-align: center; color: #79747e; margin-bottom: 24px;">
+              <p style="font-size: 14px; text-align: center; color: ${EMAIL_COLORS.inkMuted}; margin-bottom: 24px;">
                 Or copy and paste this link: <br>
-                <a href="${safeTicketUrl}" style="color: #6750A4; text-decoration: underline;">${safeTicketUrl}</a>
+                <a href="${safeTicketUrl}" style="color: ${EMAIL_COLORS.teal}; text-decoration: underline;">${safeTicketUrl}</a>
               </p>
             `
                 : ""
-            }
-          </div>
-          <div style="background-color: #f3edf7; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
-            This email was sent by Yuyu Events.<br>
-            © ${new Date().getFullYear()} Yuyu. All rights reserved.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+            }`);
 
-  const text = `RSVP ${statusText}: ${params.eventTitle}\n\n${salutation.text}\n\nThank you for registering for "${params.eventTitle}". ${statusMessage}${eventDetails ? `\n\nEvent details\nStarts: ${eventDetails.startsAt}\nEnds: ${eventDetails.endsAt}${eventDetails.location ? `\nLocation: ${eventDetails.location}` : ""}` : ""}${calendarUrl ? `\n\nAdd to Google Calendar: ${calendarUrl}\nAn .ics calendar invite is also attached for other calendar apps.` : ""}${ticketUrl && params.status === "CONFIRMED" ? `\n\nView your ticket here: ${ticketUrl}` : ""}\n\nBest regards,\nYuyu Events`;
+  const text = `RSVP ${statusText}: ${params.eventTitle}\n\n${salutation.text}\n\nThank you for registering for "${params.eventTitle}". ${statusMessage}${eventDetails ? `\n\nEvent details\nStarts: ${eventDetails.startsAt}\nEnds: ${eventDetails.endsAt}${eventDetails.location ? `\nLocation: ${eventDetails.location}` : ""}` : ""}${calendarUrl ? `\n\nAdd to Google Calendar: ${calendarUrl}\nAn .ics calendar invite is also attached for other calendar apps.` : ""}${ticketUrl && params.status === "CONFIRMED" ? `\n\nView your ticket here: ${ticketUrl}` : ""}\n\nBest regards,\nSpace Works Events`;
 
   if (!transporter) {
     // Email bodies can contain attendee PII and bearer ticket links. Mock
@@ -160,7 +144,7 @@ export async function sendRSVPConfirmation(params: {
         content: createCalendarInvite({
           ...params.calendarEvent,
           title: params.eventTitle,
-          uid: params.messageId?.replace(/[<>]/g, "") ?? `yuyu-${Date.now()}@calendar.yuyu.invalid`,
+          uid: params.messageId?.replace(/[<>]/g, "") ?? `swe-${Date.now()}@calendar.swe.invalid`,
         }),
         method: "PUBLISH",
       }
@@ -185,35 +169,14 @@ export async function sendApprovalNotification(params: {
     ? `Great news! Your RSVP request for <strong>${safeTitle}</strong> has been approved by the organizer.`
     : `We regret to inform you that your RSVP request for <strong>${safeTitle}</strong> has been declined by the organizer.`;
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>RSVP Update: ${statusText}</title>
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;">
-        <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
-          <div style="background-color: #6750A4; padding: 24px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">Yuyu Events</h1>
-          </div>
-          <div style="padding: 32px;">
-            <h2 style="margin-top: 0; color: #6750A4; font-size: 20px; font-weight: 600;">RSVP Update: ${statusText}</h2>
-            <p style="font-size: 16px; line-height: 1.5; color: #49454f; margin-bottom: 24px;">
+  const html = emailLayout(`RSVP Update: ${statusText}`, `
+            <h2 style="${HEADING_STYLE}">RSVP Update: ${statusText}</h2>
+            <p style="${BODY_STYLE}">
               ${salutation.html}<br><br>
               ${statusMessage}
-            </p>
-          </div>
-          <div style="background-color: #f3edf7; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
-            This email was sent by Yuyu Events.<br>
-            © ${new Date().getFullYear()} Yuyu. All rights reserved.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+            </p>`);
 
-  const text = `RSVP Update: ${statusText}\n\n${salutation.text}\n\n${params.approved ? `Your RSVP for "${params.eventTitle}" was approved!` : `Your RSVP for "${params.eventTitle}" was declined.`}\n\nBest regards,\nYuyu Events`;
+  const text = `RSVP Update: ${statusText}\n\n${salutation.text}\n\n${params.approved ? `Your RSVP for "${params.eventTitle}" was approved!` : `Your RSVP for "${params.eventTitle}" was declined.`}\n\nBest regards,\nSpace Works Events`;
 
   if (!transporter) {
     console.log("[EMAIL MOCK] RSVP update queued");
@@ -244,22 +207,12 @@ export async function sendEventInvitation(params: {
   const safeOrganisationName = escapeHtml(params.organisationName);
   const safeEventUrl = escapeHtml(eventUrl);
   const subject = `You’re invited: ${headerText(params.eventTitle)}`;
-  const text = `You’re invited to "${params.eventTitle}" by ${params.organisationName}.\n\nOpen the event and register with this email address:\n${eventUrl}\n\nYuyu Events`;
-  const html = `
-    <!DOCTYPE html>
-    <html><head><meta charset="utf-8"><title>${escapeHtml(subject)}</title></head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background:#f8f9fa; margin:0; padding:20px; color:#1c1b1f;">
-      <div style="max-width:600px; margin:40px auto; background:#fff; border:1px solid #e0e0e0; border-radius:16px; overflow:hidden;">
-        <div style="background:#6750A4; color:#fff; padding:24px; text-align:center;"><strong>Yuyu Events</strong></div>
-        <div style="padding:32px;">
-          <h2 style="margin-top:0; color:#6750A4;">You’re invited</h2>
-          <p><strong>${safeOrganisationName}</strong> invited you to <strong>${safeTitle}</strong>.</p>
-          <p>Open the event and register with this email address.</p>
-          <p style="margin:28px 0;"><a href="${safeEventUrl}" style="background:#6750A4; color:#fff; padding:14px 24px; border-radius:999px; text-decoration:none; font-weight:600;">View event</a></p>
-          <p style="font-size:13px; color:#666; overflow-wrap:anywhere;">${safeEventUrl}</p>
-        </div>
-      </div>
-    </body></html>`;
+  const text = `You’re invited to "${params.eventTitle}" by ${params.organisationName}.\n\nOpen the event and register with this email address:\n${eventUrl}\n\nSpace Works Events`;
+  const html = emailLayout(escapeHtml(subject), `
+          <h2 style="${HEADING_STYLE}">You’re invited</h2>
+          <p style="${BODY_STYLE}"><strong>${safeOrganisationName}</strong> invited you to <strong>${safeTitle}</strong>.<br><br>Open the event and register with this email address.</p>
+          <p style="margin:28px 0;"><a href="${safeEventUrl}" style="${EMAIL_BUTTON_STYLE}">View event</a></p>
+          <p style="font-size:13px; color:${EMAIL_COLORS.inkMuted}; overflow-wrap:anywhere;">${safeEventUrl}</p>`);
 
   if (!transporter) {
     console.log("[EMAIL MOCK] event invitation queued");
@@ -271,10 +224,14 @@ export async function sendEventInvitation(params: {
 
 export async function sendCollaboratorInvitation(params: { to: string; eventTitle: string; inviteUrl: string; messageId?: string }) {
   const { transporter, from } = await getEmailTransport();
-  const subject = `Co-organizer invitation: ${headerText(params.eventTitle)}`;
+  const subject = `Co-organiser invitation: ${headerText(params.eventTitle)}`;
   const safeUrl = escapeHtml(params.inviteUrl);
-  const text = `You have been invited to co-organize "${params.eventTitle}". Sign in with this email address to accept:\n${params.inviteUrl}`;
-  const html = `<p>You have been invited to co-organize <strong>${escapeHtml(params.eventTitle)}</strong>.</p><p><a href="${safeUrl}">Accept co-organizer invite</a></p><p>${safeUrl}</p>`;
+  const text = `You have been invited to help organise "${params.eventTitle}" as a co-organiser.\n\nSign in with this email address to accept:\n${params.inviteUrl}\n\nSpace Works Events`;
+  const html = emailLayout(escapeHtml(subject), `
+          <h2 style="${HEADING_STYLE}">You’re invited to co-organise</h2>
+          <p style="${BODY_STYLE}">You have been invited to help organise <strong>${escapeHtml(params.eventTitle)}</strong>.<br><br>Sign in with this email address to accept.</p>
+          <p style="margin:28px 0;"><a href="${safeUrl}" style="${EMAIL_BUTTON_STYLE}">Accept invitation</a></p>
+          <p style="font-size:13px; color:${EMAIL_COLORS.inkMuted}; overflow-wrap:anywhere;">${safeUrl}</p>`);
   if (!transporter) { console.log("[EMAIL MOCK] collaborator invitation queued"); return; }
   await transporter.sendMail({ messageId: params.messageId, from, to: params.to, subject, text, html });
 }
@@ -291,36 +248,15 @@ export async function sendReminder(params: {
   const safeTitle = escapeHtml(params.eventTitle);
   const subjectTitle = headerText(params.eventTitle);
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Upcoming Event Reminder: ${safeTitle}</title>
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;">
-        <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
-          <div style="background-color: #6750A4; padding: 24px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: 0.5px;">Yuyu Events</h1>
-          </div>
-          <div style="padding: 32px;">
-            <h2 style="margin-top: 0; color: #6750A4; font-size: 20px; font-weight: 600;">Upcoming Event Reminder</h2>
-            <p style="font-size: 16px; line-height: 1.5; color: #49454f; margin-bottom: 24px;">
+  const html = emailLayout(`Upcoming Event Reminder: ${safeTitle}`, `
+            <h2 style="${HEADING_STYLE}">Upcoming Event Reminder</h2>
+            <p style="${BODY_STYLE}">
               Hello,<br><br>
               This is a reminder that the event <strong>${safeTitle}</strong> is starting soon!<br><br>
               <strong>Start Time:</strong> ${formattedDate}
-            </p>
-          </div>
-          <div style="background-color: #f3edf7; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
-            This email was sent by Yuyu Events.<br>
-            © ${new Date().getFullYear()} Yuyu. All rights reserved.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+            </p>`);
 
-  const text = `Upcoming Event Reminder: ${params.eventTitle}\n\nHello,\n\nThis is a reminder that "${params.eventTitle}" is starting at ${formattedDate}.\n\nBest regards,\nYuyu Events`;
+  const text = `Upcoming Event Reminder: ${params.eventTitle}\n\nHello,\n\nThis is a reminder that "${params.eventTitle}" is starting at ${formattedDate}.\n\nBest regards,\nSpace Works Events`;
 
   if (!transporter) {
     console.log("[EMAIL MOCK] event reminder queued");
@@ -337,30 +273,7 @@ export async function sendReminder(params: {
   });
 }
 
-const BROADCAST_STYLES: Record<string, string> = {
-  p: "margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #1c1b1f;",
-  h2: "margin: 24px 0 12px; font-size: 22px; line-height: 1.3; color: #1c1b1f;",
-  h3: "margin: 20px 0 8px; font-size: 18px; line-height: 1.35; color: #1c1b1f;",
-  ul: "margin: 0 0 16px; padding-left: 24px;",
-  ol: "margin: 0 0 16px; padding-left: 24px;",
-  li: "margin: 0 0 6px; font-size: 16px; line-height: 1.6; color: #1c1b1f;",
-  blockquote: "margin: 0 0 16px; padding: 10px 16px; border-left: 4px solid #6750A4; background: #f6f2fb; color: #49454f;",
-};
-const BROADCAST_LINK_STYLE = "color: #6750A4; text-decoration: underline; overflow-wrap: anywhere;";
-const BROADCAST_BUTTON_STYLE = "display: inline-block; background-color: #6750A4; color: #ffffff; padding: 14px 28px; border-radius: 999px; text-decoration: none; font-weight: 600; font-size: 16px;";
-
-/** Mail clients ignore stylesheets, so the sanitised subset is styled inline. */
-export function inlineBroadcastStyles(html: string) {
-  return html
-    .replace(/<a\b([^>]*)>/g, (_match, attributes: string) => {
-      const href = attributes.match(/href="([^"]*)"/)?.[1] ?? "";
-      const isButton = /class="[^"]*\bcta\b[^"]*"/.test(attributes);
-      return `<a href="${href}" style="${isButton ? BROADCAST_BUTTON_STYLE : BROADCAST_LINK_STYLE}">`;
-    })
-    .replace(/<(p|h2|h3|ul|ol|li|blockquote)>/g, (_match, tag: string) => `<${tag} style="${BROADCAST_STYLES[tag]}">`)
-    .replace(/<p style="([^"]*)"><\/p>/g, '<p style="$1"><br></p>')
-    .replace(/(<li style="[^"]*">)<p style="[^"]*">/g, '$1<p style="margin: 0; font-size: 16px; line-height: 1.6; color: #1c1b1f;">');
-}
+export { inlineBroadcastStyles };
 
 /** The exact message a recipient receives; also used for the dashboard preview. */
 export function buildBroadcastEmail(params: {
@@ -369,29 +282,22 @@ export function buildBroadcastEmail(params: {
   bodyText: string;
   eventTitle: string;
   organisationName: string;
+  design?: BroadcastDesignId;
+  brand?: BroadcastBrand;
+  /** Only the dashboard preview sets this (to ""), so site images load relative to the page. */
+  imageBaseUrl?: string;
 }) {
   const subject = headerText(params.subject) || headerText(params.eventTitle) || "Event update";
-  const safeTitle = escapeHtml(params.eventTitle);
-  const safeOrganisation = escapeHtml(params.organisationName);
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;">
-        <div style="max-width: 600px; margin: 24px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; overflow: hidden;">
-          <div style="background-color: #6750A4; padding: 24px; text-align: center; color: #ffffff;">
-            <h1 style="margin: 0; font-size: 20px; font-weight: 600;">${safeOrganisation}</h1>
-            <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.85;">${safeTitle}</p>
-          </div>
-          <div style="padding: 32px;">${inlineBroadcastStyles(params.bodyHtml)}</div>
-          <div style="background-color: #f3edf7; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
-            You are receiving this because you registered for ${safeTitle} with ${safeOrganisation}.<br>
-            Sent through Yuyu Events.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+  const design = isBroadcastDesign(params.design) ? params.design : DEFAULT_BROADCAST_DESIGN;
+  const html = renderBroadcastDesign(design, {
+    subject,
+    bodyHtml: params.bodyHtml,
+    eventTitle: params.eventTitle,
+    organisationName: params.organisationName,
+    brand: params.brand ?? {},
+    // Recipients need an absolute public address; without one, site images are left out.
+    baseUrl: params.imageBaseUrl ?? (process.env.NEXT_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") || null),
+  });
   const text = `${params.bodyText.replace(/\r\n?/g, "\n").trim()}\n\n—\nYou are receiving this because you registered for "${params.eventTitle}" with ${params.organisationName}.`;
   return { subject, html, text };
 }
@@ -404,6 +310,8 @@ export async function sendEventBroadcast(params: {
   bodyText: string;
   eventTitle: string;
   organisationName: string;
+  design?: BroadcastDesignId;
+  brand?: BroadcastBrand;
   messageId?: string;
 }): Promise<void> {
   const { transporter, from } = await getEmailTransport();

@@ -1,20 +1,20 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Chip from "@mui/material/Chip";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { AdminPanel, LinkRow, NameCell, StatusValue } from "@/components/super-admin/AdminPanel";
+import { AuditTable, auditRowSelect } from "@/components/super-admin/AuditTable";
+import { credentialState, formatBytes } from "@/lib/superAdminInsights";
+import { Chip, EmptyState, OrgLogo, StatTile } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
   params: Promise<{ orgId: string }>;
 };
 
 export default async function SuperAdminOrgDetailPage({ params }: Props) {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const { orgId } = await params;
 
   const org = await prisma.organisation.findUnique({
@@ -31,10 +31,33 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
   });
 
   if (!org) {
-    return (
-      <Typography color="text.secondary">Organisation not found.</Typography>
-    );
+    return <EmptyState mood="sad">Organisation not found.</EmptyState>;
   }
+
+  const now = new Date();
+  const orgRsvpWhere = { OR: [{ event: { organisationId: org.id } }, { eventInstance: { series: { organisationId: org.id } } }] };
+  const [rsvpCount, checkedInCount, broadcastStats, feedbackCount, assetStats, apiClients, auditEvents] = await Promise.all([
+    prisma.rSVP.count({ where: orgRsvpWhere }),
+    prisma.rSVP.count({ where: { ...orgRsvpWhere, checkedInAt: { not: null } } }),
+    prisma.eventBroadcast.aggregate({ where: { event: { organisationId: org.id } }, _count: { _all: true }, _sum: { recipientCount: true } }),
+    prisma.eventFeedbackResponse.count({ where: { form: { event: { organisationId: org.id } } } }),
+    prisma.asset.aggregate({ where: { organisationId: org.id }, _count: { _all: true }, _sum: { byteSize: true } }),
+    prisma.apiClient.findMany({
+      where: { organisationId: org.id },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        createdAt: true,
+        scopes: { select: { scope: true }, orderBy: { scope: "asc" } },
+        // Lifecycle timestamps only; the credential digest is never loaded.
+        credentials: { select: { revokedAt: true, expiresAt: true, lastUsedAt: true }, orderBy: { createdAt: "desc" }, take: 50 },
+      },
+    }),
+    prisma.auditEvent.findMany({ where: { organisationId: org.id }, orderBy: { createdAt: "desc" }, take: 25, select: auditRowSelect }),
+  ]);
 
   const [members, events, series, invites] = await Promise.all([
     prisma.membership.findMany({
@@ -95,208 +118,193 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
   ]);
 
   return (
-    <Stack spacing={2}>
-      <Stack spacing={0.5}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-          {org.name}
-        </Typography>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-          <Chip
-            size="small"
-            variant="outlined"
-            label={`/${org.slug}`}
-            sx={{ fontFamily: "monospace" }}
-          />
-          <Chip size="small" variant="outlined" label={`${org._count.memberships} members`} />
-          <Chip size="small" variant="outlined" label={`${org._count.events} events`} />
-          <Chip size="small" variant="outlined" label={`${org._count.eventSeries} series`} />
-        </Stack>
-        <Typography color="text.secondary" variant="body2">
-          Created {org.createdAt.toLocaleString()}
-        </Typography>
-        <Typography color="text.secondary" sx={{ whiteSpace: "pre-wrap" }}>
-          {org.description || "—"}
-        </Typography>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-          <Link href={`/${org.slug}`} style={{ textDecoration: "none" }}>
-            Public page
-          </Link>
-          <Typography color="text.secondary">·</Typography>
-          <Link href={`/dashboard/${org.slug}`} style={{ textDecoration: "none" }}>
-            Org dashboard
-          </Link>
-        </Stack>
-      </Stack>
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-4">
+        <Link href="/super-admin/orgs" className="inline-flex w-fit items-center gap-1 text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline">
+          <ArrowLeft aria-hidden className="size-4" />
+          Organisations
+        </Link>
+        <div className="flex items-center gap-4">
+          <OrgLogo name={org.name} src={org.logoUrl} size="lg" />
+          <div className="min-w-0">
+            <h1 className="break-words text-h1 text-ink">{org.name}</h1>
+            <p className="mt-0.5 text-sm text-ink-muted">Created {org.createdAt.toLocaleString()}</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <Chip tone="outline" className="tabular-nums">{`/${org.slug}`}</Chip>
+          <Chip tone="outline">{`${org._count.memberships} members`}</Chip>
+          <Chip tone="outline">{`${org._count.events} events`}</Chip>
+          <Chip tone="outline">{`${org._count.eventSeries} series`}</Chip>
+        </div>
+        <p className="max-w-[720px] whitespace-pre-wrap text-body-ui text-ink-secondary">{org.description || "—"}</p>
+        <LinkRow links={[{ href: `/${org.slug}`, label: "Public page" }, { href: `/dashboard/${org.slug}`, label: "Org dashboard" }]} />
+      </header>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Members
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Joined</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <StatTile className="rounded-xl" label="Registrations" value={rsvpCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Checked in" value={checkedInCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Feedback responses" value={feedbackCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Broadcasts" value={broadcastStats._count._all.toLocaleString()} hint={`${(broadcastStats._sum.recipientCount ?? 0).toLocaleString()} recipients`} />
+        <StatTile className="rounded-xl" label="Stored files" value={assetStats._count._all.toLocaleString()} hint={formatBytes(assetStats._sum.byteSize == null ? 0 : Number(assetStats._sum.byteSize))} />
+      </div>
+
+      <AdminPanel title="Members">
+        <Table label="Members">
+          <THead>
+            <tr>
+              <TH>User</TH>
+              <TH>Email</TH>
+              <TH>Role</TH>
+              <TH>Joined</TH>
+            </tr>
+          </THead>
+          <TBody>
             {members.map((m) => (
-              <TableRow key={m.id}>
-                <TableCell>{m.user?.name ?? "—"}</TableCell>
-                <TableCell sx={{ fontFamily: "monospace" }}>
-                  {m.user?.email ?? "—"}
-                </TableCell>
-                <TableCell>{m.role}</TableCell>
-                <TableCell>{m.createdAt.toLocaleString()}</TableCell>
-              </TableRow>
+              <TR key={m.id}>
+                <TD>{m.user ? <NameCell href={`/super-admin/users/${m.user.id}`} name={m.user.name ?? "—"} /> : "—"}</TD>
+                <TD className="tabular-nums text-sm">{m.user?.email ?? "—"}</TD>
+                <TD><Chip size="sm" tone={m.role === "OWNER" ? "ink" : "neutral"}>{m.role}</Chip></TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{m.createdAt.toLocaleString()}</TD>
+              </TR>
             ))}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Events
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Privacy</TableCell>
-              <TableCell>Start</TableCell>
-              <TableCell align="right">RSVPs</TableCell>
-              <TableCell>Links</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Events">
+        <Table label="Events">
+          <THead>
+            <tr>
+              <TH>Title</TH>
+              <TH>Status</TH>
+              <TH>Privacy</TH>
+              <TH>Start</TH>
+              <TH className="text-right">RSVPs</TH>
+              <TH>Links</TH>
+            </tr>
+          </THead>
+          <TBody>
             {events.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary">No events.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={6} className="py-8 text-center text-ink-muted">No events.</TD></tr>
             ) : (
               events.map((e) => (
-                <TableRow key={e.id} hover>
-                  <TableCell sx={{ fontWeight: 650 }}>{e.title}</TableCell>
-                  <TableCell>{e.status}</TableCell>
-                  <TableCell>{e.privacyType}</TableCell>
-                  <TableCell>{e.startDateTime.toLocaleString()}</TableCell>
-                  <TableCell align="right">{e._count.rsvps}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/${org.slug}/${e.slug}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Public
-                    </Link>
-                    {" · "}
-                    <Link
-                      href={`/dashboard/${org.slug}/event/${e.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Manage
-                    </Link>
-                  </TableCell>
-                </TableRow>
+                <TR key={e.id}>
+                  <TD className="font-semibold">{e.title}</TD>
+                  <TD><StatusValue status={e.status} /></TD>
+                  <TD><Chip size="sm" tone="outline">{e.privacyType}</Chip></TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{e.startDateTime.toLocaleString()}</TD>
+                  <TD className="text-right tabular-nums">{e._count.rsvps}</TD>
+                  <TD><LinkRow links={[{ href: `/${org.slug}/${e.slug}`, label: "Public" }, { href: `/dashboard/${org.slug}/event/${e.id}`, label: "Manage" }]} /></TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Series
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Privacy</TableCell>
-              <TableCell align="right">Instances</TableCell>
-              <TableCell align="right">Invites</TableCell>
-              <TableCell>Link</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Series">
+        <Table label="Series">
+          <THead>
+            <tr>
+              <TH>Title</TH>
+              <TH>Status</TH>
+              <TH>Privacy</TH>
+              <TH className="text-right">Instances</TH>
+              <TH className="text-right">Invites</TH>
+              <TH>Link</TH>
+            </tr>
+          </THead>
+          <TBody>
             {series.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary">No series.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={6} className="py-8 text-center text-ink-muted">No series.</TD></tr>
             ) : (
               series.map((s) => (
-                <TableRow key={s.id} hover>
-                  <TableCell sx={{ fontWeight: 650 }}>{s.title}</TableCell>
-                  <TableCell>{s.status}</TableCell>
-                  <TableCell>{s.privacyType}</TableCell>
-                  <TableCell align="right">{s._count.instances}</TableCell>
-                  <TableCell align="right">{s._count.invites}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/dashboard/${org.slug}/series/${s.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Manage
-                    </Link>
-                  </TableCell>
-                </TableRow>
+                <TR key={s.id}>
+                  <TD className="font-semibold">{s.title}</TD>
+                  <TD><StatusValue status={s.status} /></TD>
+                  <TD><Chip size="sm" tone="outline">{s.privacyType}</Chip></TD>
+                  <TD className="text-right tabular-nums">{s._count.instances}</TD>
+                  <TD className="text-right tabular-nums">{s._count.invites}</TD>
+                  <TD><LinkRow links={[{ href: `/dashboard/${org.slug}/series/${s.id}`, label: "Manage" }]} /></TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Org invite links
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Role</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Used</TableCell>
-              <TableCell>Created by</TableCell>
-              <TableCell>Used by</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Org invite links">
+        <Table label="Org invite links">
+          <THead>
+            <tr>
+              <TH>Role</TH>
+              <TH>Created</TH>
+              <TH>Expires</TH>
+              <TH>Used</TH>
+              <TH>Created by</TH>
+              <TH>Used by</TH>
+            </tr>
+          </THead>
+          <TBody>
             {invites.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <Typography color="text.secondary">No org invites.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={6} className="py-8 text-center text-ink-muted">No org invites.</TD></tr>
             ) : (
               invites.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>{i.role}</TableCell>
-                  <TableCell>{i.createdAt.toLocaleString()}</TableCell>
-                  <TableCell>
-                    {i.expiresAt ? i.expiresAt.toLocaleString() : "—"}
-                  </TableCell>
-                  <TableCell>{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>
-                    {i.createdBy.email ?? "—"}
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>
-                    {i.usedBy?.email ?? "—"}
-                  </TableCell>
-                </TableRow>
+                <TR key={i.id}>
+                  <TD>{i.role}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.expiresAt ? i.expiresAt.toLocaleString() : "—"}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.createdBy.email ?? "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.usedBy?.email ?? "—"}</TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
-    </Stack>
+      </AdminPanel>
+
+      <AdminPanel title="Machine API clients" description="Scopes and credential lifecycle only. Credential secrets and digests are never shown.">
+        {apiClients.length === 0 ? (
+          <EmptyState mood="sleepy">No API clients.</EmptyState>
+        ) : (
+          <Table label="Machine API clients">
+            <THead>
+              <tr>
+                <TH>Client</TH>
+                <TH>Status</TH>
+                <TH>Scopes</TH>
+                <TH className="text-right">Credentials</TH>
+                <TH>Last used</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {apiClients.map((client) => {
+                const active = client.credentials.filter((credential) => credentialState(credential, now) === "active").length;
+                const lastUsed = client.credentials.reduce<Date | null>((latest, credential) => (credential.lastUsedAt && (!latest || credential.lastUsedAt > latest) ? credential.lastUsedAt : latest), null);
+                return (
+                  <TR key={client.id}>
+                    <TD className="font-semibold">{client.name}</TD>
+                    <TD><Chip size="sm" tone={client.status === "ACTIVE" ? "success" : "neutral"}>{client.status === "ACTIVE" ? "Active" : "Disabled"}</Chip></TD>
+                    <TD>
+                      <span className="flex flex-wrap gap-1">
+                        {client.scopes.length === 0 ? <span className="text-ink-muted">None</span> : client.scopes.map((scope) => <Chip key={scope.scope} size="sm" tone="outline" className="tabular-nums">{scope.scope}</Chip>)}
+                      </span>
+                    </TD>
+                    <TD className="text-right tabular-nums">{`${active} active / ${client.credentials.length}`}</TD>
+                    <TD className="whitespace-nowrap text-ink-secondary">{lastUsed ? lastUsed.toLocaleString() : "Never"}</TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        )}
+      </AdminPanel>
+
+      <AdminPanel title="Recent activity" description="Latest 25 audit events for this organisation. Metadata is redacted.">
+        <AuditTable events={auditEvents} label="Recent organisation activity" empty="No audit events for this organisation." hideOrganisation />
+      </AdminPanel>
+    </div>
   );
 }
-

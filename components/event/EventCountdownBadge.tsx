@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Chip from "@mui/material/Chip";
-import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
+import { Clock } from "lucide-react";
+import { Chip } from "@/components/ui/display";
 
 function countdownLabel(startAt: number, endAt: number, now: number) {
   if (now >= endAt) return { label: "Ended", live: false };
@@ -38,16 +38,8 @@ export function EventCountdownBadge(props: { startAt: string; endAt: string }) {
   const { label, live } = countdownLabel(new Date(startAt).getTime(), new Date(endAt).getTime(), now);
 
   return (
-    <Chip
-      icon={<ScheduleOutlinedIcon sx={{ fontSize: 14 }} />}
-      label={label}
-      size="small"
-      variant="outlined"
-      sx={
-        live
-          ? { borderColor: "rgba(48,209,88,0.5)", color: "#7CE6A2", "& .MuiChip-icon": { color: "inherit" } }
-          : { borderColor: "rgba(255,255,255,0.16)", color: "rgba(255,255,255,0.68)", "& .MuiChip-icon": { color: "inherit" } }
-      }
-    />
+    <Chip size="sm" tone={live ? "success" : "outline"} icon={<Clock />}>
+      {label}
+    </Chip>
   );
 }

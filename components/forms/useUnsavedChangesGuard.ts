@@ -18,6 +18,8 @@ export function useUnsavedChangesGuard(isDirty: boolean) {
       if (!(target instanceof Element)) return;
       const anchor = target.closest("a[href]");
       if (!(anchor instanceof HTMLAnchorElement) || anchor.target === "_blank" || anchor.href === window.location.href) return;
+      // In-page anchors (e.g. a settings section nav) never leave the form.
+      if (anchor.hash && anchor.href.split("#")[0] === window.location.href.split("#")[0]) return;
       if (!window.confirm(MESSAGE)) {
         event.preventDefault();
         event.stopImmediatePropagation();

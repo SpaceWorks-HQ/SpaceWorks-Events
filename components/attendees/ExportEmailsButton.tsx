@@ -1,7 +1,7 @@
 "use client";
 
-import Button from "@mui/material/Button";
-import AlternateEmailOutlinedIcon from "@mui/icons-material/AlternateEmailOutlined";
+import { AtSign } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   attendeeEmailExportFilename,
   buildAttendeeEmailCsv,
@@ -11,8 +11,10 @@ import {
 export function ExportEmailsButton(props: {
   eventTitle: string;
   attendees: AttendeeEmailExportRow[];
+  size?: "sm" | "md";
+  title?: string;
 }) {
-  const { eventTitle, attendees } = props;
+  const { eventTitle, attendees, size = "sm", title } = props;
 
   function handleExport() {
     const csv = buildAttendeeEmailCsv(attendees);
@@ -30,14 +32,7 @@ export function ExportEmailsButton(props: {
   const hasEmail = attendees.some((attendee) => Boolean(attendee.user?.email ?? attendee.guestEmail));
 
   return (
-    <Button
-      variant="outlined"
-      size="small"
-      startIcon={<AlternateEmailOutlinedIcon />}
-      onClick={handleExport}
-      disabled={!hasEmail}
-      sx={{ borderRadius: 2 }}
-    >
+    <Button variant="secondary" size={size} title={title} startIcon={<AtSign />} onClick={handleExport} disabled={!hasEmail}>
       Export emails
     </Button>
   );

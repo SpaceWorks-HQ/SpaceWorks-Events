@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import EventPage from "@/app/[orgSlug]/[eventSlug]/page";
+import { EmbedCredit } from "@/components/chrome/SiteFooter";
 
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string }> };
 
@@ -14,5 +15,13 @@ export const metadata: Metadata = {
  * remain unavailable here as well.
  */
 export default async function EmbeddedEventPage({ params }: Props) {
-  return <EventPage params={params} />;
+  return (
+    <>
+      {/* The same gutter as the organiser pages, which this route renders without their chrome. */}
+      <main id="main-content" tabIndex={-1} className="mx-auto w-full max-w-[1160px] px-4 py-6 focus:outline-none sm:px-6 sm:py-8">
+        <EventPage params={params} />
+      </main>
+      <EmbedCredit />
+    </>
+  );
 }

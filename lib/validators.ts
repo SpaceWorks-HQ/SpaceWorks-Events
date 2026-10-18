@@ -1,7 +1,9 @@
 import { BroadcastAttendanceFilter, EventPrivacyType, EventStatus, RsvpStatus } from "@prisma/client";
 import { z } from "zod";
+import { isReservedEventSlug, isReservedOrganisationSlug } from "@/lib/slug";
 import { isValidTimeZone } from "@/lib/timeZone";
 import { isUploadedImageUrl } from "@/lib/uploadUrl";
+import { BROADCAST_DESIGN_IDS, DEFAULT_BROADCAST_DESIGN } from "@/lib/email/broadcastDesigns";
 
 const slugRegex = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const httpUrlSchema = z
@@ -70,8 +72,9 @@ function validateEventScheduleAndLocation(
     location: string;
   },
   ctx: z.RefinementCtx,
+  { requireFutureStart = true }: { requireFutureStart?: boolean } = {},
 ) {
-  if (data.startDateTime < new Date()) {
+  if (requireFutureStart && data.startDateTime < new Date()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["startDateTime"],
@@ -109,7 +112,8 @@ export const createOrganisationSchema = z.object({
     .trim()
     .min(2, "Slug must be at least 2 characters")
     .max(64)
-    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens"),
+    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens")
+    .refine((slug) => !isReservedOrganisationSlug(slug), "That URL is reserved"),
   description: z.string().trim().max(2000).optional().default(""),
   logoUrl: z.literal(""),
 });
@@ -294,13 +298,19 @@ export const updateEventSchema = z
     }, z.number().int().positive().optional()),
     status: z.nativeEnum(EventStatus),
     privacyType: z.nativeEnum(EventPrivacyType),
+    /** Only meaningful with APPROVAL_REQUIRED: list the event publicly while approving each sign-up. */
+    listedPublicly: z
+      .preprocess((v) => v === true || v === "true" || v === "on", z.boolean())
+      .optional()
+      .default(false),
     pageTagline: z.string().trim().max(240).optional(),
     pageLogoUrl: eventPageLogoUrlSchema,
     pageAboutHtml: z.string().max(50_000).optional(),
     ...registrationCutoffSchema,
   })
   .superRefine((data, ctx) => {
-    validateEventScheduleAndLocation(data, ctx);
+    // A started event stays editable; updateEvent only rejects moving the start into the past.
+    validateEventScheduleAndLocation(data, ctx, { requireFutureStart: false });
     if (data.registrationClosesAt && data.registrationLeadMinutes != null)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -331,7 +341,8 @@ export const updateEventSlugSchema = z.object({
     .trim()
     .min(2, "Slug must be at least 2 characters")
     .max(64)
-    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens"),
+    .regex(slugRegex, "Use lowercase letters, numbers, and single hyphens")
+    .refine((slug) => !isReservedEventSlug(slug), "That URL is reserved"),
 });
 
 export const cloneEventSchema = z.object({
@@ -536,6 +547,7 @@ const broadcastAudienceFields = {
 };
 
 const broadcastSubjectSchema = z.string().trim().min(1, "Subject is required").max(150, "Keep the subject under 150 characters");
+const broadcastDesignSchema = z.enum(BROADCAST_DESIGN_IDS).default(DEFAULT_BROADCAST_DESIGN);
 const broadcastBodySchema = z.string().trim().min(1, "Message is required").max(20000, "Keep the message under 20,000 characters");
 
 export const broadcastAudienceSchema = orgScoped.extend(broadcastAudienceFields);
@@ -544,12 +556,14 @@ export const sendEventBroadcastSchema = orgScoped.extend({
   ...broadcastAudienceFields,
   subject: broadcastSubjectSchema,
   body: broadcastBodySchema,
+  design: broadcastDesignSchema,
 });
 
 export const sendEventBroadcastTestSchema = orgScoped.extend({
   eventId: z.string().trim().min(1),
   subject: broadcastSubjectSchema,
   body: broadcastBodySchema,
+  design: broadcastDesignSchema,
 });
 
 export const previewEventBroadcastSchema = sendEventBroadcastTestSchema;

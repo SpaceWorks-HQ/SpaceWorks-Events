@@ -8,8 +8,8 @@
 - TypeScript
 - PostgreSQL and Prisma ORM
 - Auth.js with Prisma persistence
-- Material UI and Emotion
-- Redis for distributed rate limiting
+- Tailwind CSS, Radix UI primitives and lucide icons (`components/ui/*`)
+- Redis for distributed rate limiting and realtime ticket check-in pub/sub
 - S3-compatible private object storage
 - Nodemailer-backed transactional email
 - Vitest and Playwright
@@ -60,8 +60,9 @@ The super-admin boundary is separate: access requires an authenticated email mat
 
 - Identity: `User`, `Account`, `Session`, and `VerificationToken`.
 - Tenancy: `Organisation`, `Membership`, and `OrganisationInvite`.
-- Events: `Event`, `EventInvite`, `EventSeries`, `SeriesInvite`, and `EventInstance`.
-- Registration: `RSVP`, registration forms, fields, and typed answers.
+- Events: `Event` (including `listedPublicly` for listed approval-required events and an optional unique `shortCode`), `EventInvite`, `EventSeries`, `SeriesInvite`, and `EventInstance`.
+- Registration: `RSVP`, registration forms, fields (with help text, placeholder, and validated `settings` JSON), and typed answers.
+- Communications: `EventBroadcast` records each organiser email, including its chosen `design`; each recipient is a separate `OutboxMessage`.
 - Feedback: feedback forms, fields, responses, typed answers, and optional certificate linkage.
 - Operations: `OutboxMessage`, `OperationalHeartbeat`, `AuditEvent`, `CheckInEvent`, `RsvpDeletionUndo`, and `Asset`.
 - Instance administration: the singleton `InstanceSetting` holds the new-account policy plus encrypted SMTP and Google SSO secrets and non-secret backup posture. It is readable and mutable only through the super-admin boundary.
@@ -72,6 +73,10 @@ Refer to `prisma/schema.prisma` for the authoritative fields, constraints, index
 ## Background and scheduled work
 
 Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. Every self-hosted Node.js instance starts a singleton one-minute worker that claims and sends a batch, retries failures, purges expired operational records, and updates a one-row `OperationalHeartbeat`. Queue row claims keep concurrent replicas safe. The protected `POST /api/internal/outbox` endpoint remains available as an external scheduler or recovery trigger.
+
+## Realtime ticket check-in
+
+When an RSVP transitions to checked in, `commitCheckInProjection` (`lib/checkInMutations.ts`, the single write path for online scans, manual check-in, offline-sync replay, and venue stations) publishes a `checkedInAt` message after its transaction commits through `lib/ticketCheckInEvents.ts`. Channels are keyed by RSVP id, never by the ticket token. With `REDIS_URL` set, messages fan out to every replica over Redis pub/sub (one lazily created subscriber connection per process, reference-counted per channel); without Redis an in-process EventEmitter shared through `globalThis` is used (Next.js can load the module more than once per process, for example in separate Server Action and route-handler bundles), which only reaches viewers on the same instance. Production requires `REDIS_URL`, so multi-replica deployments always use pub/sub. Publishing is fire-and-forget and never fails a check-in. The ticket page listens via `GET /api/ticket/:token/events` (SSE) and can fall back to `GET /api/ticket/:token/status`; both return only the check-in state. Delivery is best effort: while the stream is open the client also re-reads the status every 15 seconds, and a dropped message is recovered on that check, the next reconnect, or a return to the tab. Status and stream requests are rate limited per client IP (`ticketStatus`, `ticketEvents`), and each process caps open ticket streams. Reverse proxies must not buffer `text/event-stream` responses: the route sends `X-Accel-Buffering: no`, and nginx-style proxies should also set `proxy_buffering off` for `/api/ticket/`. Allow idle reads of at least 30 seconds (the stream sends a ping every 25 seconds and closes after 10 minutes).
 
 ## Instance service configuration
 
@@ -85,7 +90,7 @@ Asset metadata lives in PostgreSQL. Production file bytes live in a private S3-c
 
 The proxy generates a fresh Content Security Policy nonce for application-page requests. The root layout waits for a real request so Next.js can attach the nonce to framework scripts. Other response headers include HSTS in production, frame denial, content-type protection, a restricted permissions policy, and a strict referrer policy.
 
-This per-request nonce makes application pages dynamically rendered. Static metadata endpoints such as `robots.txt` and `sitemap.xml` remain static.
+This per-request nonce makes application pages dynamically rendered. There is deliberately no root `app/loading.tsx`: a root Suspense boundary would stream a 200 before `notFound()` or `redirect()` run, breaking real 404s and the short-link 307. Loading screens live at `app/dashboard/loading.tsx` and the dashboard organisation and event segments. Static metadata endpoints such as `robots.txt` and `sitemap.xml` remain static.
 
 ## Deployment shape
 

@@ -14,6 +14,8 @@ if (!testDatabaseUrl) {
 // suite. All Prisma clients created by the tests use the explicitly named test
 // database instead.
 process.env.DATABASE_URL = testDatabaseUrl;
+// The schema's `directUrl` must resolve too; never let it point elsewhere.
+process.env.DIRECT_URL = testDatabaseUrl;
 
 export default defineConfig({
   resolve: {

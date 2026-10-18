@@ -15,6 +15,10 @@ const eslintConfig = defineConfig([
     "playwright-report/**",
     "test-results/**",
     "next-env.d.ts",
+    // Separately packaged Cloudflare Worker (own package.json and tooling).
+    "deploy/**",
+    // Local Claude Code state, including agent worktrees (full repo copies).
+    ".claude/**",
   ]),
 ]);
 

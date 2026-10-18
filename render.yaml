@@ -1,0 +1,126 @@
+# Render Blueprint for Space Works Events on the free plan.
+# Step-by-step guide: docs/DEPLOYMENT_CLOUD.md
+#
+# Free-plan facts this file is built around:
+# - 512 MB RAM, 0.1 CPU; the instance sleeps after 15 idle minutes (the
+#   Cloudflare Worker in deploy/cloudflare-cron keeps it awake and runs the
+#   email outbox every minute).
+# - No pre-deploy command, so the container applies migrations on start
+#   (MIGRATE_ON_START=1, see scripts/docker-entrypoint.sh).
+# - Outbound SMTP ports 25, 465 and 587 are blocked; Brevo is used on 2525.
+# - Render passes every env var below to `docker build` as a build arg, which
+#   is how NEXT_PUBLIC_BASE_URL and NEXT_SERVER_ACTIONS_ENCRYPTION_KEY reach
+#   the build stage (see the Dockerfile).
+#
+# `sync: false` values are asked for once, when the Blueprint is first
+# created; later edits happen in the Render Dashboard (Environment tab).
+services:
+  - type: web
+    name: spaceworks-events
+    runtime: docker
+    plan: free
+    # Pick the region closest to your Supabase and Upstash regions. It cannot
+    # be changed after creation (oregon, ohio, virginia, frankfurt, singapore).
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    # Deploy only after the GitHub checks for the commit pass. Builds use the
+    # workspace's monthly build-minute allowance, so skip doc-only changes.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      ignoredPaths:
+        - docs/**
+        - deploy/**
+        - charts/**
+        - "**/*.md"
+    envVars:
+      # --- Runtime shape for the free instance ---
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
+      - key: MIGRATE_ON_START
+        value: "1"
+
+      # --- Public origin (build-visible: changing it needs a redeploy) ---
+      # Your HTTPS origin without a trailing slash, e.g. https://events.example.org
+      # or https://spaceworks-events.onrender.com. Both must be identical.
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+      - key: AUTH_URL
+        sync: false
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+
+      # --- Supabase Postgres ---
+      # Transaction pooler (port 6543):
+      # ...pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=5&sslmode=require
+      - key: DATABASE_URL
+        sync: false
+      # Session pooler (port 5432), used only for migrations:
+      # ...pooler.supabase.com:5432/postgres?sslmode=require
+      - key: DIRECT_URL
+        sync: false
+
+      # --- Upstash Redis (rediss://default:<password>@<host>.upstash.io:6379) ---
+      - key: REDIS_URL
+        sync: false
+
+      # --- Secrets ---
+      # Render generates a random 256-bit base64 value for these.
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: CRON_SECRET
+        generateValue: true # copy it into the Cloudflare Worker secret too
+      - key: HEALTHCHECK_SECRET
+        generateValue: true
+      # Generate each with `openssl rand -base64 32` and keep a copy in your
+      # password manager. Losing MFA_ENCRYPTION_KEY locks out every
+      # authenticator; changing NEXT_SERVER_ACTIONS_ENCRYPTION_KEY needs a
+      # rebuild because it is also a build arg.
+      - key: NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+        sync: false
+      - key: MFA_ENCRYPTION_KEY
+        sync: false
+
+      # --- Client IP trust ---
+      # x-forwarded-for when browsers reach Render directly (onrender.com or a
+      # DNS-only custom domain). Switch to cf-connecting-ip only when your own
+      # Cloudflare zone proxies the domain (orange cloud).
+      - key: TRUSTED_PROXY_IP_HEADER
+        value: x-forwarded-for
+      # Render appends the client address to any X-Forwarded-For the client
+      # sent, so read the entry its proxy added (right-most), not the left-most.
+      # Remove when switching to cf-connecting-ip.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
+
+      # --- Cloudflare R2 (private bucket) ---
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: auto
+      # https://<account-id>.r2.cloudflarestorage.com
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_FORCE_PATH_STYLE
+        value: "1"
+
+      # --- Brevo SMTP (bootstrap/fallback; can move to Super admin > Settings) ---
+      # e.g. Space Works Events <events@your-domain>
+      - key: EMAIL_FROM
+        sync: false
+      - key: SMTP_HOST
+        value: smtp-relay.brevo.com
+      # 2525 with STARTTLS: Render free blocks 25, 465 and 587.
+      - key: SMTP_PORT
+        value: "2525"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false

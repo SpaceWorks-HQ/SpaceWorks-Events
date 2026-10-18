@@ -43,7 +43,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
   // browsers. A versioned name retires that incompatible token cleanly rather
   // than asking Auth.js to decode it on every request.
   cookies: {
-    sessionToken: { name: "yuyu.session-token.v2" },
+    sessionToken: { name: "swe.session-token.v1" },
   },
   trustHost: true,
   logger: {

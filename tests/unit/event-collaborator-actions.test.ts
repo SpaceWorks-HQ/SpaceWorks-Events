@@ -7,19 +7,23 @@ const mocks = vi.hoisted(() => ({
   membership: vi.fn(),
   deleteMany: vi.fn(),
   updateMany: vi.fn(),
+  inviteDeleteMany: vi.fn(),
+  rateLimited: vi.fn(),
   audit: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
 vi.mock("@/lib/permissions", () => ({ getMembership: mocks.membership, isOrgAdmin: (role: string) => role === "OWNER" || role === "ADMIN" }));
 vi.mock("@/lib/audit", () => ({ recordAuditEvent: mocks.audit }));
+vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: mocks.rateLimited }));
 vi.mock("@/lib/db", () => ({ prisma: {
   organisation: { findUnique: mocks.orgFind },
   eventCollaborator: { deleteMany: mocks.deleteMany, updateMany: mocks.updateMany },
+  eventCollaboratorInvite: { deleteMany: mocks.inviteDeleteMany },
 } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-import { revokeEventCollaborator, updateEventCollaboratorPermissions } from "@/app/actions/event-collaborators";
+import { cancelEventCollaboratorInvite, revokeEventCollaborator, updateEventCollaboratorPermissions } from "@/app/actions/event-collaborators";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -28,6 +32,8 @@ beforeEach(() => {
   mocks.membership.mockResolvedValue({ role: "ADMIN" });
   mocks.deleteMany.mockResolvedValue({ count: 1 });
   mocks.updateMany.mockResolvedValue({ count: 1 });
+  mocks.inviteDeleteMany.mockResolvedValue({ count: 1 });
+  mocks.rateLimited.mockResolvedValue(false);
 });
 
 describe("event collaborator tenant binding", () => {
@@ -52,5 +58,28 @@ describe("event collaborator tenant binding", () => {
       where: { id: "grant_b", eventSeriesId: "series_b", series: { organisationId: "org_a" } },
       data: { permissions: [EventPermission.EDIT_DETAILS] },
     });
+  });
+
+  it("cancels only unused invites of an event in the authorised organisation", async () => {
+    await expect(cancelEventCollaboratorInvite({ organisationSlug: "org-a", eventId: "event_b", inviteId: "invite_b" }))
+      .resolves.toEqual({ ok: true });
+    expect(mocks.inviteDeleteMany).toHaveBeenCalledWith({ where: {
+      id: "invite_b",
+      usedAt: null,
+      eventId: "event_b",
+      event: { organisationId: "org_a" },
+    } });
+    expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "EVENT_COLLABORATOR_INVITE_CANCELLED", targetId: "invite_b" }));
+  });
+
+  it("refuses to cancel invites for non-admins and reports invites that are gone", async () => {
+    mocks.membership.mockResolvedValueOnce({ role: "MEMBER" });
+    await expect(cancelEventCollaboratorInvite({ organisationSlug: "org-a", eventId: "event_b", inviteId: "invite_b" }))
+      .resolves.toEqual({ ok: false, error: "You do not have permission." });
+    expect(mocks.inviteDeleteMany).not.toHaveBeenCalled();
+
+    mocks.inviteDeleteMany.mockResolvedValueOnce({ count: 0 });
+    await expect(cancelEventCollaboratorInvite({ organisationSlug: "org-a", eventSeriesId: "series_b", inviteId: "used_invite" }))
+      .resolves.toEqual({ ok: false, error: "Invite not found or already accepted." });
   });
 });

@@ -4,10 +4,12 @@ import { OutboxStatus, Prisma, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { sendApprovalNotification, sendCollaboratorInvitation, sendEventBroadcast, sendEventInvitation, sendRSVPConfirmation } from "@/lib/email";
 import { broadcastHtmlToText, formatBroadcastEventDate, renderBroadcastHtml, renderBroadcastTemplate, sampleBroadcastVariables } from "@/lib/broadcastTemplate";
-import { broadcastEventUrl, broadcastFeedbackUrl, broadcastScheduleUrl, broadcastTicketUrl, rsvpMatchesBroadcastAudience } from "@/lib/eventBroadcast";
+import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, broadcastFeedbackUrl, broadcastScheduleUrl, broadcastTicketUrl, rsvpMatchesBroadcastAudience } from "@/lib/eventBroadcast";
+import { isBroadcastDesign } from "@/lib/email/broadcastDesigns";
 import { sendPasswordResetEmail } from "@/lib/email/passwordReset";
 import { sendEmailVerificationEmail } from "@/lib/email/emailVerification";
 import { describeOperationalError } from "@/lib/redactSensitiveText";
+import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 
 type OutboxClient = Prisma.TransactionClient | typeof prisma;
 
@@ -51,7 +53,7 @@ type CollaboratorInvitePayload = { to: string; eventTitle: string; inviteUrl: st
 /** Per-recipient broadcast row. The template and ticket link are resolved at send time, so the queue never stores capabilities. */
 type EventBroadcastPayload = { to: string; broadcastId: string; rsvpId: string };
 
-type EventBroadcastTestPayload = { to: string; eventId: string; subject: string; body: string; recipientName?: string };
+type EventBroadcastTestPayload = { to: string; eventId: string; subject: string; body: string; design?: string; recipientName?: string };
 
 export async function enqueueEventBroadcastRecipients(client: OutboxClient, recipients: EventBroadcastPayload[]) {
   if (recipients.length === 0) return { count: 0 };
@@ -155,7 +157,7 @@ function containsCapability(kind: string, payload: Prisma.JsonValue) {
 }
 
 function messageId(id: string) {
-  return `<yuyu-${id}@outbox.invalid>`;
+  return `<swe-${id}@outbox.invalid>`;
 }
 
 function retryDelayMs(kind: string, attempts: number) {
@@ -278,7 +280,8 @@ function asEventBroadcastTestPayload(value: Prisma.JsonValue): EventBroadcastTes
     !isBoundedString(payload.eventId, 64) ||
     !isBoundedString(payload.subject, 150) ||
     !isBoundedString(payload.body, 20000) ||
-    (payload.recipientName !== undefined && !isBoundedString(payload.recipientName, 200))
+    (payload.recipientName !== undefined && !isBoundedString(payload.recipientName, 200)) ||
+    (payload.design !== undefined && !isBroadcastDesign(payload.design))
   ) return null;
   return payload as EventBroadcastTestPayload;
 }
@@ -290,7 +293,8 @@ const broadcastEventSelect = {
   timezone: true,
   location: true,
   isOnline: true,
-  organisation: { select: { name: true, slug: true } },
+  ...broadcastBrandSelect,
+  organisation: { select: { name: true, slug: true, logoUrl: true } },
 } as const;
 
 type BroadcastEvent = {
@@ -300,7 +304,7 @@ type BroadcastEvent = {
   timezone: string;
   location: string;
   isOnline: boolean;
-  organisation: { name: string; slug: string };
+  organisation: { name: string; slug: string; logoUrl: string | null };
 };
 
 function broadcastVariablesFor(event: BroadcastEvent, recipient: { name?: string | null; ticketUrl?: string | null }) {
@@ -423,7 +427,7 @@ export async function deliverOutboxBatch(limit = 20) {
         const [broadcast, rsvp] = await Promise.all([
           prisma.eventBroadcast.findUnique({
             where: { id: payload.broadcastId },
-            select: { subject: true, body: true, statuses: true, attendance: true, eventId: true, event: { select: broadcastEventSelect } },
+            select: { subject: true, body: true, design: true, statuses: true, attendance: true, eventId: true, event: { select: broadcastEventSelect } },
           }),
           prisma.rSVP.findUnique({
             where: { id: payload.rsvpId },
@@ -449,6 +453,8 @@ export async function deliverOutboxBatch(limit = 20) {
           bodyText: broadcastHtmlToText(bodyHtml),
           eventTitle: broadcast.event.title,
           organisationName: broadcast.event.organisation.name,
+          design: isBroadcastDesign(broadcast.design) ? broadcast.design : undefined,
+          brand: broadcastBrandFor(broadcast.event),
           messageId: stableMessageId,
         });
       } else if (message.kind === "event-broadcast-test") {
@@ -468,6 +474,18 @@ export async function deliverOutboxBatch(limit = 20) {
           eventUrl: broadcastEventUrl(event.organisation.slug, event.slug),
           organisationName: event.organisation.name,
         }, payload.recipientName ?? null);
+        // If the organiser receiving the test is confirmed for this event themselves,
+        // the ticket button opens their own ticket, so the whole flow can be checked.
+        // (Tests only ever go to the signed-in organiser's own verified address.)
+        const ownRsvp = await prisma.rSVP.findFirst({
+          where: {
+            eventId: payload.eventId,
+            status: RsvpStatus.CONFIRMED,
+            OR: [{ user: { email: { equals: payload.to, mode: "insensitive" } } }, { guestEmail: { equals: payload.to, mode: "insensitive" } }],
+          },
+          select: { checkInToken: true },
+        });
+        if (ownRsvp) variables.ticketLink = broadcastTicketUrl(ownRsvp.checkInToken);
         const bodyHtml = renderBroadcastHtml(payload.body, variables);
         await sendEventBroadcast({
           to: payload.to,
@@ -476,8 +494,17 @@ export async function deliverOutboxBatch(limit = 20) {
           bodyText: broadcastHtmlToText(bodyHtml),
           eventTitle: event.title,
           organisationName: event.organisation.name,
+          design: isBroadcastDesign(payload.design) ? payload.design : undefined,
+          brand: broadcastBrandFor(event),
           messageId: stableMessageId,
         });
+      } else if (message.kind === MEMBER_ID_EMAIL_KIND) {
+        const payload = asMemberIdEmailPayload(message.payload);
+        if (!payload) throw new PermanentOutboxError();
+        if ((await deliverMemberIdCardEmail(payload, stableMessageId)) === "dropped") {
+          await prisma.outboxMessage.deleteMany({ where: { id: message.id, status: OutboxStatus.PROCESSING, lockedAt: claimTime } });
+          continue;
+        }
       } else {
         throw new PermanentOutboxError();
       }

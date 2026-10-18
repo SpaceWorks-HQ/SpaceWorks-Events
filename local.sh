@@ -46,7 +46,7 @@ start_services() {
     # 3. Setup Database schema
     echo -e "${YELLOW}Syncing database schema...${NC}"
     npx prisma generate
-    npx prisma db push
+    npm run db:push
 
     # 4. Start Dev Server
     echo -e "${GREEN}Launching Next.js development server...${NC}"
@@ -79,7 +79,7 @@ stop_services() {
 }
 
 print_status() {
-    echo -e "${YELLOW}Checking Yuyu service status...${NC}"
+    echo -e "${YELLOW}Checking Space Works Events service status...${NC}"
     
     # Check Postgres
     if pg_isready >/dev/null 2>&1; then

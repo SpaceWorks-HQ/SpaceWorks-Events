@@ -10,7 +10,7 @@ import {
   getMembership,
   isUserEmailVerified,
 } from "@/lib/permissions";
-import { slugifyTitle, withSlugSuffix } from "@/lib/slug";
+import { isReservedEventSlug, slugifyTitle, withSlugSuffix } from "@/lib/slug";
 import {
   createEventSchema,
   cloneEventSchema,
@@ -172,6 +172,7 @@ export async function createEvent(
   let slug = baseSlug;
   let attempt = 0;
   while (
+    isReservedEventSlug(slug) ||
     await prisma.event.findUnique({
       where: {
         organisationId_slug: { organisationId: org.id, slug },
@@ -271,6 +272,17 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
     where: { id: data.eventId, organisationId: org.id },
   });
   if (!event) return { ok: false, error: "Event not found." };
+  const startMinute = (date: Date) => Math.floor(date.getTime() / 60_000);
+  if (
+    startMinute(data.startDateTime) !== startMinute(event.startDateTime) &&
+    data.startDateTime < new Date()
+  ) {
+    return {
+      ok: false,
+      error: "Start time must be now or in the future.",
+      fieldErrors: { startDateTime: ["Start time must be now or in the future"] },
+    };
+  }
   const aboutHtml =
     data.pageAboutHtml !== undefined
       ? sanitizeRichText(data.pageAboutHtml)
@@ -321,6 +333,7 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
           capacity: data.capacity ?? null,
           status: data.status,
           privacyType: data.privacyType,
+          listedPublicly: data.privacyType === EventPrivacyType.APPROVAL_REQUIRED && data.listedPublicly,
           registrationClosesAt: data.registrationClosesAt ?? null,
           registrationLeadMinutes: data.registrationLeadMinutes ?? null,
         },
@@ -545,6 +558,7 @@ export async function cloneEvent(
   let slug = baseSlug;
   let attempt = 0;
   while (
+    isReservedEventSlug(slug) ||
     await prisma.event.findUnique({
       where: { organisationId_slug: { organisationId: org.id, slug } },
       select: { id: true },
@@ -575,6 +589,7 @@ export async function cloneEvent(
         // Clone as draft to prevent accidental double-publishing.
         status: EventStatus.DRAFT,
         privacyType: source.privacyType,
+        listedPublicly: source.listedPublicly,
       },
     });
 

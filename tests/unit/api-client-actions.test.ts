@@ -60,7 +60,7 @@ describe("API client owner actions", () => {
 
   it("creates a client, hashed credential, scopes, and audit atomically", async () => {
     const result = await createApiClient({ organisationSlug: "tenant", name: "Rforum", credentialName: "Primary", scopes: ["events:read", "participants:read"], expiresAt: null });
-    expect(result).toMatchObject({ ok: true, data: { token: expect.stringMatching(/^yuyu_v1_/) } });
+    expect(result).toMatchObject({ ok: true, data: { token: expect.stringMatching(/^swe_v1_/) } });
     const createInput = mocks.clientCreate.mock.calls[0]![0];
     const credential = createInput.data.credentials.create;
     expect(Buffer.isBuffer(credential.secretHash)).toBe(true);

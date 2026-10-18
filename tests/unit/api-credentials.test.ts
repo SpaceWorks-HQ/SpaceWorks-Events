@@ -27,7 +27,7 @@ describe("API credentials", () => {
     expect(parseApiCredential(`bearer ${generated.token}`)).toEqual(parsed);
   });
 
-  it.each([null, "", "Basic abc", "Bearer malformed", "Bearer yuyu_v1_bad.short"])(
+  it.each([null, "", "Basic abc", "Bearer malformed", "Bearer swe_v1_bad.short"])(
     "rejects malformed authorization: %s",
     (value) => expect(parseApiCredential(value)).toBeNull(),
   );
@@ -42,7 +42,7 @@ describe("API credentials", () => {
       lastUsedAt: null,
       apiClient: { id: "client_1", organisationId: "org_1", status: "ACTIVE", scopes: [{ scope: "events:read" }] },
     });
-    const context = await authenticateApiCredential(`Bearer yuyu_v1_cr1234567890abcdef.${secret}`);
+    const context = await authenticateApiCredential(`Bearer swe_v1_cr1234567890abcdef.${secret}`);
     expect(context).toMatchObject({ apiClientId: "client_1", credentialId: "cr1234567890abcdef", organisationId: "org_1" });
     expect(context?.scopes.has("events:read")).toBe(true);
   });
@@ -61,6 +61,6 @@ describe("API credentials", () => {
       lastUsedAt: null,
       apiClient: { id: "client_1", organisationId: "org_1", status: state.status, scopes: [] },
     });
-    await expect(authenticateApiCredential(`Bearer yuyu_v1_cr1234567890abcdef.${secret}`)).resolves.toBeNull();
+    await expect(authenticateApiCredential(`Bearer swe_v1_cr1234567890abcdef.${secret}`)).resolves.toBeNull();
   });
 });

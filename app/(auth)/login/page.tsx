@@ -1,15 +1,29 @@
 import { Suspense } from "react";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { connection } from "next/server";
+import { Check } from "lucide-react";
 import { LoginForm } from "./ui";
+import { BrandHomeLink } from "@/components/chrome/SiteHeader";
+import { SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { getGoogleSsoSettings, isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
+
+/** An illustrative event card for the brand panel (product proof, not live data). */
+function SampleEvent({ month, day, title, meta, className }: { month: string; day: string; title: string; meta: string; className?: string }) {
+  return (
+    <div className={`flex items-center gap-3.5 rounded-xl border border-line bg-panel p-4 ${className ?? ""}`}>
+      <span className="flex h-[60px] w-14 shrink-0 flex-col items-center overflow-hidden rounded-[10px] border border-line bg-panel">
+        <span className="w-full bg-primary py-[3px] text-center text-[11px] font-semibold uppercase leading-[1.3] tracking-[0.08em] text-on-primary">{month}</span>
+        <span className="text-[22px] font-semibold leading-[1.35] tabular-nums text-ink">{day}</span>
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate text-label text-ink">{title}</span>
+        <span className="truncate text-caption text-ink-muted">{meta}</span>
+      </span>
+    </div>
+  );
+}
 
 export default async function LoginPage() {
   // The public registration policy is an instance setting and must be read
@@ -20,117 +34,47 @@ export default async function LoginPage() {
     getGoogleSsoSettings().then(Boolean),
   ]);
   return (
-    <Box
-      data-login-page
-      sx={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 0,
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: { xs: 2, sm: 3, md: 4 },
-        overflow: "auto",
-        background: "var(--login-page-background)",
-      }}
-    >
-      <Paper
-        elevation={0}
-        sx={{
-          width: "min(1180px, 100%)",
-          minHeight: { md: 640 },
-          overflow: "hidden",
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "var(--login-surface-border)",
-          backgroundColor: "background.paper",
-          backdropFilter: "blur(10px)",
-          boxShadow: "var(--login-surface-shadow)",
-        }}
-      >
-        <Grid container>
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Box sx={{ p: { xs: 3, sm: 4 } }}>
-              <Stack spacing={2.5}>
-                <Box>
-                  <Typography
-                    variant="overline"
-                    sx={{
-                      letterSpacing: 1.4,
-                      color: "var(--login-muted-text)",
-                    }}
-                  >
-                    YUYU
-                  </Typography>
-                  <Typography
-                    variant="h4"
-                    component="h1"
-                    sx={{ fontWeight: 700, color: "var(--login-heading-text)" }}
-                  >
-                    Get started now
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: "var(--login-muted-text)", mt: 0.75 }}
-                  >
-                    Sign in with Google or your email and password. New here?
-                    Create an account in seconds.
-                  </Typography>
-                </Box>
+    <div className="grid min-h-dvh bg-canvas md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="flex flex-col px-4 py-5 sm:px-8 sm:py-6">
+        <header>
+          <BrandHomeLink />
+        </header>
+        <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center py-10 focus:outline-none">
+          <div className="flex w-full max-w-[400px] flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h1 className="text-display-l text-ink">Welcome back.</h1>
+              <p className="text-body-ui text-ink-secondary">
+                {googleSsoConfigured ? "Sign in with Google or your email and password." : "Sign in with your email and password."}
+                {accountCreationEnabled ? " New here? Create an account in seconds." : null}
+              </p>
+            </div>
+            <Suspense fallback={<p className="text-body-ui text-ink-muted">Loading sign in…</p>}>
+              <LoginForm accountCreationEnabled={accountCreationEnabled} googleSsoConfigured={googleSsoConfigured} />
+            </Suspense>
+          </div>
+        </main>
+      </div>
 
-                <Box
-                  sx={{
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "var(--login-form-border)",
-                    backgroundColor: "var(--login-form-background)",
-                    p: { xs: 2.25, sm: 2.75 },
-                  }}
-                >
-                  <Suspense fallback={<Typography color="text.secondary">Loading sign in…</Typography>}>
-                    <LoginForm accountCreationEnabled={accountCreationEnabled} googleSsoConfigured={googleSsoConfigured} />
-                  </Suspense>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-
-          <Grid
-            size={{ xs: 12, md: 7 }}
-            sx={{ display: { xs: "none", md: "block" } }}
-          >
-            <Box
-              sx={{
-                height: "100%",
-                minHeight: 640,
-                backgroundColor: "var(--login-hero-background)",
-                position: "relative",
-              }}
-            >
-              <Box
-                component="img"
-                src="/login-hero.svg"
-                alt=""
-                sx={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-              <Box
-                sx={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "var(--login-hero-overlay)",
-                }}
-              />
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
-    </Box>
+      {/* Brand panel: the stacked lockup, the accent phrase and a few real product objects. */}
+      <aside aria-hidden className="relative hidden overflow-hidden p-4 md:block">
+        <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-[16px] bg-surface p-12">
+          <SpaceWorksLogo variant="lockup-stacked" height={72} className="self-start" />
+          <div className="relative flex flex-col gap-4 py-6">
+            <span className="absolute -right-16 -top-10 size-44 rounded-full bg-sw-citron" />
+            <span className="absolute -bottom-2 right-20 size-20 rounded-[16px] bg-sw-sky" />
+            <SampleEvent month="Nov" day="14" title="Kochi Maker Night" meta="Space Works, Kochi · 6:00 PM" className="relative max-w-[340px] -rotate-2" />
+            <SampleEvent month="Nov" day="21" title="Soldering 101" meta="Workshop · 12 spots left" className="relative ml-12 max-w-[340px] rotate-1" />
+            <span className="relative ml-4 inline-flex items-center gap-2 self-start rounded-full bg-sw-citron px-4 py-2 text-label text-sw-ink">
+              <Check className="size-4" />
+              Meera checked in
+            </span>
+          </div>
+          <p className="relative flex items-end justify-between gap-6">
+            <span className="font-accent text-[34px] font-medium leading-[1.1] text-ink">Show up.<br />Make things.</span>
+            <span className="size-14 shrink-0 rounded-tl-full bg-highlight" />
+          </p>
+        </div>
+      </aside>
+    </div>
   );
 }

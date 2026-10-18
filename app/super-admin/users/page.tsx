@@ -1,36 +1,47 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import Link from "next/link";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { cn } from "@/lib/cn";
+import { AdminPager, AdminSearchForm, NameCell } from "@/components/super-admin/AdminPanel";
+import { Chip, PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; filter?: string }>;
 };
 
+const filters = {
+  all: { label: "All", where: {} },
+  unverified: { label: "Unverified email", where: { emailVerified: null } },
+  "no-mfa": { label: "Without MFA", where: { mfaEnabledAt: null } },
+  mfa: { label: "With MFA", where: { mfaEnabledAt: { not: null } } },
+} satisfies Record<string, { label: string; where: Prisma.UserWhereInput }>;
+
+type FilterKey = keyof typeof filters;
+
 export default async function SuperAdminUsersPage({ searchParams }: Props) {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
+  const filter: FilterKey = sp.filter && sp.filter in filters ? (sp.filter as FilterKey) : "all";
   const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
   const take = 50;
   const skip = page * take;
 
   const users = await prisma.user.findMany({
-    where: q
-      ? {
-          OR: [
-            { email: { contains: q, mode: "insensitive" } },
-            { name: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
+    where: {
+      ...filters[filter].where,
+      ...(q
+        ? {
+            OR: [
+              { email: { contains: q, mode: "insensitive" } },
+              { name: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: { createdAt: "desc" },
     take,
     skip,
@@ -38,6 +49,8 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
       id: true,
       name: true,
       email: true,
+      emailVerified: true,
+      mfaEnabledAt: true,
       createdAt: true,
       _count: {
         select: { memberships: true, accounts: true, sessions: true, rsvps: true },
@@ -45,100 +58,67 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
     },
   });
 
+  const filterHref = (key: FilterKey) => `/super-admin/users?q=${encodeURIComponent(q)}${key === "all" ? "" : `&filter=${key}`}`;
+
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Users
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Users" description="Every account on this instance, with verification, MFA, memberships, sign-in accounts, sessions, and RSVPs." />
+      <AdminSearchForm action="/super-admin/users" label="Search by name or email" defaultValue={q}>
+        {filter === "all" ? null : <input type="hidden" name="filter" value={filter} />}
+      </AdminSearchForm>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Stack
-          component="form"
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          action="/super-admin/users"
-          method="GET"
-        >
-          <TextField
-            name="q"
-            label="Search by name or email"
-            defaultValue={q}
-            size="small"
-            fullWidth
-          />
-          <input type="hidden" name="page" value="0" />
-          <Button type="submit" variant="contained">
-            Search
-          </Button>
-        </Stack>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell align="right">Orgs</TableCell>
-              <TableCell align="right">Accounts</TableCell>
-              <TableCell align="right">Sessions</TableCell>
-              <TableCell align="right">RSVPs</TableCell>
-              <TableCell>Created</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography color="text.secondary">No users.</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              users.map((u) => (
-                <TableRow key={u.id} hover>
-                  <TableCell sx={{ fontWeight: 650 }}>
-                    {u.name ?? "—"}
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block" }}
-                    >
-                      {u.id}
-                    </Typography>
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>
-                    {u.email ?? "—"}
-                  </TableCell>
-                  <TableCell align="right">{u._count.memberships}</TableCell>
-                  <TableCell align="right">{u._count.accounts}</TableCell>
-                  <TableCell align="right">{u._count.sessions}</TableCell>
-                  <TableCell align="right">{u._count.rsvps}</TableCell>
-                  <TableCell>{u.createdAt.toLocaleString()}</TableCell>
-                </TableRow>
-              ))
+      <nav aria-label="Filter users" className="flex flex-wrap gap-1.5">
+        {(Object.keys(filters) as FilterKey[]).map((key) => (
+          <Link
+            key={key}
+            href={filterHref(key)}
+            aria-current={key === filter ? "page" : undefined}
+            className={cn(
+              "inline-flex min-h-8 items-center rounded-full border border-line px-3 text-sm text-ink-secondary transition-colors hover:bg-muted hover:text-ink",
+              key === filter && "border-transparent bg-primary font-semibold text-on-primary hover:bg-primary hover:text-on-primary",
             )}
-          </TableBody>
-        </Table>
-      </Paper>
+          >
+            {filters[key].label}
+          </Link>
+        ))}
+      </nav>
 
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Link
-          href={`/super-admin/users?q=${encodeURIComponent(q)}&page=${Math.max(0, page - 1)}`}
-          style={{ textDecoration: "none" }}
-        >
-          Prev
-        </Link>
-        <Typography color="text.secondary">·</Typography>
-        <Typography color="text.secondary">Page {page + 1}</Typography>
-        <Typography color="text.secondary">·</Typography>
-        <Link
-          href={`/super-admin/users?q=${encodeURIComponent(q)}&page=${page + 1}`}
-          style={{ textDecoration: "none" }}
-        >
-          Next
-        </Link>
-      </Stack>
-    </Stack>
+      <Table label="Users">
+        <THead>
+          <tr>
+            <TH>User</TH>
+            <TH>Email</TH>
+            <TH>Verified</TH>
+            <TH>MFA</TH>
+            <TH className="text-right">Orgs</TH>
+            <TH className="text-right">Accounts</TH>
+            <TH className="text-right">Sessions</TH>
+            <TH className="text-right">RSVPs</TH>
+            <TH>Created</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {users.length === 0 ? (
+            <tr><TD colSpan={9} className="py-8 text-center text-ink-muted">No users.</TD></tr>
+          ) : (
+            users.map((u) => (
+              <TR key={u.id}>
+                <TD><NameCell href={`/super-admin/users/${u.id}`} name={u.name ?? "—"} sub={u.id} /></TD>
+                <TD className="tabular-nums text-sm">{u.email ?? "—"}</TD>
+                <TD>{u.emailVerified ? <Chip size="sm" tone="success">Yes</Chip> : <Chip size="sm" tone="warning">No</Chip>}</TD>
+                <TD>{u.mfaEnabledAt ? <Chip size="sm" tone="success">On</Chip> : <Chip size="sm" tone="neutral">Off</Chip>}</TD>
+                <TD className="text-right tabular-nums">{u._count.memberships}</TD>
+                <TD className="text-right tabular-nums">{u._count.accounts}</TD>
+                <TD className="text-right tabular-nums">{u._count.sessions}</TD>
+                <TD className="text-right tabular-nums">{u._count.rsvps}</TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{u.createdAt.toLocaleString()}</TD>
+              </TR>
+            ))
+          )}
+        </TBody>
+      </Table>
+
+      <AdminPager basePath="/super-admin/users" query={q} page={page} extra={filter === "all" ? "" : `&filter=${filter}`} />
+    </div>
   );
 }
-

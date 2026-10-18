@@ -1,16 +1,16 @@
 import { auth } from "@/lib/auth";
-import { LandingPageClient } from "@/components/landing/LandingPageClient";
+import { HomePage } from "@/components/landing/HomePage";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Yuyu — Host Events That People Show Up To",
+  title: { absolute: "Space Works Events — Less admin. More making." },
   description:
-    "Create organisations, publish events with waitlist automations, send email invitations, and manage check-ins with secure ticket QR codes.",
+    "Space Works Events gives makerspaces, workshops and community groups everything to run free events: event pages, registrations and waitlists, live tickets, check-in, ID cards, short links, feedback and certificates.",
 };
 
-export default async function HomePage() {
+export default async function Page() {
   const session = await auth();
   const getStartedHref = session?.user ? "/dashboard" : "/login";
 
-  return <LandingPageClient getStartedHref={getStartedHref} />;
+  return <HomePage getStartedHref={getStartedHref} />;
 }

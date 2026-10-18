@@ -14,6 +14,9 @@ export const publicOrgEventSelect = {
   isOnline: true,
   status: true,
   tags: true,
+  // Card presentation: already public on the event's own page.
+  showRegistrationCount: true,
+  page: { select: { accentColor: true, tagline: true } },
 } satisfies Prisma.EventSelect;
 
 export const publicOrgInstanceSelect = {
@@ -26,6 +29,8 @@ export const publicOrgInstanceSelect = {
       title: true,
       description: true,
       timezone: true,
+      // Described in plain language ("Every Tuesday"); never rendered raw.
+      recurrenceRule: true,
     },
   },
 } satisfies Prisma.EventInstanceSelect;

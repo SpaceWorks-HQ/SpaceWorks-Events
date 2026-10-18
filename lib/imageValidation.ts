@@ -19,6 +19,10 @@ function readU16BE(bytes: Uint8Array, offset: number) {
   return (bytes[offset]! << 8) + bytes[offset + 1]!;
 }
 
+function readU16LE(bytes: Uint8Array, offset: number) {
+  return bytes[offset]! + (bytes[offset + 1]! << 8);
+}
+
 function dimensionsAreSafe(width: number | null, height: number | null) {
   return width !== null && height !== null && width > 0 && height > 0 && width * height <= MAX_IMAGE_PIXELS;
 }
@@ -57,9 +61,16 @@ function webpDimensions(bytes: Uint8Array) {
       height: 1 + bytes[27]! + (bytes[28]! << 8) + (bytes[29]! << 16),
     };
   }
+  // Lossy (what browsers export for opaque canvases): 14-bit little-endian sizes.
   if (type === "VP8 ") {
-    if (bytes.length < 30 || bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
-    return { width: readU16BE(bytes, 26) & 0x3fff, height: readU16BE(bytes, 28) & 0x3fff };
+    if (bytes[23] !== 0x9d || bytes[24] !== 0x01 || bytes[25] !== 0x2a) return null;
+    return { width: readU16LE(bytes, 26) & 0x3fff, height: readU16LE(bytes, 28) & 0x3fff };
+  }
+  // Lossless: signature 0x2f, then width-1 and height-1 as packed 14-bit fields.
+  if (type === "VP8L") {
+    if (bytes[20] !== 0x2f) return null;
+    const bits = bytes[21]! + (bytes[22]! << 8) + (bytes[23]! << 16) + (bytes[24]! * 2 ** 24);
+    return { width: (bits & 0x3fff) + 1, height: (Math.floor(bits / 2 ** 14) & 0x3fff) + 1 };
   }
   return null;
 }

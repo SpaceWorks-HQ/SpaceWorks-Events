@@ -1,32 +1,16 @@
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Paper from "@mui/material/Paper";
-import Grid from "@mui/material/Grid";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import Link from "next/link";
+import { ApiClientStatus, MembershipRole, OutboxStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { minutesAgo } from "@/lib/superAdminInsights";
 import { SparklineCard } from "@/components/super-admin/Sparkline";
-
-function StatCard(props: { label: string; value: number }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-      <Stack spacing={0.5}>
-        <Typography variant="body2" color="text.secondary">
-          {props.label}
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {props.value.toLocaleString()}
-        </Typography>
-      </Stack>
-    </Paper>
-  );
-}
+import { AdminPanel, MetricRows, NameCell } from "@/components/super-admin/AdminPanel";
+import { PageHeader, StatTile } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminOverviewPage() {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const [
     orgs,
     users,
@@ -36,6 +20,14 @@ export default async function SuperAdminOverviewPage() {
     rsvps,
     memberships,
     orgInvites,
+    checkIns,
+    feedbackResponses,
+    broadcasts,
+    apiClients,
+    failedEmails,
+    stuckEmails,
+    managersWithoutMfa,
+    unverifiedUsers,
   ] = await Promise.all([
     prisma.organisation.count(),
     prisma.user.count(),
@@ -45,6 +37,14 @@ export default async function SuperAdminOverviewPage() {
     prisma.rSVP.count(),
     prisma.membership.count(),
     prisma.organisationInvite.count(),
+    prisma.rSVP.count({ where: { checkedInAt: { not: null } } }),
+    prisma.eventFeedbackResponse.count(),
+    prisma.eventBroadcast.count(),
+    prisma.apiClient.count({ where: { status: ApiClientStatus.ACTIVE } }),
+    prisma.outboxMessage.count({ where: { status: OutboxStatus.FAILED } }),
+    prisma.outboxMessage.count({ where: { status: OutboxStatus.PENDING, availableAt: { lt: minutesAgo(15) } } }),
+    prisma.user.count({ where: { mfaEnabledAt: null, memberships: { some: { role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] } } } } }),
+    prisma.user.count({ where: { emailVerified: null } }),
   ]);
 
   const [{ orgs24h, events24h, rsvps24h, rsvps7d }] = await prisma.$queryRaw<
@@ -144,200 +144,118 @@ export default async function SuperAdminOverviewPage() {
     )
     .catch(() => []);
 
+  const stats = [
+    { label: "Organisations", value: orgs },
+    { label: "Users", value: users },
+    { label: "Events", value: events },
+    { label: "RSVPs", value: rsvps },
+    { label: "Series", value: series },
+    { label: "Instances", value: instances },
+    { label: "Memberships", value: memberships },
+    { label: "Org invite links", value: orgInvites },
+    { label: "Check-ins", value: checkIns },
+    { label: "Feedback responses", value: feedbackResponses },
+    { label: "Broadcasts", value: broadcasts },
+    { label: "Active API clients", value: apiClients },
+  ];
+
+  const attention = [
+    { label: "Failed emails", value: failedEmails, href: "/super-admin/email" },
+    { label: "Emails queued over 15 minutes", value: stuckEmails, href: "/super-admin/email" },
+    { label: "Owners and admins without MFA", value: managersWithoutMfa, href: "/super-admin/security" },
+    { label: "Users with unverified email", value: unverifiedUsers, href: "/super-admin/users?filter=unverified" },
+  ];
+
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Super admin
-      </Typography>
-      <Typography color="text.secondary">
-        Instance-wide master data and operational controls.
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Overview" description="Instance-wide master data and operational controls." />
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Organisations" value={orgs} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Users" value={users} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Events" value={events} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="RSVPs" value={rsvps} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Series" value={series} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Instances" value={instances} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Memberships" value={memberships} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <StatCard label="Org invite links" value={orgInvites} />
-        </Grid>
-      </Grid>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {stats.map((stat) => (
+          <StatTile key={stat.label} className="rounded-xl" label={stat.label} value={stat.value.toLocaleString()} />
+        ))}
+      </div>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <SparklineCard
-            title="Orgs (7d)"
-            subtitle="Created per day"
-            points={activity7d.map((d) => ({ xLabel: d.day, y: d.orgs }))}
+      <AdminPanel title="Needs attention" description="Signals worth checking. Each links to the page with details.">
+        <MetricRows
+          rows={attention.map((item) => ({
+            label: <Link href={item.href} className="underline-offset-4 hover:text-ink hover:underline">{item.label}</Link>,
+            value: <span className={item.value > 0 ? "inline-flex min-w-7 justify-center rounded-full bg-highlight px-2 text-on-highlight" : "text-ink-muted"}>{item.value.toLocaleString()}</span>,
+          }))}
+        />
+      </AdminPanel>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <SparklineCard title="Orgs (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.orgs }))} />
+        <SparklineCard title="Events (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.events }))} />
+        <SparklineCard title="RSVPs (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.rsvps }))} />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <AdminPanel title="Recent activity">
+          <MetricRows
+            rows={[
+              { label: "Orgs created (24h)", value: orgs24h.toLocaleString() },
+              { label: "Events created (24h)", value: events24h.toLocaleString() },
+              { label: "RSVPs created (24h)", value: rsvps24h.toLocaleString() },
+              { label: "RSVPs created (7d)", value: rsvps7d.toLocaleString() },
+            ]}
           />
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <SparklineCard
-            title="Events (7d)"
-            subtitle="Created per day"
-            points={activity7d.map((d) => ({ xLabel: d.day, y: d.events }))}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <SparklineCard
-            title="RSVPs (7d)"
-            subtitle="Created per day"
-            points={activity7d.map((d) => ({ xLabel: d.day, y: d.rsvps }))}
-          />
-        </Grid>
-      </Grid>
+        </AdminPanel>
+        <AdminPanel title="Top orgs">
+          <Table label="Top orgs">
+            <THead>
+              <tr>
+                <TH>Org</TH>
+                <TH className="text-right">Events</TH>
+                <TH className="text-right">Members</TH>
+                <TH className="text-right">RSVPs</TH>
+              </tr>
+            </THead>
+            <TBody>
+              {topOrgsByEvents.map((o) => {
+                const r = topOrgsByRsvps.find((x) => x.organisation_id === o.id);
+                return (
+                  <TR key={o.id}>
+                    <TD><NameCell href={`/super-admin/orgs/${o.id}`} name={o.name} sub={`/${o.slug}`} /></TD>
+                    <TD className="text-right tabular-nums">{o._count.events}</TD>
+                    <TD className="text-right tabular-nums">{o._count.memberships}</TD>
+                    <TD className="text-right tabular-nums">{r?.rsvps?.toLocaleString?.() ?? "—"}</TD>
+                  </TR>
+                );
+              })}
+            </TBody>
+          </Table>
+        </AdminPanel>
+      </div>
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-              Recent activity
-            </Typography>
-            <Table size="small">
-              <TableBody>
-                <TableRow>
-                  <TableCell>Orgs created (24h)</TableCell>
-                  <TableCell align="right">{orgs24h.toLocaleString()}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Events created (24h)</TableCell>
-                  <TableCell align="right">{events24h.toLocaleString()}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>RSVPs created (24h)</TableCell>
-                  <TableCell align="right">{rsvps24h.toLocaleString()}</TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>RSVPs created (7d)</TableCell>
-                  <TableCell align="right">{rsvps7d.toLocaleString()}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-              Top orgs
-            </Typography>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Org</TableCell>
-                  <TableCell align="right">Events</TableCell>
-                  <TableCell align="right">Members</TableCell>
-                  <TableCell align="right">RSVPs</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {topOrgsByEvents.map((o) => {
-                  const r = topOrgsByRsvps.find((x) => x.organisation_id === o.id);
-                  return (
-                    <TableRow key={o.id} hover>
-                      <TableCell sx={{ fontWeight: 650 }}>
-                        <Link href={`/super-admin/orgs/${o.id}`} style={{ textDecoration: "none" }}>
-                          {o.name}
-                        </Link>
-                        <Typography
-                          variant="caption"
-                          color="text.secondary"
-                          sx={{ display: "block" }}
-                        >
-                          /{o.slug}
-                        </Typography>
-                      </TableCell>
-                      <TableCell align="right">{o._count.events}</TableCell>
-                      <TableCell align="right">{o._count.memberships}</TableCell>
-                      <TableCell align="right">{r?.rsvps?.toLocaleString?.() ?? "—"}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </Paper>
-        </Grid>
-      </Grid>
-
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-              Recent organisations
-            </Typography>
-            <Table size="small">
-              <TableBody>
-                {recentOrgs.map((o) => (
-                  <TableRow key={o.id} hover>
-                    <TableCell sx={{ fontWeight: 650 }}>
-                      <Link href={`/super-admin/orgs/${o.id}`} style={{ textDecoration: "none" }}>
-                        {o.name}
-                      </Link>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block" }}
-                      >
-                        /{o.slug}
-                      </Typography>
-                    </TableCell>
-                    <TableCell align="right">{o.createdAt.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-              Recent events
-            </Typography>
-            <Table size="small">
-              <TableBody>
-                {recentEvents.map((e) => (
-                  <TableRow key={e.id} hover>
-                    <TableCell sx={{ fontWeight: 650 }}>{e.title}</TableCell>
-                    <TableCell>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block" }}
-                      >
-                        {e.organisation.name}
-                      </Typography>
-                      <Link
-                        href={`/${e.organisation.slug}/${e.slug}`}
-                        style={{ textDecoration: "none" }}
-                      >
-                        /{e.organisation.slug}/{e.slug}
-                      </Link>
-                    </TableCell>
-                    <TableCell align="right">{e.createdAt.toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Paper>
-        </Grid>
-      </Grid>
-    </Stack>
+      <div className="grid gap-6">
+        <AdminPanel title="Recent organisations">
+          <Table label="Recent organisations">
+            <TBody>
+              {recentOrgs.map((o) => (
+                <TR key={o.id}>
+                  <TD><NameCell href={`/super-admin/orgs/${o.id}`} name={o.name} sub={`/${o.slug}`} /></TD>
+                  <TD className="text-right text-ink-secondary">{o.createdAt.toLocaleString()}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </AdminPanel>
+        <AdminPanel title="Recent events">
+          <Table label="Recent events">
+            <TBody>
+              {recentEvents.map((e) => (
+                <TR key={e.id}>
+                  <TD className="font-semibold">{e.title}</TD>
+                  <TD><NameCell href={`/${e.organisation.slug}/${e.slug}`} name={`/${e.organisation.slug}/${e.slug}`} sub={e.organisation.name} /></TD>
+                  <TD className="text-right text-ink-secondary">{e.createdAt.toLocaleString()}</TD>
+                </TR>
+              ))}
+            </TBody>
+          </Table>
+        </AdminPanel>
+      </div>
+    </div>
   );
 }
-

@@ -13,6 +13,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/unit/**/*.test.ts"],
+    // Hermetic base URL, whatever a developer's shell or .env sets.
+    env: { NEXT_PUBLIC_BASE_URL: "http://localhost:3000" },
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

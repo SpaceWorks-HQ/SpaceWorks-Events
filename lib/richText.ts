@@ -30,7 +30,9 @@ export function richTextToPlainText(value: string) {
     /<\/?(?:p|br|h2|h3|li|blockquote)\b[^>]*>/gi,
     " ",
   );
+  // sanitize-html re-escapes text for HTML output; the summary is plain text, so undo that.
   return sanitizeHtml(withBlockSeparators, { allowedTags: [], allowedAttributes: {} })
+    .replace(/&(lt|gt|quot|#39|amp);/g, (_, entity: string) => ({ lt: "<", gt: ">", quot: '"', "#39": "'", amp: "&" })[entity] ?? "")
     .replace(/\s+/g, " ")
     .trim();
 }

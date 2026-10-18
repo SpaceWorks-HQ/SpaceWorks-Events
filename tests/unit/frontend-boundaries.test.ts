@@ -8,7 +8,8 @@ const source = (path: string) => readFileSync(resolve(root, path), "utf8");
 describe("frontend production boundaries", () => {
   it("uses explicit bounded public and attendee browser collections", () => {
     const publicPage = source("app/[orgSlug]/page.tsx");
-    const eventDashboard = source("app/dashboard/[orgSlug]/event/[eventId]/page.tsx");
+    // The event dashboard loads attendees through its shared, request-cached loader.
+    const eventDashboard = source("lib/eventDashboard/data.ts");
     expect(publicPage).toContain("select: publicOrgEventSelect");
     expect(publicPage).toContain("take: PUBLIC_COLLECTION_LIMIT + 1");
     expect(eventDashboard).toContain("take: MAX_BROWSER_ATTENDEES + 1");
@@ -17,9 +18,12 @@ describe("frontend production boundaries", () => {
 
   it("keeps calendar controls keyboard-named and production errors category-only", () => {
     const calendar = source("components/org/OrgEventsContainer.tsx");
-    expect(calendar).toContain('aria-label="Previous month"');
-    expect(calendar).toContain('aria-label="Next month"');
-    expect(calendar).toContain("<ButtonBase");
+    const iconButton = source("components/ui/button.tsx");
+    // IconButton requires a label and renders it as the accessible name.
+    expect(calendar).toContain('label="Previous month"');
+    expect(calendar).toContain('label="Next month"');
+    expect(iconButton).toContain("aria-label={label}");
+    expect(calendar).toContain('type="button"');
     expect(calendar).toContain("aria-pressed={isSelected}");
 
     for (const path of ["app/error.tsx", "app/global-error.tsx"]) {
@@ -39,13 +43,17 @@ describe("frontend production boundaries", () => {
   });
 
   it("provides accessible navigation, reduced motion, and install metadata", () => {
-    const layout = source("app/layout.tsx");
-    const landing = source("components/landing/LandingPageClient.tsx");
+    const chrome = source("components/chrome/ChromeSwitch.tsx");
+    const appShell = source("components/chrome/AppShell.tsx");
+    const organiserChrome = source("components/chrome/OrganiserChrome.tsx");
+    const notFoundPet = source("components/feedback/NotFoundPet.tsx");
     const styles = source("app/globals.css");
     const manifest = source("app/manifest.ts");
-    expect(layout).toContain('href="#main-content"');
-    expect(layout).toContain('id="main-content"');
-    expect(landing).toContain("useReducedMotion");
+    expect(chrome).toContain('href="#main-content"');
+    expect(chrome).toContain('id="main-content"');
+    expect(appShell).toContain('id="main-content"');
+    expect(organiserChrome).toContain('id="main-content"');
+    expect(notFoundPet).toContain("prefers-reduced-motion: reduce");
     expect(styles).toContain("prefers-reduced-motion: reduce");
     expect(manifest).toContain('display: "standalone"');
     expect(manifest).toContain('start_url: "/dashboard"');

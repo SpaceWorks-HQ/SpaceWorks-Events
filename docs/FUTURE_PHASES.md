@@ -14,18 +14,17 @@ This page contains only work that is not currently implemented. Current behavior
 
 ## Privacy and account lifecycle
 
-- Self-service account data export, correction, and deletion workflows.
+- Self-service account deletion and correction beyond profile name/photo.
 - Audited organiser exports with purpose/approval recording.
 - Configurable tenant-level retention policies for registrations, feedback, and audit history.
 - Consent and policy-version records where legally required.
 
 ## Product expansion
 
-- Paid tickets, taxes, refunds, discounts, and payment-provider reconciliation.
-- Rich attendee communications: campaigns, reminders, templates, delivery preferences, and unsubscribe management.
+- Scheduled reminders, delivery preferences, and unsubscribe management for attendee communications.
 - Calendar feeds and external calendar synchronization.
-- Expanded event analytics with privacy-preserving aggregation.
-- Organisation branding, custom domains, and configurable certificate templates.
+- Cross-event and organisation-level analytics with privacy-preserving aggregation.
+- Organisation branding and custom domains.
 - More granular custom roles and per-action permissions.
 - Import/export tools for events and attendee rosters.
 - Extend the machine API only for concrete consumers: recurring series/instances, RSVP workflow data, separately scoped participant contact or registration answers, privacy-preserving feedback reads, and narrow idempotent writes.

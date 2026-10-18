@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import Button from "@mui/material/Button";
+import { Button } from "@/components/ui/button";
 import { publishEvent } from "@/app/actions/event";
 
 export function PublishEventButton(props: {
@@ -12,9 +12,10 @@ export function PublishEventButton(props: {
 
   return (
     <Button
-      size="small"
-      variant="contained"
-      disabled={pending}
+      size="sm"
+      variant="primary"
+      loading={pending}
+      loadingLabel="Publishing…"
       onClick={() => {
         startTransition(() => {
           void publishEvent({
@@ -23,20 +24,8 @@ export function PublishEventButton(props: {
           });
         });
       }}
-      sx={{
-        backgroundColor: "#0A84FF",
-        color: "#FFFFFF",
-        fontWeight: 600,
-        textTransform: "none",
-        borderRadius: "8px",
-        px: 2.5,
-        "&:hover": {
-          backgroundColor: "#0A84FF",
-          opacity: 0.9,
-        },
-      }}
     >
-      {pending ? "Publishing..." : "Publish Event"}
+      Publish event
     </Button>
   );
 }

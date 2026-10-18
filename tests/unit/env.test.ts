@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { validateRuntimeEnvironment } from "@/lib/env";
+import { freeTierCloudEnv } from "../helpers/freeTierCloudEnv";
 
 const original = { ...process.env };
 const key = Buffer.alloc(32, 3).toString("base64");
@@ -7,15 +8,18 @@ const key = Buffer.alloc(32, 3).toString("base64");
 beforeEach(() => {
   Object.assign(process.env, {
     NODE_ENV: "production",
-    DATABASE_URL: "postgresql://user:pass@db.example.test/yuyu?sslmode=require",
+    DATABASE_URL: "postgresql://user:pass@db.example.test/swevents?sslmode=require",
     AUTH_SECRET: "a".repeat(32), AUTH_URL: "https://events.example.test", NEXT_PUBLIC_BASE_URL: "https://events.example.test",
     REDIS_URL: "rediss://redis.example.test", CRON_SECRET: "c".repeat(32), HEALTHCHECK_SECRET: "h".repeat(32),
-    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: key, MFA_ENCRYPTION_KEY: key, EMAIL_FROM: "Yuyu <noreply@example.test>",
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: key, MFA_ENCRYPTION_KEY: key, EMAIL_FROM: "Space Works Events <noreply@example.test>",
     SMTP_SERVICE: "test", SMTP_ALLOW_UNAUTHENTICATED: "1", TRUSTED_PROXY_IP_HEADER: "x-forwarded-for",
     S3_BUCKET: "private-assets", S3_REGION: "us-east-1",
   });
   delete process.env.CI;
   delete process.env.ALLOW_INSECURE_PRODUCTION_TESTS;
+  // Optional settings a CI job or developer shell may export (e.g. a plaintext
+  // DIRECT_URL for the test database) must not leak into the fixture.
+  for (const name of ["DIRECT_URL", "TRUSTED_PROXY_HOPS", "S3_ENDPOINT", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY", "S3_FORCE_PATH_STYLE"]) delete process.env[name];
 });
 
 afterEach(() => {
@@ -26,9 +30,9 @@ afterEach(() => {
 describe("production environment validation", () => {
   it("accepts a complete TLS-protected configuration", () => expect(validateRuntimeEnvironment).not.toThrow());
   it("rejects plaintext database and public origins", () => {
-    process.env.DATABASE_URL = "postgresql://user:pass@db.example.test/yuyu?sslmode=disable";
+    process.env.DATABASE_URL = "postgresql://user:pass@db.example.test/swevents?sslmode=disable";
     expect(validateRuntimeEnvironment).toThrow(/DATABASE_URL must require TLS/);
-    process.env.DATABASE_URL = "postgresql://user:pass@db.example.test/yuyu?sslmode=require";
+    process.env.DATABASE_URL = "postgresql://user:pass@db.example.test/swevents?sslmode=require";
     process.env.AUTH_URL = "http://events.example.test";
     process.env.NEXT_PUBLIC_BASE_URL = "http://events.example.test";
     expect(validateRuntimeEnvironment).toThrow(/same HTTPS origin/);
@@ -45,5 +49,18 @@ describe("production environment validation", () => {
     expect(validateRuntimeEnvironment).not.toThrow();
     process.env.ALLOWED_EMBED_ORIGINS = "https://host.example.test/path";
     expect(validateRuntimeEnvironment).toThrow(/ALLOWED_EMBED_ORIGINS/);
+  });
+  it("accepts the free-tier cloud stack (Supabase, Upstash, R2, Brevo)", () => {
+    Object.assign(process.env, freeTierCloudEnv());
+    expect(validateRuntimeEnvironment).not.toThrow();
+  });
+  it("requires TLS on DIRECT_URL and pgbouncer mode on the transaction pooler", () => {
+    Object.assign(process.env, freeTierCloudEnv());
+    process.env.DIRECT_URL = "postgresql://postgres.ref:pw@aws-0-eu-central-1.pooler.supabase.com:5432/postgres";
+    expect(validateRuntimeEnvironment).toThrow(/DIRECT_URL must require TLS/);
+    process.env.DIRECT_URL = "";
+    expect(validateRuntimeEnvironment).not.toThrow();
+    process.env.DATABASE_URL = "postgresql://postgres.ref:pw@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require";
+    expect(validateRuntimeEnvironment).toThrow(/pgbouncer=true/);
   });
 });

@@ -2,12 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Alert from "@mui/material/Alert";
-import Button from "@mui/material/Button";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import { ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Field, Input } from "@/components/ui/field";
 import { verifySuperAdminMfa } from "@/app/actions/super-admin-mfa";
 
 export function SuperAdminMfaPrompt() {
@@ -17,38 +15,46 @@ export function SuperAdminMfaPrompt() {
   const [pending, startTransition] = useTransition();
 
   return (
-    <Stack sx={{ maxWidth: 480, mx: "auto", py: { xs: 5, sm: 9 } }}>
-      <Paper variant="outlined" sx={{ p: { xs: 3, sm: 4 } }}>
-        <Stack spacing={2.5} component="form" onSubmit={(event) => {
+    <div className="mx-auto w-full max-w-[440px] py-10 sm:py-16">
+      <form
+        className="flex flex-col gap-5 rounded-xl border border-line bg-panel p-6 sm:p-8"
+        onSubmit={(event) => {
           event.preventDefault();
           startTransition(async () => {
             setError(null);
             const result = await verifySuperAdminMfa({ code });
-            if (!result.ok) { setError(result.error); return; }
+            if (!result.ok) {
+              setError(result.error);
+              return;
+            }
             router.replace("/super-admin");
             router.refresh();
           });
-        }}>
-          <Stack spacing={0.75}>
-            <Typography variant="h4" component="h1">Verify super-admin access</Typography>
-            <Typography color="text.secondary">Enter a current code from your authenticator app. This separate verification expires after 10 minutes.</Typography>
-          </Stack>
-          {error ? <Alert severity="error">{error}</Alert> : null}
-          <TextField
+        }}
+      >
+        <span aria-hidden className="flex size-12 items-center justify-center rounded-full bg-muted text-ink">
+          <ShieldCheck className="size-6" />
+        </span>
+        <div className="flex flex-col gap-2">
+          <h1 className="text-h1 text-ink">Verify super-admin access</h1>
+          <p className="text-body-ui text-ink-secondary">Enter a current code from your authenticator app. This separate verification expires after 10 minutes.</p>
+        </div>
+        {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+        <Field label="Six-digit authenticator code" required>
+          <Input
             autoFocus
             autoComplete="one-time-code"
             inputMode="numeric"
-            label="Six-digit authenticator code"
+            className="font-medium tabular-nums text-lg tracking-[0.3em]"
             onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            required
             value={code}
           />
-          <Button type="submit" variant="contained" disabled={pending || code.length !== 6}>
-            {pending ? "Verifying…" : "Verify and continue"}
-          </Button>
-          <Typography variant="body2" color="text.secondary">MFA is required for this panel. Set it up from Account security if it is not enabled.</Typography>
-        </Stack>
-      </Paper>
-    </Stack>
+        </Field>
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={pending} loadingLabel="Verifying…" disabled={code.length !== 6}>
+          Verify and continue
+        </Button>
+        <p className="text-caption text-ink-muted">MFA is required for this panel. Set it up from Account security if it is not enabled.</p>
+      </form>
+    </div>
   );
 }

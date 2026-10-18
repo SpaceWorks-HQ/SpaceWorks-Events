@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(), limited: vi.fn(), eventFind: vi.fn(), transaction: vi.fn(),
   formUpsert: vi.fn(), formFind: vi.fn(), fieldFind: vi.fn(), fieldUpdate: vi.fn(),
   fieldDelete: vi.fn(), fieldCount: vi.fn(), fieldAggregate: vi.fn(), fieldCreate: vi.fn(),
-  fieldDeleteMany: vi.fn(), responseCount: vi.fn(), query: vi.fn(), audit: vi.fn(),
+  fieldDeleteMany: vi.fn(), responseCount: vi.fn(), query: vi.fn(), audit: vi.fn(), assetCount: vi.fn(),
 }));
 
 vi.mock("@/lib/permissions", () => ({ requireOrgRole: mocks.requireRole }));
@@ -21,6 +21,7 @@ const tx = {
 };
 vi.mock("@/lib/db", () => ({ prisma: {
   event: { findFirst: mocks.eventFind },
+  asset: { count: mocks.assetCount },
   $transaction: mocks.transaction,
 } }));
 
@@ -48,6 +49,28 @@ describe("feedback form maintenance", () => {
     expect(result.ok).toBe(false);
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
+  it("rejects a certificate image layer that the organisation did not upload", async () => {
+    mocks.assetCount.mockResolvedValue(1);
+    const result = await saveFeedbackSettings({ organisationSlug: "org", eventId: "event_1", isOpen: true, title: "Feedback", thankYouMessage: "Thanks", certificateEnabled: true, certificateTemplate: {
+      version: 2,
+      backgroundKey: "organisations/org_1/certificate-backgrounds/12345678-1234-4123-8123-123456789abc.webp",
+      elements: [{ id: "logo", type: "image", key: "organisations/org_1/certificate-assets/12345678-1234-4123-8123-123456789abd.webp", label: "Logo", x: 0, y: 0, width: 10, height: 10 }],
+    } });
+    expect(result.ok).toBe(false);
+    expect(mocks.assetCount).toHaveBeenCalledWith({ where: expect.objectContaining({ organisationId: "org_1", contentType: "image/webp" }) });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("saves a legacy name area in the layered format", async () => {
+    mocks.assetCount.mockResolvedValue(1);
+    const result = await saveFeedbackSettings({ organisationSlug: "org", eventId: "event_1", isOpen: true, title: "Feedback", thankYouMessage: "Thanks", certificateEnabled: true, certificateTemplate: {
+      backgroundKey: "organisations/org_1/certificate-backgrounds/12345678-1234-4123-8123-123456789abc.webp",
+      x: 10, y: 40, width: 80, height: 15, font: "serif", fontSize: 48, color: "#000000", bold: false, align: "center",
+    } });
+    expect(result.ok).toBe(true);
+    expect(mocks.formUpsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ certificateTemplate: expect.objectContaining({ version: 2, elements: [expect.objectContaining({ text: "{{name}}" })] }) }) }));
+  });
+
   it("commits privacy settings and their audit record together", async () => {
     const result = await saveFeedbackSettings({ organisationSlug: "org", eventId: "event_1", isOpen: true, title: "Feedback", thankYouMessage: "Thanks", certificateEnabled: false });
     expect(result).toEqual({ ok: true, data: { formId: "form_1" } });

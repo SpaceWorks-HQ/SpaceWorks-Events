@@ -5,27 +5,49 @@
 ## Required managed services
 
 - PostgreSQL with TLS, encryption at rest, point-in-time recovery, daily backups, and a tested restore process.
-- Redis reachable through `REDIS_URL`; production writes fail closed when it is unavailable.
+- Redis reachable through `REDIS_URL`; production writes fail closed when it is unavailable. Redis pub/sub also carries live ticket check-in notifications between replicas.
+- A reverse proxy that does not buffer `text/event-stream` responses for `/api/ticket/:token/events` (nginx: `proxy_buffering off`; the route also sends `X-Accel-Buffering: no`) and allows idle reads of at least 30 seconds. A buffering proxy delays the live ticket tear until the client's 15-second status check.
 - Private S3-compatible object storage for generated safe image derivatives.
 - Transactional email with a verified sending domain, SPF, DKIM, DMARC, bounce handling, and delivery monitoring.
 - Edge TLS termination and WAF/rate limiting. Configure only proxy headers that the edge overwrites.
-- If Cloudflare proxies the application, disable Email Address Obfuscation for the application hostname. Yuyu sends `Cache-Control: no-transform` on HTML responses so Cloudflare does not inject its unsigned email-decoder script into pages protected by the nonce-based CSP.
+- If Cloudflare proxies the application, disable Email Address Obfuscation for the application hostname. Space Works Events sends `Cache-Control: no-transform` on HTML responses so Cloudflare does not inject its unsigned email-decoder script into pages protected by the nonce-based CSP.
 
 ## Deploy procedure
 
-Certificate designer releases require the `20260916000000_certificate_templates` migration before application rollout. Certificate artwork is re-encoded as WebP in private storage and delivered through the application image route; upload blank artwork without personal data. Keep the Docker image's DejaVu fonts installed (Serif, Sans, and Sans Mono). Custom certificates use the saved layout snapshot on each response.
+Certificate designer releases require the `20260916000000_certificate_templates` migration before application rollout. Certificate artwork and image layers (logos, signatures, seals under `certificate-assets/`) are re-encoded as WebP in private storage and delivered through the application image route; upload blank artwork without personal data. Keep the Docker image's DejaVu fonts installed (Serif, Sans, and Sans Mono). Custom certificates use the saved layout snapshot on each response.
+
+The default production deployment is the
+[free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render builds `render.yaml`'s
+Docker service on every commit that passes CI, the container applies
+migrations on start (`MIGRATE_ON_START=1`, through `DIRECT_URL`), and the
+Cloudflare Worker in `deploy/cloudflare-cron` is the independent per-minute
+outbox scheduler from step 4 below. Steps 1–2 are then automatic; still
+review migrations and take a backup before merging one.
 
 For a non-Kubernetes container host, follow the current
 [production Docker deployment guide](DEPLOYMENT_DOCKER.md). The repository's
 root Compose file is development-only, and `compose.staging.yml` is not a
 production topology. Kubernetes operators should use the
-[Helm chart](../charts/yuyu/README.md).
+[Helm chart](../charts/spaceworks-events/README.md).
 
-1. Build and test the immutable image in CI. The [Docker Hub Actions guide](DOCKERHUB_ACTIONS.md) covers automated publication of the application and migration images.
+1. Build and test the immutable image in CI. The [container image publishing guide](CONTAINER_IMAGES.md) covers automated publication of the application and migration images.
 2. Run `npm run db:status`, then `npm run db:deploy` once as a release job using the migration database role. Run `npm run storage:migrate` when legacy database assets remain.
 3. Deploy application instances using a least-privileged runtime database role and production secrets from a secrets manager.
 4. Verify the in-process outbox worker has recorded a fresh heartbeat after deployment. Configure an independent scheduler to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET` as a recovery path; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.
 5. Verify readiness, error rate, email queue depth, database connections, and Redis health before shifting traffic.
+
+### Recent schema migrations
+
+Apply these with `npm run db:deploy` before rolling out the matching application version. All are additive and safe for existing rows.
+
+| Migration | Change |
+| --- | --- |
+| `20261013000000_event_broadcasts` | `EventBroadcast` history for organiser emails |
+| `20261015000000_registration_question_settings` | `EventRegistrationField.helpText`, `placeholder`, and nullable `settings` JSON |
+| `20261016000000_event_listed_publicly` | `Event.listedPublicly` (default `false`) for listed approval-required events |
+| `20261017000000_broadcast_design` | `EventBroadcast.design` (default `classic`) |
+| `20261018000000_rsvp_user_index` | `RSVP(userId, createdAt)` index for account pages and the personal data export. A plain `CREATE INDEX` blocks RSVP writes while it builds, so run it in a quiet window on large installations |
+| `20261019000000_event_short_code` | Nullable `Event.shortCode` with a unique index |
 
 ## Instance-managed services
 
@@ -36,17 +58,17 @@ The backup fields do not run, retain, or restore backups. Keep those controls wi
 ## Backup and incident minimums
 
 - The repository provides database archives for operator-initiated backups and restores. Install PostgreSQL `psql`, `pg_dump`, and `pg_restore` clients compatible with the managed PostgreSQL server in the production release environment. The commands use a temporary owner-only PostgreSQL password file rather than placing the database URL/password in child-process arguments. The `backups/` directory is gitignored, must reside on encrypted host storage, and retains the newest seven complete archive pairs.
-- Create a local backup from the repository directory with `npm run db:backup`. The command loads `.env` when that file is present for local operation, while explicitly injected environment values retain precedence in CI and production. It reads only `DATABASE_URL` for the database connection, requires its TLS setting, queries the live database size to require 20% plus 256 MiB of free-space headroom, and writes a compressed custom PostgreSQL archive plus a SHA-256 metadata sidecar.
+- Create a local backup from the repository directory with `npm run db:backup`. The command loads `.env` when that file is present for local operation, while explicitly injected environment values retain precedence in CI and production. It reads only `DATABASE_URL` for the database connection, requires its TLS setting, queries the live database size to require 20% plus 256 MiB of free-space headroom, and writes a compressed custom PostgreSQL archive plus a SHA-256 metadata sidecar. When `DATABASE_URL` is a transaction pooler (Supabase port 6543), run it against the session/direct connection instead: `DATABASE_URL="$DIRECT_URL" npm run db:backup` (the same applies to `db:restore`).
 - To additionally copy an archive to a **dedicated private backup bucket**, pass all S3 settings only to the command (never save them in application settings or repository files):
 
   ```bash
   npm run db:backup -- \
-    --s3-bucket yuyu-production-backups \
+    --s3-bucket spaceworks-events-backups \
     --s3-region region-name \
     --s3-endpoint https://s3.example.com \
     --s3-access-key-id short-lived-access-key \
     --s3-secret-access-key short-lived-secret \
-    --s3-prefix yuyu-production
+    --s3-prefix spaceworks-events-production
   ```
 
   Add `--s3-force-path-style` only for providers that require it. The bucket must be private, use provider-side encryption at rest, and grant this credential only the object operations needed for the selected prefix. Prefer short-lived bucket-scoped credentials; command-line secrets can be exposed through shell history or process inspection.
@@ -54,24 +76,24 @@ The backup fields do not run, retain, or restore backups. Keep those controls wi
 
   ```bash
   npm run db:restore -- \
-    --file backups/yuyu-backup-2026-08-30T00-00-00-000Z.dump \
+    --file backups/spaceworks-events-backup-2026-08-30T00-00-00-000Z.dump \
     --production \
-    --confirm-database yuyu
+    --confirm-database swevents
   ```
 
-  To restore a remote archive, replace `--file` with `--s3-key yuyu-production/yuyu-backup-2026-08-30T00-00-00-000Z.dump` and supply the same required S3 options used for upload. Archives are streamed for upload and download rather than loaded into process memory; remote restores are downloaded temporarily, checksum-verified, restored, and removed from local temporary storage. Keep the provider bucket as the disaster-recovery source and perform a documented restore drill at least quarterly.
+  To restore a remote archive, replace `--file` with `--s3-key spaceworks-events-production/spaceworks-events-backup-2026-08-30T00-00-00-000Z.dump` and supply the same required S3 options used for upload. Archives are streamed for upload and download rather than loaded into process memory; remote restores are downloaded temporarily, checksum-verified, restored, and removed from local temporary storage. Keep the provider bucket as the disaster-recovery source and perform a documented restore drill at least quarterly.
 
   ```bash
   npm run db:restore -- \
-    --s3-key yuyu-production/yuyu-backup-2026-08-30T00-00-00-000Z.dump \
-    --s3-bucket yuyu-production-backups \
+    --s3-key spaceworks-events-production/spaceworks-events-backup-2026-08-30T00-00-00-000Z.dump \
+    --s3-bucket spaceworks-events-backups \
     --s3-region region-name \
     --s3-endpoint https://s3.example.com \
     --s3-access-key-id short-lived-access-key \
     --s3-secret-access-key short-lived-secret \
-    --s3-prefix yuyu-production \
+    --s3-prefix spaceworks-events-production \
     --production \
-    --confirm-database yuyu
+    --confirm-database swevents
   ```
 - Test a point-in-time database restore every quarter and record the recovery time and data-loss window.
 - Alert on failed backups, failed migrations, a stale outbox heartbeat, pending/processing email queue growth, outbox messages in `FAILED`, unavailable Redis, elevated 5xx rates, and database saturation. Treat a provider acceptance response as SMTP handoff, not inbox placement; monitor bounces and delivery events with the selected transactional-email provider.
@@ -81,6 +103,6 @@ The backup fields do not run, retain, or restore backups. Keep those controls wi
 ## Privacy operations
 
 - Collect only fields necessary for each event and document the purpose/retention period.
-- Fulfil access, export, correction, and deletion requests through audited administrator workflows.
+- Users can download their own data from `/account/registrations` (`GET /api/exports/account`, audited as `ACCOUNT_DATA_EXPORTED`). Fulfil other access, correction, and deletion requests through audited administrator workflows.
 - Purge expired verification tokens, old offline rosters, unused assets, and guest registration data according to the published retention policy.
 - Do not place passwords, reset tokens, ticket tokens, full registration answers, or email addresses in application logs or audit metadata.

@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Paper from "@mui/material/Paper";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { AcceptInviteButton } from "@/components/invites/AcceptInviteButton";
+import { Chip, OrgLogo } from "@/components/ui/display";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Join organisation", robots: { index: false, follow: false }, referrer: "no-referrer" };
+
+const roleLabels = { OWNER: "Owner", ADMIN: "Admin", MEMBER: "Member" } as const;
 
 export default async function JoinOrganisationPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -16,19 +16,29 @@ export default async function JoinOrganisationPage({ params }: { params: Promise
   if (!session?.user?.id) redirect(`/login?callbackUrl=${encodeURIComponent(joinUrl)}`);
   const invite = await prisma.organisationInvite.findUnique({
     where: { token },
-    select: { usedAt: true, expiresAt: true, organisation: { select: { name: true } } },
+    select: { usedAt: true, expiresAt: true, role: true, organisation: { select: { name: true, logoUrl: true } } },
   });
   if (!invite || invite.usedAt || (invite.expiresAt && invite.expiresAt <= new Date())) {
-    return <Stack spacing={2}><Typography variant="h5" component="h1">Invite unavailable</Typography><Typography color="text.secondary">This invite is invalid, expired, used, or revoked.</Typography></Stack>;
+    return (
+      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-2 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">
+        <h1 className="text-h1 text-ink">Invite unavailable</h1>
+        <p className="text-body-ui text-ink-secondary">This invite is invalid, expired, used, or revoked.</p>
+      </div>
+    );
   }
   return (
-    <Stack spacing={2} sx={{ py: 3, maxWidth: 560 }}>
-      <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>Join organisation</Typography>
-      <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-        <Typography sx={{ fontWeight: 600 }}>{invite.organisation.name}</Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Accept this single-use invitation to become a member.</Typography>
-      </Paper>
-      <AcceptInviteButton kind="organisation" token={token} />
-    </Stack>
+    <div className="mx-auto flex w-full max-w-[440px] flex-col items-center gap-4 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">
+      <OrgLogo name={invite.organisation.name} src={invite.organisation.logoUrl} size="lg" />
+      <div className="flex flex-col gap-1.5">
+        <p className="text-sm text-ink-muted">You’ve been invited to join</p>
+        <h1 className="text-h1 break-words text-ink">{invite.organisation.name}</h1>
+      </div>
+      <Chip size="sm">as {invite.role === "ADMIN" ? "an" : "a"} {roleLabels[invite.role]}</Chip>
+      <p className="text-body-ui text-ink-secondary">Accept this single-use invitation to become a member.</p>
+      <div className="w-full [&>div]:items-stretch [&_button]:w-full">
+        <AcceptInviteButton kind="organisation" token={token} />
+      </div>
+      {session.user.email ? <p className="text-caption text-ink-muted">Signed in as {session.user.email}</p> : null}
+    </div>
   );
 }

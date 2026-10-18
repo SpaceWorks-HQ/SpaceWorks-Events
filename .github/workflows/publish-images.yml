@@ -1,4 +1,4 @@
-name: Publish Docker Hub images
+name: Publish container images
 
 on:
   workflow_run:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: dockerhub-${{ github.event.workflow_run.head_sha }}
+  group: ghcr-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
@@ -19,12 +19,18 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      vars.NEXT_PUBLIC_BASE_URL != ''
+    # Render builds from the repository itself; GHCR publishing is opt-in and
+    # skipped (not failed) until NEXT_PUBLIC_BASE_URL is set as a repo variable.
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
     env:
-      DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-      DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+      APP_IMAGE: ghcr.io/spaceworks-hq/spaceworks-events
+      MIGRATOR_IMAGE: ghcr.io/spaceworks-hq/spaceworks-events-migrator
       NEXT_PUBLIC_BASE_URL: ${{ vars.NEXT_PUBLIC_BASE_URL }}
       IMAGE_TAG: sha-${{ github.event.workflow_run.head_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -36,15 +42,11 @@ jobs:
 
       - name: Validate publishing settings
         env:
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
           NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
         run: |
           node <<'NODE'
-          for (const key of ['DOCKERHUB_USERNAME', 'DOCKERHUB_NAMESPACE', 'DOCKERHUB_TOKEN', 'NEXT_PUBLIC_BASE_URL', 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY']) {
+          for (const key of ['NEXT_PUBLIC_BASE_URL', 'NEXT_SERVER_ACTIONS_ENCRYPTION_KEY']) {
             if (!process.env[key]?.trim()) throw new Error(`Missing GitHub Actions setting: ${key}`);
-          }
-          if (!/^[a-z0-9][a-z0-9_-]*$/.test(process.env.DOCKERHUB_NAMESPACE)) {
-            throw new Error('DOCKERHUB_NAMESPACE must be a lowercase Docker Hub user or organisation name.');
           }
           const url = new URL(process.env.NEXT_PUBLIC_BASE_URL);
           if (url.protocol !== 'https:' || url.origin !== process.env.NEXT_PUBLIC_BASE_URL) {
@@ -59,11 +61,12 @@ jobs:
 
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v4
         with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push migration image
         id: migrator
@@ -73,7 +76,11 @@ jobs:
           target: migrator
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/yuyu-migrator:${{ env.IMAGE_TAG }}
+          tags: ${{ env.MIGRATOR_IMAGE }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
 
       - name: Build and push application image
         id: app
@@ -85,7 +92,11 @@ jobs:
           target: runner
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ env.DOCKERHUB_NAMESPACE }}/yuyu:${{ env.IMAGE_TAG }}
+          tags: ${{ env.APP_IMAGE }}:${{ env.IMAGE_TAG }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
           build-args: |
             NEXT_PUBLIC_BASE_URL=${{ env.NEXT_PUBLIC_BASE_URL }}
           secret-envs: |
@@ -100,8 +111,8 @@ jobs:
         run: |
           {
             printf 'Published release `%s` (linux/amd64 and linux/arm64).\n\n' "$IMAGE_TAG"
-            printf 'Application: `%s/yuyu:%s`\n\n' "$DOCKERHUB_NAMESPACE" "$IMAGE_TAG"
-            printf 'Migration: `%s/yuyu-migrator:%s`\n\n' "$DOCKERHUB_NAMESPACE" "$IMAGE_TAG"
-            printf 'Pinned application: `%s/yuyu@%s`\n\n' "$DOCKERHUB_NAMESPACE" "$APP_DIGEST"
-            printf 'Pinned migration: `%s/yuyu-migrator@%s`\n' "$DOCKERHUB_NAMESPACE" "$MIGRATOR_DIGEST"
+            printf 'Application: `%s:%s`\n\n' "$APP_IMAGE" "$IMAGE_TAG"
+            printf 'Migration: `%s:%s`\n\n' "$MIGRATOR_IMAGE" "$IMAGE_TAG"
+            printf 'Pinned application: `%s@%s`\n\n' "$APP_IMAGE" "$APP_DIGEST"
+            printf 'Pinned migration: `%s@%s`\n' "$MIGRATOR_IMAGE" "$MIGRATOR_DIGEST"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -66,6 +66,12 @@ temp/
 .env*
 !.env.example
 !.env.staging.example
+!.env.production.example
+
+# Cloudflare Worker (deploy/cloudflare-cron) local state
+deploy/cloudflare-cron/node_modules/
+.wrangler/
+.dev.vars
 
 # direnv
 .direnv/
@@ -89,3 +95,9 @@ prisma/.env
 
 # one-off local development fixtures
 scripts/seed-t4gcc-summit-2026.cjs
+
+# page screenshots (local only)
+/screenshots/
+
+# Local design-hook state (Impeccable).
+.impeccable/

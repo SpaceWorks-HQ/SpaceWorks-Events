@@ -57,18 +57,35 @@ if (!["cf-connecting-ip", "x-forwarded-for", "x-real-ip"].includes(process.env.T
   process.exit(1);
 }
 
+// An unreadable hop count is silently ignored at runtime, which falls back to the
+// left-most (client-chosen) X-Forwarded-For entry behind an appending proxy.
+const proxyHops = process.env.TRUSTED_PROXY_HOPS?.trim();
+if (proxyHops && (!/^[1-9]\d?$/.test(proxyHops) || process.env.TRUSTED_PROXY_IP_HEADER !== "x-forwarded-for")) {
+  console.error("TRUSTED_PROXY_HOPS must be a positive whole number and is only used with TRUSTED_PROXY_IP_HEADER=x-forwarded-for.");
+  process.exit(1);
+}
+
 try {
   const authUrl = new URL(process.env.AUTH_URL);
   const baseUrl = new URL(process.env.NEXT_PUBLIC_BASE_URL);
-  const databaseUrl = new URL(process.env.DATABASE_URL);
+  const databaseUrls = { DATABASE_URL: new URL(process.env.DATABASE_URL) };
+  // DIRECT_URL is optional: only `prisma migrate` uses it, when DATABASE_URL
+  // points at a transaction pooler (Supabase Supavisor on port 6543).
+  if (process.env.DIRECT_URL?.trim()) databaseUrls.DIRECT_URL = new URL(process.env.DIRECT_URL);
   const redisUrl = new URL(process.env.REDIS_URL);
   const s3Endpoint = process.env.S3_ENDPOINT ? new URL(process.env.S3_ENDPOINT) : null;
   const insecureCiTest = process.env.CI === "true" && process.env.ALLOW_INSECURE_PRODUCTION_TESTS === "1";
   if ((!insecureCiTest && (authUrl.protocol !== "https:" || baseUrl.protocol !== "https:")) || authUrl.origin !== baseUrl.origin) {
     throw new Error("AUTH_URL and NEXT_PUBLIC_BASE_URL must be the same HTTPS origin.");
   }
-  if (!insecureCiTest && !["require", "verify-ca", "verify-full"].includes(databaseUrl.searchParams.get("sslmode") ?? "")) {
-    throw new Error("DATABASE_URL must require TLS using sslmode=require, verify-ca, or verify-full.");
+  for (const [key, url] of Object.entries(databaseUrls)) {
+    if (!insecureCiTest && !["require", "verify-ca", "verify-full"].includes(url.searchParams.get("sslmode") ?? "")) {
+      throw new Error(`${key} must require TLS using sslmode=require, verify-ca, or verify-full.`);
+    }
+  }
+  // Transaction-mode poolers cannot keep Prisma's prepared statements.
+  if (databaseUrls.DATABASE_URL.port === "6543" && databaseUrls.DATABASE_URL.searchParams.get("pgbouncer") !== "true") {
+    throw new Error("DATABASE_URL uses a transaction pooler port (6543): add pgbouncer=true, and set DIRECT_URL for migrations.");
   }
   if (!insecureCiTest && redisUrl.protocol !== "rediss:") {
     throw new Error("REDIS_URL must use TLS (rediss://) in production.");

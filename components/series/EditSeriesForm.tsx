@@ -4,16 +4,13 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { EventSeries } from "@prisma/client";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
-import Alert from "@mui/material/Alert";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { updateEventSeriesMeta, deleteEventSeries } from "@/app/actions/series";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useUnsavedChangesGuard } from "@/components/forms/useUnsavedChangesGuard";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Field, Input, Dropdown, Textarea } from "@/components/ui/field";
 
 const timezones = [
   "UTC",
@@ -56,6 +53,7 @@ export function EditSeriesForm(props: {
   return (
     <>
     <form
+      className="flex flex-col gap-4"
       onChangeCapture={() => setDirty(true)}
       onSubmit={(e) => {
         e.preventDefault();
@@ -86,88 +84,53 @@ export function EditSeriesForm(props: {
         });
       }}
     >
-      <Stack spacing={2}>
-        <Typography variant="body2" color="text.secondary">
-          Recurrence is fixed at creation. RRULE:{" "}
-          <code style={{ wordBreak: "break-all" }}>{series.recurrenceRule}</code>
-        </Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
-        <TextField
-          name="title"
-          label="Title"
-          required
-          fullWidth
-          defaultValue={series.title}
-        />
-        <TextField
-          name="description"
-          label="Description"
-          fullWidth
-          multiline
-          minRows={2}
-          defaultValue={series.description}
-        />
-        <TextField
-          name="timezone"
-          label="Timezone"
-          select
-          required
-          fullWidth
-          defaultValue={series.timezone}
-        >
-          {timezones.map((tz) => (
-            <MenuItem key={tz} value={tz}>
-              {tz}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField
-          name="capacity"
-          label="Capacity per occurrence (optional)"
-          type="number"
-          fullWidth
-          slotProps={{ htmlInput: { min: 1 } }}
-          defaultValue={series.capacity ?? ""}
-        />
-        <TextField
-          name="status"
-          label="Status"
-          select
-          fullWidth
-          defaultValue={series.status}
-        >
-          <MenuItem value={EventStatus.DRAFT}>Draft</MenuItem>
-          <MenuItem value={EventStatus.PUBLISHED}>Published</MenuItem>
-        </TextField>
-        <TextField
-          name="privacyType"
-          label="Audience"
-          select
-          fullWidth
-          defaultValue={series.privacyType}
-        >
-          <MenuItem value={EventPrivacyType.PUBLIC}>Public</MenuItem>
-          <MenuItem value={EventPrivacyType.HIDDEN_LINK}>Hidden link</MenuItem>
-          <MenuItem value={EventPrivacyType.APPROVAL_REQUIRED}>
-            Approval required
-          </MenuItem>
-          <MenuItem value={EventPrivacyType.INVITE_ONLY}>Invite only</MenuItem>
-        </TextField>
-        <Stack direction="row" spacing={2}>
-          <Button type="submit" variant="contained" disabled={pending}>
-            Save
-          </Button>
-          <Button
-            type="button"
-            color="error"
-            variant="outlined"
-            disabled={pending}
-            onClick={() => setDeleteOpen(true)}
-          >
-            Delete series
-          </Button>
-        </Stack>
-      </Stack>
+      <p className="text-body-ui text-ink-muted">
+        Recurrence is fixed at creation. RRULE:{" "}
+        <code className="break-all font-mono text-sm text-ink-secondary">{series.recurrenceRule}</code>
+      </p>
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      <Field label="Title" required>
+        <Input name="title" defaultValue={series.title} />
+      </Field>
+      <Field label="Description">
+        <Textarea name="description" rows={2} defaultValue={series.description} />
+      </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Timezone" required>
+          <Dropdown name="timezone" defaultValue={series.timezone}>
+            {timezones.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz}
+              </option>
+            ))}
+          </Dropdown>
+        </Field>
+        <Field label="Capacity per occurrence" optional>
+          <Input name="capacity" type="number" min={1} inputMode="numeric" defaultValue={series.capacity ?? ""} />
+        </Field>
+        <Field label="Status">
+          <Dropdown name="status" defaultValue={series.status}>
+            <option value={EventStatus.DRAFT}>Draft</option>
+            <option value={EventStatus.PUBLISHED}>Published</option>
+          </Dropdown>
+        </Field>
+        <Field label="Audience">
+          <Dropdown name="privacyType" defaultValue={series.privacyType}>
+            <option value={EventPrivacyType.PUBLIC}>Public</option>
+            <option value={EventPrivacyType.HIDDEN_LINK}>Hidden link</option>
+            <option value={EventPrivacyType.APPROVAL_REQUIRED}>Approval required</option>
+            <option value={EventPrivacyType.INVITE_ONLY}>Invite only</option>
+          </Dropdown>
+        </Field>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+        <Button variant="dangerQuiet" disabled={pending} onClick={() => setDeleteOpen(true)}>
+          Delete series
+        </Button>
+        <Button type="submit" variant="primary" disabled={pending} loading={pending}>
+          Save
+        </Button>
+      </div>
     </form>
     <ConfirmationDialog
       open={deleteOpen}

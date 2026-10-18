@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
+import { Camera, CameraOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type Html5QrcodeLike = {
   start: (
@@ -102,48 +100,39 @@ export function CheckInQrScanner(props: {
   }, [stop]);
 
   return (
-    <Stack spacing={1}>
-      <Box
-        id={regionId}
-        aria-label="Camera preview for ticket QR scanning"
-        sx={{
-          width: "100%",
-          minHeight: 260,
-          borderRadius: 1,
-          overflow: "hidden",
-          bgcolor: "action.hover",
-        }}
-      />
-      <Stack
-        direction="row"
-        spacing={1}
-        useFlexGap
-        sx={{ flexWrap: "wrap" }}
-      >
+    <div className="flex flex-col gap-3">
+      <div className="relative overflow-hidden rounded-xl bg-[#232326]">
+        <div id={regionId} aria-label="Camera preview for ticket QR scanning" className="min-h-[300px] w-full" />
         {!running ? (
-          <Button
-            variant="contained"
-            onClick={() => void start()}
-            disabled={disabled}
-          >
+          <div aria-hidden className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-6 p-6">
+            <span className="relative block size-44">
+              <span className="absolute left-0 top-0 size-10 rounded-tl-xl border-l-[3px] border-t-[3px] border-white" />
+              <span className="absolute right-0 top-0 size-10 rounded-tr-xl border-r-[3px] border-t-[3px] border-white" />
+              <span className="absolute bottom-0 left-0 size-10 rounded-bl-xl border-b-[3px] border-l-[3px] border-white" />
+              <span className="absolute bottom-0 right-0 size-10 rounded-br-xl border-b-[3px] border-r-[3px] border-white" />
+            </span>
+            <span className="text-sm font-semibold text-white">Hold the ticket QR inside the frame</span>
+          </div>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {!running ? (
+          <Button variant="primary" onClick={() => void start()} disabled={disabled}>
+            <Camera aria-hidden className="size-[18px]" />
             Start camera
           </Button>
         ) : (
-          <Button
-            variant="outlined"
-            color="inherit"
-            onClick={() => void stop()}
-            disabled={disabled}
-          >
+          <Button variant="secondary" onClick={() => void stop()} disabled={disabled}>
+            <CameraOff aria-hidden className="size-[18px]" />
             Stop camera
           </Button>
         )}
-      </Stack>
+      </div>
       {error ? (
-        <Typography variant="body2" color="error" role="alert">
+        <p role="alert" className="text-sm text-danger-fg">
           {error}
-        </Typography>
+        </p>
       ) : null}
-    </Stack>
+    </div>
   );
 }

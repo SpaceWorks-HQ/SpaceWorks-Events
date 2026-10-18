@@ -1,29 +1,23 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Chip from "@mui/material/Chip";
-import Grid from "@mui/material/Grid";
+import { requireSuperAdminMfa } from "@/lib/permissions";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { getApiMonitorSnapshot } from "@/lib/apiMonitor";
 import { Histogram } from "@/components/super-admin/Histogram";
+import { AdminPanel } from "@/components/super-admin/AdminPanel";
+import { Chip, EmptyState, PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 function OkChip(props: { ok: boolean; labelOk?: string; labelBad?: string }) {
   return (
-    <Chip
-      size="small"
-      color={props.ok ? "success" : "error"}
-      variant={props.ok ? "outlined" : "filled"}
-      label={props.ok ? props.labelOk ?? "OK" : props.labelBad ?? "Error"}
-    />
+    <Chip tone={props.ok ? "success" : "danger"} icon={props.ok ? <CheckCircle2 /> : <XCircle />}>
+      {props.ok ? props.labelOk ?? "OK" : props.labelBad ?? "Error"}
+    </Chip>
   );
 }
 
 export default async function SuperAdminMonitoringPage() {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const snapshot = getApiMonitorSnapshot();
 
   let dbOk = true;
@@ -42,117 +36,63 @@ export default async function SuperAdminMonitoringPage() {
   const configuredDbUrl = !!process.env.DATABASE_URL;
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Monitoring
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Monitoring" description="Health checks and API request stats for this server." />
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Stack spacing={1}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Health checks
-          </Typography>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-            <Chip
-              size="small"
-              variant="outlined"
-              label={`DB: ${dbName ?? "unknown"}`}
-            />
+      <AdminPanel title="Health checks">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Chip tone="outline">{`DB: ${dbName ?? "unknown"}`}</Chip>
             <OkChip ok={dbOk} labelOk="DB reachable" labelBad="DB down" />
-            <OkChip
-              ok={configuredDbUrl}
-              labelOk="DATABASE_URL set"
-              labelBad="DATABASE_URL missing"
-            />
-            <OkChip
-              ok={configuredAuthSecret}
-              labelOk="AUTH_SECRET set"
-              labelBad="AUTH_SECRET missing"
-            />
-            <OkChip
-              ok={configuredSuperAdmin}
-              labelOk="SUPER_ADMIN_EMAIL set"
-              labelBad="SUPER_ADMIN_EMAIL missing"
-            />
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            For external uptime monitors: use <code>/api/health</code> and{" "}
-            <code>/api/health/db</code>.
-          </Typography>
-        </Stack>
-      </Paper>
+            <OkChip ok={configuredDbUrl} labelOk="DATABASE_URL set" labelBad="DATABASE_URL missing" />
+            <OkChip ok={configuredAuthSecret} labelOk="AUTH_SECRET set" labelBad="AUTH_SECRET missing" />
+            <OkChip ok={configuredSuperAdmin} labelOk="SUPER_ADMIN_EMAIL set" labelBad="SUPER_ADMIN_EMAIL missing" />
+          </div>
+          <p className="text-sm text-ink-muted">
+            For external uptime monitors: use <code className="font-mono text-[0.9em] text-ink">/api/health</code> and <code className="font-mono text-[0.9em] text-ink">/api/health/db</code>.
+          </p>
+        </div>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Stack spacing={1.5}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            API request stats (in-memory)
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            These stats reset on server restart and are not shared across multiple
-            instances.
-          </Typography>
-
-          {snapshot.routes.length === 0 ? (
-            <Typography color="text.secondary">
-              No traffic observed yet.
-            </Typography>
-          ) : (
-            <Stack spacing={2}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Route</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                    <TableCell align="right">Errors (5xx)</TableCell>
-                    <TableCell>Last error</TableCell>
-                    <TableCell>Last seen</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {snapshot.routes.map((r) => (
-                    <TableRow key={r.routeId}>
-                      <TableCell sx={{ fontFamily: "monospace" }}>
-                        {r.routeId}
-                      </TableCell>
-                      <TableCell align="right">
-                        {r.total.toLocaleString()}
-                      </TableCell>
-                      <TableCell align="right">
-                        {r.errors.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        {r.lastErrorAt
-                          ? `${new Date(r.lastErrorAt).toLocaleString()} · ${r.lastErrorMessage ?? ""}`
-                          : "—"}
-                      </TableCell>
-                      <TableCell>
-                        {r.lastSeenAt
-                          ? new Date(r.lastSeenAt).toLocaleString()
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <Grid container spacing={2}>
+      <AdminPanel title="API request stats (in-memory)" description="These stats reset on server restart and are not shared across multiple instances.">
+        {snapshot.routes.length === 0 ? (
+          <EmptyState mood="sleepy">No traffic observed yet.</EmptyState>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <Table label="API request stats">
+              <THead>
+                <tr>
+                  <TH>Route</TH>
+                  <TH className="text-right">Total</TH>
+                  <TH className="text-right">Errors (5xx)</TH>
+                  <TH>Last error</TH>
+                  <TH>Last seen</TH>
+                </tr>
+              </THead>
+              <TBody>
                 {snapshot.routes.map((r) => (
-                  <Grid key={`${r.routeId}:hist`} size={{ xs: 12, md: 6 }}>
-                    <Histogram
-                      title={`${r.routeId} · latency buckets`}
-                      buckets={Object.entries(r.buckets).map(([label, count]) => ({
-                        label,
-                        count,
-                      }))}
-                    />
-                  </Grid>
+                  <TR key={r.routeId}>
+                    <TD className="tabular-nums text-sm">{r.routeId}</TD>
+                    <TD className="text-right tabular-nums">{r.total.toLocaleString()}</TD>
+                    <TD className="text-right tabular-nums">{r.errors.toLocaleString()}</TD>
+                    <TD className="text-ink-secondary">{r.lastErrorAt ? `${new Date(r.lastErrorAt).toLocaleString()} · ${r.lastErrorMessage ?? ""}` : "—"}</TD>
+                    <TD className="text-ink-secondary">{r.lastSeenAt ? new Date(r.lastSeenAt).toLocaleString() : "—"}</TD>
+                  </TR>
                 ))}
-              </Grid>
-            </Stack>
-          )}
-        </Stack>
-      </Paper>
-    </Stack>
+              </TBody>
+            </Table>
+            <div className="grid gap-3 md:grid-cols-2">
+              {snapshot.routes.map((r) => (
+                <Histogram
+                  key={`${r.routeId}:hist`}
+                  title={`${r.routeId} · latency buckets`}
+                  buckets={Object.entries(r.buckets).map(([label, count]) => ({ label, count }))}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </AdminPanel>
+    </div>
   );
 }
-

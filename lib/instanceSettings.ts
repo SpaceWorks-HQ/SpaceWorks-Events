@@ -37,7 +37,7 @@ export async function getEmailSettings() {
   });
   const configured = Boolean(settings?.smtpService || settings?.smtpHost);
   return {
-    from: settings?.emailFrom ?? process.env.EMAIL_FROM ?? "Yuyu Events <noreply@localhost>",
+    from: settings?.emailFrom ?? process.env.EMAIL_FROM ?? "Space Works Events <noreply@localhost>",
     service: settings?.smtpService ?? process.env.SMTP_SERVICE,
     host: settings?.smtpHost ?? process.env.SMTP_HOST,
     port: settings?.smtpPort ?? parseInt(process.env.SMTP_PORT || "587", 10),
