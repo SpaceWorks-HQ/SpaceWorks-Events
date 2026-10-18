@@ -111,13 +111,13 @@ describe("ticket check-in events (Redis)", () => {
     expect(redis.instances).toHaveLength(1);
     const subscriber = redis.instances[0];
     expect(subscriber.subscribe).toHaveBeenCalledTimes(2);
-    expect(subscriber.subscribe).toHaveBeenCalledWith("yuyu:ticket-checkin:rsvp_1");
-    expect(subscriber.subscribe).toHaveBeenCalledWith("yuyu:ticket-checkin:rsvp_2");
+    expect(subscriber.subscribe).toHaveBeenCalledWith("swe:ticket-checkin:rsvp_1");
+    expect(subscriber.subscribe).toHaveBeenCalledWith("swe:ticket-checkin:rsvp_2");
 
     offA();
     expect(subscriber.unsubscribe).not.toHaveBeenCalled();
     offB();
-    expect(subscriber.unsubscribe).toHaveBeenCalledWith("yuyu:ticket-checkin:rsvp_1");
+    expect(subscriber.unsubscribe).toHaveBeenCalledWith("swe:ticket-checkin:rsvp_1");
     offC();
     expect(subscriber.unsubscribe).toHaveBeenCalledTimes(2);
   });
@@ -131,15 +131,15 @@ describe("ticket check-in events (Redis)", () => {
     events.publishTicketCheckedIn({ rsvpId: "rsvp_1", checkedInAt: new Date("2035-01-01T10:00:00.000Z") });
     const publisher = redis.instances[1];
     expect(publisher.publish).toHaveBeenCalledWith(
-      "yuyu:ticket-checkin:rsvp_1",
+      "swe:ticket-checkin:rsvp_1",
       JSON.stringify({ checkedInAt: "2035-01-01T10:00:00.000Z" }),
     );
     // Redis mode does not also dispatch locally on success.
     await flush();
     expect(listener).not.toHaveBeenCalled();
 
-    subscriber.handlers.message("yuyu:ticket-checkin:rsvp_1", "{not json");
-    subscriber.handlers.message("yuyu:ticket-checkin:rsvp_1", JSON.stringify({ checkedInAt: "2035-01-01T10:00:00.000Z" }));
+    subscriber.handlers.message("swe:ticket-checkin:rsvp_1", "{not json");
+    subscriber.handlers.message("swe:ticket-checkin:rsvp_1", JSON.stringify({ checkedInAt: "2035-01-01T10:00:00.000Z" }));
     expect(listener).toHaveBeenCalledTimes(1);
     expect(listener).toHaveBeenCalledWith({ checkedInAt: "2035-01-01T10:00:00.000Z" });
     off();

@@ -2,7 +2,9 @@
 
 [Documentation index](README.md)
 
-Yuyu must not be released until every item below is complete and recorded in the deployment change.
+Space Works Events must not be released until every item below is complete and recorded in the deployment change.
+
+The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render (app), Supabase (PostgreSQL), Upstash (Redis), Cloudflare R2 (storage), Brevo (SMTP), and a Cloudflare Worker (scheduler). It satisfies the TLS, private-storage, authenticated-SMTP, and scheduler requirements below. It does **not** provide point-in-time recovery, provider backups, or alerting on the free plans: take operator backups (`DATABASE_URL="$DIRECT_URL" npm run db:backup`) and add an uptime monitor for `/api/health`, or upgrade those services before holding real attendee data at scale.
 
 ## Required managed services
 
@@ -16,12 +18,12 @@ Yuyu must not be released until every item below is complete and recorded in the
 
 ## Deployment procedure
 
-1. Configure the canonical production hostname. For the current example, set both `AUTH_URL` and `NEXT_PUBLIC_BASE_URL` to `https://events.dev.idliapps.com`; they must match exactly. Configure DNS, a valid TLS certificate, CDN/WAF origin routing, and the trusted proxy-IP header.
-2. If Google OAuth is enabled, register `https://events.dev.idliapps.com/api/auth/callback/google` as an authorized callback URL.
+1. Configure the canonical production hostname. Set both `AUTH_URL` and `NEXT_PUBLIC_BASE_URL` to the same HTTPS origin (for example `https://events.example.com`); they must match exactly. Configure DNS, a valid TLS certificate, CDN/WAF origin routing, and the trusted proxy-IP header.
+2. If Google OAuth is enabled, register `https://events.example.com/api/auth/callback/google` (your origin) as an authorized callback URL.
 3. Review and approve the Prisma migration; take a backup before applying it. The secure-token migration rotates existing ticket and certificate links.
 4. Run `npm ci`, `npm run production:check`, `npm run db:deploy`, `npm run db:verify`, `npm run storage:migrate`, `npm run lint`, `npx tsc --noEmit`, `npm run test:coverage`, and `npm run build` in staging.
 5. Exercise auth, organisation permissions, RSVP capacity, duplicate RSVP, upload rejection, email delivery, and offline-check-in sync in staging.
-6. Build an immutable image with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` supplied as a BuildKit secret, inject that same value at runtime, run the authenticated `/api/health/db` readiness probe, and verify the outbox scheduler.
+6. Build an immutable image with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` supplied as a BuildKit secret (Render: as the service environment variable, which Render passes as a build arg), inject that same value at runtime, run the authenticated `/api/health/db` readiness probe, and verify the outbox scheduler.
 7. Confirm alert delivery and record the release, backup point, migration version, and rollback owner.
 
 ## Domain changes

@@ -2,9 +2,9 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "yuyu.fullname" . }}-migrate
+  name: {{ include "spaceworks-events.fullname" . }}-migrate
   labels:
-    {{- include "yuyu.labels" . | nindent 4 }}
+    {{- include "spaceworks-events.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
@@ -15,7 +15,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "yuyu.selectorLabels" . | nindent 8 }}
+        {{- include "spaceworks-events.selectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
       securityContext:
@@ -32,7 +32,7 @@ spec:
         - name: migrate
           image: "{{ .Values.migration.image.repository }}:{{ default .Chart.AppVersion .Values.migration.image.tag }}"
           imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
-          command: ["npx", "prisma", "migrate", "deploy"]
+          command: ["node", "scripts/prisma.mjs", "migrate", "deploy"]
           envFrom:
             - secretRef:
                 name: {{ required "existingSecret is required" .Values.existingSecret }}

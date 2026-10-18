@@ -20,7 +20,7 @@ Other security-relevant unit suites include `super-admin-page-guards` (fails if 
 
 ```bash
 docker compose up -d
-TEST_DATABASE_URL="postgresql://yuyu:yuyu_dev@localhost:5432/yuyu_dev" npm run test:integration
+TEST_DATABASE_URL="postgresql://swevents:swevents_dev@localhost:5432/swevents_test" npm run test:integration
 ```
 
 These tests exercise real constraints, transactions, audit triggers, RSVP
@@ -89,10 +89,12 @@ npm run production:check
 npm run build
 docker build \
   --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" \
-  -t yuyu:local .
+  -t swevents:local .
 ```
 
-The quality workflow runs dependency, migration, schema, lint, type, unit, integration, build, standalone-container smoke, and browser checks using PostgreSQL and Redis services.
+The quality workflow runs dependency, migration, schema, lint, type, unit, integration, build, standalone-container smoke, and browser checks using PostgreSQL and Redis services. The container smoke test starts the runner with `MIGRATE_ON_START=1` and checks both `/api/health` and the bearer-protected `/api/health/db`.
+
+Pooled-connection compatibility: Prisma's `pgbouncer=true` only disables prepared statements, so the integration suite can be pointed at a plain local database with a Supabase-style URL (`TEST_DATABASE_URL="postgresql://…/swevents_test?pgbouncer=true&connection_limit=1"`). The integration config sets `DIRECT_URL` to the same database. `tests/unit/check-production-env.test.ts` runs the preflight against a realistic Supabase/Upstash/R2/Brevo environment.
 
 ## Release test priorities
 

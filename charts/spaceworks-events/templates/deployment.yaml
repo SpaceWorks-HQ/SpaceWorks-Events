@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "yuyu.fullname" . }}
+  name: {{ include "spaceworks-events.fullname" . }}
   labels:
-    {{- include "yuyu.labels" . | nindent 4 }}
+    {{- include "spaceworks-events.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "yuyu.selectorLabels" . | nindent 6 }}
+      {{- include "spaceworks-events.selectorLabels" . | nindent 6 }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "yuyu.selectorLabels" . | nindent 8 }}
+        {{- include "spaceworks-events.selectorLabels" . | nindent 8 }}
     spec:
       securityContext:
         runAsNonRoot: true
@@ -30,7 +30,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: yuyu
+        - name: spaceworks-events
           image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:

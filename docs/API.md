@@ -2,7 +2,7 @@
 
 [Documentation index](README.md)
 
-Yuyu exposes a tenant-bound, machine-to-machine REST API under `/api/v1`. It is an application contract, not a generic Prisma API.
+Space Works Events exposes a tenant-bound, machine-to-machine REST API under `/api/v1`. It is an application contract, not a generic Prisma API.
 
 ## Authentication
 

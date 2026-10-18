@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/your-org/yuyu
+  repository: ghcr.io/spaceworks-hq/spaceworks-events
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -11,7 +11,7 @@ fullnameOverride: ""
 
 # Create this Secret outside Helm (External Secrets, Sealed Secrets, or kubectl).
 # It must contain every production runtime variable in .env.example.
-existingSecret: yuyu-runtime
+existingSecret: spaceworks-events-runtime
 
 service:
   type: ClusterIP
@@ -22,7 +22,7 @@ ingress:
   className: ""
   annotations: {}
   hosts:
-    - host: events.dev.idliapps.com
+    - host: events.example.com
       paths:
         - path: /
           pathType: Prefix
@@ -51,7 +51,7 @@ migration:
   # Enable for production releases after publishing the Docker `migrator` target.
   enabled: true
   image:
-    repository: ghcr.io/your-org/yuyu-migrator
+    repository: ghcr.io/spaceworks-hq/spaceworks-events-migrator
     tag: ""
     pullPolicy: IfNotPresent
   backoffLimit: 1

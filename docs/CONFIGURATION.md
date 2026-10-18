@@ -2,13 +2,16 @@
 
 [Documentation index](README.md)
 
-Copy `.env.example` to `.env` for local development. Production secrets must come from a secrets manager or the deployment platform, never from a committed file.
+Copy `.env.example` to `.env` for local development. For the default free-tier production stack (Render, Supabase, Upstash, Cloudflare R2, Brevo), start from `.env.production.example` and follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md). Production secrets must come from a secrets manager or the deployment platform, never from a committed file.
 
 ## Core and authentication
 
 | Variable | Production | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | Required | PostgreSQL URL; production requires `sslmode=require`, `verify-ca`, or `verify-full` |
+| `DATABASE_URL` | Required | Runtime PostgreSQL URL; production requires `sslmode=require`, `verify-ca`, or `verify-full`. Through a transaction pooler (Supabase Supavisor on port 6543) it must include `pgbouncer=true`; add `connection_limit=5` to cap Prisma's pool |
+| `DIRECT_URL` | Required with a pooler | Direct or session-mode PostgreSQL URL used only by `prisma migrate` (schema `directUrl`); TLS required when set. Prisma needs the variable to exist, so `npm run db:*`, the migrator image and the container entrypoint fall back to `DATABASE_URL` when it is unset. Local `.env` files should set it to the same value as `DATABASE_URL` for direct `npx prisma` commands |
+| `MIGRATE_ON_START` | Optional | `1` makes the Docker runner apply migrations before starting (`scripts/docker-entrypoint.sh`). For platforms without a release job, such as Render free; leave unset where the migrator image or Helm Job runs |
+| `NODE_OPTIONS` | Optional | Set `--max-old-space-size=384` on a 512 MB instance (Render free) so the heap stays within memory |
 | `AUTH_SECRET` | Required | Auth.js signing/encryption secret, at least 32 characters |
 | `AUTH_URL` | Required | Canonical Auth.js HTTPS origin |
 | `NEXT_PUBLIC_BASE_URL` | Required | Public link origin; must exactly match `AUTH_URL`. Sent emails also use it to make site-relative images and links (event cover, organisation logo, event page) absolute; without it those are left out of delivered broadcasts, while the dashboard preview still renders them |
@@ -16,22 +19,23 @@ Copy `.env.example` to `.env` for local development. Production secrets must com
 | `AUTH_GOOGLE_SECRET` | Legacy fallback | Google OAuth client secret; configure new instances in Super admin → Settings |
 | `SUPER_ADMIN_EMAIL` | Recommended | Sole email allowed into the instance administration area |
 
-### Deployment example: `events.dev.idliapps.com`
+### Deployment example
 
-For the current deployment hostname, configure both canonical URL settings to the exact same HTTPS origin:
+Configure both canonical URL settings to the exact same HTTPS origin, for example a custom domain or, before you have one, the Render service URL:
 
 ```env
-AUTH_URL=https://events.dev.idliapps.com
-NEXT_PUBLIC_BASE_URL=https://events.dev.idliapps.com
+AUTH_URL=https://events.example.com
+NEXT_PUBLIC_BASE_URL=https://events.example.com
+# or, temporarily: https://spaceworks-events.onrender.com for both
 ```
 
-If Google OAuth is enabled, register this callback with Google Cloud:
+If Google OAuth is enabled, register the matching callback with Google Cloud:
 
 ```text
-https://events.dev.idliapps.com/api/auth/callback/google
+https://events.example.com/api/auth/callback/google
 ```
 
-Leave `ALLOWED_ACTION_ORIGINS` empty when browsers reach the application on this same hostname. Configure it only if a trusted CDN or reverse proxy uses a different host for Server Action requests.
+Leave `ALLOWED_ACTION_ORIGINS` empty when browsers reach the application on this same hostname (including `*.onrender.com`). Configure it only if a trusted CDN or reverse proxy uses a different host for Server Action requests; no platform hostname is hard-coded.
 
 ### Changing the public domain
 
@@ -55,7 +59,7 @@ Generate independent keys with `openssl rand -base64 32`. Rotating the Server Ac
 | Variable | Production | Purpose |
 | --- | --- | --- |
 | `REDIS_URL` | Required | Distributed rate limiter and pub/sub for live ticket check-in across replicas; production requires `rediss://` |
-| `TRUSTED_PROXY_IP_HEADER` | Required | One of `cf-connecting-ip`, `x-forwarded-for`, or `x-real-ip`; the edge must overwrite it |
+| `TRUSTED_PROXY_IP_HEADER` | Required | One of `cf-connecting-ip`, `x-forwarded-for`, or `x-real-ip`; the edge must overwrite it. Render reached directly: `x-forwarded-for`; behind your own proxied Cloudflare zone: `cf-connecting-ip` |
 | `ALLOWED_ACTION_ORIGINS` | Optional | Comma-separated trusted proxy/CDN hosts allowed to invoke Server Actions |
 | `ALLOWED_EMBED_ORIGINS` | Optional | Exact HTTPS origins permitted to frame public event embeds; blank disables cross-site framing |
 | `NEXT_DEV_ALLOWED_ORIGINS` | Development only | Comma-separated LAN hosts permitted to request development assets |
@@ -74,17 +78,17 @@ The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/even
 | `SMTP_*` | Legacy fallback | SMTP settings; configure new instances in Super admin → Settings |
 | `OUTBOX_RETENTION_DAYS` | Optional | Retention for non-capability sent/failed outbox history; defaults to 30 (capability-bearing rows are deleted immediately after delivery or terminal failure) |
 
-Configure SMTP, Google SSO, and backup status under **Super admin → Settings**. SMTP and Google client secrets are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Environment values remain supported as migration fallbacks. Production SMTP connections require TLS with certificate verification.
+Configure SMTP, Google SSO, and backup status under **Super admin → Settings**. SMTP and Google client secrets are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Environment values remain supported as migration fallbacks. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
 
 ## Object storage
 
 | Variable | Production | Purpose |
 | --- | --- | --- |
 | `S3_BUCKET` | Required | Private object-store bucket |
-| `S3_REGION` | Required | Bucket region |
+| `S3_REGION` | Required | Bucket region; `auto` for Cloudflare R2 |
 | `S3_ENDPOINT` | Provider-dependent | Custom HTTPS endpoint for R2, MinIO, or another compatible service |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Provider-dependent | Configure both, or neither when using a workload/IAM role |
-| `S3_FORCE_PATH_STYLE` | Optional | Set to `1` for providers that require path-style addressing |
+| `S3_FORCE_PATH_STYLE` | Optional | Set to `1` for providers that require path-style addressing (`1` for Cloudflare R2 and MinIO) |
 
 The bucket must remain private. Existing database-backed assets can be moved with `npm run storage:migrate` after S3 is configured.
 

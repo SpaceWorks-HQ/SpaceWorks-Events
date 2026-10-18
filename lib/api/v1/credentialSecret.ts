@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
-const TOKEN_PREFIX = "yuyu_v1_";
-const TOKEN_PATTERN = /^yuyu_v1_([a-z0-9]+)\.([A-Za-z0-9_-]{43})$/;
+const TOKEN_PREFIX = "swe_v1_";
+const TOKEN_PATTERN = /^swe_v1_([a-z0-9]+)\.([A-Za-z0-9_-]{43})$/;
 
 export function hashApiSecret(secret: string) {
   return crypto.createHash("sha256").update(secret, "utf8").digest();

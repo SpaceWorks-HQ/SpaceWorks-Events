@@ -66,6 +66,12 @@ temp/
 .env*
 !.env.example
 !.env.staging.example
+!.env.production.example
+
+# Cloudflare Worker (deploy/cloudflare-cron) local state
+deploy/cloudflare-cron/node_modules/
+.wrangler/
+.dev.vars
 
 # direnv
 .direnv/

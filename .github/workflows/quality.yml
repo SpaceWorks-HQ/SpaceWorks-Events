@@ -15,19 +15,20 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: yuyu
-          POSTGRES_PASSWORD: yuyu_ci
-          POSTGRES_DB: yuyu_ci
+          POSTGRES_USER: swevents
+          POSTGRES_PASSWORD: swevents_ci
+          POSTGRES_DB: swevents_ci
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U yuyu -d yuyu_ci"
+          --health-cmd "pg_isready -U swevents -d swevents_ci"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:7-alpine
         ports: ["6379:6379"]
     env:
-      DATABASE_URL: postgresql://yuyu:yuyu_ci@localhost:5432/yuyu_ci
-      TEST_DATABASE_URL: postgresql://yuyu:yuyu_ci@localhost:5432/yuyu_ci
+      DATABASE_URL: postgresql://swevents:swevents_ci@localhost:5432/swevents_ci
+      DIRECT_URL: postgresql://swevents:swevents_ci@localhost:5432/swevents_ci
+      TEST_DATABASE_URL: postgresql://swevents:swevents_ci@localhost:5432/swevents_ci
       AUTH_SECRET: ci-only-not-a-production-secret-0123456789
       AUTH_URL: http://localhost:3000
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
@@ -36,18 +37,18 @@ jobs:
       HEALTHCHECK_SECRET: ci-health-secret-not-for-production-012345
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       MFA_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
-      EMAIL_FROM: Yuyu CI <noreply@example.test>
+      EMAIL_FROM: Space Works Events CI <noreply@example.test>
       SMTP_SERVICE: test
       SMTP_ALLOW_UNAUTHENTICATED: "1"
       TRUSTED_PROXY_IP_HEADER: x-forwarded-for
-      S3_BUCKET: yuyu-ci
+      S3_BUCKET: swevents-ci
       S3_REGION: us-east-1
       ALLOW_INSECURE_PRODUCTION_TESTS: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci
       - run: npm audit --omit=dev
@@ -60,17 +61,21 @@ jobs:
       - run: npm run test:integration
       - run: npm run production:check
       - run: npm run build
-      - run: docker build --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" -t yuyu:ci .
+      - run: docker build --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" -t swevents:ci .
       - name: Smoke-test standalone container
+        # MIGRATE_ON_START exercises the entrypoint's bundled Prisma CLI
+        # (a no-op here because db:deploy already ran).
         run: |
-          docker run -d --name yuyu-ci --network host \
-            -e CI=true -e ALLOW_INSECURE_PRODUCTION_TESTS=1 \
-            -e DATABASE_URL -e AUTH_SECRET -e AUTH_URL -e NEXT_PUBLIC_BASE_URL \
+          docker run -d --name swevents-ci --network host \
+            -e CI=true -e ALLOW_INSECURE_PRODUCTION_TESTS=1 -e MIGRATE_ON_START=1 \
+            -e DATABASE_URL -e DIRECT_URL -e AUTH_SECRET -e AUTH_URL -e NEXT_PUBLIC_BASE_URL \
             -e REDIS_URL -e CRON_SECRET -e HEALTHCHECK_SECRET \
             -e NEXT_SERVER_ACTIONS_ENCRYPTION_KEY -e MFA_ENCRYPTION_KEY \
             -e EMAIL_FROM -e SMTP_SERVICE -e SMTP_ALLOW_UNAUTHENTICATED \
-            -e TRUSTED_PROXY_IP_HEADER -e S3_BUCKET -e S3_REGION yuyu:ci
-          curl --fail --retry 15 --retry-delay 2 http://127.0.0.1:3000/api/health
-          docker rm -f yuyu-ci
+            -e TRUSTED_PROXY_IP_HEADER -e S3_BUCKET -e S3_REGION swevents:ci
+          curl --fail --retry 15 --retry-delay 2 --retry-all-errors http://127.0.0.1:3000/api/health
+          curl --fail --header "Authorization: Bearer $HEALTHCHECK_SECRET" http://127.0.0.1:3000/api/health/db
+          docker logs swevents-ci 2>&1 | grep -q "Applying database migrations"
+          docker rm -f swevents-ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:production

@@ -35,6 +35,8 @@ const mfaEncryptionKey = z.string().refine((value) => {
 
 export const envSchema = z.object({
   DATABASE_URL: z.string().url("must be a valid database connection URL"),
+  // Direct/session connection used only by `prisma migrate`; DATABASE_URL may be a transaction pooler.
+  DIRECT_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url("must be a valid database connection URL").optional()),
   AUTH_SECRET: secret,
   AUTH_URL: z.string().url("must be a valid URL").optional(),
   EMAIL_FROM: z.string().min(3).optional(),
@@ -95,9 +97,17 @@ export function validateRuntimeEnvironment() {
   if ((!insecureCiTest && (baseUrl.protocol !== "https:" || authUrl.protocol !== "https:")) || baseUrl.origin !== authUrl.origin) {
     throw new Error("AUTH_URL and NEXT_PUBLIC_BASE_URL must be the same HTTPS origin in production.");
   }
-  const databaseUrl = new URL(process.env.DATABASE_URL!);
-  if (!insecureCiTest && !["require", "verify-ca", "verify-full"].includes(databaseUrl.searchParams.get("sslmode") ?? "")) {
-    throw new Error("DATABASE_URL must require TLS using sslmode=require, verify-ca, or verify-full.");
+  for (const key of ["DATABASE_URL", "DIRECT_URL"] as const) {
+    if (!process.env[key]) continue;
+    const databaseUrl = new URL(process.env[key]);
+    if (!insecureCiTest && !["require", "verify-ca", "verify-full"].includes(databaseUrl.searchParams.get("sslmode") ?? "")) {
+      throw new Error(`${key} must require TLS using sslmode=require, verify-ca, or verify-full.`);
+    }
+  }
+  // Transaction-mode poolers (Supabase Supavisor :6543) cannot keep Prisma's prepared statements.
+  const runtimeDatabaseUrl = new URL(process.env.DATABASE_URL!);
+  if (runtimeDatabaseUrl.port === "6543" && runtimeDatabaseUrl.searchParams.get("pgbouncer") !== "true") {
+    throw new Error("DATABASE_URL uses a transaction pooler port (6543): add pgbouncer=true.");
   }
   const redisUrl = new URL(process.env.REDIS_URL!);
   if (!insecureCiTest && redisUrl.protocol !== "rediss:") {
