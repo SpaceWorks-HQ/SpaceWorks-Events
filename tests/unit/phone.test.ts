@@ -4,6 +4,7 @@ import {
   normalizeInternationalPhone,
   phoneValidationMessage,
 } from "@/lib/phone";
+import { phoneNumberInputValue } from "@/components/rsvp/QuestionField";
 
 describe("international phone validation", () => {
   it("accepts valid Indian mobile numbers", () => {
@@ -23,5 +24,18 @@ describe("international phone validation", () => {
   it("keeps standard E.164 validation for other countries", () => {
     expect(isValidInternationalPhone("+14155552671")).toBe(true);
     expect(isValidInternationalPhone("+1415555")).toBe(false);
+  });
+});
+
+describe("registration phone input", () => {
+  it("keeps every digit of a pasted number with spaces or a country code", () => {
+    expect(phoneNumberInputValue("", "+91 98765 43210")).toBe("+919876543210");
+    expect(phoneNumberInputValue("", "98765 43210")).toBe("+919876543210");
+    expect(phoneNumberInputValue("", "0044 20 7946 0958")).toBe("+442079460958");
+  });
+
+  it("caps national digits for the chosen country", () => {
+    expect(phoneNumberInputValue("+91", "987654321099")).toBe("+919876543210");
+    expect(phoneNumberInputValue("+44", "2079460958")).toBe("+442079460958");
   });
 });
