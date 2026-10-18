@@ -18,7 +18,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
       <body style={{ margin: 0, minHeight: "100dvh", background: CREAM, color: INK, fontFamily: "system-ui, sans-serif" }}>
         <main style={{ maxWidth: 560, margin: "0 auto", padding: "clamp(3rem, 12vh, 7rem) 1.5rem", textAlign: "center" }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- the app stylesheet and image pipeline may be what failed */}
-          <img src="/brand/lockup-horizontal.svg" alt="Space Works" width={180} style={{ display: "inline-block", height: "auto", marginBottom: "2.5rem" }} />
+          <img src="/brand/logo/lockup-horizontal.svg" alt="Space Works" width={180} style={{ display: "inline-block", height: "auto", marginBottom: "2.5rem" }} />
           <h1 style={{ margin: "0 0 .75rem", fontSize: 30, fontWeight: 600, lineHeight: 1.15 }}>We couldn’t load this page.</h1>
           <p style={{ margin: "0 0 1.75rem", fontSize: 17, lineHeight: 1.55 }}>Try again. If it keeps happening, let the team that runs this Space Works Events site know.</p>
           <button type="button" onClick={reset} style={{ minHeight: 44, border: 0, borderRadius: 10, padding: ".75rem 1.25rem", color: CREAM, background: TEAL, fontSize: 16, fontWeight: 600, cursor: "pointer" }}>Try again</button>

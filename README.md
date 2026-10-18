@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/SpaceWorks-HQ/SpaceWorks-Events">
-    <img src="public/brand/lockup-horizontal.svg" width="300" alt="Space Works" />
+    <img src="public/brand/logo/lockup-horizontal.svg" width="300" alt="Space Works" />
   </a>
 </p>
 

@@ -41,8 +41,8 @@ export function DiscoverEventCard({ event }: { event: DiscoverEvent }) {
           // eslint-disable-next-line @next/next/no-img-element -- covers are served by the app's own upload route
           <img src={event.coverImageUrl} alt="" className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element -- static SVG design asset
-          <img src="/landing/discover-card-dots.svg" alt="" width={373} height={150} className="absolute left-0 top-0 h-[150px] w-[373px] max-w-none" />
+          // No cover: the event accent field with a quiet brand shape.
+          <span aria-hidden className="absolute -right-6 -top-10 size-40 rounded-full bg-sw-citron" />
         )}
       </div>
       <span aria-hidden className="absolute left-[19px] top-[119px] flex h-[60px] w-14 flex-col items-center overflow-hidden rounded-md border border-line bg-canvas">

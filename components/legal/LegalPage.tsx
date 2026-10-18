@@ -1,4 +1,4 @@
-import { ThemedImage } from "@/components/ui/themed-image";
+import { TriangleAlert } from "lucide-react";
 import { LegalToc } from "./LegalToc";
 
 /** One paragraph, or several in order. */
@@ -17,7 +17,7 @@ export function LegalPage({ title, updated, notice, sections }: { current?: "pri
         <h1 className="text-display-m text-ink">{title}</h1>
         <p className="text-body-ui text-ink-muted">Last updated {updated}</p>
         <div role="note" className="flex max-w-[836px] items-start gap-3.5 rounded-[16px] bg-warning-bg px-5 py-4 text-warning-fg">
-          <ThemedImage src="/landing/legal-icon-alert.svg" darkSrc="/landing/legal-icon-alert-dark.svg" width={20} height={20} className="mt-0.5 size-5" />
+          <TriangleAlert aria-hidden className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
           <p className="text-body-ui">{notice}</p>
         </div>
       </header>
