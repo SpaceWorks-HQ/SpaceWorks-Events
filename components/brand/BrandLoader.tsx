@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 /** Maker Teal, Workshop Orange and an ink dot (cream in dark mode), bouncing in turn. */
 const DOTS = [
   { className: "bg-primary", delay: 0 },
-  { className: "", color: "#FF7447", delay: 160 },
+  { className: "bg-highlight", delay: 160 },
   { className: "bg-ink", delay: 320 },
 ] as const;
 
@@ -21,7 +21,7 @@ export function BrandLoader({ size = 48, label = "Loading", className }: { size?
           <span
             key={index}
             className={cn("block shrink-0 rounded-full motion-safe:animate-bounce", item.className)}
-            style={{ width: dot, height: dot, animationDelay: `${item.delay}ms`, backgroundColor: "color" in item ? item.color : undefined }}
+            style={{ width: dot, height: dot, animationDelay: `${item.delay}ms` }}
           />
         ))}
       </span>

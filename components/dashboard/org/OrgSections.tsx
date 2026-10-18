@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Check, ChevronLeft, ChevronRight, ExternalLink, Repeat, ScanLine, Search, Settings } from "lucide-react";
 import type { ReactNode } from "react";
-import { DotFace } from "@/components/brand/DotFace";
+import { MoodTile } from "@/components/brand/MoodTile";
 import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { Button } from "@/components/ui/button";
 import { Chip, DateBlock, EmptyState, OrgLogo } from "@/components/ui/display";
@@ -334,7 +334,7 @@ export function OrgSetup({
   return (
     <section aria-labelledby="org-setup-title" className="flex flex-col gap-3.5">
       <div className="flex flex-col items-start gap-5 rounded-2xl bg-tint-peach p-6 sm:flex-row sm:items-center">
-        <DotFace mood="cheering" size={72} />
+        <MoodTile mood="cheering" size={72} />
         <div className="flex flex-col gap-1">
           <h2 id="org-setup-title" className="font-display text-[28px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{name} is ready</h2>
           <p className="text-body-ui text-ink-secondary">A few steps and your community has its own page, events and team.</p>

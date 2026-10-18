@@ -2,10 +2,9 @@ import { type HTMLAttributes, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Info, Repeat, XCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { DotFace } from "@/components/brand/DotFace";
+import { MoodTile, type Mood } from "@/components/brand/MoodTile";
 import { getAccentTokens } from "@/lib/theme/accent";
 import { AvatarImage } from "./avatar-image";
-import type { DotFaceMood } from "@/components/brand/patterns";
 
 /* ---------- Status pills (docs/DESIGN.md §4.5) ---------- */
 
@@ -108,10 +107,10 @@ export function Callout({ tone = "info", title, children, action, className, rol
  * face `mood` (Sleepy for empty lists, Sad for errors); organiser-facing pages
  * leave it out.
  */
-export function EmptyState({ title, children, action, className, icon, mood }: { title?: ReactNode; children?: ReactNode; action?: ReactNode; className?: string; icon?: ReactNode; mood?: DotFaceMood }) {
+export function EmptyState({ title, children, action, className, icon, mood }: { title?: ReactNode; children?: ReactNode; action?: ReactNode; className?: string; icon?: ReactNode; mood?: Mood }) {
   return (
     <div className={cn("flex flex-col items-center gap-2 rounded-xl border border-line bg-panel px-6 py-7 text-center", className)}>
-      {mood ? <DotFace mood={mood} size={48} className="mb-1" /> : null}
+      {mood ? <MoodTile mood={mood} size={48} className="mb-1" /> : null}
       {icon ? <span aria-hidden className="text-ink-muted [&_svg]:size-7">{icon}</span> : null}
       {title ? <p className="text-label text-ink">{title}</p> : null}
       {children ? <div className="max-w-md text-body-ui text-ink-muted">{children}</div> : null}

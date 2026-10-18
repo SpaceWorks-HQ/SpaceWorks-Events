@@ -1,6 +1,6 @@
 "use client";
 
-import { DotLoader } from "@/components/brand/DotLoader";
+import { BrandLoader } from "@/components/brand/BrandLoader";
 import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { BroadcastAttendanceFilter, RsvpStatus } from "@prisma/client";
@@ -394,7 +394,7 @@ export function EventBroadcastPanel(props: {
               <div className="relative flex flex-col gap-2 rounded-xl border border-line bg-muted p-2.5 sm:p-3.5">
                 {!previewReady ? (
                   <div aria-live="polite" className="absolute right-3 top-3 z-[1] flex items-center gap-2 rounded-full bg-canvas px-2.5 py-1 text-caption text-ink-secondary">
-                    <DotLoader size={16} label="Updating preview" /> Updating…
+                    <BrandLoader size={20} label="Updating preview" /> Updating…
                   </div>
                 ) : null}
                 <p className="px-1 text-label text-ink-muted [overflow-wrap:anywhere]">

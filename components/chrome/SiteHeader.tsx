@@ -8,8 +8,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Menu as MenuIcon, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button, IconButton } from "@/components/ui/button";
-import { DotLockup } from "@/components/brand/DotLockup";
-import { DotMark } from "@/components/brand/DotMark";
+import { SpaceWorksEventsLogo, SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { ColorModeToggle } from "./ColorModeToggle";
 
 const primaryLinks = [
@@ -29,17 +28,15 @@ export function BrandHomeLink({ href = "/", stacked = false, className }: { href
   if (stacked) {
     return (
       <Link href={href} aria-label="Space Works Events home" className={cn("inline-flex shrink-0 flex-col items-start gap-1.5 rounded-md", className)}>
-        <DotLockup size="sm" label={null} />
+        <SpaceWorksLogo variant="lockup-stacked" height={64} label={null} />
         <span aria-hidden className="text-[15px] font-semibold leading-none text-ink">Events</span>
       </Link>
     );
   }
   return (
     <Link href={href} aria-label="Space Works Events home" className={cn("inline-flex shrink-0 items-center gap-3 rounded-md", className)}>
-      <DotMark size={32} label={null} className="sm:hidden" />
-      <DotLockup size="sm" label={null} className="hidden sm:inline-flex" />
-      <span aria-hidden className="h-6 w-px bg-line-strong" />
-      <span aria-hidden className="text-[17px] font-semibold leading-none text-ink">Events</span>
+      <SpaceWorksLogo variant="app-icon" height={36} label={null} className="sm:hidden" />
+      <SpaceWorksEventsLogo height={32} label={null} className="hidden sm:inline-flex" />
     </Link>
   );
 }

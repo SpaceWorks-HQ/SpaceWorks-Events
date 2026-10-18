@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DotFace } from "@/components/brand/DotFace";
+import { MoodTile } from "@/components/brand/MoodTile";
 import { ArrowLeft, ArrowUpRight, CalendarPlus, Check } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { TicketQrPanel } from "@/components/ticket/TicketQrPanel";
@@ -235,11 +235,11 @@ export default async function TicketPage({ params }: Props) {
         </div>
         {confirmed ? (
           <div className="flex items-center gap-4">
-            <DotFace mood="cheering" size={64} />
+            <MoodTile mood="cheering" size={64} />
             <p className="text-display-m break-words text-ink">You&apos;re in, {name}!</p>
           </div>
         ) : rsvp.status === "WAITLISTED" ? (
-          <DotFace mood="waiting" size={64} />
+          <MoodTile mood="waiting" size={64} />
         ) : null}
 
         {confirmed ? (

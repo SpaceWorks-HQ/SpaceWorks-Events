@@ -1,10 +1,10 @@
-import { PageLoader } from "@/components/brand/DotLoader";
+import { BrandPageLoader } from "@/components/brand/BrandLoader";
 import { OrgDashboardSkeleton } from "@/components/dashboard/OrgDashboardSkeleton";
 
 export default function Loading() {
   return (
     <div className="flex flex-col gap-6">
-      <PageLoader label="Loading organisation" />
+      <BrandPageLoader label="Loading organisation" />
       <OrgDashboardSkeleton />
     </div>
   );

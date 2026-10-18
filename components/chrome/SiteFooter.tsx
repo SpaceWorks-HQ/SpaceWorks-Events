@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { DotLockup } from "@/components/brand/DotLockup";
+import { SpaceWorksEventsLogo } from "@/components/brand/SpaceWorksLogo";
 import { GITHUB_URL, LICENSE_URL } from "@/lib/openSource";
 
 
@@ -47,7 +47,7 @@ export function SiteFooter() {
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2.5">
             <Link href="/" className="inline-flex items-center self-start" aria-label="Space Works Events home">
-              <DotLockup size="md" label={null} />
+              <SpaceWorksEventsLogo height={32} label={null} />
             </Link>
             <p className="text-body-ui text-ink-secondary">Events for people who make things.</p>
           </div>

@@ -1,10 +1,10 @@
 import { Skeleton } from "@/components/ui/display";
-import { PageLoader } from "@/components/brand/DotLoader";
+import { BrandPageLoader } from "@/components/brand/BrandLoader";
 
 export default function Loading() {
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
-      <PageLoader label="Loading event" />
+      <BrandPageLoader label="Loading event" />
       <Skeleton className="h-4 w-24" />
       <div className="flex items-center gap-4">
         <Skeleton className="size-14 rounded-md" />

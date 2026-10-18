@@ -3,7 +3,7 @@ import { connection } from "next/server";
 import { Check } from "lucide-react";
 import { LoginForm } from "./ui";
 import { BrandHomeLink } from "@/components/chrome/SiteHeader";
-import { DotLockup } from "@/components/brand/DotLockup";
+import { SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { getGoogleSsoSettings, isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
 import type { Metadata } from "next";
 
@@ -57,7 +57,7 @@ export default async function LoginPage() {
       {/* Brand panel: the stacked lockup, the accent phrase and a few real product objects. */}
       <aside aria-hidden className="relative hidden overflow-hidden p-4 md:block">
         <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-[28px] bg-surface p-12">
-          <DotLockup layout="stacked" label={null} className="self-start" />
+          <SpaceWorksLogo variant="lockup-stacked" height={72} className="self-start" />
           <div className="relative flex flex-col gap-4 py-6">
             <span className="absolute -right-16 -top-10 size-44 rounded-full bg-sw-citron" />
             <span className="absolute -bottom-2 right-20 size-20 rounded-[16px] bg-sw-sky" />

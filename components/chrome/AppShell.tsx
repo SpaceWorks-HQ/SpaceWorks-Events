@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/cn";
 import type { ShellOrganisation, ShellUser } from "@/lib/appShell";
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from "@/lib/sidebar";
-import { DotMark } from "@/components/brand/DotMark";
+import { SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { useAppColorMode } from "@/components/providers";
 import { Avatar, OrgLogo } from "@/components/ui/display";
 import { IconButton } from "@/components/ui/button";
@@ -185,7 +185,7 @@ function SidebarContents({
       <div className={cn("flex gap-2 pt-1", collapsed ? "flex-col items-center" : "items-start justify-between pl-2")}>
         {collapsed ? (
           <Link href="/dashboard" aria-label="Space Works Events home" className="inline-flex rounded-md p-1">
-            <DotMark size={32} label={null} />
+            <SpaceWorksLogo variant="app-icon" height={32} label={null} />
           </Link>
         ) : (
           <BrandHomeLink href="/dashboard" stacked />

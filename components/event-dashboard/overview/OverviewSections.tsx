@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ArrowRight, Check, Code2 } from "lucide-react";
 import type { EventPrivacyType, EventStatus } from "@prisma/client";
-import { DotFace } from "@/components/brand/DotFace";
+import { MoodTile } from "@/components/brand/MoodTile";
 import { DotColumns } from "@/components/dashboard/home/DotCharts";
 import { CopyEventLink } from "@/components/dashboard/home/CopyEventLink";
 import { PublishEventButton } from "@/components/event/PublishEventButton";
@@ -21,7 +21,7 @@ export function ReadinessCard({ title, summary, complete, items, organisationSlu
   return (
     <section aria-labelledby="overview-ready-title" className="flex flex-col gap-4 rounded-2xl bg-tint-peach p-5 sm:p-6 lg:flex-row lg:items-center">
       <div className="flex min-w-0 items-center gap-4 lg:w-[300px] lg:shrink-0">
-        <DotFace mood={complete ? "done" : "happy"} size={56} className="shrink-0" />
+        <MoodTile mood={complete ? "done" : "happy"} size={56} className="shrink-0" />
         <div className="min-w-0">
           <h2 id="overview-ready-title" className="font-display text-[22px] font-extrabold leading-tight text-ink">
             {title}
