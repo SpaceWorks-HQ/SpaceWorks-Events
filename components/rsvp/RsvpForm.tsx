@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { RsvpStatus } from "@prisma/client";
 import { CheckCircle2, Download } from "lucide-react";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
@@ -84,6 +85,7 @@ export function RsvpForm(props: {
 }) {
   const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved } = props;
   const { data: session, status } = useSession();
+  const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
   const [guestEmail, setGuestEmail] = useState("");
   const [name, setName] = useState("");
@@ -158,6 +160,8 @@ export function RsvpForm(props: {
     }
     onRsvpSaved?.(rsvp);
     setDone(true);
+    // Refresh the server-rendered going count and spots left beside the form.
+    router.refresh();
   }
 
   if (status === "loading") {
