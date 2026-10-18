@@ -179,7 +179,7 @@ export function CertificateBuilder(props: Props) {
         <p className="mt-1 text-body-ui text-ink-secondary">Upload your certificate artwork, then add text and images on top. Text can include values such as the attendee’s name, which are filled in for each certificate and reduced automatically to fit their box.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <label className={cn(buttonClasses({ variant: "secondary" }), busyOrDisabled ? "pointer-events-none opacity-60" : "cursor-pointer")} aria-disabled={busyOrDisabled || undefined}>
+        <label className={cn(buttonClasses({ variant: "secondary" }), busyOrDisabled ? "pointer-events-none border-line bg-surface text-ink-muted" : "cursor-pointer")} aria-disabled={busyOrDisabled || undefined}>
           <Upload aria-hidden className="size-[18px]" />
           {busy ? "Working…" : value ? "Replace background" : "Upload background"}
           <input hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={busyOrDisabled} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(file); }} />
@@ -193,7 +193,7 @@ export function CertificateBuilder(props: Props) {
           <div className="flex min-w-0 flex-col gap-3">
             <div role="toolbar" aria-label="Add layers" className="flex flex-wrap items-center gap-2">
               <Button variant="secondary" size="sm" startIcon={<Type />} disabled={busyOrDisabled || atLimit} onClick={addText}>Add text</Button>
-              <label className={cn(buttonClasses({ variant: "secondary", size: "sm" }), busyOrDisabled || atLimit ? "pointer-events-none opacity-60" : "cursor-pointer")} aria-disabled={busyOrDisabled || atLimit || undefined}>
+              <label className={cn(buttonClasses({ variant: "secondary", size: "sm" }), busyOrDisabled || atLimit ? "pointer-events-none border-line bg-surface text-ink-muted" : "cursor-pointer")} aria-disabled={busyOrDisabled || atLimit || undefined}>
                 <ImagePlus aria-hidden className="size-4" />
                 Add image
                 <input hidden type="file" accept="image/png,image/jpeg,image/webp" disabled={busyOrDisabled || atLimit} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void addImage(file); }} />

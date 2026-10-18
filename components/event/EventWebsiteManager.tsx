@@ -259,7 +259,7 @@ function ContentCollection({
   const photoPicker =
     kind === "speaker" || kind === "sponsor" ? (
       <div className="flex flex-wrap items-center gap-2.5">
-        <label className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--yy-focus)", (pending || uploadingPhoto) && "pointer-events-none opacity-50")}>
+        <label className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-control border border-line bg-panel px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--yy-focus)", (pending || uploadingPhoto) && "pointer-events-none opacity-50")}>
           <Upload aria-hidden className="size-4" />
           Choose {kind === "speaker" ? "speaker photo" : "sponsor logo"}
           <input

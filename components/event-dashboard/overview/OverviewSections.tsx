@@ -104,7 +104,7 @@ export function ShareCard({ url, path, title, published, canEmbed, shortLink }: 
       <div className="flex flex-wrap gap-2">
         {published ? <CopyEventLink path={path} title={title} /> : null}
         {canEmbed ? (
-          <OpenTabButton tab="settings" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-panel px-3.5 text-sm font-semibold text-ink hover:bg-subtle">
+          <OpenTabButton tab="settings" className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-line bg-panel px-3.5 text-sm font-semibold text-ink hover:bg-subtle">
             <Code2 aria-hidden className="size-4" />
             Embed on a website
           </OpenTabButton>

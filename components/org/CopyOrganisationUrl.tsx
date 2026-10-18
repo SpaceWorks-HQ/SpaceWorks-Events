@@ -37,7 +37,7 @@ export function CopyOrganisationUrl(props: { slug: string }) {
           showToast("Could not copy organisation URL", "error");
         }
       }}
-      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle"
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-line bg-panel px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-muted"
     >
       <Copy aria-hidden className="size-4" />
       Copy link

@@ -309,7 +309,7 @@ export function EventBroadcastPanel(props: {
                       )}
                     >
                       {STATUS_PILL_LABEL[option.value]}
-                      <span className="tabular-nums opacity-75">{statusCounts[option.value] ?? 0}</span>
+                      <span className="font-medium tabular-nums">{statusCounts[option.value] ?? 0}</span>
                     </button>
                   </Tooltip>
                 );

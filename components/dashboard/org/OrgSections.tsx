@@ -205,7 +205,7 @@ export function OrgEventList({
         <form action={base} method="get" role="search" className="w-full sm:w-auto">
           {events.view !== "upcoming" ? <input type="hidden" name="view" value={events.view} /> : null}
           {query.month ? <input type="hidden" name="month" value={query.month} /> : null}
-          <label className="flex min-h-10 items-center gap-2 rounded-full border border-line-strong bg-panel px-3.5 focus-within:border-[var(--yy-focus)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] sm:w-[260px]">
+          <label className="flex min-h-11 items-center gap-2 rounded-control border border-line-strong bg-panel px-3.5 focus-within:border-[var(--yy-focus)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] sm:w-[260px]">
             <Search aria-hidden className="size-4 shrink-0 text-ink-muted" />
             <span className="sr-only">Search events</span>
             <input type="search" name="q" defaultValue={query.q} placeholder="Search events" maxLength={100} className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted" />

@@ -50,7 +50,7 @@ export function EditorSlider({
         <span id={labelId} className={cn("text-label", dark ? "text-sw-cream" : "text-ink")}>
           {label}
         </span>
-        <span aria-hidden className={cn("tabular-nums text-caption ", dark ? "text-sw-cream/70" : "text-ink-muted")}>
+        <span aria-hidden className={cn("tabular-nums text-caption", "text-ink-muted")}>
           {valueText}
         </span>
       </div>
