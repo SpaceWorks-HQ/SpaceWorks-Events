@@ -69,6 +69,11 @@ describe("broadcast HTML bodies", () => {
       "https://events.test/x",
     ].join("\n"));
   });
+
+  it("keeps one line per bullet when list items wrap their text in paragraphs", () => {
+    const html = "<ul><li><p><strong>When:</strong> Wed</p></li><li><p><strong>Where:</strong> Hall</p></li></ul><p>Bye</p>";
+    expect(broadcastHtmlToText(html)).toBe("• When: Wed\n• Where: Hall\n\nBye");
+  });
 });
 
 describe("starter templates", () => {
