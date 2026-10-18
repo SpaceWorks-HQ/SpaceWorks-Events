@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getClientIpFromHeaders, checkRateLimitById } from "@/lib/rateLimit";
-import { CHECK_IN_STATION_COOKIE, createCheckInStationProof, hasValidCheckInStationProof, stationExpiresAt, verifyStationPin } from "@/lib/checkInStation";
+import { CHECK_IN_STATION_COOKIE, createCheckInStationProof, hasValidCheckInStationProof, stationExpiresAt, stationOpensAt, verifyStationPin } from "@/lib/checkInStation";
 import { gateCheckInForStatus, parseCheckInPayload } from "@/lib/checkIn";
 import { getCheckInDetails, getRegistrationDetails } from "@/lib/checkInDetails";
 import { commitCheckInProjection, commitUndoCheckInProjection } from "@/lib/checkInMutations";
@@ -44,7 +44,10 @@ export async function POST(request: Request) {
     if (!allowed) return failure("Too many attempts. Please try again shortly.", 429);
     if (!input.pin || !(await verifyStationPin(input.pin, event.checkInStationPinHash))) return failure("Unable to open this check-in station.", 401);
     const proof = createCheckInStationProof(event.id, event.checkInStationSecretVersion, event.startDateTime, event.endDateTime);
-    if (!proof) return failure("This check-in station has closed.", 401);
+    if (!proof) {
+      const early = Date.now() < stationOpensAt(event.startDateTime).getTime();
+      return failure(early ? "This check-in station opens 24 hours before the event starts." : "This check-in station has closed.", 401);
+    }
     const response = NextResponse.json({ ok: true });
     // The station UI calls /api/check-in/station, so this must be available to
     // both the public page and its protected API. The signed proof itself is
@@ -66,7 +69,7 @@ export async function POST(request: Request) {
     ]);
     // The station prints the event's saved badge design (read-only here).
     const badge = badgeEvent ? { design: badgeDesignFor(badgeEvent), branding: badgeBrandingFor(badgeEvent) } : null;
-    return NextResponse.json({ ok: true, data: { organisationName: event.organisation.name, badge, eventId: event.id, eventTitle: event.title, registrationFields: form?.fields ?? [], stats: { confirmed, checkedIn }, recent: recentRsvps.map((r) => ({ rsvpId: r.id, displayName: attendeeLabel({ ...r, guestName: null }), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() })) } });
+    return NextResponse.json({ ok: true, data: { organisationName: event.organisation.name, badge, eventId: event.id, eventTitle: event.title, registrationFields: form?.fields ?? [], stats: { confirmed, checkedIn }, recent: recentRsvps.map((r) => ({ rsvpId: r.id, displayName: attendeeLabel(r), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() })) } });
   }
   let rsvp: StationRsvp | null = null;
   if (input.action === "previewToken") {
