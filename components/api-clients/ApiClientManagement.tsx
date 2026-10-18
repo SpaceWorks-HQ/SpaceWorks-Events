@@ -42,10 +42,8 @@ function expiryIso(value: FormDataEntryValue | null) {
 }
 
 function formatTimestamp(value: string) {
-  return new Date(value)
-    .toISOString()
-    .replace("T", " ")
-    .replace(".000Z", " UTC");
+  // Minute precision; stored times usually carry milliseconds ("…:18.356Z").
+  return `${new Date(value).toISOString().slice(0, 16).replace("T", " ")} UTC`;
 }
 
 function SecretDialog(props: { token: string | null; onClose: () => void }) {
