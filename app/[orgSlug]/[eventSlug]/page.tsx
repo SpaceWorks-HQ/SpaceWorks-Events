@@ -9,6 +9,7 @@ import {
 import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { countConfirmedForEvent } from "@/lib/rsvpCapacity";
 import { EventWebsiteShell } from "@/components/event/EventWebsiteShell";
+import { normalizeSections } from "@/components/event-dashboard/event-page/summary";
 import { effectiveEventProgram } from "@/lib/eventProgram";
 import { plainTextToSafeHtml, sanitizeRichText } from "@/lib/richText";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
@@ -136,17 +137,6 @@ export default async function EventPage({ params }: Props) {
     }),
     countConfirmedForEvent(event.id),
   ]);
-  const defaults = [
-    "HERO",
-    "ABOUT",
-    "HIGHLIGHTS",
-    "SCHEDULE",
-    "SPEAKERS",
-    "SPONSORS",
-    "VENUE",
-    "FAQ",
-    "RESOURCES",
-  ].map((type) => ({ type, isVisible: true }));
   return (
     <EventWebsiteShell
       orgSlug={org.slug}
@@ -171,7 +161,8 @@ export default async function EventPage({ params }: Props) {
         aboutHtml: page?.aboutHtml
           ? sanitizeRichText(page.aboutHtml)
           : plainTextToSafeHtml(event.description),
-        sections: page?.sections ?? defaults,
+        // Sections the organiser never saved show by default, as in the editor.
+        sections: normalizeSections(page?.sections),
       }}
       highlights={highlights}
       sessions={effectiveEventProgram(sessions).map((session) => ({

@@ -58,6 +58,12 @@ describe("normalizeSections", () => {
     expect(result.map((section) => section.sortOrder)).toEqual(SECTION_TYPES.map((_, index) => index));
     expect(normalizeSections(null).map((section) => section.type)).toEqual([...SECTION_TYPES]);
   });
+
+  it("shows every section for a page saved without section rows (the public page uses this too)", () => {
+    const result = normalizeSections([]);
+    expect(result.map((section) => section.type)).toEqual([...SECTION_TYPES]);
+    expect(result.every((section) => section.isVisible)).toBe(true);
+  });
 });
 
 describe("accent input", () => {
