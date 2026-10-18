@@ -12,6 +12,9 @@ coverage
 playwright-report
 test-results
 *.log
+# Local Claude Code state, including agent worktrees (full repo copies).
+.claude
+.impeccable
 *.tsbuildinfo
 .DS_Store
 # Deployment tooling that is never part of the application image.

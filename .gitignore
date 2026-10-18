@@ -98,3 +98,6 @@ scripts/seed-t4gcc-summit-2026.cjs
 
 # page screenshots (local only)
 /screenshots/
+
+# Local design-hook state (Impeccable).
+.impeccable/
