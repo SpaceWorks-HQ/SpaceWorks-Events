@@ -197,7 +197,17 @@ export function nameSizePt(settings: IdCardPrintSettings, name: string) {
   if (!settings.nameAutoFit) return size;
   const uppercase = idCardTemplateDecor(settings.template, settings.widthMm, settings.heightMm).nameUppercase;
   const widthMm = uppercase ? settings.elementSizes.name / 1.15 : settings.elementSizes.name;
-  return fitTextSizePt(name, widthMm, size, settings.elementBold.name || uppercase);
+  const bold = settings.elementBold.name || uppercase;
+  const fitted = fitTextSizePt(name, widthMm, size, bold);
+  // A name too long for two lines at the auto-fit floor would spill over the
+  // email below. Shrink until its wrapped lines fit the room kept for the name
+  // (nameBlockHeightMm: 1.2 lines at full size). Lines ≈ chars·em·pt/width, and
+  // lines·pt must stay within 1.2·size, so pt ≤ √(1.2·size·width / (chars·em));
+  // 0.85 leaves room for words that wrap early.
+  const emMm = (bold ? 0.6 : 0.54) * PT_TO_MM;
+  const chars = Math.max(1, name.trim().length);
+  const area = 0.85 * Math.sqrt((1.2 * size * widthMm) / (chars * emMm));
+  return round1(Math.min(fitted, Math.max(size * 0.3, area)));
 }
 
 const MIN_DIMENSION_MM = 40;

@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ downloadFile: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ downloadFile: mocks.downloadFile }));
 
-import { CR80, normalizeIdCardPrintSettings } from "@/lib/idCardPrint";
+import { CR80, layoutForPaper, normalizeIdCardPrintSettings, PT_TO_MM } from "@/lib/idCardPrint";
 import { MAX_PHOTO_PX, prepareBadgeImage } from "@/lib/badge/assets";
 import { loadBadgeFonts } from "@/lib/badge/fonts";
 import { buildBadgeScene, wrapText, type BadgeScene, type BadgeTextOp } from "@/lib/badge/layout";
@@ -78,6 +78,25 @@ describe("badge text layout", { timeout: 30_000 }, () => {
     expect(nameOps.length).toBeGreaterThanOrEqual(1);
     for (const op of nameOps) {
       expect(op.x + measurer.widthMm(op.text, op.weight, op.sizePt, op.trackingEm)).toBeLessThanOrEqual(settings.elementPositions.name.xMm + settings.elementSizes.name + 0.01);
+    }
+  });
+
+  it("keeps a very long name above the email on every template and stock", async () => {
+    const { measurer } = await loadBadgeFonts();
+    const displayName = "Bartholomew Maximilian Alexander Featherstonehaugh-Wolfeschlegelsteinhausen";
+    for (const template of ["classic", "bold", "minimal"] as const) {
+      for (const [widthMm, heightMm] of [[105, 148], [CR80.widthMm, CR80.heightMm], [CR80.heightMm, CR80.widthMm]]) {
+        const settings = normalizeIdCardPrintSettings({ template, widthMm, heightMm, ...layoutForPaper(template, widthMm, heightMm) }, "Door Night", "Space Works");
+        const scene = buildBadgeScene({ settings, attendee: { ...attendee, displayName }, branding, measurer });
+        const texts = scene.ops.filter((op): op is BadgeTextOp => op.kind === "text");
+        const first = texts.find((op) => /^bartholomew/i.test(op.text))!;
+        const email = texts.find((op) => op.text === attendee.email)!;
+        const nameLines = texts.filter((op) => op !== email && op.sizePt === first.sizePt && op.x === first.x && op.baseline >= first.baseline);
+        const lastName = nameLines.at(-1)!;
+        const descent = measurer.descent * lastName.sizePt * PT_TO_MM;
+        const emailTop = email.baseline - measurer.ascent * email.sizePt * PT_TO_MM;
+        expect(lastName.baseline + descent, `${template} ${widthMm}×${heightMm}`).toBeLessThanOrEqual(emailTop);
+      }
     }
   });
 
