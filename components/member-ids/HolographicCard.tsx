@@ -117,7 +117,8 @@ export function HolographicCard({
       style={{
         mixBlendMode: "soft-light",
         opacity: active ? 0.55 + Math.min(0.35, Math.hypot(tilt.x, tilt.y) * 0.35) : 0,
-        background: `radial-gradient(circle at ${sheenX}% ${sheenY}%, rgb(255 255 255 / 0.75), transparent 42%), linear-gradient(${110 + tilt.x * 25}deg, transparent 22%, rgb(223 255 143 / 0.65) 38%, rgb(181 205 255 / 0.7) 50%, rgb(255 244 232 / 0.6) 60%, transparent 76%)`,
+        // Longhand only: React warns when the `background` shorthand is mixed with backgroundSize/Position on re-render.
+        backgroundImage: `radial-gradient(circle at ${sheenX}% ${sheenY}%, rgb(255 255 255 / 0.75), transparent 42%), linear-gradient(${110 + tilt.x * 25}deg, transparent 22%, rgb(223 255 143 / 0.65) 38%, rgb(181 205 255 / 0.7) 50%, rgb(255 244 232 / 0.6) 60%, transparent 76%)`,
         backgroundSize: "100% 100%, 220% 220%",
         backgroundPosition: `center, ${sheenX}% ${sheenY}%`,
       }}
