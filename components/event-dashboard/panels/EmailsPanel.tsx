@@ -1,32 +1,14 @@
-import type { RsvpStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
+import { loadEmailsPanel } from "@/lib/views/components__event-dashboard__panels__EmailsPanel";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
 import { formatRelativeTime } from "@/lib/format/datetime";
 import { EventBroadcastPanel } from "@/components/broadcasts/EventBroadcastPanel";
 import { NoPermission } from "./shared";
 import { DEFAULT_BROADCAST_DESIGN, isBroadcastDesign } from "@/lib/email/broadcastDesigns";
 
-export async function EmailsPanel({ ctx }: { ctx: EventDashboardContext }) {
-  const { event, permissions, organisation, now } = ctx;
+export async function EmailsPanel({ ctx }: { ctx: EventDashboardContext; }) {
+  const { permissions } = ctx;
   if (!permissions.canManageRegistrations) return <NoPermission>You do not have permission to email attendees.</NoPermission>;
-  const [records, counts, branding] = await Promise.all([
-    prisma.eventBroadcast.findMany({
-      where: { eventId: event.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      select: { id: true, subject: true, body: true, design: true, statuses: true, attendance: true, recipientCount: true, createdAt: true, createdBy: { select: { name: true } } },
-    }),
-    loadRsvpStatusCounts(event.id),
-    prisma.event.findUnique({ where: { id: event.id }, select: { coverImageUrl: true, page: { select: { accentColor: true } } } }),
-  ]);
-  const brand = { accentColor: branding?.page?.accentColor ?? null, coverImageUrl: branding?.coverImageUrl ?? null };
-  const statusCounts: Record<RsvpStatus, number> = {
-    CONFIRMED: counts.confirmed,
-    WAITLISTED: counts.waitlisted,
-    PENDING_APPROVAL: counts.pendingApproval,
-    REJECTED: counts.rejected,
-  };
+  const { event, organisation, now, records, brand, statusCounts } = await loadEmailsPanel({ ctx });
   return (
     <EventBroadcastPanel
       organisationSlug={organisation.slug}

@@ -1,11 +1,10 @@
+import { loadVerifyView } from "@/lib/views/app__verify__token__page";
 import type { Metadata } from "next";
 import { BadgeCheck, CircleSlash, Clock, SearchX } from "lucide-react";
 import { BrandHomeLink } from "@/components/chrome/SiteHeader";
 import { Avatar } from "@/components/ui/display";
-import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { cn } from "@/lib/cn";
 import type { VerifyState, VerifyView } from "@/lib/memberIds/verify";
-import { lookupVerification } from "@/lib/memberIds/verifyLookup";
 
 export const dynamic = "force-dynamic";
 
@@ -16,15 +15,9 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-type Props = { params: Promise<{ token: string }> };
+type Props = { params: Promise<{ token: string; }>; };
 
-async function lookup(token: string): Promise<VerifyView | "limited"> {
-  // Tight per-IP limit so the token space cannot be scanned.
-  if (await isActionRateLimited("shortLink")) return "limited";
-  return lookupVerification(token);
-}
-
-const STATES: Record<VerifyState, { title: string; body: string; panel: string; icon: typeof BadgeCheck }> = {
+const STATES: Record<VerifyState, { title: string; body: string; panel: string; icon: typeof BadgeCheck; }> = {
   valid: { title: "Valid card", body: "This card is genuine and in date.", panel: "bg-success-bg text-success-fg", icon: BadgeCheck },
   expired: { title: "Expired card", body: "This card is genuine, but it is past its valid-until date.", panel: "bg-warning-bg text-warning-fg", icon: Clock },
   revoked: { title: "Revoked card", body: "The organisation that issued this card has withdrawn it. Don't accept it as proof of membership.", panel: "border border-danger-border bg-panel text-danger-fg", icon: CircleSlash },
@@ -41,9 +34,7 @@ const STAMP_CSS = `
 }`;
 
 export default async function VerifyPage({ params }: Props) {
-  const { token } = await params;
-  const result = await lookup(token.trim());
-
+  const { result } = await loadVerifyView({ params });
   return (
     <main id="main-content" className="flex min-h-dvh flex-col items-center bg-canvas px-4 py-8 sm:py-12">
       <style>{STAMP_CSS}</style>
@@ -65,7 +56,7 @@ export default async function VerifyPage({ params }: Props) {
   );
 }
 
-function VerifyResult({ view }: { view: VerifyView }) {
+function VerifyResult({ view }: { view: VerifyView; }) {
   const state = STATES[view.state];
   const Icon = state.icon;
   return (

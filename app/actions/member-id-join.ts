@@ -1,7 +1,8 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
 import { auth } from "@/lib/auth";
@@ -12,6 +13,8 @@ import { approveMembers } from "@/lib/memberIds/issue";
 import { storeMemberIdImage } from "@/lib/memberIds/uploads";
 import type { ActionResult } from "./org";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 /*
  * The public join form. Joining needs a signed-in account (the card then
  * appears in the person's ID wallet), the programme must be active with
@@ -19,7 +22,7 @@ import type { ActionResult } from "./org";
  * per email (and per account) per programme.
  */
 
-export async function joinIdProgramme(formData: FormData): Promise<ActionResult<{ status: "PENDING" | "APPROVED" }>> {
+export async function joinIdProgramme(formData: FormData): Promise<ActionResult<{ status: "PENDING" | "APPROVED"; }>> {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) return { ok: false, error: "Sign in to request your card." };

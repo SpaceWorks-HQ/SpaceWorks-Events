@@ -1,26 +1,24 @@
+import { loadIdProgrammeView } from "@/lib/views/app__dashboard__orgSlug__ids__programmeId__page";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Prisma } from "@prisma/client";
 import { OrgPageHeader } from "@/components/dashboard/org/OrgPageHeader";
 import { IdImportWizard } from "@/components/member-ids/IdImportWizard";
 import { MemberIdDesigner } from "@/components/member-ids/MemberIdDesigner";
-import { MembersTable, type MemberRow } from "@/components/member-ids/MembersTable";
+import { MembersTable } from "@/components/member-ids/MembersTable";
 import { ProgrammeActions } from "@/components/member-ids/ProgrammeActions";
 import { ProgrammeSettings } from "@/components/member-ids/ProgrammeSettings";
 import { ProgrammeStatusPill } from "@/components/member-ids/ProgrammeStatusPill";
 import { Button } from "@/components/ui/button";
 import { NavTabs } from "@/components/ui/tabs";
-import { prisma } from "@/lib/db";
-import { cardState, formatCardDate, toDateInput } from "@/lib/memberIds/core";
-import { loadProgramme, memberPhotoUrl, programmeBranding, programmeDesign, publicOrigin } from "@/lib/memberIds/data";
-import { isOrgAdmin, requireOrgMembership } from "@/lib/permissions";
+import { toDateInput } from "@/lib/memberIds/core";
+import { programmeBranding, programmeDesign } from "@/lib/memberIds/presentation";
 
 export const metadata: Metadata = { title: "Member IDs" };
 
 type Props = {
-  params: Promise<{ orgSlug: string; programmeId: string }>;
-  searchParams: Promise<{ tab?: string; q?: string; status?: string; page?: string }>;
+  params: Promise<{ orgSlug: string; programmeId: string; }>;
+  searchParams: Promise<{ tab?: string; q?: string; status?: string; page?: string; }>;
 };
 
 const TABS = [
@@ -29,66 +27,19 @@ const TABS = [
   { id: "design", label: "Card design" },
   { id: "settings", label: "Settings" },
 ] as const;
-type Tab = (typeof TABS)[number]["id"];
 
-const STATUS_FILTERS = ["all", "PENDING", "APPROVED", "REJECTED", "REVOKED"] as const;
-type StatusFilter = (typeof STATUS_FILTERS)[number];
-const PAGE_SIZE = 100;
+
+
+
+
 
 export default async function IdProgrammePage({ params, searchParams }: Props) {
-  const { orgSlug, programmeId } = await params;
-  const query = await searchParams;
-  const { organisation, membership } = await requireOrgMembership(orgSlug);
-  const canManage = isOrgAdmin(membership.role);
-  const programme = await loadProgramme(organisation.id, programmeId);
-  if (!programme) notFound();
-  const profile = await prisma.organisation.findUniqueOrThrow({ where: { id: organisation.id }, select: { logoUrl: true } });
-
-  const requested = (TABS.find((tab) => tab.id === query.tab)?.id ?? "members") as Tab;
-  const tab: Tab = canManage ? requested : "members";
-  const base = `/dashboard/${organisation.slug}/ids/${programme.id}`;
-  const status: StatusFilter = (STATUS_FILTERS as readonly string[]).includes(query.status ?? "") ? (query.status as StatusFilter) : "all";
-  const search = (query.q ?? "").trim().slice(0, 100);
-
-  const counts = await prisma.idMember.groupBy({ by: ["status"], where: { programmeId: programme.id }, _count: { _all: true } });
+  const { organisation, canManage, programme, profile, tab, base, status, search, counts, total, joinPath, origin, memberList } = await loadIdProgrammeView({ params, searchParams });
   const countOf = (value: string) => counts.find((row) => row.status === value)?._count._all ?? 0;
-  const total = counts.reduce((sum, row) => sum + row._count._all, 0);
-  const joinPath = `/${organisation.slug}/ids/${programme.slug}`;
-  const origin = publicOrigin();
-
   let content: React.ReactNode = null;
   if (tab === "members") {
-    const where: Prisma.IdMemberWhereInput = {
-      programmeId: programme.id,
-      ...(status !== "all" ? { status } : {}),
-      ...(search
-        ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { idNumber: { contains: search, mode: "insensitive" } }, ...(canManage ? [{ email: { contains: search.toLowerCase() } }] : [])] }
-        : {}),
-    };
-    const filtered = await prisma.idMember.count({ where });
-    const pages = Math.max(1, Math.ceil(filtered / PAGE_SIZE));
-    const page = Math.min(pages, Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1));
-    const members = await prisma.idMember.findMany({
-      where,
-      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      select: { id: true, organisationId: true, name: true, email: true, photoUrl: true, status: true, idNumber: true, expiresAt: true, fieldValues: true, statusReason: true, source: true },
-    });
-    // Emails and answers reach the browser only for owners and admins.
-    const rows: MemberRow[] = members.map((member) => ({
-      id: member.id,
-      name: member.name,
-      email: canManage ? member.email : null,
-      photoUrl: memberPhotoUrl(member),
-      status: member.status,
-      state: cardState(member),
-      idNumber: member.idNumber,
-      validUntil: member.status === "APPROVED" || member.status === "REVOKED" ? formatCardDate(member.expiresAt) ?? "No expiry" : null,
-      values: canManage && member.fieldValues && typeof member.fieldValues === "object" && !Array.isArray(member.fieldValues) ? (member.fieldValues as Record<string, string>) : {},
-      reason: canManage ? member.statusReason : null,
-      source: member.source,
-    }));
+    if (!memberList) notFound();
+    const { filtered, pages, page, rows } = memberList;
     content = (
       <MembersTable
         organisationSlug={organisation.slug}

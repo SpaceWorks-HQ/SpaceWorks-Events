@@ -1,22 +1,19 @@
+import { loadOrgMembersView } from "@/lib/views/app__dashboard__orgSlug__members__page";
 import Link from "next/link";
-import { headers } from "next/headers";
-import type { MembershipRole } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { isOrgAdmin, requireOrgMembership } from "@/lib/permissions";
 import { formatRelativeTime } from "@/lib/format/datetime";
 import { OrgPageHeader } from "@/components/dashboard/org/OrgPageHeader";
 import { OrgInviteLinkPanel } from "@/components/members/OrgInviteLinkPanel";
 import { MemberStat, RolesCard } from "@/components/members/MemberSections";
 import { TeamList } from "@/components/members/TeamList";
-import { firstName, roleBreakdown, roleDots, type RoleCounts, type TeamMemberRow } from "@/components/members/memberSummary";
+import { roleBreakdown, roleDots } from "@/components/members/memberSummary";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/display";
 import { cn } from "@/lib/cn";
 
 import type { Metadata } from "next";
 
-type Props = { params: Promise<{ orgSlug: string }>; searchParams: Promise<{ page?: string }> };
-const MEMBERS_PAGE_SIZE = 100;
+type Props = { params: Promise<{ orgSlug: string; }>; searchParams: Promise<{ page?: string; }>; };
+
 const RECENT_DAYS = 30;
 /** Member join dates and invite ages carry no event context; show them in UTC so every viewer sees the same label. */
 const DISPLAY_TIME_ZONE = "UTC";
@@ -26,89 +23,10 @@ export const metadata: Metadata = {
   description: "Organisation members and roles.",
 };
 
-const joinedFormatter = new Intl.DateTimeFormat("en-GB", { month: "short", year: "numeric", timeZone: DISPLAY_TIME_ZONE });
+
 
 export default async function OrgMembersPage({ params, searchParams }: Props) {
-  const { orgSlug } = await params;
-  const requestedPage = Math.max(1, Number.parseInt((await searchParams).page ?? "1", 10) || 1);
-  const { organisation, membership } = await requireOrgMembership(orgSlug);
-  const adminView = isOrgAdmin(membership.role);
-  const h = await headers();
-  const now = new Date();
-  const recentSince = new Date(now.getTime() - RECENT_DAYS * 86_400_000);
-  const where = { organisationId: organisation.id };
-
-  const [profile, memberCount, roleGroups, recentCount, latestJoiner] = await Promise.all([
-    prisma.organisation.findUniqueOrThrow({ where: { id: organisation.id }, select: { logoUrl: true } }),
-    prisma.membership.count({ where }),
-    prisma.membership.groupBy({ by: ["role"], where, _count: { _all: true } }),
-    prisma.membership.count({ where: { ...where, createdAt: { gte: recentSince } } }),
-    prisma.membership.findFirst({
-      where,
-      orderBy: { createdAt: "desc" },
-      select: { userId: true, createdAt: true, user: { select: { name: true } } },
-    }),
-  ]);
-
-  const memberPages = Math.max(1, Math.ceil(memberCount / MEMBERS_PAGE_SIZE));
-  const memberPage = Math.min(requestedPage, memberPages);
-  // Emails are only selected for OWNER/ADMIN viewers so they never reach a plain member's browser.
-  const members = await prisma.membership.findMany({
-    where,
-    select: { id: true, userId: true, role: true, createdAt: true, user: { select: { name: true, email: adminView } } },
-    orderBy: { createdAt: "asc" },
-    skip: (memberPage - 1) * MEMBERS_PAGE_SIZE,
-    take: MEMBERS_PAGE_SIZE,
-  });
-
-  const openInviteWhere = {
-    organisationId: organisation.id,
-    usedAt: null,
-    OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-  };
-  const [invites, openInviteCount] = adminView
-    ? await Promise.all([
-        prisma.organisationInvite.findMany({
-          where: openInviteWhere,
-          orderBy: { createdAt: "desc" },
-          take: 8,
-          select: { id: true, token: true, createdAt: true },
-        }),
-        prisma.organisationInvite.count({ where: openInviteWhere }),
-      ])
-    : [[], 0];
-
-  const baseUrl: string =
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    (() => {
-      const proto = h.get("x-forwarded-proto") ?? "http";
-      const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-      return `${proto}://${host}`;
-    })();
-
-  const roleCounts: RoleCounts = { OWNER: 0, ADMIN: 0, MEMBER: 0 };
-  for (const group of roleGroups) roleCounts[group.role as MembershipRole] = group._count._all;
-
-  const latestName =
-    latestJoiner == null
-      ? null
-      : latestJoiner.userId === membership.userId
-        ? "you"
-        : (firstName(latestJoiner.user.name) ?? "someone new");
-  const recentHint = latestJoiner
-    ? `Latest: ${latestName}, ${formatRelativeTime(latestJoiner.createdAt, DISPLAY_TIME_ZONE, now).replace(/^(Just now|Yesterday)$/, (word) => word.toLowerCase())}`
-    : "No one has joined yet";
-
-  const rows: TeamMemberRow[] = members.map((m) => ({
-    id: m.id,
-    userId: m.userId,
-    name: m.user.name,
-    ...(adminView ? { email: m.user.email ?? null } : {}),
-    role: m.role,
-    joinedLabel: joinedFormatter.format(m.createdAt),
-    isYou: m.userId === membership.userId,
-  }));
-
+  const { organisation, profile, adminView, memberCount, roleCounts, recentCount, recentHint, openInviteCount, rows, membership, memberPages, memberPage, baseUrl, invites, now } = await loadOrgMembersView({ params, searchParams });
   return (
     <div className="flex flex-col gap-7 pb-4">
       <OrgPageHeader

@@ -1,7 +1,8 @@
 "use server";
 
 import { Prisma, RsvpStatus } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -15,11 +16,13 @@ import { validateAndNormalizeAnswers } from "@/lib/rsvpCore";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { hasCapacityToRestoreConfirmedRsvp } from "@/lib/rsvpCapacity";
 
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
+
 const UNDO_TTL_MS = 5 * 60_000;
 
 export async function addManualRsvp(
   input: unknown,
-): Promise<ActionResult<{ count: number; status: RsvpStatus }>> {
+): Promise<ActionResult<{ count: number; status: RsvpStatus; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (await isActionRateLimited("rsvp", session.user.id)) {
@@ -115,7 +118,7 @@ export async function updateRsvpRegistration(input: unknown): Promise<ActionResu
       }
     });
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string; }).code === "P2002") {
       return { ok: false, error: "This email is already registered for this event." };
     }
     console.error("[rsvp] registration update failed");
@@ -150,7 +153,7 @@ const snapshotSchema = z.object({
   { message: "Invalid RSVP target." },
 );
 
-function revalidateRsvpPaths(orgSlug: string, target: { eventId: string | null; eventInstanceId: string | null; eventSlug?: string }) {
+function revalidateRsvpPaths(orgSlug: string, target: { eventId: string | null; eventInstanceId: string | null; eventSlug?: string; }) {
   revalidatePath(`/${orgSlug}`);
   revalidatePath(`/dashboard/${orgSlug}`);
   if (target.eventId) {
@@ -160,7 +163,7 @@ function revalidateRsvpPaths(orgSlug: string, target: { eventId: string | null; 
   if (target.eventInstanceId) revalidatePath(`/${orgSlug}/i/${target.eventInstanceId}`);
 }
 
-export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId: string }>> {
+export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId: string; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (await isActionRateLimited("rsvp", session.user.id)) return { ok: false, error: "Too many attendee updates. Try again shortly." };
@@ -280,13 +283,15 @@ export async function restoreRsvp(input: unknown): Promise<ActionResult> {
           checkInToken: snapshot.data.checkInToken,
           checkedInAt: snapshot.data.checkedInAt ? new Date(snapshot.data.checkedInAt) : null,
           createdAt: new Date(snapshot.data.createdAt),
-          answers: { create: snapshot.data.answers.map((answer) => ({
-            fieldId: answer.fieldId,
-            valueText: answer.valueText,
-            valueBool: answer.valueBool,
-            valueNumber: answer.valueNumber,
-            valueDate: answer.valueDate ? new Date(answer.valueDate) : null,
-          })) },
+          answers: {
+            create: snapshot.data.answers.map((answer) => ({
+              fieldId: answer.fieldId,
+              valueText: answer.valueText,
+              valueBool: answer.valueBool,
+              valueNumber: answer.valueNumber,
+              valueDate: answer.valueDate ? new Date(answer.valueDate) : null,
+            }))
+          },
         },
       });
       await tx.rsvpDeletionUndo.delete({ where: { id: undo.id } });
@@ -295,7 +300,7 @@ export async function restoreRsvp(input: unknown): Promise<ActionResult> {
     if (!restored) return { ok: false, error: "This RSVP cannot be restored because the event is now at capacity." };
     restoredId = restored.id;
   } catch (error) {
-    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002") {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code?: string; }).code === "P2002") {
       return { ok: false, error: "This RSVP can no longer be restored because a conflicting registration exists." };
     }
     console.error("[rsvp] restore failed");

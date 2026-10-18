@@ -1,55 +1,21 @@
+import { loadOverviewPanel } from "@/lib/views/components__event-dashboard__panels__OverviewPanel";
 import { ArrowRight } from "lucide-react";
 import { Callout } from "@/components/ui/display";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { loadRegistrationFields, loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
-import { loadBroadcastCount, loadEventTeam, loadPendingRequests, loadRecentSignupDates } from "@/lib/eventDashboard/overview";
 import { cn } from "@/lib/cn";
 import { OpenTabButton } from "../EventDashboardTabs";
 import { GlanceCard, ReadinessCard, ShareCard, SignupsCard, TeamCard } from "../overview/OverviewSections";
 import { WaitingForYou } from "../overview/WaitingForYou";
 import { ShortLinkControl } from "../overview/ShortLinkControl";
-import { eventPhase, readinessHeading, readinessItems, signupTrend } from "../overview/readiness";
+import { signupTrend } from "../overview/readiness";
 
 /**
  * Overview tab. Guest data (sign-ups, approvals, counts) is organisation-admin
  * only, matching the RSVP server actions; collaborators get a reduced view
  * with only the checklist items they can act on.
  */
-export async function OverviewPanel({ ctx }: { ctx: EventDashboardContext }) {
-  const { event, permissions, organisation, now } = ctx;
-  const guests = permissions.canManageRegistrations;
-
-  const [counts, fields, emailsSent, signupDates, requests, team] = await Promise.all([
-    guests ? loadRsvpStatusCounts(event.id) : null,
-    guests ? loadRegistrationFields(event.id) : null,
-    guests ? loadBroadcastCount(event.id) : 0,
-    guests ? loadRecentSignupDates(event.id, now) : null,
-    guests ? loadPendingRequests(event.id) : null,
-    permissions.canManageCollaborators ? loadEventTeam(organisation.id, event.id) : null,
-  ]);
-
-  const phase = eventPhase(event.startDateTime, event.endDateTime, now);
-  const approvalRequired = event.privacyType === "APPROVAL_REQUIRED";
-  const items = readinessItems({
-    published: event.status === "PUBLISHED",
-    hasCoverImage: Boolean(event.coverImageUrl),
-    hasAccent: Boolean(event.page?.accentColor),
-    isOnline: event.isOnline,
-    sessionCount: event.sessions.length,
-    registrationFieldCount: fields?.length ?? 0,
-    // Only whether a PIN exists; the hash itself never leaves the server.
-    stationPinSet: Boolean(event.checkInStationPinHash),
-    approvalRequired,
-    pendingApprovals: counts?.pendingApproval ?? 0,
-    emailsSent,
-    permissions,
-  });
-  const heading = readinessHeading({ items, start: event.startDateTime, end: event.endDateTime, now, timeZone: event.timezone });
-
-  const path = `/${organisation.slug}/${event.slug}`;
-  const showWaiting = Boolean(requests && counts && (counts.pendingApproval > 0 || approvalRequired));
-  const hasMain = guests;
-
+export async function OverviewPanel({ ctx }: { ctx: EventDashboardContext; }) {
+  const { event, permissions, organisation, now, counts, signupDates, requests, team, phase, items, heading, path, showWaiting, hasMain } = await loadOverviewPanel({ ctx });
   const aside = (
     <>
       <ShareCard

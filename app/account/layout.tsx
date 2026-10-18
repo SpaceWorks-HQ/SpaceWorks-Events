@@ -1,22 +1,10 @@
-import { prisma } from "@/lib/db";
-import { requireAuth } from "@/lib/permissions";
-import { getAppShellData } from "@/lib/appShell";
+import { loadAccountShell } from "@/lib/views/app__account__layout";
 import { AppShell } from "@/components/chrome/AppShell";
-import { isSidebarCollapsed } from "@/lib/sidebarServer";
 import { AccountSettingsLayout } from "@/components/account/AccountSettingsLayout";
 import { formatMemberSince } from "@/lib/accountSecurity";
 
-export default async function AccountLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireAuth();
-  const [{ user, organisations }, collapsed, account] = await Promise.all([
-    getAppShellData(session.user.id),
-    isSidebarCollapsed(),
-    // Header facts only: booleans and a date, never secrets.
-    prisma.user.findUniqueOrThrow({
-      where: { id: session.user.id },
-      select: { emailVerified: true, mfaEnabledAt: true, createdAt: true },
-    }),
-  ]);
+export default async function AccountLayout({ children }: { children: React.ReactNode; }) {
+  const { user, organisations, collapsed, account } = await loadAccountShell();
   return (
     <AppShell user={user} organisations={organisations} initialCollapsed={collapsed}>
       <AccountSettingsLayout

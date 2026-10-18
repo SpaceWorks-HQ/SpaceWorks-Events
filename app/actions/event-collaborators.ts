@@ -1,7 +1,8 @@
 "use server";
 
 import { EventPermission } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -13,6 +14,8 @@ import { getRequestOrigin } from "@/lib/publicUrl";
 import { startOutboxWorker } from "@/lib/outboxWorker";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const permissions = z.array(z.nativeEnum(EventPermission)).min(1).max(5);
 const target = z.object({ organisationSlug: z.string().min(1), eventId: z.string().min(1).optional(), eventSeriesId: z.string().min(1).optional() }).refine((v) => Boolean(v.eventId) !== Boolean(v.eventSeriesId));
@@ -26,7 +29,7 @@ async function requireAdmin(orgSlug: string, userId: string) {
   return membership && isOrgAdmin(membership.role) ? org : null;
 }
 
-export async function createEventCollaboratorInvite(input: unknown): Promise<ActionResult<{ token: string; inviteId: string }>> {
+export async function createEventCollaboratorInvite(input: unknown): Promise<ActionResult<{ token: string; inviteId: string; }>> {
   const session = await auth();
   if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
   if (await isActionRateLimited("invite", session.user.id)) return { ok: false, error: "Too many invite requests. Please try again later." };
@@ -42,11 +45,13 @@ export async function createEventCollaboratorInvite(input: unknown): Promise<Act
   const origin = await getRequestOrigin();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000);
   const invite = await prisma.$transaction(async (tx) => {
-    const created = await tx.eventCollaboratorInvite.create({ data: {
-    ...(parsed.data.eventId ? { eventId: parsed.data.eventId } : { eventSeriesId: parsed.data.eventSeriesId }),
-    email: parsed.data.email.toLowerCase(), tokenHash: hashEventCollaboratorToken(token), permissions: parsed.data.permissions,
-    createdByUserId: session.user.id, expiresAt,
-    } });
+    const created = await tx.eventCollaboratorInvite.create({
+      data: {
+        ...(parsed.data.eventId ? { eventId: parsed.data.eventId } : { eventSeriesId: parsed.data.eventSeriesId }),
+        email: parsed.data.email.toLowerCase(), tokenHash: hashEventCollaboratorToken(token), permissions: parsed.data.permissions,
+        createdByUserId: session.user.id, expiresAt,
+      }
+    });
     await enqueueCollaboratorInvite(tx, { to: parsed.data.email.toLowerCase(), eventTitle: exists.title, inviteUrl: `${origin}/join/event-collaborator/${token}`, expiresAt: expiresAt.toISOString() });
     return created;
   });

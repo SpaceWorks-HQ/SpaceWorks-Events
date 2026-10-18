@@ -135,3 +135,24 @@ anonymous storage rejection, plain-text database rejection, repeated migrations,
 setup refusing existing credentials and internal-certificate renewal. Validate
 Caddy configuration and complete public HTTPS, sign-in, mail, upload and streaming
 checks on a reachable test domain before deploying to production.
+
+
+## Separate frontend / VPS backend
+
+Run `npm run test:e2e:split` with Docker and Node.js 22. It creates disposable
+PostgreSQL/Redis containers, migrates, builds both workspaces, starts production
+servers on loopback ports 3100/3200, and runs the browser suite plus split-specific
+tenant/MFA/gateway checks. The frontend runs with an independent Server Actions
+key and without backend data, authentication, mail or storage credentials.
+It removes its own containers/volumes on completion; allow both ports to be free.
+Plaintext dependency URLs and HTTP are limited to the existing explicit CI test
+override. Production still requires TLS. It does not test a live Netlify adapter,
+external SMTP/OAuth, S3 uploads or host package installation. The VPS guide covers
+those live acceptance checks and the separate TLS/storage smoke checks.
+
+Run `npm run test:e2e:vps` for the same disposable-dependency browser checks against
+the original single-runtime production application. The split-only scenarios are
+skipped in that mode.
+
+The CI `hosting` matrix runs both deployment browser suites on Node.js 22 with
+disposable containers; it needs no production hosting credentials.

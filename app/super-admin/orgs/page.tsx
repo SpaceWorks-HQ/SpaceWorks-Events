@@ -1,45 +1,16 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminOrgsView } from "@/lib/views/app__super-admin__orgs__page";
 import { AdminPager, AdminSearchForm, LinkRow } from "@/components/super-admin/AdminPanel";
 import { PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; }>;
 };
 
 export default async function SuperAdminOrgsPage({ searchParams }: Props) {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const sp = await searchParams;
-  const q = (sp.q ?? "").trim();
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
-  const take = 50;
-  const skip = page * take;
-
-  const orgs = await prisma.organisation.findMany({
-    where: q
-      ? {
-          OR: [
-            { name: { contains: q, mode: "insensitive" } },
-            { slug: { contains: q, mode: "insensitive" } },
-          ],
-        }
-      : undefined,
-    orderBy: { createdAt: "desc" },
-    take,
-    skip,
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      createdAt: true,
-      _count: {
-        select: { events: true, eventSeries: true, memberships: true },
-      },
-    },
-  });
-
+  const { q, orgs, page } = await loadSuperAdminOrgsView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Organisations" description="Every organisation on this instance, newest first." />

@@ -1,12 +1,8 @@
+import { loadSpeakerView } from "@/lib/views/app__orgSlug__eventSlug__speakers__speakerSlug__page";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowRight, ArrowUpRight } from "lucide-react";
-import { ContentVisibility } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { sanitizeRichText } from "@/lib/richText";
 import { accentStyle } from "@/lib/theme/accent";
-import { effectiveEventProgram } from "@/lib/eventProgram";
 import { formatDayShort, formatTime } from "@/lib/format/datetime";
 import { Breadcrumb } from "@/components/event/Breadcrumb";
 import { Avatar } from "@/components/ui/display";
@@ -15,28 +11,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Event speaker" };
 
-export default async function SpeakerPage({ params }: { params: Promise<{ orgSlug: string; eventSlug: string; speakerSlug: string }> }) {
-  const { orgSlug, eventSlug, speakerSlug } = await params;
-  const org = await prisma.organisation.findUnique({ where: { slug: orgSlug } });
-  if (!org) notFound();
-  const event = await prisma.event.findUnique({ where: { organisationId_slug: { organisationId: org.id, slug: eventSlug } }, include: { page: { select: { isPublished: true, accentColor: true } } } });
-  if (!event) notFound();
-  const access = await resolvePublicEventAccess({ organisationId: org.id, eventId: event.id, status: event.status, privacyType: event.privacyType, websiteReleased: event.page?.isPublished ?? false });
-  if (!access.allowed) notFound();
-  const speaker = await prisma.eventSpeaker.findFirst({ where: { eventId: event.id, slug: speakerSlug, visibility: ContentVisibility.PUBLISHED }, include: { sessions: { include: { session: { include: { track: { select: { name: true } } } } } } } });
-  if (!speaker) notFound();
-
-  // Show live (delay-adjusted) times, matching the programme.
-  const programme = effectiveEventProgram(
-    await prisma.eventSession.findMany({ where: { eventId: event.id, visibility: ContentVisibility.PUBLISHED }, select: { id: true, trackId: true, startDateTime: true, endDateTime: true, sortOrder: true, delayMinutes: true } }),
-  );
-  const startById = new Map(programme.map((item) => [item.id, item.effectiveStartDateTime]));
-  const sessions = speaker.sessions
-    .map(({ session }) => session)
-    .filter((session) => session.visibility === ContentVisibility.PUBLISHED)
-    .map((session) => ({ ...session, start: startById.get(session.id) ?? session.startDateTime }))
-    .sort((a, b) => a.start.getTime() - b.start.getTime());
-
+export default async function SpeakerPage({ params }: { params: Promise<{ orgSlug: string; eventSlug: string; speakerSlug: string; }>; }) {
+  const { event, org, speaker, sessions } = await loadSpeakerView({ params });
   return (
     <div style={accentStyle(event.page?.accentColor)} className="yy-accent-scope mx-auto flex w-full max-w-[832px] flex-col gap-8">
       <Breadcrumb items={[{ label: event.title, href: `/${org.slug}/${event.slug}` }, { label: "Speakers", href: `/${org.slug}/${event.slug}#speakers` }]} />

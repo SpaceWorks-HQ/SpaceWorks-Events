@@ -1,9 +1,8 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminEmailView } from "@/lib/views/app__super-admin__email__page";
 import Link from "next/link";
-import { OutboxStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { EMAIL_SERIES, loadDailyEmail, loadTopOrganisationsByBroadcasts } from "@/lib/superAdminData";
-import { fillDailySeries, formatShare, outboxByKind, sumPoints, windowStart } from "@/lib/superAdminInsights";
+import { EMAIL_SERIES } from "@/lib/superAdminSeries";
+import { formatShare, sumPoints } from "@/lib/superAdminInsights";
 import { SparklineCard } from "@/components/super-admin/Sparkline";
 import { AdminPanel, NameCell } from "@/components/super-admin/AdminPanel";
 import { Chip, EmptyState, PageHeader, StatTile } from "@/components/ui/display";
@@ -11,7 +10,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 const WINDOW_DAYS = 14;
 const BROADCAST_WINDOW_DAYS = 30;
-const STUCK_AFTER_MS = 15 * 60_000;
+
 
 const seriesLabels: Record<(typeof EMAIL_SERIES)[number], string> = {
   queued: "Queued",
@@ -22,38 +21,8 @@ const seriesLabels: Record<(typeof EMAIL_SERIES)[number], string> = {
 const attendanceLabels: Record<string, string> = { ANY: "Everyone", CHECKED_IN: "Checked in", NOT_CHECKED_IN: "Not checked in" };
 
 export default async function SuperAdminEmailPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const now = new Date();
-  const since = windowStart(WINDOW_DAYS, now);
-  const [kindGroups, dailyRows, stuckPending, stuckProcessing, broadcasts, broadcastsCount, topBroadcasters] = await Promise.all([
-    prisma.outboxMessage.groupBy({ by: ["kind", "status"], _count: { _all: true } }),
-    loadDailyEmail(since),
-    prisma.outboxMessage.count({ where: { status: OutboxStatus.PENDING, availableAt: { lt: new Date(now.getTime() - STUCK_AFTER_MS) } } }),
-    prisma.outboxMessage.count({ where: { status: OutboxStatus.PROCESSING, lockedAt: { lt: new Date(now.getTime() - STUCK_AFTER_MS) } } }),
-    prisma.eventBroadcast.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      // Subject and audience only: the body, recipients, and sender are not loaded.
-      select: {
-        id: true,
-        subject: true,
-        design: true,
-        statuses: true,
-        attendance: true,
-        recipientCount: true,
-        createdAt: true,
-        event: { select: { title: true, organisation: { select: { id: true, name: true } } } },
-      },
-    }),
-    prisma.eventBroadcast.count({ where: { createdAt: { gte: windowStart(BROADCAST_WINDOW_DAYS, now) } } }),
-    loadTopOrganisationsByBroadcasts(windowStart(BROADCAST_WINDOW_DAYS, now)).catch(() => []),
-  ]);
-
-  const kinds = outboxByKind(kindGroups.map((group) => ({ kind: group.kind, status: group.status, count: group._count._all })));
-  const daily = fillDailySeries(dailyRows, EMAIL_SERIES, WINDOW_DAYS, now);
-  const totals = kinds.reduce((sum, row) => ({ pending: sum.pending + row.pending, failed: sum.failed + row.failed, sent: sum.sent + row.sent, total: sum.total + row.total }), { pending: 0, failed: 0, sent: 0, total: 0 });
-
+  const { totals, stuckPending, stuckProcessing, daily, kinds, broadcastsCount, topBroadcasters, broadcasts } = await loadSuperAdminEmailView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader

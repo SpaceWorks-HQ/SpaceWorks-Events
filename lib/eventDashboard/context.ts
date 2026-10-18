@@ -6,6 +6,7 @@ import { EventPermission, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getRequestOrigin } from "@/lib/publicUrl";
 import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
+import { eventForView } from "@/lib/frontend/eventView";
 import { canViewEventDashboard } from "@/lib/eventAccess";
 
 /*
@@ -24,7 +25,8 @@ export const eventDashboardInclude = {
   sessions: { orderBy: { sortOrder: "asc" }, include: { speakers: true } },
 } satisfies Prisma.EventInclude;
 
-export type DashboardEvent = Prisma.EventGetPayload<{ include: typeof eventDashboardInclude }>;
+type DashboardEventRecord = Prisma.EventGetPayload<{ include: typeof eventDashboardInclude; }>;
+export type DashboardEvent = Omit<DashboardEventRecord, "checkInStationPinHash" | "checkInStationPinEncrypted" | "checkInStationSecretVersion"> & { stationEnabled: boolean; };
 
 export type EventDashboardPermissions = {
   /** Organisation OWNER/ADMIN. */
@@ -39,7 +41,7 @@ export type EventDashboardPermissions = {
 };
 
 export type EventDashboardContext = {
-  organisation: { id: string; slug: string; name: string };
+  organisation: { id: string; slug: string; name: string; };
   event: DashboardEvent;
   userId: string;
   origin: string;
@@ -67,7 +69,7 @@ export const loadEventDashboard = cache(async (orgSlug: string, eventId: string)
 
   return {
     organisation: { id: organisation.id, slug: organisation.slug, name: organisation.name },
-    event,
+    event: { ...eventForView(event), stationEnabled: Boolean(event.checkInStationPinHash) },
     userId: access.userId,
     origin: await getRequestOrigin(),
     now: new Date(),

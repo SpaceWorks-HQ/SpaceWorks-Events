@@ -1,7 +1,8 @@
 "use server";
 
 import { EventPermission } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -9,6 +10,8 @@ import { canAccessEvent } from "@/lib/eventAccess";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const target = z.object({ organisationSlug: z.string().min(1), eventSeriesId: z.string().min(1) });
 const itemSchema = target.extend({ itemId: z.string().min(1).optional(), title: z.string().trim().min(1).max(200), description: z.string().trim().max(4000).optional().default(""), startDateTime: z.coerce.date(), endDateTime: z.coerce.date() }).refine((v) => v.endDateTime > v.startDateTime, { path: ["endDateTime"], message: "End must be after start." });

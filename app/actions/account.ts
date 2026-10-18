@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import bcrypt from "bcryptjs";
 import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
@@ -12,6 +13,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { flattenZodErrors } from "./utils";
 import type { ActionResult } from "./org";
 import { isUploadedImageUrl, isUserUploadUrl } from "@/lib/uploadUrl";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const updateProfileSchema = z.object({
   name: z
@@ -40,7 +43,7 @@ const updatePasswordSchema = z
 
 export async function updateAccountProfile(
   input: unknown,
-): Promise<ActionResult<{ name: string; profileImageUrl: string | null }>> {
+): Promise<ActionResult<{ name: string; profileImageUrl: string | null; }>> {
   const session = await requireAuth();
   if (await isActionRateLimited("action", session.user.id)) {
     return { ok: false, error: "Too many updates. Please try again later." };
@@ -80,7 +83,7 @@ export async function updateAccountProfile(
 
 export async function updateAccountPassword(
   input: unknown,
-): Promise<ActionResult<{ passwordSet: true }>> {
+): Promise<ActionResult<{ passwordSet: true; }>> {
   const session = await requireAuth();
   if (await isActionRateLimited("auth", session.user.id)) {
     return { ok: false, error: "Too many attempts. Please try again later." };

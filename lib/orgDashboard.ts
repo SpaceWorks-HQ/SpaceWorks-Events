@@ -40,30 +40,30 @@ export type OrgEventRow = HomeEventRow & {
   checkInHref: string | null;
   linkable: boolean;
   /** Past events: "34 of 40 came" and feedback responses. */
-  outcome: { came: number; going: number; feedback: number } | null;
+  outcome: { came: number; going: number; feedback: number; } | null;
 };
 
-export type OrgSeriesCard = { id: string; title: string; rule: string; isDraft: boolean; next: { start: Date; timezone: string; going: number } | null };
+export type OrgSeriesCard = { id: string; title: string; rule: string; isDraft: boolean; next: { start: Date; timezone: string; going: number; } | null; };
 
 export type OrgCalendar = {
   label: string;
   prevKey: string;
   nextKey: string;
-  cells: Array<{ day: number | null; dots: string[]; today: boolean }>;
+  cells: Array<{ day: number | null; dots: string[]; today: boolean; }>;
   events: number;
   seriesDates: number;
 };
 
 export type OrgDashboard = {
-  members: { total: number; owners: number; admins: number; members: number; initials: string[] };
+  members: { total: number; owners: number; admins: number; members: number; initials: string[]; };
   needsYou: DashboardHome["needsYou"];
   next: DashboardHome["next"];
   live: HomeLiveEvent | null;
   calendar: OrgCalendar;
   stats: HomeStat[];
-  events: { view: OrgEventView; rows: OrgEventRow[]; total: number; hasMore: boolean; counts: { upcoming: number; draft: number; past: number } };
-  series: { cards: OrgSeriesCard[]; total: number };
-  setup: { hasProfile: boolean; hasEvent: boolean; hasTeam: boolean; hasPublished: boolean } | null;
+  events: { view: OrgEventView; rows: OrgEventRow[]; total: number; hasMore: boolean; counts: { upcoming: number; draft: number; past: number; }; };
+  series: { cards: OrgSeriesCard[]; total: number; };
+  setup: { hasProfile: boolean; hasEvent: boolean; hasTeam: boolean; hasPublished: boolean; } | null;
 };
 
 const PRIVACY_LABELS: Record<EventPrivacyType, string> = {
@@ -73,11 +73,7 @@ const PRIVACY_LABELS: Record<EventPrivacyType, string> = {
   INVITE_ONLY: "Invite only",
 };
 
-const ROLE_LABELS: Record<MembershipRole, string> = { OWNER: "Owner", ADMIN: "Admin", MEMBER: "Member" };
-
-export function roleLabel(role: MembershipRole) {
-  return ROLE_LABELS[role];
-}
+export { roleLabel } from "./permissionRoles";
 
 /** "2026-10-15" for an instant in a timezone. */
 function localDay(date: Date, timeZone: string) {
@@ -91,7 +87,7 @@ function initialsOf(name: string | null | undefined) {
 }
 
 export async function getOrgDashboard(input: {
-  organisation: { id: string; slug: string; logoUrl: string | null; description: string };
+  organisation: { id: string; slug: string; logoUrl: string | null; description: string; };
   canManage: boolean;
   view: OrgEventView;
   query: string;
@@ -160,17 +156,17 @@ export async function getOrgDashboard(input: {
     prisma.event.findFirst({ where: liveEventWhere(orgEvent, now), orderBy: { startDateTime: "asc" }, select: eventSelect }),
     canManage
       ? prisma.rSVP.findMany({
-          where: {
-            status: "PENDING_APPROVAL",
-            OR: [
-              { event: { organisationId: organisation.id, endDateTime: { gte: now } } },
-              { eventInstance: { endDateTime: { gte: now }, series: { organisationId: organisation.id } } },
-            ],
-          },
-          orderBy: { createdAt: "asc" },
-          take: 500,
-          select: { event: { select: { id: true } }, eventInstance: { select: { series: { select: { id: true } } } } },
-        })
+        where: {
+          status: "PENDING_APPROVAL",
+          OR: [
+            { event: { organisationId: organisation.id, endDateTime: { gte: now } } },
+            { eventInstance: { endDateTime: { gte: now }, series: { organisationId: organisation.id } } },
+          ],
+        },
+        orderBy: { createdAt: "asc" },
+        take: 500,
+        select: { event: { select: { id: true } }, eventInstance: { select: { series: { select: { id: true } } } } },
+      })
       : Promise.resolve([]),
     canManage ? prisma.event.findFirst({ where: viewWhere.draft, orderBy: { createdAt: "desc" }, select: { id: true } }) : Promise.resolve(null),
     prisma.rSVP.findMany({ where: { ...orgRsvp, createdAt: { gte: thirtyDaysAgo } }, select: { createdAt: true }, orderBy: { createdAt: "desc" }, take: SAMPLE_LIMIT }),
@@ -336,4 +332,3 @@ export async function getOrgDashboard(input: {
     setup,
   };
 }
-

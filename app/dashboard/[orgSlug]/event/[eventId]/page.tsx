@@ -1,7 +1,8 @@
+import { loadEventManageView } from "@/lib/views/app__dashboard__orgSlug__event__eventId__page";
 import Link from "next/link";
 import { ArrowUpRight, QrCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EventManageHeader, type EventHeaderStat } from "@/components/dashboard/EventManageHeader";
+import { EventManageHeader } from "@/components/dashboard/EventManageHeader";
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
 import { CopyEventLink } from "@/components/dashboard/home/CopyEventLink";
 import { EventDashboardTabs } from "@/components/event-dashboard/EventDashboardTabs";
@@ -13,32 +14,15 @@ import { CheckInPanel } from "@/components/event-dashboard/panels/CheckInPanel";
 import { FeedbackPanel } from "@/components/event-dashboard/panels/FeedbackPanel";
 import { AnalyticsPanel } from "@/components/event-dashboard/panels/AnalyticsPanel";
 import { SettingsPanel } from "@/components/event-dashboard/panels/SettingsPanel";
-import { loadEventDashboard } from "@/lib/eventDashboard/context";
-import { loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
 
 type Props = {
-  params: Promise<{ orgSlug: string; eventId: string }>;
+  params: Promise<{ orgSlug: string; eventId: string; }>;
 };
 
 export const metadata = { title: "Manage event", robots: { index: false, follow: false } };
 
 export default async function EventManagePage({ params }: Props) {
-  const { orgSlug, eventId } = await params;
-  const ctx = await loadEventDashboard(orgSlug, eventId);
-  const { organisation, event, permissions } = ctx;
-
-  // Live numbers in the header are registration data: organisation admins only.
-  const counts = permissions.canManageRegistrations ? await loadRsvpStatusCounts(event.id) : null;
-  const stats: EventHeaderStat[] | undefined = counts
-    ? [
-        { label: "Going", value: event.capacity ? `${counts.confirmed} / ${event.capacity}` : counts.confirmed, meter: event.capacity ? { filled: counts.confirmed, total: event.capacity, tone: "accent" } : undefined },
-        { label: "Waitlist", value: counts.waitlisted },
-        { label: "To approve", value: counts.pendingApproval },
-        { label: "Checked in", value: counts.checkedIn, meter: counts.confirmed ? { filled: counts.checkedIn, total: counts.confirmed, tone: "success" } : undefined },
-      ]
-    : undefined;
-
-  const publicPath = `/${organisation.slug}/${event.slug}`;
+  const { organisation, event, stats, permissions, ctx, publicPath, counts } = await loadEventManageView({ params });
   return (
     <div className="flex flex-col gap-6">
       <EventManageHeader

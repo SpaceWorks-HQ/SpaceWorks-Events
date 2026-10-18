@@ -1,16 +1,14 @@
+import { loadOrgSlugShell } from "@/lib/views/app__dashboard__orgSlug__layout";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
-import { requireOrgDashboardAccess } from "@/lib/permissions";
 
 export default async function OrgSlugLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ orgSlug: string }>;
+  params: Promise<{ orgSlug: string; }>;
 }) {
-  const { orgSlug } = await params;
-  const { organisation } = await requireOrgDashboardAccess(orgSlug);
-
+  const { organisation } = await loadOrgSlugShell({ params });
   return (
     <DashboardLayout
       organisationName={organisation.name}

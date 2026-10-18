@@ -1,86 +1,13 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminStorageView } from "@/lib/views/app__super-admin__storage__page";
 import { AdminPanel, NameCell } from "@/components/super-admin/AdminPanel";
 import { EmptyState, PageHeader, StatTile } from "@/components/ui/display";
 import { formatBytes } from "@/lib/superAdminInsights";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminStoragePage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  let dbSizeBytes: number | null = null;
-  let tableSizes:
-    | Array<{ table_name: string; total_bytes: number; total_pretty: string }>
-    | null = null;
-
-  try {
-    const dbRows = await prisma.$queryRaw<Array<{ bytes: bigint }>>`
-      select pg_database_size(current_database()) as bytes
-    `;
-    dbSizeBytes = dbRows?.[0]?.bytes ? Number(dbRows[0].bytes) : null;
-
-    tableSizes = await prisma.$queryRaw<
-      Array<{ table_name: string; total_bytes: bigint; total_pretty: string }>
-    >`
-      select
-        relname as table_name,
-        pg_total_relation_size(quote_ident(relname)) as total_bytes,
-        pg_size_pretty(pg_total_relation_size(quote_ident(relname))) as total_pretty
-      from pg_stat_user_tables
-      order by pg_total_relation_size(quote_ident(relname)) desc
-      limit 25
-    `.then((rows) =>
-      rows.map((r) => ({
-        table_name: r.table_name,
-        total_bytes: Number(r.total_bytes),
-        total_pretty: r.total_pretty,
-      })),
-    );
-  } catch {
-    // Some managed Postgres setups restrict these functions. We'll degrade gracefully.
-  }
-
-  const perOrgCounts = await prisma.organisation.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 100,
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      _count: { select: { events: true, eventSeries: true, memberships: true } },
-    },
-  });
-
-  const assetTotals = await prisma.asset
-    .groupBy({
-      by: ["organisationId"],
-      _sum: { byteSize: true },
-      where: { organisationId: { not: null }, byteSize: { not: null } },
-    })
-    .then((rows) => {
-      const m = new Map<string, number>();
-      for (const r of rows) {
-        const orgId = r.organisationId;
-        if (!orgId) continue;
-        const bytes = r._sum.byteSize ? Number(r._sum.byteSize) : 0;
-        m.set(orgId, bytes);
-      }
-      return m;
-    })
-    .catch(() => new Map<string, number>());
-
-  const [assetSummary, assetsByType, recentAssets] = await Promise.all([
-    prisma.asset.aggregate({ _count: { _all: true }, _sum: { byteSize: true } }),
-    prisma.asset.groupBy({ by: ["provider", "contentType"], _count: { _all: true }, _sum: { byteSize: true } }),
-    prisma.asset.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 15,
-      // Object keys and URLs stay private; only type, size, and owner are shown.
-      select: { id: true, contentType: true, byteSize: true, provider: true, createdAt: true, organisation: { select: { id: true, name: true } } },
-    }),
-  ]);
-  const sortedTypes = [...assetsByType].sort((a, b) => Number(b._sum.byteSize ?? 0) - Number(a._sum.byteSize ?? 0));
-
+  const { dbSizeBytes, assetSummary, sortedTypes, recentAssets, tableSizes, perOrgCounts, assetTotals } = await loadSuperAdminStorageView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Storage" description="Database size, largest tables, and each organisation's footprint." />

@@ -1,73 +1,17 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { ApiClientStatus, MembershipRole } from "@prisma/client";
-import { prisma } from "@/lib/db";
-import { credentialState, DAY_MS, formatShare, SECURITY_AUDIT_ACTIONS } from "@/lib/superAdminInsights";
+import { loadSuperAdminSecurityView } from "@/lib/views/app__super-admin__security__page";
+import { ApiClientStatus } from "@prisma/client";
+import { credentialState, formatShare } from "@/lib/superAdminInsights";
 import { AdminPanel, MetricRows, NameCell } from "@/components/super-admin/AdminPanel";
-import { AuditTable, auditRowSelect } from "@/components/super-admin/AuditTable";
+import { AuditTable } from "@/components/super-admin/AuditTable";
 import { Chip, EmptyState, PageHeader, StatTile } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 const ACTION_WINDOW_DAYS = 7;
 
 export default async function SuperAdminSecurityPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const now = new Date();
-  const actionSince = new Date(now.getTime() - ACTION_WINDOW_DAYS * DAY_MS);
-  const managerWhere = { memberships: { some: { role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] } } } };
-
-  const [
-    users,
-    mfaUsers,
-    unverifiedUsers,
-    passwordUsers,
-    managers,
-    managersWithoutMfa,
-    providerGroups,
-    activeSessions,
-    actionCounts,
-    recentSecurityEvents,
-    apiClients,
-    activeClients,
-  ] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.count({ where: { mfaEnabledAt: { not: null } } }),
-    prisma.user.count({ where: { emailVerified: null } }),
-    prisma.user.count({ where: { passwordHash: { not: null } } }),
-    prisma.user.count({ where: managerWhere }),
-    prisma.user.count({ where: { ...managerWhere, mfaEnabledAt: null } }),
-    prisma.account.groupBy({ by: ["provider"], _count: { _all: true } }),
-    prisma.session.count({ where: { expires: { gt: now } } }),
-    prisma.auditEvent.groupBy({
-      by: ["action"],
-      where: { action: { in: [...SECURITY_AUDIT_ACTIONS] }, createdAt: { gte: actionSince } },
-      _count: { _all: true },
-    }),
-    prisma.auditEvent.findMany({
-      where: { action: { in: [...SECURITY_AUDIT_ACTIONS] } },
-      orderBy: { createdAt: "desc" },
-      take: 25,
-      select: auditRowSelect,
-    }),
-    prisma.apiClient.findMany({
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        createdAt: true,
-        organisation: { select: { id: true, name: true, slug: true } },
-        scopes: { select: { scope: true }, orderBy: { scope: "asc" } },
-        // Lifecycle timestamps only; the credential digest is never loaded.
-        credentials: { select: { revokedAt: true, expiresAt: true, lastUsedAt: true }, orderBy: { createdAt: "desc" }, take: 50 },
-      },
-    }),
-    prisma.apiClient.count({ where: { status: ApiClientStatus.ACTIVE } }),
-  ]);
-
-  const sortedActions = [...actionCounts].sort((a, b) => b._count._all - a._count._all);
-
+  const { mfaUsers, users, managersWithoutMfa, managers, unverifiedUsers, activeClients, passwordUsers, providerGroups, activeSessions, sortedActions, recentSecurityEvents, apiClients, now } = await loadSuperAdminSecurityView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Security" description="Account protection, sign-in methods, sensitive activity, and machine API access across the instance." />

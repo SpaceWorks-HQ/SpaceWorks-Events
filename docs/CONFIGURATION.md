@@ -108,3 +108,17 @@ Validate production configuration with:
 ```bash
 npm run production:check
 ```
+
+
+## Separate Netlify frontend and VPS backend
+
+See [split deployment](DEPLOYMENT_SPLIT.md). Set `DEPLOYMENT_MODE=backend` and a
+32-byte hex `FRONTEND_GATEWAY_SECRET` only when enabling the backend peer.
+`AUTH_URL` and `NEXT_PUBLIC_BASE_URL` remain the same frontend HTTPS origin.
+The frontend receives `BACKEND_ORIGIN`, `NEXT_PUBLIC_BACKEND_ORIGIN`,
+`FRONTEND_GATEWAY_SECRET`, `FRONTEND_TRUSTED_IP_HEADER` and its own stable
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`, plus `NEXT_PUBLIC_BASE_URL`. The gateway key
+is server-only; never prefix it with `NEXT_PUBLIC_`. Use the Netlify-provided
+`x-nf-client-connection-ip` header or a directly controlled reverse proxy that
+always overwrites `x-real-ip`. Unknown addresses share the fail-closed fallback
+bucket; forwarded browser-chosen headers are never authoritative.

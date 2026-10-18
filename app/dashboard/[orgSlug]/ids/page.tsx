@@ -1,34 +1,17 @@
+import { loadMemberIdsView } from "@/lib/views/app__dashboard__orgSlug__ids__page";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { OrgPageHeader } from "@/components/dashboard/org/OrgPageHeader";
 import { CreateIdProgrammeForm } from "@/components/member-ids/CreateIdProgrammeForm";
 import { ProgrammeStatusPill } from "@/components/member-ids/ProgrammeStatusPill";
 import { Card, EmptyState } from "@/components/ui/display";
-import { prisma } from "@/lib/db";
-import { isOrgAdmin, requireOrgMembership } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Member IDs", description: "ID card programmes for your organisation." };
 
-type Props = { params: Promise<{ orgSlug: string }> };
+type Props = { params: Promise<{ orgSlug: string; }>; };
 
 export default async function MemberIdsPage({ params }: Props) {
-  const { orgSlug } = await params;
-  const { organisation, membership } = await requireOrgMembership(orgSlug);
-  const canManage = isOrgAdmin(membership.role);
-  const [profile, programmes] = await Promise.all([
-    prisma.organisation.findUniqueOrThrow({ where: { id: organisation.id }, select: { logoUrl: true } }),
-    prisma.idProgramme.findMany({
-      where: { organisationId: organisation.id },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      select: { id: true, name: true, status: true, registrationOpen: true, _count: { select: { members: true } } },
-    }),
-  ]);
-  const pendingCounts = programmes.length
-    ? await prisma.idMember.groupBy({ by: ["programmeId"], where: { organisationId: organisation.id, status: "PENDING" }, _count: { _all: true } })
-    : [];
-  const pending = new Map(pendingCounts.map((row) => [row.programmeId, row._count._all]));
-
+  const { organisation, profile, programmes, canManage, pending } = await loadMemberIdsView({ params });
   return (
     <div className="flex flex-col gap-7 pb-4">
       <OrgPageHeader

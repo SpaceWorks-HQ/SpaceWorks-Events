@@ -29,6 +29,7 @@ New here? Start with [Features](FEATURES.md) for what it does, then [Local devel
 | [Production release](PRODUCTION_RELEASE.md) | Mandatory pre-deployment checklist |
 | [Production operations](production-operations.md) | Deployments, probes, schedulers, backups, incidents, and privacy operations |
 | [Container image publishing](CONTAINER_IMAGES.md) | GitHub Actions setup, build secrets, publication to GitHub Container Registry, and release handoff |
+| [Netlify frontend + VPS backend](DEPLOYMENT_SPLIT.md) | Separate frontend workspace, private API gateway, setup and verification |
 | [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS and scheduler on one VPS; setup, checks, upgrades and backups |
 | [Production Docker deployment](DEPLOYMENT_DOCKER.md) | Current single-host/container deployment, migrations, upgrades, and image limitations |
 | [Isolated staging deployment](DEPLOYMENT_STAGING.md) | Single-VM Docker Compose staging/test setup behind host Nginx |

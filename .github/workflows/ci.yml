@@ -66,3 +66,22 @@ jobs:
       - run: npm run db:verify
         env:
           DATABASE_URL: postgresql://swevents:swevents@localhost:5432/swevents
+
+  hosting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        deployment: [split, vps]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # Generates independent disposable credentials and removes only its own
+      # PostgreSQL/Redis containers. No deployed database or hosting keys needed.
+      - run: npm run test:e2e:${{ matrix.deployment }}

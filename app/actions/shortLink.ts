@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -8,6 +9,8 @@ import { canManageEvents, getMembership } from "@/lib/permissions";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
 import { generateShortCode } from "@/lib/shortLink";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 /*
  * Event short links (`/aB3x9Kq`). Created only on request by an organisation
@@ -25,11 +28,11 @@ const shortLinkSchema = z
   })
   .strict();
 
-export type ShortLinkResult = { ok: true; code: string } | { ok: false; error: string };
+export type ShortLinkResult = { ok: true; code: string; } | { ok: false; error: string; };
 
-type ManageableEvent = { orgId: string; orgSlug: string; userId: string; event: { id: string; shortCode: string | null } };
+type ManageableEvent = { orgId: string; orgSlug: string; userId: string; event: { id: string; shortCode: string | null; }; };
 
-async function resolveManageableEvent(input: unknown): Promise<ManageableEvent | { error: string }> {
+async function resolveManageableEvent(input: unknown): Promise<ManageableEvent | { error: string; }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "You must be signed in." };
   if (await isActionRateLimited("action", session.user.id)) return { error: "Too many updates. Please try again later." };
@@ -56,7 +59,7 @@ async function resolveManageableEvent(input: unknown): Promise<ManageableEvent |
 }
 
 function isUniqueViolation(error: unknown) {
-  return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002";
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: string; }).code === "P2002";
 }
 
 /**
@@ -65,7 +68,7 @@ function isUniqueViolation(error: unknown) {
  * overwrite each other; it returns null when another request won the race.
  */
 async function writeNewCode(eventId: string, organisationId: string, onlyIfUnset: boolean): Promise<string | null | "failed"> {
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0;attempt < MAX_ATTEMPTS;attempt += 1) {
     const code = generateShortCode();
     try {
       const updated = await prisma.event.updateMany({

@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
@@ -9,6 +10,8 @@ import type { ActionResult } from "./org";
 import { z } from "zod";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { EventPrivacyType } from "@prisma/client";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const cancelRsvpSchema = z.object({ checkInToken: z.string().trim().min(8).max(256) }).strict();
 
@@ -20,7 +23,7 @@ const cancelRsvpSchema = z.object({ checkInToken: z.string().trim().min(8).max(2
  * When a CONFIRMED RSVP is cancelled and there are WAITLISTED RSVPs,
  * the oldest waitlisted RSVP is auto-promoted to CONFIRMED.
  */
-export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancelled: true }>> {
+export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancelled: true; }>> {
   const parsed = cancelRsvpSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Missing token." };

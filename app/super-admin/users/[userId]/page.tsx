@@ -1,75 +1,21 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminUserDetailView } from "@/lib/views/app__super-admin__users__userId__page";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { RsvpStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
 import { AdminPanel, MetricRows, NameCell } from "@/components/super-admin/AdminPanel";
-import { AuditTable, auditRowSelect } from "@/components/super-admin/AuditTable";
+import { AuditTable } from "@/components/super-admin/AuditTable";
 import { Avatar, Chip, EmptyState } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  params: Promise<{ userId: string }>;
+  params: Promise<{ userId: string; }>;
 };
 
 /** Support lookup for one person: account posture, organisations, registrations, and their audit trail. */
 export default async function SuperAdminUserDetailPage({ params }: Props) {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const { userId } = await params;
-  const now = new Date();
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    // Flags and counts only: no password hash, MFA seed, or recovery codes.
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      emailVerified: true,
-      mfaEnabledAt: true,
-      createdAt: true,
-      profileImageUrl: true,
-      image: true,
-      _count: { select: { memberships: true, rsvps: true, eventCollaborations: true, sessions: true } },
-    },
-  });
-
-  if (!user) {
-    return <EmptyState mood="sad">User not found.</EmptyState>;
-  }
-
-  const [hasPassword, accounts, activeSessions, memberships, rsvpStatuses, checkedIn, rsvps, auditEvents] = await Promise.all([
-    prisma.user.count({ where: { id: user.id, passwordHash: { not: null } } }),
-    prisma.account.findMany({ where: { userId: user.id }, select: { id: true, provider: true, type: true } }),
-    prisma.session.count({ where: { userId: user.id, expires: { gt: now } } }),
-    prisma.membership.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-      select: { id: true, role: true, createdAt: true, organisation: { select: { id: true, name: true, slug: true } } },
-    }),
-    prisma.rSVP.groupBy({ by: ["status"], where: { userId: user.id }, _count: { _all: true } }),
-    prisma.rSVP.count({ where: { userId: user.id, checkedInAt: { not: null } } }),
-    prisma.rSVP.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      // The check-in token and registration answers are deliberately not selected.
-      select: {
-        id: true,
-        status: true,
-        checkedInAt: true,
-        createdAt: true,
-        event: { select: { title: true, organisation: { select: { id: true, name: true } } } },
-        eventInstance: { select: { startDateTime: true, series: { select: { title: true, organisation: { select: { id: true, name: true } } } } } },
-      },
-    }),
-    prisma.auditEvent.findMany({ where: { actorUserId: user.id }, orderBy: { createdAt: "desc" }, take: 20, select: auditRowSelect }),
-  ]);
-
-  const displayName = user.name ?? user.email ?? "Unnamed user";
-
+  const { user, hasPassword, accounts, activeSessions, memberships, rsvpStatuses, checkedIn, rsvps, auditEvents, displayName } = await loadSuperAdminUserDetailView({ params });
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-4">

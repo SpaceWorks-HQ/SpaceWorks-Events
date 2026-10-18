@@ -1,7 +1,8 @@
 "use server";
 
 import { RsvpStatus } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
@@ -12,6 +13,8 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 function revalidateRsvpPaths(params: {
   orgSlug: string;
@@ -83,14 +86,14 @@ async function loadRsvpContext(
 
 function attendeeEmail(rsvp: {
   guestEmail: string | null;
-  user: { email: string | null } | null;
+  user: { email: string | null; } | null;
 }): string | null {
   return rsvp.user?.email?.trim() || rsvp.guestEmail;
 }
 
 function attendeeName(rsvp: {
   guestName: string | null;
-  user: { name: string | null } | null;
+  user: { name: string | null; } | null;
 }): string | undefined {
   return rsvp.user?.name?.trim() || rsvp.guestName?.trim() || undefined;
 }

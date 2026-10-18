@@ -15,7 +15,8 @@ with the transport and privacy requirements of this Events application. Use
 
 ## Before you start
 
-- A Linux VPS with Docker Engine, the Compose plugin and Git. Start with **2 vCPU,
+- A Linux VPS. The curl installer can install Docker Engine + Compose on fresh
+  Ubuntu/Debian; other distributions need Docker installed first. Start with **2 vCPU,
   4 GB RAM and 30 GB SSD** for a small installation, with extra space for uploads
   and backups. These are starting estimates, not load-tested capacity limits;
   building the image can need additional memory or swap.
@@ -34,14 +35,33 @@ with the transport and privacy requirements of this Events application. Use
 
 ## Guided installation
 
-After installing Docker + Compose and Git, clone this repository, check out the
-reviewed release, and run `bash scripts/setup-vps.sh` in an interactive terminal.
-The script asks for the public hostname, super-admin email, external configuration
-directory, sender and SMTP settings. It hides the SMTP password and shows a summary
-before making changes. It generates configuration, builds the images, applies
-migrations, waits for the stack and runs the VPS checks. It does not install
-Docker, change DNS/firewall rules, configure off-server backups or silently update
-an existing installation. Complete the account and real-delivery checks below.
+Use a reviewed, published source ref containing `install.sh`:
+
+```bash
+SWE_REF=<reviewed-commit-or-tag>
+curl -fsSL "https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/$SWE_REF/install.sh" -o install.sh
+sudo bash install.sh --ref "$SWE_REF"
+```
+
+The bootstrap resolves the ref to one commit, downloads that pinned archive and
+runs its guided setup. For a checkout with Docker already installed, run
+`bash scripts/setup-vps.sh` instead. Choose mode 1 for the whole application on
+the VPS, or mode 2 for [Netlify + VPS](DEPLOYMENT_SPLIT.md).
+
+Setup collects domains, admin email, external configuration directory, verified
+sender and authenticated SMTP settings (password hidden). It shows a summary
+before installing packages, generating secrets, building images or starting
+services. It applies migrations, waits for healthy services and runs the VPS
+checks. DNS, firewall policy, SMTP provisioning and off-server backups remain
+operator tasks. Root is needed only when installing host packages or writing the
+default `/opt` and `/etc` paths; Docker itself grants privileged host access.
+
+Source releases live in `/opt/spaceworks-events/releases/<commit>` and `current`
+points to the successfully installed release. Configuration stays outside the
+source in `/etc/spaceworks-events`. A cancelled or failed setup retains its source
+for inspection; fix the reported issue and rerun the script from that directory.
+If configuration was already generated, use the manual build/start/check commands
+below rather than running setup again. No command deletes existing volumes.
 
 For explicit commands or an automated deployment, follow the manual steps below.
 
@@ -145,6 +165,22 @@ no Cloudflare Worker or host cron.
 
 ## Upgrades and rollback
 
+For a curl-installed release, download a reviewed installer as above, then run:
+
+```bash
+sudo bash install.sh --ref <new-reviewed-commit-or-tag> --update
+```
+
+The updater asks for the existing configuration directory, requires confirmation
+that off-server backups and migrations were reviewed, saves a local pre-upgrade
+database dump and configuration archive, builds the new images, runs preflight,
+applies migrations, verifies the schema and recreates/checks services. It changes
+only `SWE_VERSION` in the existing Compose settings. It retains encryption keys,
+credentials, volumes, previous sources and images. It does not roll back database
+migrations automatically. Local archives contain sensitive data and still need
+encrypted off-server retention. For split hosting, deploy the identical commit to
+Netlify after the backend update.
+
 Back up first and record the current commit and image version. Review database
 migrations for compatibility before changing the running installation.
 
@@ -169,7 +205,7 @@ then recreate the services from those retained images. Reverting images does
 verified backup and a compatible application version. Do not reset volumes to
 repair an upgrade.
 
-A hostname change needs matching `PUBLIC_HOST` in `compose.env`, matching
+A hostname change needs matching `PUBLIC_HOST` and `PUBLIC_ORIGIN` in `compose.env`, matching
 `AUTH_URL` / `NEXT_PUBLIC_BASE_URL` in `app.env`, a new image version and an app
 rebuild. Also update DNS, OAuth callbacks, monitoring and any embeds; retain an
 HTTPS redirect for previously shared links. Keep `actions-key` and its matching
@@ -234,29 +270,8 @@ healthcheck becomes unhealthy; alert and investigate.
 
 ## A separate frontend on Netlify
 
-The related [SpaceWorks repository](https://github.com/SpaceWorks-HQ/SpaceWorks)
-uses a separate Vite React SPA and a Django API. Its
-[`netlify.toml`](https://github.com/SpaceWorks-HQ/SpaceWorks/blob/main/netlify.toml)
-builds `frontend/` and points it at the backend with `VITE_API_URL`.
-
-**Space Works Events currently has one Next.js application**, with Server
-Components, Auth.js sessions, Server Actions and HTTP handlers together. There
-is no standalone `frontend/`, static dashboard build or configurable remote
-backend URL. Hosting only its existing UI on Netlify and only its backend on
-this VPS is not an implemented deployment mode. Setting CORS or
-`ALLOWED_ACTION_ORIGINS` does not separate those server features.
-
-Supported arrangements today are:
-
-| Arrangement | Where code runs |
-| --- | --- |
-| Complete VPS stack in this guide | UI rendering, auth, actions, API, database, Redis and files on the VPS; SMTP through your relay |
-| VPS app with managed dependencies | Next.js in Docker; TLS database, Redis and private S3 elsewhere; see [Docker deployment](DEPLOYMENT_DOCKER.md) |
-| Separate marketing site on Netlify | Your own static site on Netlify links to the Events app on the VPS, or embeds its public event page using the exact HTTPS `ALLOWED_EMBED_ORIGINS` allowlist |
-| Frontend-only Netlify + Events backend on VPS | Requires a separate frontend and explicit browser-facing APIs/authentication; not supplied by this repository |
-
-Deploying the entire Next.js application through a Netlify Next.js integration
-would also move server rendering, auth and actions there. It is a separate
-platform deployment that needs adapter, streaming, background-work and security
-verification; this repository does not provide a tested Netlify deployment.
-Keep database, Redis, storage and SMTP credentials server-side in every case.
+Choose mode 2 in the installer and follow [Netlify frontend + Docker VPS backend](DEPLOYMENT_SPLIT.md).
+The same data services, private TLS, migrations, scheduler, backups and renewal
+procedures apply. `PUBLIC_HOST` is the VPS API hostname; `PUBLIC_ORIGIN`, `AUTH_URL`
+and `NEXT_PUBLIC_BASE_URL` are the frontend HTTPS origin. Public variables require
+rebuilding the appropriate application image/workspace when changed.

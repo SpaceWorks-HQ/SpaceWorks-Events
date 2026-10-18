@@ -103,7 +103,7 @@ services:
       context: .
       target: runner
       args:
-        NEXT_PUBLIC_BASE_URL: https://${PUBLIC_HOST:?Set the public hostname}
+        NEXT_PUBLIC_BASE_URL: ${PUBLIC_ORIGIN:-https://${PUBLIC_HOST:?Set the public hostname}}
       secrets: [NEXT_SERVER_ACTIONS_ENCRYPTION_KEY]
     depends_on:
       postgres: { condition: service_healthy }

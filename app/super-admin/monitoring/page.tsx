@@ -1,13 +1,12 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
+import { loadSuperAdminMonitoringView } from "@/lib/views/app__super-admin__monitoring__page";
 import { CheckCircle2, XCircle } from "lucide-react";
-import { prisma } from "@/lib/db";
-import { getApiMonitorSnapshot } from "@/lib/apiMonitor";
 import { Histogram } from "@/components/super-admin/Histogram";
 import { AdminPanel } from "@/components/super-admin/AdminPanel";
 import { Chip, EmptyState, PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
-function OkChip(props: { ok: boolean; labelOk?: string; labelBad?: string }) {
+function OkChip(props: { ok: boolean; labelOk?: string; labelBad?: string; }) {
   return (
     <Chip tone={props.ok ? "success" : "danger"} icon={props.ok ? <CheckCircle2 /> : <XCircle />}>
       {props.ok ? props.labelOk ?? "OK" : props.labelBad ?? "Error"}
@@ -16,25 +15,8 @@ function OkChip(props: { ok: boolean; labelOk?: string; labelBad?: string }) {
 }
 
 export default async function SuperAdminMonitoringPage() {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const snapshot = getApiMonitorSnapshot();
-
-  let dbOk = true;
-  let dbName: string | null = null;
-  try {
-    const rows = await prisma.$queryRaw<Array<{ db: string }>>`
-      select current_database() as db
-    `;
-    dbName = rows?.[0]?.db ?? null;
-  } catch {
-    dbOk = false;
-  }
-
-  const configuredSuperAdmin = !!process.env.SUPER_ADMIN_EMAIL;
-  const configuredAuthSecret = !!process.env.AUTH_SECRET;
-  const configuredDbUrl = !!process.env.DATABASE_URL;
-
+  const { dbName, dbOk, configuredDbUrl, configuredAuthSecret, configuredSuperAdmin, snapshot } = await loadSuperAdminMonitoringView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Monitoring" description="Health checks and API request stats for this server." />

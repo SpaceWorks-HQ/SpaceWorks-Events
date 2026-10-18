@@ -7,7 +7,7 @@
  * request URL, is never logged, and is never stored by this module.
  */
 
-export type TicketCheckInStatus = { checkedIn: boolean; checkedInAt: string | null };
+export type TicketCheckInStatus = { checkedIn: boolean; checkedInAt: string | null; };
 
 type EventSourceLike = {
   addEventListener(type: string, listener: (event: MessageEvent) => void): void;
@@ -82,7 +82,7 @@ export function watchTicketCheckIn(
   onCheckedIn: (checkedInAt: string | null) => void,
   env: TicketCheckInWatcherEnv | null = defaultEnv(),
 ): () => void {
-  if (!env || !token) return () => {};
+  if (!env || !token) return () => { };
 
   const base = `/api/ticket/${encodeURIComponent(token)}`;
   const doc = env.document;
@@ -193,7 +193,7 @@ export function watchTicketCheckIn(
     closeSource();
     let stream: EventSourceLike;
     try {
-      stream = new EventSourceImpl(`${base}/events`);
+      stream = new EventSourceImpl(`${process.env.NEXT_PUBLIC_BACKEND_ORIGIN ?? ""}${base}/events`);
     } catch {
       mode = "poll";
       schedule(TICKET_POLL_INTERVAL_MS, poll);

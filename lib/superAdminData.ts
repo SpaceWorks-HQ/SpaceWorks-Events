@@ -3,7 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { DailyRow } from "@/lib/superAdminInsights";
 
-export const ACTIVITY_SERIES = ["signups", "organisations", "events", "rsvps", "checkins", "feedback", "broadcasts"] as const;
+
 export type ActivitySeries = (typeof ACTIVITY_SERIES)[number];
 
 /**
@@ -29,7 +29,7 @@ export function loadDailyActivity(since: Date) {
   `;
 }
 
-export const EMAIL_SERIES = ["queued", "sent", "failed"] as const;
+
 
 /** Per-day outbox volume: messages created, delivered (by sent time), and failed (by creation). */
 export function loadDailyEmail(since: Date) {
@@ -44,7 +44,7 @@ export function loadDailyEmail(since: Date) {
 
 /** Organisations with the most registrations created since `since` (event and series occurrences). */
 export function loadTopOrganisationsByRsvps(since: Date, limit = 10) {
-  return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; rsvps: number }>>`
+  return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; rsvps: number; }>>`
     select o.id, o.name, o.slug, count(r.id)::int as rsvps
     from "RSVP" r
     left join "Event" e on e.id = r."eventId"
@@ -60,7 +60,7 @@ export function loadTopOrganisationsByRsvps(since: Date, limit = 10) {
 
 /** Organisations that sent the most broadcasts since `since`, with total recipients. */
 export function loadTopOrganisationsByBroadcasts(since: Date, limit = 10) {
-  return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; broadcasts: number; recipients: number }>>`
+  return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; broadcasts: number; recipients: number; }>>`
     select o.id, o.name, o.slug, count(b.id)::int as broadcasts, coalesce(sum(b."recipientCount"), 0)::int as recipients
     from "EventBroadcast" b
     join "Event" e on e.id = b."eventId"
@@ -71,3 +71,6 @@ export function loadTopOrganisationsByBroadcasts(since: Date, limit = 10) {
     limit ${limit}
   `;
 }
+
+import { ACTIVITY_SERIES } from "./superAdminSeries";
+export { ACTIVITY_SERIES, EMAIL_SERIES } from "./superAdminSeries";

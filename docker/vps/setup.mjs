@@ -4,13 +4,19 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 
 process.umask(0o077);
-const dir = "/config";
-const [host, email, version] = process.argv.slice(2);
+const dir = process.env.SWE_SETUP_CONFIG_DIR || "/config";
+if (!dir.startsWith("/") || dir.includes("\0")) throw new Error("Use an absolute external configuration directory.");
+const [hostInput, email, version, frontendInput] = process.argv.slice(2);
+const host = hostInput?.toLowerCase();
+const frontendHost = frontendInput?.toLowerCase();
+const hostname = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i;
+if (frontendHost && (!hostname.test(frontendHost) || frontendHost === host)) throw new Error("Split mode requires a distinct frontend hostname.");
+const publicOrigin = `https://${frontendHost || host}`;
 const renew = host === "renew-certificates";
 if (!renew && (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(host ?? "") || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email ?? "") || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(version ?? ""))) {
   throw new Error("Usage: setup.mjs events.example.com admin@example.com release-version (or renew-certificates)");
 }
-if (!renew && existsSync(`${dir}/compose.env`)) throw new Error("Configuration exists; refusing to replace secrets. Use renew-certificates only for TLS renewal.");
+if (!renew && ["compose.env", "app.env", "actions-key"].some((name) => existsSync(`${dir}/${name}`))) throw new Error("Configuration exists; refusing to replace secrets. Use renew-certificates only for TLS renewal.");
 if (renew && !existsSync(`${dir}/tls/ca.key`)) throw new Error("Existing CA required for certificate renewal.");
 const write = (name, value) => writeFileSync(`${dir}/${name}`, value, { mode: 0o600 });
 const openssl = (...args) => execFileSync("openssl", args, { stdio: "ignore" });
@@ -36,7 +42,14 @@ const adminPassword = hex(), appPassword = hex(), redisPassword = hex(), storage
 const actionsKey = key(), cronSecret = hex(), readinessSecret = hex();
 const dbUrl = (user, password) => `postgresql://${user}:${password}@postgres:5432/swevents?sslmode=require&sslcert=/tls/ca.crt&sslaccept=strict`;
 const envText = (values) => Object.entries(values).map(([name, value]) => `${name}='${String(value).replaceAll("'", "\\'")}'`).join("\n") + "\n";
-write("compose.env", envText({ PUBLIC_HOST: host, SWE_VERSION: version }));
+write("compose.env", envText({ PUBLIC_HOST: host, PUBLIC_ORIGIN: publicOrigin, SWE_VERSION: version }));
+const peerKey = frontendHost ? hex() : undefined;
+if (frontendHost) write("frontend.env", envText({
+  NEXT_PUBLIC_BASE_URL: publicOrigin, BACKEND_ORIGIN: `https://${host}`,
+  NEXT_PUBLIC_BACKEND_ORIGIN: `https://${host}`, FRONTEND_GATEWAY_SECRET: peerKey,
+  FRONTEND_TRUSTED_IP_HEADER: "x-nf-client-connection-ip",
+  NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: key(),
+}));
 write("actions-key", actionsKey);
 write("postgres.env", envText({ POSTGRES_USER: "swevents", POSTGRES_DB: "swevents", POSTGRES_PASSWORD: adminPassword, POSTGRES_APP_PASSWORD: appPassword, POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256" }));
 write("migrator.env", envText({ DATABASE_URL: dbUrl("swevents", adminPassword), DIRECT_URL: dbUrl("swevents", adminPassword) }));
@@ -44,7 +57,8 @@ write("storage.env", envText({ MINIO_ROOT_USER: "swevents-root", MINIO_ROOT_PASS
 write("storage-init.env", envText({ MC_HOST_local: `https://swevents-root:${storageRoot}@storage:9000`, S3_APP_PASSWORD: storageApp, SSL_CERT_FILE: "/tls/ca.crt" }));
 write("scheduler.env", envText({ CRON_SECRET: cronSecret }));
 write("app.env", envText({
-  NODE_ENV: "production", AUTH_URL: `https://${host}`, NEXT_PUBLIC_BASE_URL: `https://${host}`,
+  NODE_ENV: "production", AUTH_URL: publicOrigin, NEXT_PUBLIC_BASE_URL: publicOrigin,
+  ...(frontendHost ? { DEPLOYMENT_MODE: "backend", FRONTEND_GATEWAY_SECRET: peerKey } : {}),
   DATABASE_URL: dbUrl("swevents_app", appPassword), DIRECT_URL: dbUrl("swevents_app", appPassword),
   REDIS_URL: `rediss://default:${redisPassword}@redis:6379`, NODE_EXTRA_CA_CERTS: "/tls/ca.crt",
   AUTH_SECRET: hex(), CRON_SECRET: cronSecret, HEALTHCHECK_SECRET: readinessSecret,

@@ -7,7 +7,8 @@ const source = (path: string) => readFileSync(resolve(root, path), "utf8");
 
 describe("frontend production boundaries", () => {
   it("uses explicit bounded public and attendee browser collections", () => {
-    const publicPage = source("app/[orgSlug]/page.tsx");
+    const publicPage = source("lib/views/app__orgSlug__page.ts");
+    expect(source("app/[orgSlug]/page.tsx")).not.toContain("prisma.");
     // The event dashboard loads attendees through its shared, request-cached loader.
     const eventDashboard = source("lib/eventDashboard/data.ts");
     expect(publicPage).toContain("select: publicOrgEventSelect");

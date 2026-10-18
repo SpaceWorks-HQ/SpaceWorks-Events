@@ -1,7 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
+import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { prisma } from "@/lib/db";
 import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
 import { requireSuperAdminMfa } from "@/lib/permissions";
@@ -9,6 +10,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { encryptInstanceConfigSecret } from "@/lib/instanceConfigSecrets";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
+
+const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const signupSettingSchema = z.object({ allowNewUserSignups: z.boolean() });
 const serviceSettingsSchema = z.object({

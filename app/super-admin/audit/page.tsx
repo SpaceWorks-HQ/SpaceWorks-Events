@@ -1,38 +1,16 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminAuditView } from "@/lib/views/app__super-admin__audit__page";
 import { AdminPager, AdminSearchForm } from "@/components/super-admin/AdminPanel";
-import { AuditTable, auditRowSelect } from "@/components/super-admin/AuditTable";
+import { AuditTable } from "@/components/super-admin/AuditTable";
 import { PageHeader } from "@/components/ui/display";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; }>;
 };
 
 export default async function SuperAdminAuditPage({ searchParams }: Props) {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const sp = await searchParams;
-  const q = (sp.q ?? "").trim().slice(0, 120);
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
-  const take = 50;
-
-  const events = await prisma.auditEvent.findMany({
-    where: q
-      ? {
-          OR: [
-            { action: { contains: q, mode: "insensitive" } },
-            { targetType: { contains: q, mode: "insensitive" } },
-            { actor: { is: { email: { contains: q, mode: "insensitive" } } } },
-            { organisation: { is: { name: { contains: q, mode: "insensitive" } } } },
-          ],
-        }
-      : undefined,
-    orderBy: { createdAt: "desc" },
-    skip: page * take,
-    take,
-    select: auditRowSelect,
-  });
-
+  const { q, events, page } = await loadSuperAdminAuditView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Audit log" description="Append-only security and application activity. Sensitive values are redacted before display." />

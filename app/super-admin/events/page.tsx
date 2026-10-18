@@ -1,61 +1,17 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminEventsView } from "@/lib/views/app__super-admin__events__page";
 import { AdminPager, AdminSearchForm, LinkRow, NameCell, StatusValue } from "@/components/super-admin/AdminPanel";
 import { Chip, PageHeader } from "@/components/ui/display";
 import { Input } from "@/components/ui/field";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; org?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; org?: string; page?: string; }>;
 };
 
 export default async function SuperAdminEventsPage({ searchParams }: Props) {
-  // Layout checks don't re-run on client navigation, so every page checks too.
   await requireSuperAdminMfa();
-  const sp = await searchParams;
-  const q = (sp.q ?? "").trim();
-  const org = (sp.org ?? "").trim();
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
-  const take = 50;
-  const skip = page * take;
-
-  const events = await prisma.event.findMany({
-    where: {
-      ...(org ? { organisationId: org } : {}),
-      ...(q
-        ? {
-            OR: [
-              { title: { contains: q, mode: "insensitive" } },
-              { slug: { contains: q, mode: "insensitive" } },
-              {
-                organisation: { name: { contains: q, mode: "insensitive" } },
-              },
-            ],
-          }
-        : {}),
-    },
-    orderBy: { createdAt: "desc" },
-    take,
-    skip,
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      status: true,
-      privacyType: true,
-      startDateTime: true,
-      createdAt: true,
-      organisation: { select: { id: true, slug: true, name: true } },
-      _count: { select: { rsvps: true } },
-    },
-  });
-
-  const checkedIn = events.length === 0
-    ? new Map<string, number>()
-    : await prisma.rSVP
-        .groupBy({ by: ["eventId"], where: { eventId: { in: events.map((e) => e.id) }, checkedInAt: { not: null } }, _count: { _all: true } })
-        .then((rows) => new Map(rows.map((row) => [row.eventId ?? "", row._count._all])));
-
+  const { q, org, events, checkedIn, page } = await loadSuperAdminEventsView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Events" description="Events across every organisation, newest first." />

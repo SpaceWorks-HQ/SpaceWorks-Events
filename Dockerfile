@@ -9,6 +9,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json .npmrc ./
+COPY frontend/package.json ./frontend/package.json
 # `npm ci` runs the Prisma postinstall hook, which needs the schema available.
 COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
@@ -57,6 +58,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
+# This stage starts fresh; avoid writing a compiler cache that the runner never uses.
+ENV SWE_DISABLE_BUILD_CACHE=1
 
 RUN npx prisma generate
 # The key is consumed by Next.js while compiling Server Actions. Every image

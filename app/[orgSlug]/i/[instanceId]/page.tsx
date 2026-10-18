@@ -1,93 +1,22 @@
-import { notFound } from "next/navigation";
+import { loadRouteMetadata } from "@/lib/views/app__orgSlug__i__instanceId__page";
+import { loadInstanceEventView } from "@/lib/views/app__orgSlug__i__instanceId__page";
 import type { Metadata } from "next";
 import { ArrowRight, Clock } from "lucide-react";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
-import { prisma } from "@/lib/db";
 import { RsvpForm } from "@/components/rsvp/RsvpForm";
-import { isEventPublished, shouldIndexPublicEvent } from "@/lib/eventVisibility";
-import { countConfirmedForInstance } from "@/lib/rsvpCapacity";
-import { safeTimeZone } from "@/lib/timeZone";
 import Link from "next/link";
-import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { accentStyle, INK_ACCENT } from "@/lib/theme/accent";
-import { formatDateBlock, formatDayLong, formatTimeRange, formatDayShort } from "@/lib/format/datetime";
+import { formatDayLong, formatTimeRange, formatDayShort } from "@/lib/format/datetime";
 import { recurrenceChip } from "@/lib/format/recurrence";
 import { Button } from "@/components/ui/button";
 import { Chip, DateBlock, ProgressBar } from "@/components/ui/display";
 
-type Props = { params: Promise<{ orgSlug: string; instanceId: string }> };
+type Props = { params: Promise<{ orgSlug: string; instanceId: string; }>; };
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { orgSlug, instanceId } = await params;
-  const org = await prisma.organisation.findUnique({
-    where: { slug: orgSlug },
-  });
-  if (!org) return { title: "Event" };
-  const instance = await prisma.eventInstance.findFirst({
-    where: {
-      id: instanceId,
-      series: { organisationId: org.id },
-    },
-    include: { series: true },
-  });
-  if (!instance) return { title: "Event" };
-  const series = instance.series;
-  const noindex = { index: false, follow: false } as const;
-  if (!isEventPublished(series.status)) {
-    return { title: "Event", robots: noindex };
-  }
-  if (series.privacyType === EventPrivacyType.INVITE_ONLY) {
-    return { title: "Event", robots: noindex };
-  }
-  if (!shouldIndexPublicEvent(series.status, series.privacyType)) {
-    return {
-      title: series.title,
-      description: series.description.slice(0, 160) || `${series.title} · ${org.name}`,
-      robots: noindex,
-    };
-  }
-  const description =
-    series.description.slice(0, 160) || `${series.title} · ${org.name}`;
-  return {
-    title: series.title,
-    description,
-    openGraph: { title: series.title, description, type: "website" },
-  };
-}
+export async function generateMetadata({ params }: Props): Promise<Metadata> { return loadRouteMetadata({ params }); }
 
 export default async function InstanceEventPage({ params }: Props) {
-  const { orgSlug, instanceId } = await params;
-  const org = await prisma.organisation.findUnique({
-    where: { slug: orgSlug },
-  });
-  if (!org) notFound();
-
-  const instance = await prisma.eventInstance.findFirst({
-    where: {
-      id: instanceId,
-      series: { organisationId: org.id },
-    },
-    include: {
-      series: true,
-    },
-  });
-  if (!instance) notFound();
-
-  const series = instance.series;
-  const access = await resolvePublicEventAccess({ organisationId: org.id, eventSeriesId: series.id, status: series.status, privacyType: series.privacyType });
-  if (!access.allowed) notFound();
-
-  const isPast = instance.endDateTime <= new Date();
-  const showRsvp = series.status === EventStatus.PUBLISHED && !isPast;
-  const confirmedCount = await countConfirmedForInstance(instance.id);
-  const spotsLeft =
-    series.capacity != null
-      ? Math.max(0, series.capacity - confirmedCount)
-      : null;
-  const full = spotsLeft !== null && spotsLeft <= 0;
-  const timeZone = safeTimeZone(series.timezone);
-  const dateBlock = formatDateBlock(instance.startDateTime, timeZone);
-
+  const { org, series, access, dateBlock, instance, timeZone, showRsvp, full, confirmedCount, spotsLeft, isPast } = await loadInstanceEventView({ params });
   return (
     <div style={accentStyle(INK_ACCENT)} className="yy-accent-scope grid gap-10 md:grid-cols-[minmax(0,1fr)_360px] md:gap-14">
       <article className="flex min-w-0 flex-col gap-5">

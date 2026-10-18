@@ -3,10 +3,10 @@ import "server-only";
 import { Prisma, RsvpStatus } from "@prisma/client";
 import { getCheckInDetails, getRegistrationDetails } from "@/lib/checkInDetails";
 import { prisma } from "@/lib/db";
-import { normalizeIdCardPrintSettings, SPONSOR_LIMIT_MAX, type IdCardPrintSettings } from "@/lib/idCardPrint";
-import { attendeePhotoUrl, managedImageUrl } from "./imageUrl";
+import { SPONSOR_LIMIT_MAX, type IdCardPrintSettings } from "@/lib/idCardPrint";
+import { attendeePhotoUrl } from "./imageUrl";
 import type { BadgeStatusFilter } from "./filters";
-import type { BadgeBranding, IdCardAttendee } from "./types";
+import type { IdCardAttendee } from "./types";
 
 /*
  * Database side of badges: the event's branding and saved design, and the
@@ -29,32 +29,13 @@ export const badgeEventSelect = {
   },
 } satisfies Prisma.EventSelect;
 
-export type BadgeEvent = Prisma.EventGetPayload<{ select: typeof badgeEventSelect }>;
+export type BadgeEvent = Prisma.EventGetPayload<{ select: typeof badgeEventSelect; }>;
 
 export function loadBadgeEvent(eventId: string) {
   return prisma.event.findUnique({ where: { id: eventId }, select: badgeEventSelect });
 }
 
-/** Only this organisation's own managed uploads are used. */
-export function badgeBrandingFor(event: BadgeEvent): BadgeBranding {
-  const organisationId = event.organisationId;
-  return {
-    eventAccent: event.page?.accentColor ?? null,
-    organisationLogoUrl: managedImageUrl(event.organisation.logoUrl, { kind: "organisation", organisationId, category: "organisation-logos" }),
-    eventLogoUrl: managedImageUrl(event.page?.logoUrl, { kind: "organisation", organisationId, category: "event-page-logos" }),
-    sponsorLogoUrls: event.sponsors.flatMap((sponsor) => managedImageUrl(sponsor.logoUrl, { kind: "organisation", organisationId, category: "event-sponsors" }) ?? []),
-  };
-}
-
-export type BadgeDesignState = { settings: IdCardPrintSettings; saved: boolean; updatedAt: string | null };
-
-export function badgeDesignFor(event: Pick<BadgeEvent, "title" | "organisation" | "badgeDesign">): BadgeDesignState {
-  return {
-    settings: normalizeIdCardPrintSettings(event.badgeDesign?.settings ?? null, event.title, event.organisation.name),
-    saved: Boolean(event.badgeDesign),
-    updatedAt: event.badgeDesign?.updatedAt.toISOString() ?? null,
-  };
-}
+export type BadgeDesignState = { settings: IdCardPrintSettings; saved: boolean; updatedAt: string | null; };
 
 export function badgeStatusWhere(filter: BadgeStatusFilter): Prisma.RSVPWhereInput {
   if (filter === "checked-in") return { checkedInAt: { not: null } };
@@ -68,7 +49,7 @@ export const badgeRsvpInclude = {
   answers: { include: { field: { select: { key: true, label: true } } } },
 } satisfies Prisma.RSVPInclude;
 
-type BadgeRsvp = Prisma.RSVPGetPayload<{ include: typeof badgeRsvpInclude }>;
+type BadgeRsvp = Prisma.RSVPGetPayload<{ include: typeof badgeRsvpInclude; }>;
 
 export function badgeAttendeeFor(rsvp: BadgeRsvp): IdCardAttendee {
   return {
@@ -112,3 +93,5 @@ export async function* badgeAttendees(eventId: string, filter: BadgeStatusFilter
     cursor = rows.at(-1)!.id;
   }
 }
+
+export { badgeBrandingFor, badgeDesignFor } from "@/lib/badge/presentation";

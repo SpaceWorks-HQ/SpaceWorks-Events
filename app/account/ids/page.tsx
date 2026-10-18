@@ -1,29 +1,19 @@
+import { loadAccountIdsView } from "@/lib/views/app__account__ids__page";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { MemberStatusPill } from "@/components/member-ids/StatusPill";
 import { WalletCard } from "@/components/member-ids/WalletCard";
 import { EmptyState } from "@/components/ui/display";
-import { prisma } from "@/lib/db";
 import { cardState } from "@/lib/memberIds/core";
-import { walletSelect, walletWhere } from "@/lib/memberIds/access";
-import { memberCardPerson, programmeBranding, programmeDesign, publicOrigin } from "@/lib/memberIds/data";
+import { memberCardPerson, programmeBranding, programmeDesign } from "@/lib/memberIds/presentation";
 import { sideSettings } from "@/lib/memberIds/design";
-import { requireAuth } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Your IDs", description: "ID cards issued to you." };
 export const dynamic = "force-dynamic";
 
 /** The signed-in person's ID cards: their own requests, and cards issued to their verified email. */
 export default async function AccountIdsPage() {
-  const session = await requireAuth();
-  const members = await prisma.idMember.findMany({
-    where: await walletWhere(session.user.id),
-    select: walletSelect,
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-  const origin = publicOrigin();
-
+  const { members, origin } = await loadAccountIdsView();
   if (members.length === 0) {
     return (
       <EmptyState title="No ID cards yet">

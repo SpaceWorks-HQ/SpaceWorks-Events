@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/db";
+import { loadJoinOrganisationView } from "@/lib/views/app__join__org__token__page";
 import { AcceptInviteButton } from "@/components/invites/AcceptInviteButton";
 import { Chip, OrgLogo } from "@/components/ui/display";
 import type { Metadata } from "next";
@@ -9,15 +7,8 @@ export const metadata: Metadata = { title: "Join organisation", robots: { index:
 
 const roleLabels = { OWNER: "Owner", ADMIN: "Admin", MEMBER: "Member" } as const;
 
-export default async function JoinOrganisationPage({ params }: { params: Promise<{ token: string }> }) {
-  const { token } = await params;
-  const session = await auth();
-  const joinUrl = `/join/org/${encodeURIComponent(token)}`;
-  if (!session?.user?.id) redirect(`/login?callbackUrl=${encodeURIComponent(joinUrl)}`);
-  const invite = await prisma.organisationInvite.findUnique({
-    where: { token },
-    select: { usedAt: true, expiresAt: true, role: true, organisation: { select: { name: true, logoUrl: true } } },
-  });
+export default async function JoinOrganisationPage({ params }: { params: Promise<{ token: string; }>; }) {
+  const { token, session, invite } = await loadJoinOrganisationView({ params });
   if (!invite || invite.usedAt || (invite.expiresAt && invite.expiresAt <= new Date())) {
     return (
       <div className="mx-auto flex w-full max-w-[440px] flex-col gap-2 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">

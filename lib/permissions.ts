@@ -6,11 +6,6 @@ import { prisma } from "@/lib/db";
 import { hasValidSuperAdminMfaProof, SUPER_ADMIN_MFA_COOKIE } from "@/lib/superAdminMfa";
 import type { Session } from "next-auth";
 
-const roleRank: Record<MembershipRole, number> = {
-  MEMBER: 0,
-  ADMIN: 1,
-  OWNER: 2,
-};
 
 export async function getMembership(
   userId: string,
@@ -29,44 +24,10 @@ export async function isUserEmailVerified(userId: string): Promise<boolean> {
   return user?.emailVerified != null;
 }
 
-export function hasRoleAtLeast(
-  role: MembershipRole,
-  min: MembershipRole,
-): boolean {
-  return roleRank[role] >= roleRank[min];
-}
-
-export function isOrgAdmin(role: MembershipRole): boolean {
-  return role === "OWNER" || role === "ADMIN";
-}
-
-/** Create, edit, delete events and manage attendees — OWNER or ADMIN. */
-export function canManageEvents(m: Membership | null): boolean {
-  return m != null && isOrgAdmin(m.role);
-}
-
-/** @deprecated Use canManageEvents — kept name for gradual migration */
-export function canCreateEvent(m: Membership | null): m is Membership {
-  return canManageEvents(m);
-}
-
-/** Publish, set PUBLISHED/HIDDEN on create or update — OWNER/ADMIN. */
-export function canPublishEvents(m: Membership | null): boolean {
-  return canManageEvents(m);
-}
-
-export function canManageMembers(m: Membership | null): boolean {
-  return m?.role === "OWNER";
-}
-
-export function canDeleteOrg(m: Membership | null): boolean {
-  return m?.role === "OWNER";
-}
-
-export async function requireAuth(): Promise<Session & { user: { id: string } }> {
+export async function requireAuth(): Promise<Session & { user: { id: string; }; }> {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  return session as Session & { user: { id: string } };
+  return session as Session & { user: { id: string; }; };
 }
 
 function normalizeEmail(email: string): string {
@@ -82,7 +43,7 @@ function normalizeEmail(email: string): string {
  * We return `notFound()` on mismatch to avoid leaking panel existence.
  */
 export async function requireSuperAdmin(): Promise<
-  Session & { user: { id: string; email: string } }
+  Session & { user: { id: string; email: string; }; }
 > {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
@@ -101,7 +62,7 @@ export async function requireSuperAdmin(): Promise<
   return {
     ...session,
     user: { ...session.user, id: session.user.id, email: userEmail },
-  } as Session & { user: { id: string; email: string } };
+  } as Session & { user: { id: string; email: string; }; };
 }
 
 /**
@@ -123,7 +84,7 @@ export async function requireSuperAdminMfa() {
 }
 
 export type OrgAccessContext = {
-  organisation: { id: string; slug: string; name: string };
+  organisation: { id: string; slug: string; name: string; };
   membership: Membership;
   userId: string;
 };
@@ -158,7 +119,7 @@ export async function requireOrgMembership(
 }
 
 /** Dashboard access may also be granted by an event/series collaborator assignment. */
-export async function requireOrgDashboardAccess(orgSlug: string): Promise<Omit<OrgAccessContext, "membership"> & { membership: Membership | null; isCollaborator: boolean }> {
+export async function requireOrgDashboardAccess(orgSlug: string): Promise<Omit<OrgAccessContext, "membership"> & { membership: Membership | null; isCollaborator: boolean; }> {
   const session = await requireAuth();
   const org = await prisma.organisation.findUnique({ where: { slug: orgSlug } });
   if (!org) redirect("/dashboard");
@@ -168,3 +129,7 @@ export async function requireOrgDashboardAccess(orgSlug: string): Promise<Omit<O
   if (!grant) redirect("/dashboard");
   return { organisation: { id: org.id, slug: org.slug, name: org.name }, membership: null, userId: session.user.id, isCollaborator: true };
 }
+
+export { hasRoleAtLeast, isOrgAdmin, canManageEvents, canCreateEvent, canPublishEvents, canManageMembers, canDeleteOrg } from "@/lib/permissionRoles";
+
+import { hasRoleAtLeast } from "./permissionRoles";

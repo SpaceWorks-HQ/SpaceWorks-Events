@@ -1,16 +1,15 @@
+import { loadLoginView } from "@/lib/views/app__auth__login__page";
 import { Suspense } from "react";
-import { connection } from "next/server";
 import { Check } from "lucide-react";
 import { LoginForm } from "./ui";
 import { BrandHomeLink } from "@/components/chrome/SiteHeader";
 import { SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
-import { getGoogleSsoSettings, isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Sign in", robots: { index: false, follow: false } };
 
 /** An illustrative event card for the brand panel (product proof, not live data). */
-function SampleEvent({ month, day, title, meta, className }: { month: string; day: string; title: string; meta: string; className?: string }) {
+function SampleEvent({ month, day, title, meta, className }: { month: string; day: string; title: string; meta: string; className?: string; }) {
   return (
     <div className={`flex items-center gap-3.5 rounded-xl border border-line bg-panel p-4 ${className ?? ""}`}>
       <span className="flex h-[60px] w-14 shrink-0 flex-col items-center overflow-hidden rounded-[10px] border border-line bg-panel">
@@ -26,13 +25,7 @@ function SampleEvent({ month, day, title, meta, className }: { month: string; da
 }
 
 export default async function LoginPage() {
-  // The public registration policy is an instance setting and must be read
-  // only for a real request, never from a build-time database.
-  await connection();
-  const [accountCreationEnabled, googleSsoConfigured] = await Promise.all([
-    isNewUserRegistrationEnabled(),
-    getGoogleSsoSettings().then(Boolean),
-  ]);
+  const { googleSsoConfigured, accountCreationEnabled } = await loadLoginView();
   return (
     <div className="grid min-h-dvh bg-canvas md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <div className="flex flex-col px-4 py-5 sm:px-8 sm:py-6">

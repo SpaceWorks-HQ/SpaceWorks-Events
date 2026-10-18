@@ -34,6 +34,8 @@ const mfaEncryptionKey = z.string().refine((value) => {
 });
 
 export const envSchema = z.object({
+  DEPLOYMENT_MODE: z.enum(["backend", "monolith"]).optional(),
+  FRONTEND_GATEWAY_SECRET: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^[a-f0-9]{64}$/).optional()),
   DATABASE_URL: z.string().url("must be a valid database connection URL"),
   // Direct/session connection used only by `prisma migrate`; DATABASE_URL may be a transaction pooler.
   DIRECT_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url("must be a valid database connection URL").optional()),
@@ -92,6 +94,7 @@ export function validateRuntimeEnvironment() {
     const details = [...(parsed.success ? [] : issueMessages(parsed.error)), ...missing.map((key) => `${key}: required in production`)];
     throw new Error(`Invalid production environment configuration: ${details.join("; ")}`);
   }
+  if (process.env.DEPLOYMENT_MODE === "backend" && !/^[a-f0-9]{64}$/.test(process.env.FRONTEND_GATEWAY_SECRET ?? "")) throw new Error("Split backend requires FRONTEND_GATEWAY_SECRET.");
   const baseUrl = new URL(process.env.NEXT_PUBLIC_BASE_URL!);
   const authUrl = new URL(process.env.AUTH_URL!);
   const insecureCiTest = process.env.CI === "true" && process.env.ALLOW_INSECURE_PRODUCTION_TESTS === "1";

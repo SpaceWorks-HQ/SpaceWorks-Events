@@ -132,24 +132,28 @@ file storage, automatic public HTTPS, database migrations and an independent
 email-queue scheduler. Only a domain and an authenticated SMTP relay are external;
 Render, Supabase, Upstash and Cloudflare are optional hosting choices.
 
-Start with a Linux VPS, Docker Engine + Compose, Git, a domain pointing at the
-server, and a verified SMTP sending domain. For a small installation, plan around
-2 vCPU, 4 GB RAM and 30 GB SSD, plus upload/backup space; this is a starting estimate,
-not a capacity guarantee. Allow ports 80/443 and keep data-service ports private.
+Start with a Linux VPS, a domain pointing at it and authenticated SMTP. Plan around
+2 vCPU, 4 GB RAM and 30 GB SSD for a small instance, plus uploads and backups;
+image builds can need extra memory. Only ports 80/443 are published.
 
-For a guided first installation, check out a reviewed release and run:
+The curl installer offers **everything on the VPS** or **Netlify frontend + VPS
+backend**. It collects hostnames, admin email and SMTP settings, shows a summary,
+then installs Docker on a fresh Ubuntu/Debian VPS if needed, generates secrets and
+internal TLS certificates, builds containers, migrates and checks readiness.
+
+Use a published, reviewed commit or tag in both places below:
 
 ```bash
-git clone https://github.com/SpaceWorks-HQ/SpaceWorks-Events.git
-cd SpaceWorks-Events
-git checkout <reviewed-commit-or-tag>
-bash scripts/setup-vps.sh
+SWE_REF=<reviewed-commit-or-tag>
+curl -fsSL "https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/$SWE_REF/install.sh" -o install.sh
+sudo bash install.sh --ref "$SWE_REF"
 ```
 
-The installer asks for the hostname, admin email and SMTP settings (password
-hidden), shows a summary, then generates configuration, builds the containers,
-applies migrations, starts the stack and checks readiness. Docker + Compose must
-already be installed. It never replaces an existing installation's secrets.
+The selected ref must contain this installer; local, unpublished changes are not
+available at that URL. From a checked-out release with Docker already installed,
+run `bash scripts/setup-vps.sh`. Existing installations use `--update`; setup
+refuses to replace their secrets. The installer does not change DNS, firewall
+rules or provision an SMTP provider or off-server backup destination.
 
 For a manual first installation from that checkout:
 
@@ -186,14 +190,22 @@ production setups.
 
 ### Can the frontend live on Netlify and the backend on the VPS?
 
-[SpaceWorks](https://github.com/SpaceWorks-HQ/SpaceWorks) supports that arrangement
-with its separate Vite frontend and Django backend. **This Events app currently
-combines its UI, server rendering, Auth.js, Server Actions and API in one Next.js
-application.** A frontend-only Netlify deployment talking to an Events backend on
-a VPS requires a separate frontend and API/authentication work; it is not supplied
-by this repository. You can host a separate marketing site on Netlify and link to
-or embed public Events pages on your VPS. See
-[hosting arrangements](docs/DEPLOYMENT_VPS.md#a-separate-frontend-on-netlify).
+**Yes.** Choose mode 2 in the installer. Docker runs authentication, the API,
+business actions, PostgreSQL, Redis, private file storage and jobs on your VPS.
+The separate `frontend/` workspace renders the shared Next.js UI on Netlify and
+calls the VPS through a private server gateway. Browser API requests use the
+frontend origin; ticket live updates stream directly from the VPS.
+
+The installer writes a separate `frontend.env` containing only the frontend's
+URLs, gateway credential and its own stable Server Actions key. Add those settings
+to Netlify, set **Package directory = `frontend`**, leave **Base directory at the
+repository root**, and use `frontend/netlify.toml`. Deploy the same source revision
+on both hosts. Follow the [Netlify + VPS guide](docs/DEPLOYMENT_SPLIT.md) for DNS,
+OAuth, exact environment settings, development and verification.
+
+The [SpaceWorks reference](https://github.com/SpaceWorks-HQ/SpaceWorks) uses a
+Vite/Django split. Events preserves its Next.js server rendering and uses explicit,
+authenticated backend contracts for this arrangement.
 
 For a Docker app with managed dependencies, use the
 [Docker deployment guide](docs/DEPLOYMENT_DOCKER.md). For Kubernetes, use the
@@ -302,6 +314,7 @@ Rebuild the README artwork with `npm run readme:art`.
 | [Machine API v1](docs/API.md) | Connect another system |
 | [Security](docs/SECURITY.md) | Review authentication, isolation and privacy |
 | [Testing](docs/TESTING.md) | Run the suites and quality gates |
+| [Netlify frontend + VPS backend](docs/DEPLOYMENT_SPLIT.md) | Split hosting, private gateway, frontend settings and verification |
 | [Complete Docker VPS deployment](docs/DEPLOYMENT_VPS.md) | Host the app and data services on one server; operate and update the stack |
 | [Free-tier cloud deployment](docs/DEPLOYMENT_CLOUD.md) | Go live on Render, Supabase, Upstash, R2 and Brevo |
 | [Production release](docs/PRODUCTION_RELEASE.md) and [operations](docs/production-operations.md) | Ship and run it |

@@ -1,5 +1,5 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { prisma } from "@/lib/db";
+import { loadSuperAdminShell } from "@/lib/views/app__super-admin__layout";
 import { SuperAdminTopBar } from "@/components/super-admin/SuperAdminTopBar";
 import type { Metadata } from "next";
 
@@ -12,12 +12,8 @@ export const dynamic = "force-dynamic";
 export default async function SuperAdminLayout(props: {
   children: React.ReactNode;
 }) {
-  const session = await requireSuperAdminMfa();
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { name: true, email: true, image: true, profileImageUrl: true },
-  });
-
+  await requireSuperAdminMfa();
+  const { user } = await loadSuperAdminShell();
   return (
     <div className="flex min-h-dvh flex-col">
       <SuperAdminTopBar user={{ name: user?.name ?? null, email: user?.email ?? null, image: user?.profileImageUrl ?? user?.image ?? null }} />
