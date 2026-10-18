@@ -205,14 +205,15 @@ do not sweep in or revert other sessions' uncommitted files. The user manual
 ### Branching: one branch per feature
 
 Every new feature gets its own branch; never commit a feature straight onto the
-integration branch (`main`, which Render deploys; change it only through a
-reviewed pull request).
+integration branch (`dev`). `main` is the production branch Render deploys;
+only the maintainer (@Shaan-Shoukath) may merge or push to it, which branch
+protection enforces. Never push to `main`; open a pull request instead.
 
-- Branch from the latest integration branch: `git switch -c feat/<short-name>`
+- Branch from the latest `dev`: `git switch -c feat/<short-name>`
   (use `fix/<short-name>` for a standalone bug fix). One feature per branch.
 - Commit the work there, with checks passing (lint, TypeScript, relevant tests,
   plus the stronger checks above where they apply).
-- Open a pull request into `main` (or merge locally with `git merge --no-ff`
+- Open a pull request into `dev` (or merge locally with `git merge --no-ff`
   when asked), then re-run the checks on the merged result.
 - Push the integration branch and the feature branch only when asked. Delete a
   merged feature branch only when asked.

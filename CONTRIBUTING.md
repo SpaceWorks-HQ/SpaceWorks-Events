@@ -58,6 +58,16 @@ Never commit `.env` or real secrets.
 5. Database changes need a reviewed Prisma migration.
 6. Describe what changed and how you tested it in the pull request.
 
+## Branches and merging
+
+- `main` is the production branch; Render deploys it. Only the maintainer,
+  [@Shaan-Shoukath](https://github.com/Shaan-Shoukath), can merge or push to
+  `main`. Branch protection enforces this (organisation admins included), and
+  force pushes and branch deletion are blocked.
+- `dev` is the integration branch. Branch from `dev` (`feat/<short-name>` or
+  `fix/<short-name>`) and open your pull request against `dev`. Changes reach
+  `main` through a pull request from `dev` that the maintainer reviews and merges.
+
 ## Licence
 
 By contributing, you agree that your contributions are licensed under the

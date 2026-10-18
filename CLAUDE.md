@@ -41,8 +41,9 @@ deployment changes, follow the stronger checks listed in `AGENTS.md` and
 explicit paths only, and commit the user manual only when asked.
 
 Every new feature goes on its own branch (`feat/<short-name>`, or
-`fix/<short-name>` for a bug fix) created from `main`, and lands through a
-pull request once checks pass. Don't push, merge to `main`, or delete branches
+`fix/<short-name>` for a bug fix) created from `dev`, and lands in `dev`
+through a pull request once checks pass. Only @Shaan-Shoukath merges to `main`
+(branch protection); never push to `main`. Don't push or delete branches
 unless asked. See "Branching" in `AGENTS.md`.
 
 For local review data, `DEMO_PASSWORD=... node --env-file=.env
