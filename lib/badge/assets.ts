@@ -89,11 +89,11 @@ const SYMBOL_FILES: Record<BadgeSymbolVariant, string> = {
 };
 const symbolCache = new Map<BadgeSymbolVariant, Promise<SymbolPath[]>>();
 
-/** The master symbol's paths and fills, exactly as drawn in public/brand. */
+/** The master symbol's paths and fills, exactly as drawn in public/brand/logo. */
 export function loadSymbolPaths(variant: BadgeSymbolVariant): Promise<SymbolPath[]> {
   let entry = symbolCache.get(variant);
   if (!entry) {
-    entry = readFile(path.join(process.cwd(), "public", "brand", SYMBOL_FILES[variant]), "utf8").then((svg) =>
+    entry = readFile(path.join(process.cwd(), "public", "brand", "logo", SYMBOL_FILES[variant]), "utf8").then((svg) =>
       [...svg.matchAll(/<path\s+d="([^"]+)"\s+fill="(#[0-9A-Fa-f]{6})"\s*\/>/g)].map((match) => ({ d: match[1]!, fill: match[2]! })),
     );
     entry.catch(() => symbolCache.delete(variant));

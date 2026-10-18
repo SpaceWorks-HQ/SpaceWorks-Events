@@ -165,9 +165,9 @@ export function resolveBadgePalette(
 }
 
 export const SYMBOL_ASSET: Record<BadgeSymbolVariant, string> = {
-  full: "/brand/symbol.svg",
-  reversed: "/brand/symbol-reversed.svg",
-  ink: "/brand/symbol-one-colour-ink.svg",
+  full: "/brand/logo/symbol.svg",
+  reversed: "/brand/logo/symbol-reversed.svg",
+  ink: "/brand/logo/symbol-one-colour-ink.svg",
 };
 
 /** The master symbol's aspect ratio (136 × 126). */
