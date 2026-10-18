@@ -5,11 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { BrandLoader } from "@/components/brand/BrandLoader";
 import { SPACE_WORKS_LOGO_ARTWORK, SpaceWorksEventsLogo, SpaceWorksLogo, spaceWorksLogoSize, spaceWorksLogoSrc, type SpaceWorksLogoTone, type SpaceWorksLogoVariant } from "@/components/brand/SpaceWorksLogo";
-import { DotFace } from "@/components/brand/DotFace";
-import { DotGrid } from "@/components/brand/DotGrid";
-import { DotLockup } from "@/components/brand/DotLockup";
-import { DotLoader, PageLoader } from "@/components/brand/DotLoader";
-import { DotMark } from "@/components/brand/DotMark";
 
 const render = (element: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(element);
 const images = (html: string) => [...html.matchAll(/<img src="([^"]+)" alt="" width="(\d+)" height="(\d+)"/g)].map(([, src, width, height]) => ({ src, width: Number(width), height: Number(height) }));
@@ -78,24 +73,5 @@ describe("BrandLoader", () => {
     expect(html).toContain("Loading event");
     expect(html.match(/yy-dot-loader-jump/g)).toHaveLength(3);
     expect(html).not.toMatch(/animate-bounce/);
-  });
-});
-
-describe("deprecated dot components", () => {
-  it("render the Space Works equivalents", () => {
-    expect(render(createElement(DotMark, { size: 64 }))).toContain("/brand/logo/symbol.svg");
-    expect(render(createElement(DotMark, { size: 64, variant: "mono" }))).toContain("/brand/logo/symbol-one-colour-ink.svg");
-    expect(render(createElement(DotMark, { size: 24 }))).toContain("/brand/logo/app-icon.svg");
-    expect(render(createElement(DotLockup, {}))).toContain(">Events</span>");
-    expect(render(createElement(DotLockup, { layout: "stacked" }))).toContain("/brand/logo/lockup-stacked.svg");
-    expect(DotLoader).toBe(BrandLoader);
-    expect(render(createElement(PageLoader, {}))).toContain('role="status"');
-  });
-
-  it("draw faces and grids as decorative dots in brand colours only", () => {
-    const html = render(createElement(DotFace, { mood: "happy", size: 85 }));
-    expect(html).toContain('aria-hidden="true"');
-    expect(html).not.toMatch(/marigold|#FFB547|#18181B/i);
-    expect(render(createElement(DotGrid, { pattern: "XD|Om", dot: 8 }))).toMatch(/#006E63[\s\S]*#FF7447[\s\S]*currentColor[\s\S]*#DFFF8F/);
   });
 });

@@ -2,7 +2,16 @@
 @import "./styles/tokens.css";
 
 /* Opt into class-based dark variants that follow the same attribute as the tokens. */
-@custom-variant dark (&:where([data-color-mode="dark"], [data-color-mode="dark"] *));
+@custom-variant dark {
+  &:where([data-color-mode="dark"], [data-color-mode="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-color-mode]), :root:not([data-color-mode]) *) {
+      @slot;
+    }
+  }
+}
 
 /*
  * Space Works type: Gilroy 400–700 for everything, Unbounded 500 for one
