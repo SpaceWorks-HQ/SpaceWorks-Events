@@ -120,7 +120,21 @@ function isTrustedProxyHeader(value: string | undefined): value is "cf-connectin
 function readConfiguredIp(headers: Headers, header: "cf-connecting-ip" | "x-forwarded-for" | "x-real-ip") {
   const value = headers.get(header)?.trim();
   if (!value) return "unknown";
-  return header === "x-forwarded-for" ? value.split(",")[0]?.trim() || "unknown" : value;
+  return header === "x-forwarded-for" ? forwardedClientIp(value) : value;
+}
+
+/**
+ * The client address in `X-Forwarded-For`. By default the edge is expected to
+ * overwrite the header, so the left-most entry is the client. Proxies that
+ * append instead (Render) leave client-chosen values on the left; set
+ * `TRUSTED_PROXY_HOPS` to the number of trusted proxies to read the entry the
+ * outermost trusted proxy added, counted from the right.
+ */
+function forwardedClientIp(value: string): string {
+  const entries = value.split(",").map((entry) => entry.trim()).filter(Boolean);
+  const hops = Number.parseInt(process.env.TRUSTED_PROXY_HOPS ?? "", 10);
+  const entry = Number.isInteger(hops) && hops > 0 ? entries[Math.max(0, entries.length - hops)] : entries[0];
+  return entry || "unknown";
 }
 
 function checkRateLimitMemory(bucket: Bucket, id: string): boolean {

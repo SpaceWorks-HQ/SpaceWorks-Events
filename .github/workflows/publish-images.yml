@@ -19,7 +19,10 @@ jobs:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      vars.NEXT_PUBLIC_BASE_URL != ''
+    # Render builds from the repository itself; GHCR publishing is opt-in and
+    # skipped (not failed) until NEXT_PUBLIC_BASE_URL is set as a repo variable.
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:

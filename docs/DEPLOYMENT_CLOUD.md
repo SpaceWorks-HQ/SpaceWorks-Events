@@ -161,12 +161,17 @@ It must print `Production environment preflight passed.`
    Docker web service, free plan, health check `/api/health`.
 3. Fill in every prompted (`sync: false`) value. For the first deploy without
    a custom domain, use `https://spaceworks-events.onrender.com` (your service
-   URL) for both `AUTH_URL` and `NEXT_PUBLIC_BASE_URL`.
+   URL) for both `AUTH_URL` and `NEXT_PUBLIC_BASE_URL`. If that subdomain is
+   taken, Render adds a suffix: after the service is created, check its real
+   URL on the service page, set both values to it, and run **Manual Deploy →
+   Clear build cache & deploy** (the base URL is baked in at build time).
 4. Click **Apply**. The first build takes about 10 minutes. On start the
    container runs `prisma migrate deploy` against `DIRECT_URL`
    (`MIGRATE_ON_START=1`), then starts the server. If a migration fails, the
    container exits, the deploy fails its health check, and the previous
-   version keeps serving.
+   version keeps serving. Migrations also run on every wake from sleep (a
+   no-op when nothing is pending, a few seconds on the free CPU), and if
+   Supabase is paused or unreachable the container cannot start at all.
 
 How the Blueprint fits the free plan:
 

@@ -60,6 +60,7 @@ Generate independent keys with `openssl rand -base64 32`. Rotating the Server Ac
 | --- | --- | --- |
 | `REDIS_URL` | Required | Distributed rate limiter and pub/sub for live ticket check-in across replicas; production requires `rediss://` |
 | `TRUSTED_PROXY_IP_HEADER` | Required | One of `cf-connecting-ip`, `x-forwarded-for`, or `x-real-ip`; the edge must overwrite it. Render reached directly: `x-forwarded-for`; behind your own proxied Cloudflare zone: `cf-connecting-ip` |
+| `TRUSTED_PROXY_HOPS` | Optional | With `x-forwarded-for` only: the number of trusted proxies that append to the header. Unset means the edge overwrites it and the left-most entry is used. Render: `1` (the right-most entry, added by Render's proxy) |
 | `ALLOWED_ACTION_ORIGINS` | Optional | Comma-separated trusted proxy/CDN hosts allowed to invoke Server Actions |
 | `ALLOWED_EMBED_ORIGINS` | Optional | Exact HTTPS origins permitted to frame public event embeds; blank disables cross-site framing |
 | `NEXT_DEV_ALLOWED_ORIGINS` | Development only | Comma-separated LAN hosts permitted to request development assets |

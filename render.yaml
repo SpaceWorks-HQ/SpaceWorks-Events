@@ -88,6 +88,11 @@ services:
       # Cloudflare zone proxies the domain (orange cloud).
       - key: TRUSTED_PROXY_IP_HEADER
         value: x-forwarded-for
+      # Render appends the client address to any X-Forwarded-For the client
+      # sent, so read the entry its proxy added (right-most), not the left-most.
+      # Remove when switching to cf-connecting-ip.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
 
       # --- Cloudflare R2 (private bucket) ---
       - key: S3_BUCKET
