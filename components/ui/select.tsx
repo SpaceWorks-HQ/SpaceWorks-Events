@@ -31,7 +31,7 @@ export const SelectTrigger = forwardRef<ElementRef<typeof SelectPrimitive.Trigge
   ref,
 ) {
   return (
-    <SelectPrimitive.Trigger ref={ref} className={cn(controlClasses, "flex items-center justify-between gap-2 text-left data-[placeholder]:text-ink-disabled", className)} {...props}>
+    <SelectPrimitive.Trigger ref={ref} className={cn(controlClasses, "flex items-center justify-between gap-2 text-left data-[placeholder]:text-ink-muted", className)} {...props}>
       <span className="min-w-0 truncate">{children}</span>
       <SelectPrimitive.Icon asChild>
         <ChevronDown aria-hidden className="size-[18px] shrink-0 text-ink-muted" />
@@ -50,7 +50,7 @@ export const SelectContent = forwardRef<ElementRef<typeof SelectPrimitive.Conten
         ref={ref}
         position={position}
         sideOffset={6}
-        className={cn("z-[60] max-h-[min(420px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-line bg-canvas text-ink shadow-float", className)}
+        className={cn("z-[60] max-h-[min(420px,var(--radix-select-content-available-height))] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-line bg-panel text-ink shadow-float", className)}
         {...props}
       >
         <SelectPrimitive.Viewport className="p-1.5">{children}</SelectPrimitive.Viewport>
@@ -66,7 +66,7 @@ export const SelectItem = forwardRef<
   return (
     <SelectPrimitive.Item
       ref={ref}
-      className={cn("relative flex min-h-10 cursor-pointer select-none items-start gap-2 rounded-md py-2 pl-3 pr-9 text-body-ui outline-none data-[disabled]:pointer-events-none data-[disabled]:text-ink-disabled data-[highlighted]:bg-emphasis", className)}
+      className={cn("relative flex min-h-10 cursor-pointer select-none items-start gap-2 rounded-md py-2 pl-3 pr-9 text-body-ui outline-none data-[disabled]:pointer-events-none data-[disabled]:text-ink-disabled data-[highlighted]:bg-muted", className)}
       {...props}
     >
       <span className="min-w-0">
@@ -117,7 +117,7 @@ function collectOptions(children: ReactNode, into: DropdownOption[] = []): Dropd
  * children, `value`/`defaultValue`, `name` and `onChange(event)` with
  * `event.target.value`. A visually hidden native select carries the value,
  * so form posts, FormData, `required` and form-level change listeners keep
- * working; the visible part is a Radix listbox in the Yuyu style.
+ * working; the visible part is a Radix listbox in the Space Works style.
  */
 export const Dropdown = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(function Dropdown(
   { className, children, value, defaultValue, onChange, disabled, id, name, required, form, ...rest },

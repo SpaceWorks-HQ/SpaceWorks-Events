@@ -3,29 +3,37 @@ import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Info, Repeat, XCircle } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { DotFace } from "@/components/brand/DotFace";
+import { getAccentTokens } from "@/lib/theme/accent";
 import { AvatarImage } from "./avatar-image";
 import type { DotFaceMood } from "@/components/brand/patterns";
 
-/* ---------- Chips (docs/DESIGN.md §4.5) ---------- */
+/* ---------- Status pills (docs/DESIGN.md §4.5) ---------- */
 
-export type ChipTone = "neutral" | "success" | "warning" | "danger" | "accent" | "ink" | "outline";
+/**
+ * Fully round, 24px tall, and always carrying a word: colour never stands
+ * alone. The status tokens give solid brand fills with ink labels in light
+ * mode and soft fills with brand-coloured words in dark mode.
+ */
+export type ChipTone = "neutral" | "success" | "warning" | "info" | "danger" | "accent" | "highlight" | "ink" | "outline";
 
 const chipTones: Record<ChipTone, string> = {
-  neutral: "bg-muted text-ink-secondary",
+  neutral: "border border-line bg-surface text-ink",
   success: "bg-success-bg text-success-fg",
   warning: "bg-warning-bg text-warning-fg",
-  danger: "bg-danger-bg text-danger-fg",
+  info: "bg-info-bg text-info-fg",
+  danger: "border border-danger-border bg-panel text-danger-fg",
   accent: "bg-accent-soft text-accent-text",
-  ink: "bg-primary text-on-primary",
-  outline: "border border-line-strong bg-canvas text-ink-secondary",
+  highlight: "bg-highlight text-on-highlight",
+  ink: "bg-inverse text-on-inverse",
+  outline: "border border-line-strong bg-panel text-ink-secondary",
 };
 
 export function Chip({ tone = "neutral", icon, className, children, size = "md" }: { tone?: ChipTone; icon?: ReactNode; className?: string; children: ReactNode; size?: "sm" | "md" }) {
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center gap-1 whitespace-nowrap rounded-full font-semibold [&_svg]:size-3.5 [&_svg]:shrink-0",
-        size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-[13px]",
+        "inline-flex min-h-6 max-w-full items-center gap-1 whitespace-nowrap rounded-full font-semibold leading-4 [&_svg]:size-3.5 [&_svg]:shrink-0",
+        size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-[13px]",
         chipTones[tone],
         className,
       )}
@@ -36,14 +44,14 @@ export function Chip({ tone = "neutral", icon, className, children, size = "md" 
   );
 }
 
-/* ---------- Cards ---------- */
+/* ---------- Cards: white panel, 1px hairline, 16px radius, no shadow ---------- */
 
 export function Card({ className, children, padding = "md", as = "div", ...props }: HTMLAttributes<HTMLElement> & { padding?: "none" | "sm" | "md" | "lg"; as?: "div" | "section" | "article" }) {
   const Component = as;
   return (
     <Component
       className={cn(
-        "rounded-lg border border-line bg-canvas",
+        "rounded-xl border border-line bg-panel",
         padding === "sm" && "p-4",
         padding === "md" && "p-5",
         padding === "lg" && "p-6 sm:p-8",
@@ -74,7 +82,7 @@ export type CalloutTone = "warning" | "info" | "success" | "danger";
 
 const calloutTones: Record<CalloutTone, { classes: string; icon: ReactNode }> = {
   warning: { classes: "bg-warning-bg text-warning-fg", icon: <AlertTriangle /> },
-  info: { classes: "bg-muted text-ink-secondary", icon: <Info /> },
+  info: { classes: "bg-info-bg text-info-fg", icon: <Info /> },
   success: { classes: "bg-success-bg text-success-fg", icon: <CheckCircle2 /> },
   danger: { classes: "bg-danger-bg text-danger-fg", icon: <XCircle /> },
 };
@@ -86,7 +94,7 @@ export function Callout({ tone = "info", title, children, action, className, rol
       <span aria-hidden className="hidden shrink-0 sm:inline-flex [&_svg]:size-5">{icon}</span>
       <div className="min-w-0 flex-1 text-body-ui">
         {title ? <p className="font-semibold">{title}</p> : null}
-        {children ? <div className={cn(title && "opacity-90")}>{children}</div> : null}
+        {children ? <div>{children}</div> : null}
       </div>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
     </div>
@@ -96,13 +104,13 @@ export function Callout({ tone = "info", title, children, action, className, rol
 /* ---------- Empty state ---------- */
 
 /**
- * Empty, success or error message in a card. On Yuyu's own screens pass a dot
+ * Empty, success or error message in a card. On Space Works Events' own screens pass a dot
  * face `mood` (Sleepy for empty lists, Sad for errors); organiser-facing pages
  * leave it out.
  */
 export function EmptyState({ title, children, action, className, icon, mood }: { title?: ReactNode; children?: ReactNode; action?: ReactNode; className?: string; icon?: ReactNode; mood?: DotFaceMood }) {
   return (
-    <div className={cn("flex flex-col items-center gap-2 rounded-lg border border-line bg-canvas px-6 py-7 text-center", className)}>
+    <div className={cn("flex flex-col items-center gap-2 rounded-xl border border-line bg-panel px-6 py-7 text-center", className)}>
       {mood ? <DotFace mood={mood} size={48} className="mb-1" /> : null}
       {icon ? <span aria-hidden className="text-ink-muted [&_svg]:size-7">{icon}</span> : null}
       {title ? <p className="text-label text-ink">{title}</p> : null}
@@ -116,7 +124,7 @@ export function EmptyState({ title, children, action, className, icon, mood }: {
 
 export function DangerZone({ title, description, action, className, children }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string; children?: ReactNode }) {
   return (
-    <section className={cn("rounded-lg border-[1.5px] border-danger-border bg-canvas p-5", className)}>
+    <section className={cn("rounded-xl border border-danger-border bg-panel p-5", className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="font-sans text-label text-danger-fg">{title}</h3>
@@ -150,7 +158,7 @@ export function Avatar({ name, src, size = "md", tone = "neutral", className }: 
     ink: "bg-primary text-on-primary",
   }[tone];
   return (
-    <span className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-bold", avatarSizes[size], toneClass, className)}>
+    <span className={cn("relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold", avatarSizes[size], toneClass, className)}>
       {src ? (
         <AvatarImage src={src} fallback={<span aria-hidden>{initials(name)}</span>} />
       ) : (
@@ -166,7 +174,7 @@ const logoSizes = { sm: "size-8 rounded-[9px] text-xs", md: "size-10 rounded-[10
 /** Square organisation logo; falls back to initials on ink. */
 export function OrgLogo({ name, src, size = "md", className }: { name: string; src?: string | null; size?: keyof typeof logoSizes; className?: string }) {
   return (
-    <span className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden border border-line font-bold", logoSizes[size], src ? "bg-canvas" : "bg-primary text-on-primary", className)}>
+    <span className={cn("inline-flex shrink-0 items-center justify-center overflow-hidden border border-line font-semibold", logoSizes[size], src ? "bg-panel" : "bg-primary text-on-primary", className)}>
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element -- organisation logos are served by the app's own upload route
         <img src={src} alt="" className="size-full object-cover" />
@@ -180,22 +188,22 @@ export function OrgLogo({ name, src, size = "md", className }: { name: string; s
 /* ---------- Date block (docs/DESIGN.md §4.6) ---------- */
 
 export function DateBlock({ month, day, tone = "accent", color, size = "md", series = false, className }: { month: string; day: string; tone?: "accent" | "draft" | "ink"; /** Explicit header colour (validated hex), e.g. an event's own accent in a dashboard list. */ color?: string; size?: "sm" | "md" | "lg"; series?: boolean; className?: string }) {
-  const header = color ? "text-white" : tone === "accent" ? "bg-accent text-on-accent" : tone === "draft" ? "bg-ink-disabled text-white" : "bg-primary text-on-primary";
+  const header = color ? undefined : tone === "accent" ? "bg-accent text-on-accent" : tone === "draft" ? "bg-emphasis text-ink-secondary" : "bg-primary text-on-primary";
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 flex-col overflow-hidden rounded-md border border-line bg-canvas text-center",
+        "inline-flex shrink-0 flex-col overflow-hidden rounded-md border border-line bg-panel text-center",
         size === "sm" && "w-[50px]",
         size === "md" && "w-14",
         size === "lg" && "w-[68px]",
         className,
       )}
     >
-      <span className={cn("block py-0.5 text-[11px] font-bold tracking-[0.08em]", size === "lg" && "text-xs", header)} style={color ? { backgroundColor: color } : undefined}>{month}</span>
+      <span className={cn("block py-0.5 text-[11px] font-semibold tracking-[0.08em]", size === "lg" && "text-xs", header)} style={color ? { backgroundColor: color, color: getAccentTokens(color, "light")["--yy-on-accent"] } : undefined}>{month}</span>
       <span
         className={cn(
-          "flex items-center justify-center font-display font-extrabold leading-none text-ink",
+          "flex items-center justify-center font-display font-semibold tabular-nums leading-none text-ink",
           size === "sm" && "h-8 text-xl",
           size === "md" && "h-10 text-2xl",
           size === "lg" && "h-12 text-[30px]",
@@ -230,12 +238,12 @@ export function StatTile({ label, value, hint, progress, tone = "default", class
   const body = (
     <>
       <span className="block text-sm text-ink-muted">{label}</span>
-      <span className="mt-1 block font-display text-[32px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{value}</span>
+      <span className="mt-1 block font-display text-[32px] font-semibold leading-tight tracking-[-0.01em] tabular-nums text-ink">{value}</span>
       {hint ? <span className="mt-0.5 block text-caption text-ink-muted">{hint}</span> : null}
       {progress ? <ProgressBar className="mt-2.5" value={progress.value} max={progress.max} tone={progress.tone ?? "accent"} /> : null}
     </>
   );
-  const classes = cn("block rounded-lg border p-4", tone === "attention" ? "border-transparent bg-warning-bg [&_span]:text-warning-fg" : "border-line bg-canvas", href && "transition-colors hover:bg-subtle", className);
+  const classes = cn("block rounded-xl border p-4", tone === "attention" ? "border-transparent bg-warning-bg [&_span]:text-warning-fg" : "border-line bg-panel", href && "transition-colors hover:bg-subtle", className);
   return href ? <Link href={href} className={classes}>{body}</Link> : <div className={classes}>{body}</div>;
 }
 

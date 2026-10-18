@@ -5,22 +5,33 @@
  * The output is a plain record of CSS custom properties that callers place in
  * an inline `style` on the event page root. Only a validated `#RRGGBB` value
  * ever reaches CSS; anything else falls back to the default accent.
+ *
+ * Surfaces and labels are the Space Works neutrals (app/styles/tokens.css),
+ * so the default Maker Teal reproduces the global accent tokens exactly.
  */
 
-export const DEFAULT_EVENT_ACCENT = "#C2410C"; // Ember
-export const INK_ACCENT = "#18181B";
+export const DEFAULT_EVENT_ACCENT = "#006E63"; // Maker Teal
+export const INK_ACCENT = "#142C2A"; // Deep Ink
 
+/**
+ * Brand presets offered to organisers. The `name` values are stable keys
+ * (components map them to swatch artwork); the colours are Space Works brand
+ * colours. Light accents automatically get Deep Ink labels.
+ */
 export const ACCENT_PRESETS = [
-  { name: "Ember", hex: "#C2410C" },
-  { name: "Iris", hex: "#4B3FA8" },
-  { name: "Teal", hex: "#0F766E" },
-  { name: "Ink", hex: "#18181B" },
+  { name: "Teal", hex: "#006E63" },
+  { name: "Ember", hex: "#FF7447" },
+  { name: "Iris", hex: "#B5CDFF" },
+  { name: "Ink", hex: "#142C2A" },
 ] as const;
 
-const LIGHT_CANVAS = "#FFFFFF";
-const DARK_CANVAS = "#111113";
-const INK = "#18181B";
-const WHITE = "#FFFFFF";
+/** Page and panel surfaces per mode: an accent text colour must read on all of them. */
+const LIGHT_SURFACES = ["#FFF4E8", "#FFFFFF", "#F6ECE0"];
+const DARK_SURFACES = ["#142C2A", "#1F433F", "#193935"];
+const LIGHT_PANEL = "#FFFFFF";
+const DARK_PANEL = "#1F433F";
+const INK = "#142C2A";
+const CREAM = "#FFF4E8";
 const HEX = /^#([0-9a-f]{6})$/i;
 
 type Rgb = [number, number, number];
@@ -81,14 +92,30 @@ export type AccentTokens = {
   "--yy-accent-text": string;
 };
 
+/**
+ * Label candidates in brand order: cream, then Deep Ink (light accents such as
+ * Workshop Orange), then white and black as a functional fallback for
+ * organiser-chosen mid-tones where neither brand neutral reaches AA.
+ */
+const LABELS = [CREAM, INK, "#FFFFFF", "#000000"];
+
+function labelFor(accent: string): string {
+  return LABELS.find((label) => contrastRatio(accent, label) >= 4.5)
+    ?? LABELS.reduce((best, label) => (contrastRatio(accent, label) > contrastRatio(accent, best) ? label : best));
+}
+
 export function getAccentTokens(value: string | null | undefined, scheme: AccentScheme, fallback = DEFAULT_EVENT_ACCENT): AccentTokens {
   const accent = normalizeAccentHex(value, fallback);
-  const canvas = scheme === "dark" ? DARK_CANVAS : LIGHT_CANVAS;
-  const soft = mix(accent, canvas, scheme === "dark" ? 0.14 : 0.08);
-  const onAccent = contrastRatio(accent, WHITE) >= 4.5 ? WHITE : INK;
-  const accentText = scheme === "dark"
-    ? adjustUntil(mix(accent, WHITE, 0.65), WHITE, [canvas, soft], 4.5)
-    : adjustUntil(accent, INK, [canvas, soft], 4.5);
+  const dark = scheme === "dark";
+  // Soft fill: the panel with a little of the accent (12 % light, 16 % dark).
+  const soft = mix(accent, dark ? DARK_PANEL : LIGHT_PANEL, dark ? 0.16 : 0.12);
+  const surfaces = [...(dark ? DARK_SURFACES : LIGHT_SURFACES), soft];
+  const onAccent = labelFor(accent);
+  // Text: the accent itself in light mode (darkened toward Deep Ink if needed);
+  // in dark mode a third of the accent mixed into cream, lightened if needed.
+  const accentText = dark
+    ? adjustUntil(mix(accent, CREAM, 0.33), CREAM, surfaces, 4.5)
+    : adjustUntil(accent, INK, surfaces, 4.5);
   return {
     "--yy-accent": accent,
     "--yy-accent-soft": soft,

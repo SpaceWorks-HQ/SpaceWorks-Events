@@ -74,15 +74,15 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 /** Every dropdown in the app uses the custom `Dropdown`, never the browser's own picker. */
 export { Dropdown } from "./select";
 
-/** Grey prefix segment joined to the input, e.g. `yuyu.idliapps.com/`. */
+/** Muted prefix segment joined to the input, e.g. `events.example.org/`. */
 export const PrefixInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { prefix: string }>(function PrefixInput(
   { prefix, className, ...props },
   ref,
 ) {
   return (
-    <div className="flex w-full overflow-hidden rounded-md border border-line-strong bg-canvas focus-within:border-[var(--yy-focus)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] has-[[aria-invalid=true]]:border-danger-fg">
-      <span className="flex shrink-0 items-center border-r border-line bg-muted px-3 text-[15px] text-ink-muted">{prefix}</span>
-      <input ref={ref} className={cn("min-w-0 flex-1 bg-transparent px-3.5 py-[11px] text-base text-ink outline-none", className)} {...props} />
+    <div className="flex min-h-11 w-full overflow-hidden rounded-md border border-line-strong bg-panel transition-colors duration-[120ms] ease-yy hover:border-ink focus-within:border-accent focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] has-[[aria-invalid=true]]:border-danger-fg">
+      <span className="flex shrink-0 items-center border-r border-line bg-surface px-3 text-[15px] text-ink-muted">{prefix}</span>
+      <input ref={ref} className={cn("min-w-0 flex-1 bg-transparent px-3.5 py-[9px] text-base text-ink placeholder:text-ink-muted outline-none", className)} {...props} />
     </div>
   );
 });
@@ -90,7 +90,7 @@ export const PrefixInput = forwardRef<HTMLInputElement, InputHTMLAttributes<HTML
 /** Read-only value with a lock icon (e.g. an email you can't change). */
 export function ReadOnlyValue({ id, value, action }: { id?: string; value: ReactNode; action?: ReactNode }) {
   return (
-    <div id={id} className="flex items-center gap-2.5 rounded-md border border-line bg-subtle px-3.5 py-[11px] text-base text-ink-secondary">
+    <div id={id} className="flex items-center gap-2.5 min-h-11 rounded-md border border-line bg-surface px-3.5 py-[9px] text-base text-ink-secondary">
       <Lock aria-hidden className="size-4 shrink-0 text-ink-muted" />
       <span className="min-w-0 flex-1 truncate">{value}</span>
       {action}
@@ -108,7 +108,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttribut
         onClick={() => setVisible((value) => !value)}
         aria-label={visible ? "Hide password" : "Show password"}
         aria-pressed={visible}
-        className="absolute right-1.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-ink-muted hover:bg-emphasis hover:text-ink"
+        className="absolute right-1.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted hover:bg-muted hover:text-ink"
       >
         {visible ? <EyeOff aria-hidden className="size-[18px]" /> : <Eye aria-hidden className="size-[18px]" />}
       </button>
@@ -116,7 +116,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttribut
   );
 });
 
-/** Pill search field with a leading icon and a clear button. */
+/** Search field with a leading icon and a clear button. */
 export const SearchInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { onClear?: () => void }>(function SearchInput(
   { className, onClear, value, ...props },
   ref,
@@ -129,7 +129,7 @@ export const SearchInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes
         ref={ref}
         type="search"
         value={value}
-        className={cn(controlClasses, "rounded-full pl-11 pr-11 [&::-webkit-search-cancel-button]:appearance-none", className)}
+        className={cn(controlClasses, "pl-11 pr-11 [&::-webkit-search-cancel-button]:appearance-none", className)}
         {...props}
       />
       {onClear && hasValue ? (
@@ -137,7 +137,7 @@ export const SearchInput = forwardRef<HTMLInputElement, Omit<InputHTMLAttributes
           type="button"
           onClick={onClear}
           aria-label="Clear search"
-          className="absolute right-1.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-full text-ink-muted hover:bg-emphasis hover:text-ink"
+          className="absolute right-1.5 top-1/2 inline-flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted hover:bg-muted hover:text-ink"
         >
           <X aria-hidden className="size-4" />
         </button>

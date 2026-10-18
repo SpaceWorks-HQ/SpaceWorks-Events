@@ -23,7 +23,7 @@ describe("broadcast designs", () => {
 
   it("uses the event accent for buttons, with readable text on light colours", () => {
     const html = renderBroadcastDesign("accent", { ...base, brand: { accentColor: "#0EA5E9" } });
-    expect(html).toContain("background-color: #0EA5E9; color: #18181B;");
+    expect(html).toContain("background-color: #0EA5E9; color: #142C2A;");
     // Invalid accents never reach CSS.
     const bad = renderBroadcastDesign("accent", { ...base, brand: { accentColor: "red;background:url(x)" } });
     expect(bad).not.toContain("url(x)");

@@ -1,559 +1,540 @@
-# Yuyu Design System — agent brief
+# Space Works Events design system — agent brief
 
-> Read this before building or changing any Yuyu UI. It is the source of truth for how Yuyu looks and behaves.
-> Visual reference: Figma file **Yuyu — Light screens** (pages "Light screens" and "Dark screens"):
-> https://www.figma.com/design/oVuNh4VRXQ9fIpdnUCoZqt
-> Design system (tokens.json, reference CSS, component previews): https://claude.ai/artifact/ByW8SYP7tb7yyLUwgHu3tz
+> Read this before building or changing any Space Works Events UI. It describes how the brand is
+> implemented in this app.
+>
+> **Source of truth for the brand:** [SpaceWorks-HQ/SpaceWorks-Design](https://github.com/SpaceWorks-HQ/SpaceWorks-Design):
+> `tokens/tokens.css` (colour values), `docs/ui-brand-spec.md` (tokens, states, type, shape, logo, icons),
+> `logo/` (master artwork), `fonts/` (Gilroy, Unbounded and their licences). When this file and the
+> design repo disagree, the design repo wins. Update this file to match.
+>
+> The app was forked from Yuyu (github.com/twilighty-abhi/yuyu). The `--yy-*` variable prefix and the
+> `yy-*` helper classes (`yy-accent-scope`, `yy-dark-band`, `ease-yy`) are kept from that code base so
+> existing utilities keep working. Their **values** are Space Works.
 
 ---
 
-## 1. What Yuyu is, and what the design must do
+## 1. What the design must do
 
-Yuyu is a free, open-source, self-hostable platform for running **free** community events (no tickets, payments or ad trackers). Most organisers are volunteers and small groups — clubs, meetups, NGOs, campus groups — not ops teams. Most attendees open an event link on a phone.
+Space Works Events is a self-hosted platform for running **free** community events (no tickets, payments
+or ad trackers). Most organisers are volunteers and small groups. Most attendees open an event link on a
+phone.
 
-The design direction is called **A+ ("Commons, refined")**:
-
-1. **Welcoming, like a neighbourhood.** Plain words, generous spacing, rounded shapes, friendly type. Never feels like an admin console.
-2. **Yuyu steps back; the event leads.** Yuyu's own chrome is quiet neutrals. On event-facing pages the organiser's **accent colour, cover and logo** carry the identity.
-3. **Bold only where it earns it.** Big tight display type and colour moments are reserved for: event titles, the ticket, success states (you're in, checked in, certificate), and Yuyu's own marketing pages. Dashboards and forms stay calm.
-4. **Simple for volunteers.** One obvious primary action per view. Destructive actions are visually distinct and confirm before acting.
-5. **Accessible by default.** WCAG AA contrast, real form controls, keyboard reachable, works at 360px wide.
+1. **Calm in the product, warm in public.** Dashboards are quiet cream, white panels and hairlines.
+   Public pages may have one bold moment.
+2. **The event leads.** On event-facing pages the organiser's accent colour, cover and logo carry the
+   identity. Space Works chrome stays neutral.
+3. **One bold moment per layout.** Workshop Orange appears once, as a fill with an ink label, never as text.
+4. **Simple for volunteers.** One obvious primary action per view. Destructive actions look different and
+   confirm before acting.
+5. **Accessible by default.** WCAG AA contrast for every token pair, real form controls, 44px targets,
+   keyboard reachable, works at 360px wide.
 
 ---
 
 ## 2. Design tokens
 
-All values below exist as CSS custom properties (see §9). **Never hard-code a hex in a component** — use a token.
+Every value lives in `app/styles/tokens.css` and is mapped to Tailwind utilities in `app/globals.css`
+(§9.1). **Never hard-code a hex in a component.** Use a token or a raw brand utility (`bg-sw-citron`).
 
-### 2.1 Colour — neutrals (light / dark)
+### 2.1 Brand colours
 
-| Token | Light | Dark | Use |
+Seven colours, plus the Yuyu reds for danger (the brand has no red). No black, no other hues.
+
+| Name | Hex | Utility | Role |
 |---|---|---|---|
-| `--yy-bg-canvas` | `#FFFFFF` | `#111113` | Page background, cards |
-| `--yy-bg-subtle` | `#FAFAF9` | `#18181B` | App sidebar, kiosk background, quiet panels |
-| `--yy-bg-muted` | `#F4F4F2` | `#232326` | Neutral chips, stat fills, map placeholders |
-| `--yy-bg-emphasis` | `#EFEEEA` | `#2A2A2E` | Selected nav item, hover fills |
-| `--yy-bg-track` | `#F0EFEB` | `#2A2A2E` | Progress-bar tracks |
-| `--yy-border` | `#E7E6E2` | `#2A2A2E` | Card borders, dividers |
-| `--yy-border-strong` | `#D4D3CE` | `#3F3F46` | Inputs, secondary buttons, dashed empty states |
-| `--yy-text` | `#18181B` | `#F4F4F5` | Primary text |
-| `--yy-text-secondary` | `#3F3F46` | `#D4D4D8` | Body copy under headings |
-| `--yy-text-muted` | `#5F5E5A` | `#A1A1AA` | Meta, captions, helper text (passes AA on canvas) |
-| `--yy-text-disabled` | `#A1A09A` | `#71717A` | Disabled labels only (not for readable content) |
+| Deep Ink | `#142C2A` | `sw-ink` | Text, inverse surfaces, dark-mode ground |
+| Maker Teal | `#006E63` | `sw-teal` | Primary actions, links, focus (light) |
+| Workshop Orange | `#FF7447` | `sw-orange` | Emphasis fill with an ink label. Never text. |
+| Citron | `#DFFF8F` | `sw-citron` | Success, dashboard sidebar, focus (dark), selection |
+| Sky Blue | `#B5CDFF` | `sw-sky` | Info |
+| Warm Yellow | `#FFD447` | `sw-yellow` | Warning |
+| Warm Cream | `#FFF4E8` | `sw-cream` | Page ground, labels on teal |
+| Danger reds | `#B91C1C`, `#991B1B`, `#FCA5A5` | `danger-*` | Destructive actions and errors |
 
-### 2.2 Colour — Yuyu primary ("ink")
+Brand-tested pairs: cream on teal 5.68, ink on cream 13.60, ink on orange 5.51, ink on yellow 10.37,
+ink on citron 13.23, ink on sky 9.23. Orange on cream is 2.47, which is why orange is never text.
 
-Yuyu's own primary action is ink, not a hue. It inverts in dark mode.
+### 2.2 Neutrals and surfaces
 
-| Token | Light | Dark |
-|---|---|---|
-| `--yy-primary` | `#18181B` | `#F4F4F5` |
-| `--yy-on-primary` | `#FFFFFF` | `#18181B` |
-| `--yy-inverse-surface` (feature bands, kiosk camera) | `#18181B` | `#1C1C1F` |
+Light mode is a Warm Cream page with white panels. Dark mode is the brand's teal-lit Deep Ink.
 
-### 2.3 Colour — brand (dot sign)
-
-Yuyu's own identity is the **dot sign**: a 5×5 grid of round dots drawing a "Y" (Figma "Brand — Dot sign", 111:292). It belongs to Yuyu's own surfaces only. Organiser logos, covers, certificates and event accent colours are never restyled with it.
-
-**Mark pattern** (`components/brand/patterns.ts`, rows top to bottom; `X` lit, `O` base, `.` soft):
-
-```
-X...X
-.X.X.
-..X..
-..X..
-..O..
-```
-
-**Rules**
-
-- The gap between dots is ¼ of a dot. Leave one dot step of clear space around the mark.
-- Show the full grid (lit and soft dots) at 48px and above. Below 48px, show the lit dots and the base dot only. Never render the mark smaller than 16px.
-- Below 32px on a light background, lit dots use deep marigold so they stay visible.
-- Wordmark: lowercase **yuyu**, Bricolage Grotesque 800, tracking −3%, in ink.
-- Marigold is never used for text.
-- Don't use square dots, rotation, other hues, filled soft dots, outlines, shadows or gradients.
-
-**Components** (`components/brand/`): `DotGrid` (the primitive), `DotMark` (full / bright / onMarigold / mono), `DotLockup` (horizontal / stacked / tagline), `DotFace` (10 moods), `DotIcon` and `DotLoader`. Face moods are fixed by meaning: Sleepy for empty states, Cheering for "You're in", Wink for checked in, Sad for errors, Waiting for the waitlist and Thinking for loading.
-
-**Assets:** hand-written SVG masters live in `public/brand/`. `npm run brand:generate` rasterises them into the favicon, PWA icons, apple-touch icon, default social card and email lockup. Commit both the masters and the outputs.
-
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--yy-brand-marigold` | `#FFB547` | `#FFB547` | Lit dots |
-| `--yy-brand-marigold-deep` | `#E8930C` | `#E8930C` | Lit dots under 32px on white |
-| `--yy-brand-marigold-small` | `#E8930C` | `#FFB547` | Resolved small-size lit dot |
-| `--yy-brand-dot-base` | `#18181B` | `#F4F4F5` | Base dot (the stem's foot) |
-| `--yy-brand-dot-off` | `#E7E6E2` | `#2A2A2E` | Soft dots |
-| `--yy-highlight-peach` | `#FDE7C8` | `#4A3418` | Highlighter mark, step circles, text selection |
-| `--yy-tint-peach` | `#FFF4E5` | `#2A1F10` | Feature cards, sign-in panel |
-
-### 2.4 Colour — status
-
-Status always pairs a **soft background** with a **strong foreground**, plus an icon or word (never colour alone).
-
-| Status | bg (L / D) | fg (L / D) | solid (L / D) | Used for |
+| Token (`--yy-…`) | Utility | Light | Dark | Use |
 |---|---|---|---|---|
-| Success | `#DCFCE7` / `#13301F` | `#166534` / `#86EFAC` | `#15803D` | Going, Published, Checked in, Verified, Online |
-| Warning | `#FEF3C7` / `#33270B` | `#92400E` / `#FCD34D` | `#F59E0B` | Waitlist, Draft, Running late, Reminders, MFA off |
-| Danger | `#FEE2E2` / `#3A1414` | `#B91C1C` / `#F87171` | `#B91C1C` | Delete, Invalid ticket, Cancelled, errors |
-| Danger border | `#FCA5A5` / `#7F1D1D` | — | — | Danger-zone card outline |
-| Neutral | `--yy-bg-muted` | `--yy-text-secondary` | — | In person, Online, Owner, Recurring, tags |
+| `bg-canvas` | `bg-canvas` | `#FFF4E8` | `#142C2A` | Page background |
+| `bg-panel` | `bg-panel` | `#FFFFFF` | `#1F433F` | Cards, panels, inputs, dialogs, menus |
+| `bg-surface` | `bg-surface` | `#F6ECE0` | `#193935` | Recessed areas, table headers, disabled fills |
+| `bg-subtle` | `bg-subtle` | `#F6ECE0` | `#193935` | Hover on cards and rows |
+| `bg-muted` | `bg-muted` | `#EFE6DB` | `#254D48` | Hover on controls, neutral fills |
+| `bg-emphasis` | `bg-emphasis` | `#EAE2D7` | `#2B5751` | Pressed controls, selected neutral fills |
+| `bg-track` | `bg-track` | `#EAE2D7` | `#2B5751` | Progress-bar tracks |
+| `border` | `border-line` | `#D5D0C6` | `#4D6D67` | Hairlines on cards and dividers |
+| `border-strong` | `border-line-strong` | `#828A83` | `#93A198` | Form-control outline (≥3:1) |
+| `text` | `text-ink` | `#142C2A` | `#FFF4E8` | Primary text |
+| `text-secondary` | `text-ink-secondary` | `#374A47` | `#E3DCD1` | Body copy under headings |
+| `text-muted` | `text-ink-muted` | `#5B6863` | `#C7C4BA` | Meta, captions, helper text, placeholders |
+| `text-disabled` | `text-ink-disabled` | `#828A83` | `#93A198` | Disabled labels only (WCAG-exempt) |
+
+### 2.3 Actions, emphasis and chrome
+
+| Token | Utility | Light | Dark | Use |
+|---|---|---|---|---|
+| `primary` / `-hover` / `-active` | `bg-primary` … | `#006E63` / `#02675D` / `#046158` | same | Space Works' own primary action |
+| `on-primary` | `text-on-primary` | `#FFF4E8` | `#FFF4E8` | Label on teal (5.68) |
+| `inverse-surface` | `bg-inverse` | `#142C2A` | `#254D48` | Toasts, tooltips, code blocks, sticky bars |
+| `on-inverse` | `text-on-inverse` | `#FFF4E8` | `#FFF4E8` | |
+| `highlight` / `-hover` | `bg-highlight` | `#FF7447` / `#FF8157` | same | The one bold moment: public CTA, counters, "2 left" |
+| `on-highlight` | `text-on-highlight` | `#142C2A` | `#142C2A` | Ink on orange (5.51) |
+| `highlight-soft` | `bg-highlight-soft` | `#FFEEE9` | `#2F4640` | Warm tinted panels |
+| `sidebar` | `bg-sidebar` | `#DFFF8F` | `#113532` | Dashboard sidebar field |
+| `sidebar-hover` | `bg-sidebar-hover` | `#F2FFD2` | `#254D48` | Sidebar item hover |
+| `sidebar-active` | `bg-sidebar-active` | `#006E63` | `#006E63` | Current sidebar item |
+| `on-sidebar-active` | `text-on-sidebar-active` | `#FFF4E8` | `#FFF4E8` | |
+| `focus` | (ring) | `#006E63` | `#DFFF8F` | Focus ring; event pages use the accent text colour |
+
+Legacy names keep working and now point at brand colours: `brand-marigold*` → Workshop Orange,
+`brand-dot-base` → ink/cream, `brand-dot-off` → line, `highlight-peach` → Citron (light) / `#2F4640`
+(dark, used for selection and the `.yy-highlight` marker), `tint-peach` → `highlight-soft`.
+
+### 2.4 Status
+
+Status always pairs colour with a **word** (mandatory) and optionally an icon. Light mode uses the
+brand's solid pastels with ink words; dark mode uses soft fills with the brand colour as the word.
+
+| Status | `*-bg` (L / D) | `*-fg` (L / D) | `*-solid` (L / D) | Used for |
+|---|---|---|---|---|
+| Success (Citron) | `#DFFF8F` / `#2C5045` | `#536D49` / `#DFFF8F` | `#536D49` / `#DFFF8F` | Going, Published, Checked in |
+| Warning (Warm Yellow) | `#FFD447` / `#2F4D40` | `#142C2A` / `#FFD447` | `#696834` / `#FFD447` | Waitlist, Pending approval, Draft reminders |
+| Info (Sky Blue) | `#B5CDFF` / `#2A4D4C` | `#142C2A` / `#B5CDFF` | `#51697B` / `#B5CDFF` | Completed, waitlisted, neutral notices |
+| Danger (Yuyu reds) | `#F7E4E4` / `#3A4F4B` | `#B91C1C` / `#FCA5A5` | `#B91C1C` / `#FCA5A5` | Delete, invalid ticket, errors |
+| Danger border | `#FCA5A5` / `#7C6261` | | | Danger-zone card outline |
+| Danger hover / on-danger | `#991B1B` / `#FDB9B6` · `#FFF4E8` / `#142C2A` | | | Solid danger button |
+
+`*-solid` is for dots, bars and icons that must stand out on the page (≥3:1 on canvas). It is a dark
+brand-mix in light mode and the brand fill in dark mode, so put text on a solid fill only with the
+matching label: `text-on-success`, `text-on-warning`, `text-on-info`, `text-on-danger` (cream in light,
+Deep Ink in dark). Never `text-white` on a status solid.
+Attention counters use `bg-highlight text-on-highlight`, not danger.
 
 ### 2.5 Colour — event accent (organiser theming)
 
-Every **event** and **organisation** has an accent colour (stored on the event, e.g. `Event.accentColor` — check `prisma/schema.prisma` and add a reviewed migration if it doesn't exist yet; an organisation without one falls back to ink `#18181B`). On event-facing pages the accent drives:
+Every event and organisation can have an accent colour (`Event.accentColor`). The default is **Maker
+Teal `#006E63`**; organisation pages, instance pages and tickets without one fall back to **Deep Ink
+`#142C2A`** (`INK_ACCENT`). On event-facing pages the accent drives the title, the Register button, the
+date-block header, progress fills, the active section underline and accent chips.
 
-- Event title (display type), Register/primary button, date-block header, progress fill, active section-nav underline, accent chips, speaker initials.
-
-Derived tokens, computed at render time and set as CSS variables **on the event page root**:
+`lib/theme/accent.ts` derives the tokens and the page root sets them inline (`accentStyle()` plus the
+`yy-accent-scope` class, which picks the light or dark set):
 
 | Token | Formula |
 |---|---|
-| `--yy-accent` | organiser value (validated hex) |
-| `--yy-accent-soft` | `color-mix(in srgb, var(--yy-accent) 8%, var(--yy-bg-canvas))` in light, `14%` in dark (Ember → `#FAF0EC` / `#2A1812`). Keeps accent-text on it ≥ 4.5:1 |
-| `--yy-on-accent` | `#FFFFFF` if contrast(accent, white) ≥ 4.5, else `#18181B` |
-| `--yy-accent-text` | Light: accent if contrast(accent, canvas) ≥ 4.5, else darken until it passes. Dark: `color-mix(in srgb, var(--yy-accent) 65%, #FFFFFF)` and check ≥ 4.5 on `#111113` |
+| `--yy-accent` | organiser value (validated `#RRGGBB`) |
+| `--yy-accent-soft` | white panel + 12 % accent (light); dark panel `#1F433F` + 16 % accent (dark) |
+| `--yy-on-accent` | first of cream, Deep Ink, white, black that reaches 4.5:1 on the accent |
+| `--yy-accent-text` | light: the accent, darkened toward Deep Ink until ≥4.5 on canvas, panel, surface and soft. Dark: 33 % accent in cream, lightened until it passes the same check on the dark surfaces |
 
-**Contrast guard (required):** organisers can pick any colour, so always compute `--yy-on-accent` and `--yy-accent-text`, and check `--yy-accent-text` against both the canvas and `--yy-accent-soft` (≥ 4.5:1 for chip text). Never put white text on a light accent. Note: White on the success solid `#15803D` is 5.0:1, so all kiosk panel text stays readable.
+With the default teal these reproduce the global tokens exactly (`#E0EEEC`, `#FFF4E8`, `#006E63`; dark
+`#1A4A45`, `#ABC8BC`), so an event in the default colour looks like the rest of the product.
 
-Preset swatches offered in the colour picker:
+Preset swatches (`ACCENT_PRESETS`; the `name` values are stable keys for swatch artwork):
 
-| Name | Hex | Dark accent-text |
+| Key | Colour | Label on fill |
 |---|---|---|
-| Ember (default for new events) | `#C2410C` | `#FB8A5B` |
-| Iris | `#4B3FA8` | `#A79BFF` |
-| Teal | `#0F766E` | `#5EEAD4` |
-| Ink | `#18181B` | `#F4F4F5` |
+| Teal (default) | Maker Teal `#006E63` | cream |
+| Ember | Workshop Orange `#FF7447` | Deep Ink |
+| Iris | Sky Blue `#B5CDFF` | Deep Ink |
+| Ink | Deep Ink `#142C2A` | cream |
 
-Yuyu chrome (app shell, Yuyu marketing pages, auth) **never** uses an event accent. In the dashboard, an event's accent appears only on its own date block and progress bar.
+Space Works chrome (dashboard shell, marketing pages, auth) never uses an event accent. In the dashboard
+an event's accent appears only on its own date block and progress bar.
 
 ### 2.6 Typography
 
-| Role | Family | Fallback |
-|---|---|---|
-| Display / headings | **Bricolage Grotesque** (variable, opsz) — weights 600, 800 | `ui-sans-serif, system-ui, sans-serif` |
-| Body / UI | **Figtree** — 400, 500, 600, 700 | `system-ui, sans-serif` |
-| Code / IDs / API | **JetBrains Mono** — 400, 500 | `ui-monospace, monospace` |
+| Role | Family | Weights | Files |
+|---|---|---|---|
+| Headings, titles, numbers | **Gilroy** | 600 (700 for inline strong) | `public/brand/fonts/Gilroy-SemiBold.woff`, `Gilroy-Bold.woff` |
+| Body, labels, controls, IDs | **Gilroy** | 400, 500, 600, 700 | `Gilroy-Regular.woff`, `Gilroy-Medium.woff` + above |
+| One short expressive accent | **Unbounded** | 500 (600 allowed) | `Unbounded-Variable.woff2` |
+| Code, secrets, JSON | system monospace | — | none (`--font-mono`) |
 
-Self-host fonts (privacy invariant: no third-party font CDNs at runtime). Use `next/font/local` or `@fontsource`.
+Fonts are self-hosted with `@font-face` in `app/globals.css` (privacy invariant: no font CDNs).
+Licences are in `public/brand/fonts/LICENSES/`. `font-synthesis: none` is set on `body`: there is no
+faux bold or italic. Gilroy Bold also answers legacy 800/900 requests.
 
-Type scale (desktop → mobile ≤ 640px):
+- `font-sans` and `font-display` are Gilroy. Headings are **600, never 800**.
+- `font-accent` is Unbounded 500 with −0.01em tracking: **one short phrase per public layout** (landing
+  hero, auth brand panel, an empty-state hero). Never in dashboard or staff chrome.
+- IDs, codes and counts use Gilroy 500 with `tabular-nums`, not a monospace face.
 
-| Token | Family / weight | Size / line-height | Tracking | Mobile | Used for |
-|---|---|---|---|---|---|
-| `display-xl` | Bricolage 800 | 76 / 0.98 | −0.035em | 44 | Yuyu home hero |
-| `display-l` | Bricolage 800 | 64–72 / 0.98–1.0 | −0.03em | 40 | Event title, About/Features hero |
-| `display-m` | Bricolage 800 | 52–56 / 1.0 | −0.03em | 36 | Page titles on public pages, Feedback "How was it?" |
-| `h1` | Bricolage 800 | 38–40 / 1.1 | −0.02em | 30 | Dashboard page title |
-| `h2` | Bricolage 800 | 30–32 / 1.15 | −0.01em | 24 | Event page section (Schedule, Speakers) |
-| `h3` | Bricolage 800 | 24 / 1.2 | 0 | 20 | Card titles, feature areas |
-| `h4` | Bricolage 800 | 20 / 1.25 | 0 | 18 | Dashboard section titles |
-| `body-l` | Figtree 400 | 18–20 / 1.6 | 0 | 17 | Lead paragraphs |
-| `body` | Figtree 400 | 16 / 1.6 | 0 | 16 | Default copy (public) |
-| `body-ui` | Figtree 400/500 | 15 / 1.5 | 0 | 15 | Dashboard default |
-| `label` | Figtree 600 | 14 / 1.4 | 0 | 14 | Form labels, table headers |
-| `caption` | Figtree 400 | 13–14 / 1.45 | 0 | 13 | Helper text, timestamps |
-| `overline` | Figtree 700 | 13 / 1.3 | 0.06em, UPPERCASE | 12 | "VENUE", "ON THIS PAGE" |
-| `mono` | JetBrains Mono 400 | 13 / 1.5 | 0 | 13 | Codes, endpoints, scopes |
+Type scale (mobile → desktop from 640px):
 
-Rules: never tighter than −0.035em (letters must not touch). Body copy max width ~640px. Don't use Inter, Roboto or Arial.
+| Class | Weight | Size / line | Tracking | Use |
+|---|---|---|---|---|
+| `text-display-xl` | 600 | 44/48 → 72/76 | −0.02em | Landing hero |
+| `text-display-l` | 600 | 40/43 → 64/68 | −0.02em | Event title, About/Features hero |
+| `text-display-m` | 600 | 34/38 → 48/52 | −0.015em | Public page titles |
+| `text-h1` | 600 | 26/32 → 32/38 | −0.01em | One page title per screen |
+| `text-h2` | 600 | 22/28 → 28/34 | −0.01em | Event page sections |
+| `text-h3` | 600 | 20/26 → 24/30 | −0.005em | Card and dialog titles |
+| `text-h4` | 600 | 18/24 → 20/28 | −0.005em | Dashboard section titles |
+| `text-title` | 600 | 16/24 | 0 | Card and list-row titles |
+| `text-body-l` | 400 | 17 → 19 | 0 | Lead paragraphs |
+| `text-body` | 400 | 16/24 | 0 | Default copy, inputs |
+| `text-body-ui` | 400 | 15/22 | 0 | Dense dashboard copy |
+| `text-label` | 500 | 14/20 | 0 | Form labels, nav, meta |
+| `text-caption` | 500 | 13/18 | 0.01em | Helper text, timestamps |
+| `text-overline` | 600 | 12/16 UPPERCASE | 0.08em | Eyebrows ("VENUE") |
+| `font-accent` | Unbounded 500 | inherit | −0.01em | One accent phrase |
+
+Button labels are Gilroy 600. Body copy max width ~640px.
 
 ### 2.7 Spacing
 
-4px base. Use only: `2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 80`.
-
-| Context | Value |
-|---|---|
-| Inline gaps (icon + label, chips) | 6–10 |
-| Form field gap | 12–14 |
-| Card padding | 16–24 (dashboard 16–20, public 24–32) |
-| Section gap (dashboard) | 24 |
-| Section gap (event page) | 40–48 |
-| Section gap (marketing) | 64–80 |
-| Page side gutter | 24 desktop, 16 mobile |
-| Content max-width | 1160 public; dashboard fluid with forms ≤ 900 |
+4px grid: `4, 8, 12, 16, 20, 24, 32, 40, 48, 64`. Page gutter 16 (mobile) / 24 / 32. Card padding 20
+(24 on settings). Every control is 44px tall. Rows: 56 for lists, 48 for tables.
 
 ### 2.8 Radius
 
-| Token | px | Use |
+| Utility | px | Use |
 |---|---|---|
-| `r-sm` | 8 | Inline code buttons, tiny controls |
-| `r-md` | 10–12 | Inputs, date block, nav items, org avatar small |
-| `r-lg` | 16 | Cards, list rows, tables, stat tiles |
-| `r-xl` | 20 | Feature cards, registration card, cover image |
-| `r-2xl` | 24–28 | Hero panels, ticket, kiosk result panel, CTA bands |
-| `r-full` | 999 | **All buttons**, chips, segmented controls, search fields, avatars |
+| `rounded-sm` | 6 | Checkboxes, tiny controls |
+| `rounded` | 8 | Inline elements |
+| `rounded-md` / `rounded-control` | 10 | **Buttons**, inputs, selects, nav items, date block |
+| `rounded-lg` | 12 | Menus, popovers, callouts, segmented track |
+| `rounded-xl` | 16 | **Cards, panels, tables, dialogs** |
+| `rounded-2xl` | 20 | Feature panels |
+| `rounded-3xl` | 24 | Hero panels, ticket |
+| `rounded-full` | 9999 | Status pills, filter chips, avatars, switches |
 
-Don't nest more than two rounded containers (card inside card inside card is banned).
+Prefer `rounded-md` over `rounded-control` inside `cn()`: `tailwind-merge` does not know the custom
+`control` key, so a later `rounded-*` override would not replace it.
 
 ### 2.9 Elevation
 
-Flat by default: cards use a 1px `--yy-border`, no shadow.
+**No shadows on cards.** Cards and panels use a 1px `border-line`.
 
-| Token | Value (light) | Dark | Use |
-|---|---|---|---|
-| `shadow-raised` | `0 1px 2px rgba(24,24,27,.04), 0 12px 32px rgba(24,24,27,.06)` | `0 12px 32px rgba(0,0,0,.5)` | Event registration card, auth card |
-| `shadow-float` | `0 1px 2px rgba(24,24,27,.04), 0 24px 48px rgba(24,24,27,.08)` | `0 24px 48px rgba(0,0,0,.5)` | Hero product mock, menus, dialogs |
-| `shadow-ticket` | `0 1px 2px rgba(24,24,27,.06), 0 16px 40px rgba(24,24,27,.10)` | same, black | Ticket stub |
+| Token | Value | Use |
+|---|---|---|
+| `shadow-raised` | `none` | Legacy name for cards; now flat |
+| `shadow-ticket` | `none` | Legacy ticket stub; `.yy-ticket-shadow` draws a hairline that follows the torn edge |
+| `shadow-segment` | `0 0 0 1px var(--yy-border-strong)` | Segmented-control thumb and switch thumb outline |
+| `shadow-float` | `0 2px 6px rgb(20 44 42 / .06), 0 12px 32px rgb(20 44 42 / .10)` | **Overlays only:** menus, popovers, dialogs, toasts, tooltips |
 
 ### 2.10 Motion
 
-- Durations: 120 (press), 180 (hover/fade), 240 (panels, dialogs), 360 (success moments).
-- Easing: `cubic-bezier(.2,.8,.2,1)`.
-- **Content is visible by default.** Scroll-reveal animations may only enhance, never hide content (fixes the blank sections on v1 Home/About).
-- Respect `prefers-reduced-motion: reduce` → no translate/scale, fades ≤ 120ms.
-- Success moments (Registered, Checked in): a single 360ms scale-in of the check icon; no confetti.
-- **Colour-mode switch** (`components/providers.tsx`): the new mode grows from the toggle as a soft-edged circle (View Transitions + an animated `--yy-reveal` mask, 720ms, final frame held with `fill: "forwards"` so the old mode never flashes back). The light/dark illustration twins are decoded before the snapshot, waiting at most 150ms. Without View Transitions, colours cross-fade for 420ms. Reduced motion switches instantly.
-- **Loading:** `DotLoader` (`components/brand/DotLoader.tsx`) is three dots, two marigold and one ink, hopping left to right in turn (`.yy-dot-loader-jump`, 1.2s loop, 160ms stagger, `role="status"` with a hidden label). `PageLoader` centres it fixed in the viewport for route `loading.tsx` screens (dashboard, organisation, event). There is no root `loading.tsx`: a root Suspense boundary streams a 200 before `notFound()`/redirects run. Buttons keep their own pending state. With reduced motion the dots rest on the baseline.
-- **Dialogs** open in place: overlay fades in (180ms), panel fades and rises 8px from `scale(.98)` (`yy-dialog-in`, 240ms). Centring uses the `translate` property, so the keyframes animate only `transform`; mixing the two made dialogs fly in from the top-left.
-- **Physical objects** (envelope, letter, ticket stub) move on springs, with stages overlapping instead of waiting for each other (the flap is still swinging while the letter slides out). Gravity exits use an ease-in curve such as `[0.45, 0, 0.85, 0.35]`.
-- **Cross-fades between stages:** render each stage as its own full-screen centred layer (`absolute inset-0 grid place-items-center`) so the outgoing and incoming objects share the same spot and nothing shifts.
-- **Restart-safe sequences:** React runs effects twice in development (mount, cleanup, mount). An imperative `animate()` sequence must check it is still the current run after each `await`, stop quietly if its elements have unmounted, and start cleanly from the beginning on the second run. Closing mid-sequence closes straight away.
+- Colour changes 120ms. Expand 200ms. Dialog enter 240ms, exit 160ms. Easing `ease-yy`
+  (`cubic-bezier(.2,.8,.2,1)`).
+- **No translate, scale or shadow on hover.** Buttons change colour only.
+- Content is visible by default; scroll reveals only enhance.
+- `prefers-reduced-motion: reduce` → no translate/scale, fades ≤ 120ms.
+- Colour-mode switch (`components/providers.tsx`): the new mode grows from the toggle as a soft circle
+  (View Transitions); without them colours cross-fade; reduced motion switches instantly.
+- Restart-safe sequences: React runs effects twice in development. An imperative `animate()` sequence
+  must check it is still the current run after each `await` (see `AGENTS.md`).
 
 ### 2.11 Breakpoints
 
-`sm 640` · `md 960` · `lg 1200`. Mobile-first. Two-column layouts (content + side card) stack below `md`, side card first on event pages only for the Register card (see §5.2).
+`sm 640` · `md 960` · `lg 1200`. Mobile-first. Two-column layouts stack below `md`.
 
 ---
 
-## 3. Iconography & imagery
+## 3. Logo, icons and imagery
 
-- Icons: 1.8–2px stroke, rounded caps/joins, 16/18/20/24px. Use Lucide (`lucide-react`) to match. Decorative icons get `aria-hidden="true"`; icon-only buttons need `aria-label`.
+### 3.1 Logo
+
+Use the master artwork from SpaceWorks-Design `logo/` **unaltered** (no recolouring, stretching,
+rotation, effects or re-typed wordmarks). Brand components live in `components/brand/`.
+
+| Ground | Artwork |
+|---|---|
+| Warm Cream | Full colour (`lockup-*.svg`, `symbol.svg`) |
+| White | One-colour Deep Ink (`*-one-colour-ink.svg`) |
+| Deep Ink or Maker Teal (dark mode, dark bands) | Reversed cream (`*-reversed.svg`) |
+
+- Clear space: ¼ of the symbol height on every side.
+- Minimum sizes: symbol ≥ 48px; primary lockup ≥ 180px wide. Favicon and app icon are the only
+  exceptions (they use `app-icon.svg`, rasterised).
+- Placements: dashboard sidebar stacked lockup 180px wide; mobile top bar symbol 48px; public header
+  horizontal lockup ≥ 768px, symbol below; auth brand panel stacked lockup 240–320px; social card cream
+  1200×630 with the stacked lockup 600px wide.
+- Copy: the product is **"Space Works Events"**, the organisation **"Space Works"**. "SpaceWorks"
+  (no space) is for code identifiers, URLs and repo names only.
+
+### 3.2 Icons
+
+`lucide-react` (24px grid, 2px stroke, round caps), rendered at 16/18/20px. Decorative icons get
+`aria-hidden`; icon-only buttons need `IconButton` with a required `label`. **The dashboard sidebar is
+text-only.** Use icons only where they help: search, add, back, external link, switchers, callouts,
+overflow, theme toggle, sign out.
+
+### 3.3 Imagery
+
 - No emoji in UI.
-- Event cover: 16:7 (event page), 2:1 (cards). If none is uploaded, draw a placeholder from the accent: solid accent + 22–24px dot grid at 16–18% white. Never show a broken image. Covers are set through the cover photo editor (§4.16).
-- Avatars: photo if present, else initials (1–2 letters, 700 weight) on a tint: `--yy-accent-soft` on event pages; status tint in activity feeds; `--yy-bg-emphasis` for users. Render photos with `AvatarImage` (`components/ui/avatar-image.tsx`), which swaps to the initials if the image fails to load (missing Gravatar, deleted upload, blocked by CSP) instead of a broken-image icon.
-- Organisation logo: square, radius 9–28 depending on size; fallback = initials on the org accent.
-- Logos of sponsors: real logo in a 40×40 tile; fallback dashed tile. Never repeat the name twice.
-- **Dot illustrations** (Yuyu's own pages only): 7×7 dot icons and faces from `components/brand` or `/public/landing`. Every landing SVG has a `-dark.svg` twin, swapped by `ThemedImage` with CSS only (no JS, no flash).
-- **Faces are always live `DotFace` grids, never images.** On hover of the face or its `.group` card, the dots ripple out from the centre, the eyes blink and the face lifts 4px with a −4° tilt (`.yy-face` in `globals.css`). This is mouse-only (`hover: hover`) and fully still under reduced motion. Pass `hover={false}` where a face must stay still.
-- **Faces carry meaning, not decoration.** `EmptyState` takes a `mood`: Sleepy for empty lists, Sad for errors and not-found, Cheering for "You're in", Wink for checked in, Waiting for the waitlist, Thinking for loading. Keep the existing words beside the face. Organiser surfaces (org page, event schedule) don't show faces.
-- **404** (`components/feedback/NotFoundExperience.tsx`): the whole page fits one screen (checked down to 1280×720 and 390×844); no search box, no overline, no face above the heading. A small companion follows the pointer (or taps on touch) and settles when idle; it is decorative (`aria-hidden`). Heading "This page isn't on the programme" (`text-h1`), the requested path in mono, then a ticket that tilts with the pointer and a stub stamped "No match" (danger outline, −14°, spring in). Drag the stub right or press "Tear off the stub": it resists and tilts while pulled, then peels at the perforation and drops away, leaving jagged edges on both pieces (`.yy-ripped-right` / `.yy-ripped-left`, an SVG-mask of 7×10px teeth, ≥ 640px; `.yy-ticket-shadow` drop-shadow because box-shadow ignores masks). The departing stub leaves layout so the ticket doesn't jump. Actions: Go back (primary) + Discover events. Reduced motion: no tilt, no drag, instant stamp.
+- Event cover: 16:7 on the event page, 2:1 on cards. With none, `.yy-cover-placeholder` draws the accent
+  with a soft cream dot grid. Never a broken image.
+- Avatars: photo, else 1–2 initials (Gilroy 600) on a tint. `AvatarImage` swaps to initials on error.
+- Organisation logo: square; fallback is initials on teal.
+- QR codes always sit on a white plate, in both modes.
 
 ---
 
-## 4. Components
+## 4. Components (`components/ui/*`)
 
-Each lists anatomy, variants, sizes and rules. Names match the Figma layers and suggested React components.
+All primitives are Radix + Tailwind. Their props and exports are stable; prefer them over one-off markup.
 
 ### 4.1 Button
 
-Pill shape (`r-full`), Figtree 600–700.
+`rounded-md` (10px), Gilroy 600, `min-h-11` for every size (`lg` is 48px). No hover lift, scale or
+shadow; colour changes only. Focus uses the global 2px ring with a 2px offset.
 
-| Variant | Light | Dark | When |
+| Variant | Rest | Hover | When |
 |---|---|---|---|
-| `primary` | bg `--yy-primary`, text `--yy-on-primary` | inverted | One per view: Save, Create, Sign in |
-| `accent` | bg `--yy-accent`, text `--yy-on-accent` | same | Event-facing primary: Register, Send feedback |
-| `secondary` | bg canvas, 1px `--yy-border-strong`, text `--yy-text` | same tokens | Second action: Cancel, Share, Add to calendar |
-| `quiet` | no bg/border, text `--yy-text-secondary`, underline on hover | — | Tertiary: Back, Undo, Forgot? |
-| `danger` | bg canvas, 1.5px danger, text danger | — | Delete organisation…, Sign out everywhere |
-| `danger-quiet` | text danger only | — | Revoke, Turn off station |
-| `inverse` | bg white, text ink | bg `#F4F4F5` | On ink bands (CTA band) |
+| `primary` | `bg-primary text-on-primary` | `bg-primary-hover` | One per view: Save, Create, Sign in |
+| `accent` | `bg-accent text-on-accent` | accent mixed 12 % toward Deep Ink | Event-facing primary: Register |
+| `secondary` / `neutral` | `bg-panel border-line text-ink` | `bg-muted` | Second action: Cancel, Share |
+| `ghost` | `text-accent-text` | `bg-accent-soft` | Low-emphasis action in teal |
+| `quiet` | `text-ink-secondary`, underline on hover | | Tertiary: Back, Undo |
+| `highlight` | `bg-highlight text-on-highlight` | `bg-highlight-hover` | The one bold public CTA. Never in dashboard chrome |
+| `danger` / `dangerOutline` | `bg-panel border-danger-fg text-danger-fg` | `bg-muted`, darker red | Opens a confirmation: Delete organisation… |
+| `dangerSolid` | `bg-danger-solid text-on-danger` | `bg-danger-hover` | The final destructive confirm (used by `ConfirmDialog`) |
+| `dangerQuiet` | `text-danger-fg` | underline | Revoke, Turn off station |
+| `inverse` | `bg-on-inverse text-inverse` | `bg-subtle` | On dark bands |
 
-Sizes: `sm` 36px (14px text, 7×14 padding) · `md` 44px (15–16px, 10×18) · `lg` 52px (17px, 14×24). Minimum touch target 44px on touch screens. Kiosk keys 76px.
-
-Rules: destructive actions are never `primary`; destructive confirmations end with "…" and open a dialog. Disabled = `--yy-bg-emphasis` bg, `--yy-text-muted` text, still readable. Loading = keep width, swap label for spinner + "Saving…".
+**Disabled** is explicit, never opacity: `bg-surface text-ink-muted border-line`. Loading keeps the
+width and swaps in a spinner. Destructive actions are never `primary`; triggers end with "…" and open
+a dialog.
 
 ### 4.2 Text input / textarea / select
 
-- Label **above** the field (Figtree 600 14px), never a floating label. Optional fields say "Optional" in muted text, required fields don't need an asterisk unless most fields are optional.
-- Field: 1px `--yy-border-strong`, `r-md` 12px, padding 11–12 × 14, 16px text (prevents iOS zoom), canvas bg.
-- Helper text under field: 13px muted. Error: border danger, helper text danger with icon, `aria-invalid` + `aria-describedby`.
-- Focus: 2px ring `--yy-primary` (or `--yy-accent` on event pages) with 2px offset.
-- Read-only values (email you can't change, web address): `--yy-bg-subtle` fill, 1px `--yy-border`, lock icon, optional "Copy".
-- Prefix fields: grey prefix segment (`yuyu.idliapps.com/`) joined to the input.
-- Search: pill shape, leading search icon, clear (✕) button.
-- Password: inline show/hide icon button inside the same border; strength bar (4 segments) + rule checklist.
-- Textarea resizes vertically; no grey box inside the field (v1 bug).
-- Dropdowns never use the browser's own picker. Use `Dropdown` (`components/ui/select.tsx`, re-exported from `field.tsx`): same API as `<select>` with `<option>` children, rendered as the Yuyu listbox (field-styled trigger, `shadow-float` panel, check on the selected row). A visually hidden native select carries `name`/`value`, so form posts, `FormData` and form-level `onChange` keep working. Use `Select` + `SelectItem` directly for options with descriptions.
+- Label above (`text-label`), never floating. Optional fields say "Optional" in muted text.
+- Field (`controlClasses`): `bg-panel`, 1px `border-line-strong` (3:1), `rounded-md`, 44px tall, 16px text.
+  Hover `border-ink`; focus `border-accent` + 2px focus ring; invalid (`aria-invalid`) `border-danger-fg`
+  with a danger helper line and icon; disabled and read-only `bg-surface` + `border-line`.
+- Placeholders use `text-ink-muted` (readable, not disabled grey).
+- Prefix fields join a `bg-surface` segment to the input. Search has a leading icon and a clear button.
+- Dropdowns never use the browser picker: `Dropdown` (`components/ui/select.tsx`) keeps a hidden native
+  `<select>` for forms and renders a panel listbox with `shadow-float`.
 
 ### 4.3 Choice controls
 
-- **Chip toggle / filter chip:** pill, 1px border; selected = 1.5px ink border + ink fill + white text (or outline-only for "radio-like" groups). `aria-pressed`.
-- **Segmented control:** pill track `--yy-bg-muted`, 4px padding, selected segment white with `shadow` `0 1px 3px rgba(24,24,27,.12)`. Used for Sign in / Create account, List / Calendar, Page content / Programme.
-- **Checkbox card:** for options with descriptions (API scopes). Selected = 1.5px ink border.
-- **Switch:** for instant settings (Let waitlisted guests in, Print ID cards). Label + description left, switch right, whole row clickable.
-- **Rating 1–5:** five equal buttons with number + word (Poor, Meh, Okay, Good, Loved it); selected = 2px accent border + accent-soft fill.
-- **PIN input:** 8 boxes 44×60, current box 2px ink border; on kiosks pair with a 3×4 keypad (Clear, 0, ⌫).
-- **Option card:** for one choice among a few with consequences (Publishing, badge style, email design). Radix radio item, `rounded-xl` 1px border, icon in a 32px circle, title (`text-label`) + one-line description; checked = ink border with a 0.5px inset ink shadow and the icon circle turns ink. Hover `bg-subtle`.
-- **Colour picker** (`components/ui/color-picker.tsx`): never the browser's `<input type="color">`. A "Custom" chip sits after the preset swatches (§2.5) and opens a popover: saturation/brightness area (drag or arrow keys), hue slider, hex box, the system eyedropper where the browser has one (Chromium), a live Register button and link sample using the same contrast rules as the event page, and "Use the default colour".
+- **Checkbox / radio:** 20px, `bg-panel`, outline border; checked = teal fill (checkbox) or teal dot.
+- **Checkbox card / radio card:** `bg-panel`, 1px line; checked = 1.5px teal (or accent) border.
+- **Switch:** outline-grey track, teal when on; white panel thumb with a 1px outline ring.
+- **Segmented control:** `bg-surface` track with a hairline and 4px padding; selected segment
+  `bg-panel` + outline ring, `rounded-md`.
+- **Filter chip:** fully round; selected = teal fill with cream text; `aria-pressed`.
+- **Colour picker** (`components/ui/color-picker.tsx`): presets (§2.5) then "Custom": saturation area,
+  hue slider, hex box, eyedropper where supported, live Register/link sample using the same contrast rules.
 
 ### 4.4 Tabs & navigation
 
-- Tab rows that overflow scroll sideways and show a faded arrow on each side with hidden tabs; clicking it scrolls the row (`components/ui/tabs.tsx`).
+- Underline tabs: rest `text-ink-muted`, hover `text-ink`, active `text-ink` + **2px underline** (teal in
+  the product, the event accent on event pages). Rows scroll sideways with faded arrow hints.
+- Dashboard sidebar: Citron field (`bg-sidebar`), text-only items 44px tall, hover `bg-sidebar-hover`,
+  current item `bg-sidebar-active text-on-sidebar-active font-semibold` with `aria-current="page"`.
+  Dark mode uses the Deep Ink sidebar.
+- Back link: `← All events`, quiet, 14px 600.
 
-- **Underline tabs** (page sub-sections): 2px bottom border on active (ink in app, accent on event page), muted text inactive, horizontal scroll on overflow. Max 8 tabs.
-- **Section nav** on event page: About · Schedule · Speakers · Venue · FAQ, anchors.
-- **Breadcrumb:** `Event / Programme`, 15px, parent links 600 weight.
-- **Back link:** `← All events`, quiet, 14px 600.
+### 4.5 Status pills (`Chip`)
 
-### 4.5 Chips / badges
+Fully round, 24px tall (`min-h-6`), 12–13px Gilroy 600, padding 8–10. **The word is mandatory**; the
+icon is optional. Tones: `success`, `warning`, `info` (solid pastel + ink in light, soft + brand word in
+dark), `danger` (panel + `danger-border` + red word), `accent` (accent-soft + accent text), `highlight`
+(orange + ink; for "2 left"-style attention), `neutral` (surface + hairline + ink), `ink` (inverse),
+`outline`.
 
-Pill, 12–13px, 600–700, padding 3–5 × 10–12. Types: status (§2.4), accent (accent-soft bg + accent-text), neutral (muted bg). One word where possible: Going, Waitlist, Draft, Published, Free, In person, Online, Weekly.
-
-**Naming:** recurring events are always called **"Series"** in the dashboard and **"Every Tuesday" / "Weekly"** to attendees. Don't mix "Recurring" and "Series".
+Recurring events are "Series" in the dashboard and "Every Tuesday" / "Weekly" to attendees.
 
 ### 4.6 Date block
 
-The signature element. 50–68px wide, `r-md`, 1px border, overflow hidden.
-- Top band: month (`OCT`), 11–12px 700, 0.08em tracking, white on accent (event) or neutral `#A1A09A` for drafts.
-- Bottom: day number, Bricolage 800, 20–30px.
-Used on: event cards, dashboard rows, event header, ticket, embed. Optional series variant: repeat icon instead of date.
+50–68px wide, `rounded-md`, 1px line, `bg-panel`. Top band: month, 11–12px 600, 0.08em tracking, on the
+accent (event), teal (product) or `bg-emphasis` (draft). An explicit `color` gets its contrast-checked
+label from `getAccentTokens`. Bottom: day in Gilroy 600 `tabular-nums`, 20–30px.
 
 ### 4.7 Cards
 
-- **Base card:** canvas bg, 1px border, `r-lg`, padding 16–24. Clickable cards are a single `<a>` with hover bg `--yy-bg-subtle`.
-- **Event card (grid, discover):** cover band 150px in accent with date block overlapping the bottom-left by 22px; chips; title (Bricolage 800 22px); "Wed 14 Oct · 9:30 AM · Bengaluru"; footer row: org · "5 going".
-- **Event row (dashboard, org page):** date block · title + one-line meta · right side status/going + mini progress bar. Drafts use a dashed border and a "Finish & publish" warning chip.
-- **Stat tile:** label (14px muted) over number (Bricolage 800 32–34px); optional progress bar; optional tinted "needs you" variant.
-- **Feature/principle card:** tint bg, no border, `r-xl`, padding 24.
-- **Callout / banner:** warning tint, icon, bold first sentence, single action link/button at the right. One per page max.
-- **Empty state:** 1.5px dashed `--yy-border-strong`, centered text, a next step ("Copy the invite link above to bring in your team.").
-- **Danger zone:** 1.5px `--yy-danger-border` outline card at the bottom of settings, title in danger fg, `danger` button.
+- **Base card** (`Card`): `bg-panel`, 1px `border-line`, `rounded-xl` (16px), padding 16–24, **no shadow**.
+  Clickable cards are one `<a>` with hover `bg-subtle`.
+- **Stat tile:** label (14px muted) over a Gilroy 600 `tabular-nums` number (32px); optional progress
+  bar; "attention" variant on `bg-warning-bg`.
+- **Callout:** tinted status fill (`warning`, `info`, `success`, `danger`), icon, bold first sentence,
+  one action. One per page. No translucent text.
+- **Empty state:** panel card, centred, says what to do next ("No guests yet. Share the event link to
+  get sign-ups."). Space Works Events' own screens may add a `mood` illustration.
+- **Danger zone:** `bg-panel` card with a 1px `border-danger-border`, title in `text-danger-fg`, a
+  `danger` (outline) trigger that opens a `dangerSolid` confirmation.
 
 ### 4.8 Lists & tables
 
-- Tables: rounded container `r-lg` with 1px border, header 13px 600 muted, rows 12–14px padding, 1px `#EFEEEA` separators, horizontal scroll wrapper on small screens. Person cell = avatar + name + email (never repeat the email twice).
-- Timestamps: relative for < 7 days ("2 min ago", "Yesterday"), else "13 Oct 2026".
-- Undo actions in tables are `quiet` buttons, not coloured links.
+- `Table`: `rounded-xl` panel with a 1px line; header row on `bg-surface`, 14px Gilroy 600 sentence case
+  in `text-accent-text`; **rows 48px** with 1px `border-line` separators; hover `bg-subtle`; scrolls
+  inside its own box on small screens.
+- Person cell = avatar + name + email (never repeat the email).
+- Timestamps: relative for < 7 days ("2 min ago"), else "13 Oct 2026".
 
 ### 4.9 Schedule / programme
 
-- **Schedule list (event page):** rows: time (700) + duration (muted) · title link (700 18px) + speakers · track chip (accent for primary track, neutral for others).
-- **Programme grid:** time column 96px + one column per track; sessions as tinted blocks spanning rows (accent-soft for main track, muted for others); breaks span all tracks; empty slots dashed. Track filter chips on top. Times in event timezone, labelled once ("all times IST").
-- **Live schedule:** NOW card (accent fill, white text, progress bar, "4 min left") · NEXT card with delay chip ("Running 5 min late", old time struck through) · LATER list. "Live · updates automatically" badge.
-- **Programme editor:** tracks as reorderable chips with edit buttons + "Add track"; each track a column of session cards with a "Running late?" − / + stepper ("On time", "+5 min").
+- Schedule list: time (600) + duration (muted) · title link + speakers · track chip (accent for the
+  main track, neutral for others).
+- Programme grid: time column + one column per track; sessions as tinted blocks; breaks span tracks.
+- Live schedule: NOW card (accent fill, on-accent text, progress), NEXT card with delay chip, LATER list.
 
 ### 4.10 Event registration card
 
-Right column on desktop (sticky top 24px), below title on mobile **plus a sticky bottom bar** with the Register button once the card scrolls away.
-Contents: "Join this event" (h3) · "5 going / 115 spots left" + progress bar (accent) · avatar stack + "Adithya, Dev and 3 others" · accent button "Register — it's free" · secondary row Add to calendar / Share · host row (org logo, "Hosted by", name, →).
-States: Open · Full ("Join the waitlist", warning) · Approval required ("Request to join") · Closed ("Registration closed", disabled + reason) · Registered ("You're in" success + View ticket).
+Right column on desktop (sticky), below the title on mobile plus a sticky bottom Register bar. States:
+Open · Full ("Join the waitlist", warning) · Approval required · Closed (disabled + reason) ·
+Registered ("You're in", success + View ticket).
 
 ### 4.11 Ticket
 
-Phone-first. Heading "You're in, {firstName}!" (display, 34px). Stub card `r-2xl` + `shadow-ticket`: accent header (org name 13px, event title Bricolage 800 28px) · 2-col detail grid (DATE, TIME, VENUE, GUEST with overline labels) · perforation (dashed line + two half-circle notches in page bg) · QR on **white plate always** (also in dark mode) + "Show this at the door. It only holds a private ticket link." Actions: Add to calendar (primary), Save ticket (secondary), "Can't make it? Cancel registration" (quiet).
-
-- **Venue:** for in-person events with a valid http(s) map link (`safeHttpUrl`), VENUE is a link to the map in a new tab, with an external icon and an sr-only "(opens in a new tab)". Online events and events without a map link show plain text.
-- **Live tear-away** (`components/ticket/LiveTicket.tsx`): while the ticket is open it listens for its check-in (SSE, polling fallback, 15s re-check). When the desk confirms, the QR stub rips along the perforation and falls away (peels left, hinged top-right, then drops: 0.9s, `x −36`, `y 380`, `rotate −26°`), both edges get jagged teeth (`.yy-ripped-bottom` on the main part, `.yy-ripped-top` on the stub, 10×7px SVG-mask teeth, paired with `.yy-ticket-shadow`), and a "You're checked in" panel takes the stub's place: `bg-success-bg`, dashed `border-line-strong`, `rounded-xl`, a 64px success-solid check that springs in from −25°, Bricolage 800 26px heading, "at {time}" and "Enjoy the event" (0.4s rise, 0.45s delay). Phones vibrate (`[35, 60, 70]`), a polite live region announces it, and "Cancel registration" disappears. Reloads after check-in render the torn state and never show the QR again. Reduced motion: no rip; the stub fades (120ms), the main part closes into a whole card and the panel crossfades in.
+Phone-first. Stub card `rounded-3xl`, flat with a hairline: accent header, 2-column detail grid,
+perforation, QR on a white plate. When the desk checks the guest in, the stub tears away
+(`.yy-ripped-bottom` / `.yy-ripped-top`, paired with `.yy-ticket-shadow`) and a "You're checked in"
+panel on `bg-success-bg` takes its place. Reduced motion: no rip, a 120ms fade.
 
 ### 4.12 Check-in
 
-- **Station (kiosk, tablet, no site chrome):** header with event, "Station 1", count "3 / 5 checked in", Online/Offline badge, Lock station. Left: camera viewfinder (dark, corner brackets, hint text) + search pill + Find. Right: **full-height result panel**:
-  - Success: `#15803D` fill, check icon, "Checked in", name in display type, Next guest (inverse) + Undo.
-  - Waitlisted: warning tint + 2px amber border, "On the waitlist", guidance, "Admit anyway" + Next guest.
-  - Invalid: `#B91C1C` fill, ✕ icon, plain-language reason, "Scan again".
-  - Below: RECENT list.
-- **PIN lock:** left copy ("Enter the station PIN"), right keypad. Open check-in disabled until 8 digits.
-- **Organiser check-in desk (dashboard tab):** progress tile, offline-readiness callout ("Download guest list"), camera + search, switches, recent check-ins table, Door-station card (QR, Copy link, Show PIN, New PIN, Turn off station).
-- **Badge quick print** (`components/checkin/id-card/QuickPrintSheet.tsx`): with "Print ID cards" on, each check-in opens a small sheet showing the attendee's real badge, one big "Print badge" button (Enter prints; becomes "Print again" / "Done" once sent), Skip, and Edit design. Never the full designer mid-queue.
-- **Badge designer** (`IdCardDesigner.tsx`): a full-screen editor with Undo/Redo (⌘Z / ⇧⌘Z) and Close in the header, then three columns at `lg` (`300px | 1fr | 272px`): **settings** on the left (Style, paper, heading, badge label and footer toggles, "Show on the badge" switches, shrink long names to one line down to 60%, answer order, export/import design); the **badge to scale** in the middle on `bg-subtle` (preview with Short name / Long name / the attendee, grid and guides toggle, snap size; click to select, drag or arrow keys, Shift for bigger steps; guides never print); and an **inspector** for the selected item on the right. Below `lg` it stacks preview first. Print a test card without an attendee.
-- **Badge templates** are black and white only and the **name is always the largest text**: **Classic** (thin inset frame, hairline under the heading), **Bold** (white heading on a solid black top band, name in capitals; prints with exact colour adjust), **Minimal** (no lines, lots of space). Layouts stack so nothing overlaps, and preview and print share the same decoration and line heights.
-- **Paper presets** (`lib/idCardPrint.ts`): A6 (105×148 mm, sheet paper), 4×6 in (label printer), 3×4 in (lanyard pouch), 4×3 in (landscape pouch) and ID card CR80 (85.6×54 mm), each in either orientation. Type and margins scale relative to A6.
+Station kiosk with a full-height result panel: success (success fill, "Checked in", name in display
+type), waitlisted (warning), invalid (danger fill with `text-on-danger`, plain-language reason). Badge
+printing and the badge designer live in `components/checkin/`.
 
 ### 4.13 App shell (dashboard)
 
-- **Sidebar** 224px, `--yy-bg-subtle`, right border; collapses to a 68px icon rail with tooltips (remembered in the `yy-sidebar` cookie so the server renders the same width). Top: Yuyu lockup (dot mark when collapsed) and the collapse button. The organisation switcher is a card with a dotted strip; the active item is a raised canvas pill. Two modes:
-  - *Outside an org:* Home · ORGANISATIONS list (logo + name) · + New organisation.
-  - *Inside an org:* org switcher (logo, name, role, ⇅) · Events · Series · Members · Settings. API access is reached from Settings (owners only), not the menu.
-  - Bottom: "View public page ↗" and an account card that opens a menu: Account settings, Light/Dark mode, Sign out.
-  - Active item: canvas fill with a border, 600 weight, `aria-current="page"`.
-  - Below `md`: sidebar collapses to a top bar + menu sheet.
-- **Super-admin chrome** (`components/super-admin/SuperAdminTopBar.tsx`): no sidebar. A light sticky top bar (`bg-canvas/95` + backdrop blur, bottom border, 56px row, max 1200px): Yuyu lockup · hairline divider · "Super admin" label · "Back to dashboard" ("Dashboard" on phones) + account menu (Light/Dark mode, Sign out) on the right. A second row holds pill links to each section (Overview, Activity, Monitoring, Operations, Email, Audit log, Organisations, Events, Users, Auth, Security, Settings, Invites, Storage); active = `bg-muted` + 600 weight + `aria-current`; the row scrolls sideways on phones.
-- **Super-admin pages stay restrained:** the standard title + one-line description, then `AdminPanel` cards (`rounded-2xl` bordered canvas, `CardHeader`), `MetricRows` for label/value facts, small ink `Sparkline`/`Histogram` charts and capped tables. Overview leads with a "Needs attention" panel whose items link to details. No colour moments, faces or accents; read-only views never show secrets, tokens, answers or message bodies.
-- **Event/series header:** ← All events · date block + title (h1 32px) + status chip + "Public · Tomorrow, 9:30 AM" · actions (View page ↗ secondary, Open check-in primary) · underline tabs: Overview, Guests, Event page, Emails, Check-in, Feedback, Analytics, Settings. Registration form lives under Event page and Invites under Guests. See §5.4 for the tab patterns.
-- Page title pattern: optional greeting/kicker (muted) + h1 + one-line description.
-- Settings pages: left label column (title + helper) / right field column rows separated by dividers; Save/Discard bottom-right.
+Citron text-only sidebar (§4.4) with the stacked lockup at 180px, organisation switcher, and an account
+menu (Account settings, Light/Dark mode, Sign out). Page title pattern: optional kicker (muted) + `h1` +
+one-line description. Settings pages: label column / field column rows separated by hairlines.
+Super-admin pages stay restrained: panel cards, metric rows, small charts, capped tables, no accents.
 
 ### 4.14 Public chrome
 
-- **Yuyu site header** (home, about, features, discover, legal): `DotLockup` · Discover · Features · About (active = muted pill) · right: Sign in (secondary) + Start organising (primary). Footer: `DotLockup` + "Free events, run by communities." · links (incl. GitHub) · "Built by Abhiram · Hosted on Idlistack".
-- **Open source:** the homepage hero links to the GitHub repo, the Self-host band ends with a "Built in the open" row (star, report a bug, suggest an idea, contribute), and About's "Open and yours" section links issues, discussions and `CONTRIBUTING.md`. All repo URLs come from `lib/openSource.ts`.
-- **Event-context header** (event, programme, session, speaker, series, feedback, org page): **organiser** logo + name on the left (not Yuyu); right: Discover events + Sign in, or an accent "Register — free" on sub-pages. Footer: 18px `DotMark` + "Free event, powered by Yuyu" · Privacy · Terms. Embedded events (`/embed/…`) end with the same credit, opening Yuyu in a new tab.
-- "Powered by Idlistack" lives in the footer only — never in the top nav.
-- **Auth pages:** minimal header (logo only), centered card `r-2xl` max 440–480px, or split layout on sign-in (form left, peach-tint brand panel right).
+Site header with the horizontal lockup (symbol below 768px), Discover · Features · About, and Sign in
+(secondary) + Start organising (primary, or `highlight` as the page's one bold moment). Event-context
+pages show the **organiser** logo and name, with a small "Powered by Space Works Events" credit in the
+footer. Auth pages: logo-only header, centred `rounded-xl` panel card, or a split layout with a cream
+brand panel that may hold the one `font-accent` phrase.
 
 ### 4.15 Dialogs, toasts, menus
 
-- Dialog: `r-2xl`, `shadow-float`, max 480px, title (h3) + body + actions right-aligned (secondary then primary/danger). Destructive dialogs require typing the name for org deletion. Overlay `rgba(17,17,19,.48)`; opens in place (§2.10).
-- **Review-before-send dialog** (irreversible bulk actions such as email broadcasts): title "Send to {n} people?", a bordered `dl` summary (To · audience, Subject), and a checkbox "I've checked the preview and want to email {n} people" that must be ticked before the primary button enables. Confirming starts a 5s undo window (§5.4) rather than acting immediately.
-- Toast: bottom-center (mobile) / bottom-left (desktop), ink bg, white text, 4s, optional Undo action.
-- Menu (⋯): `r-lg`, `shadow-float`, items 40px, danger items last in danger fg.
+- Dialog: `bg-panel`, `rounded-xl`, 1px line, `shadow-float`, max 480px; title (`text-h3`) + body +
+  actions right-aligned (secondary, then primary/`dangerSolid`). Overlay Deep Ink at 48 %.
+- Review-before-send dialog for irreversible bulk actions (summary + "I've checked…" checkbox), then a 5s
+  undo window.
+- Toast: `bg-inverse text-on-inverse`, `shadow-float`, 4s, optional Undo.
+- Menu / popover: `bg-panel`, `rounded-lg`, 1px line, `shadow-float`; items 40px, highlighted `bg-muted`,
+  danger items last in `text-danger-fg`. Tooltip: `bg-inverse`, 13px.
 
-### 4.16 Cover photo editor
+### 4.16 Cover photo editor and account card
 
-- **Picker** (`components/event/CoverImagePicker.tsx`): an empty cover is a 16:7 dashed drop zone ("Drop an image, paste one, or choose a file"); a set cover shows a wide 16:7 preview with Replace, Edit and Remove. Drag-over shows "Drop to replace the cover"; paste works anywhere on the page.
-- **Editor** (`components/media/PhotoEditor.tsx`, reusable): a large dialog with a dark `#111113` stage on the left and tools on the right. The stage always covers the frame (drag, pinch, wheel or keyboard; zoom slider with − / +), with guides for the other crops (Event page 16:7, Cards 2.5:1, Social share 1.91:1). Tools are tabs: **Crop** (rotate left/right, flip, Straighten slider) and **Adjust** (Brightness, Contrast, Saturation, Reset adjustments, plus looks: Original, Vivid, Warm, Cool, Mono, Soft). Placement previews show the card and social-share result. Output shapes: Event page banner 16:7 (1680×735, default), Wide 16:9, Square. Exports WebP with a JPEG fallback. Cancelling with changes asks first.
-
-### 4.17 Account card
-
-`AccountCard` (`components/account/AccountCard.tsx`) is the one card for account pages: `rounded-2xl`, 1px border (`border-danger-border` for `tone="danger"`), padding 20/24, title `text-h4` + one-line muted description on the left, optional actions on the right (stacking on phones), body 20px below. One topic per card; no nested cards.
+The cover picker, `PhotoEditor` (`components/media`) and `AccountCard` (`components/account`) follow the
+card and dialog rules above: panel surfaces, hairlines, 16px radius, no shadows except on overlays.
 
 ---
 
 ## 5. Page patterns
 
-### 5.1 Inventory
-
-| Area | Screens |
-|---|---|
-| Yuyu's own pages | Home, About (building note, who makes Yuyu), Features, Privacy, Terms |
-| Discover & orgs | Discover (search + filters), Organisation public page (list/calendar), Embeddable event card (520×300) |
-| Attending | Event page, Programme, Session, Speaker, Series date (RSVP), Live schedule, Feedback & certificate, Ticket (with live tear-away), Station PIN, Station scanning |
-| Auth & account | Sign in / Create account, Set new password, Verify email, Join organisation, Co-organiser invite, Account: Profile, Registrations, Organisations, Security (§5.5) |
-| Workspace | Workspace home, Organisation events, Create organisation, Members, Organisation settings, API access |
-| Event management | Event overview (short link), Event page tab with Publishing, cover photo editor and colour picker, Registration form builder, Emails (designs, review, undo), Check-in desk, Badge quick print + badge designer, Feedback results, Certificate designer, Analytics, Programme editor, Series manage (§5.4) |
-| Operators | Super-admin top bar and pages: Overview, Activity, Monitoring, Operations, Email, Audit log, Organisations, Events, Users (+ per-user support), Auth, Security, Settings, Invites, Storage |
-| Brand & system states | Dot sign kit, app icons, social card, email header, error / empty states, loading screens (`DotLoader`), 404 (ticket tear) |
-| Not yet designed — follow this system | Create event / series flow, Guests list, Page content editor, Feedback form builder, Invites |
-
-### 5.2 Event page layout
-
-1. Organiser header.
-2. Cover (16:7, `r-xl`) or nothing — never a broken placeholder in production.
-3. Two columns ≥ 960: left content (chips → title in accent display → tagline → date block + venue rows → section nav → About + highlight tiles → Schedule → Speakers → Partners → Venue (map + directions) → FAQ (`<details>`) → Resources); right sticky registration card + host card.
-4. Mobile: title block → registration card → sections; sticky bottom Register bar.
-
-### 5.3 Dashboard home & lists
-
-Built in `app/dashboard/page.tsx` from `lib/dashboardHome.ts`; every number comes from a real query scoped to the person's memberships.
-
-- **Greeting:** a dot face (Happy normally, Cheering during an event, Sleepy when nothing is planned), a time-of-day greeting in the viewer's timezone, and one sentence built from real numbers ("Demo Summit is tomorrow, and 12 people signed up in the last day.").
-- **Needs you:** one warning callout for pending approvals and drafts, only from organisations the person manages (OWNER/ADMIN). The sidebar shows the same approval count as a badge per organisation.
-- **Next up:** the soonest event in its own accent (`yy-accent-scope` + `yy-cover-placeholder`), with a 25-dot capacity meter, sign-ups in the last day, named attendees (anonymous guests are counted but never shown), and Open check-in (managers only), Manage event and Copy link (published events only).
-- **Event day:** from two hours before start until the end, Next up becomes a dark live band: checked-in count with a seat-dot grid, On stage now/next (honouring live delays), Arrivals per 15 minutes and At the door.
-- **Stats:** Upcoming events, sign-ups, check-ins and feedback over the last seven rolling days, each with a small dot-column chart and a week-over-week hint. No invented scores.
-- **Your events:** tabs Upcoming / Drafts (managers only) / Past; rows with the event's accent date block, a status chip (approvals → full/waitlist → going) and a 10-dot fill meter. Drafts use the dashed border.
-- **Activity:** sign-ups, waitlist joins, check-ins and feedback, newest first, one line each with a mood face. Names only, never emails.
-- **Organisations:** cards with a dotted strip, logo, upcoming/member/role chips, and a dashed "New organisation" card.
-- **First run:** until the person has a published event, a four-step checklist (organisation → logo → first event → publish); with no events yet, it replaces the page under a peach welcome banner.
-
-**Organisation workspace** (`app/dashboard/[orgSlug]/page.tsx`, data from `lib/orgDashboard.ts`, every query scoped to the one organisation):
-
-- **Banner:** dotted strip, logo, name, description, `/slug` with Copy link and Public page, role and member count; Settings / New series / New event for managers.
-- **Needs you**, **event day** and **Next up** reuse the home components, scoped to this organisation. Next up sits beside a **mini month calendar** (`?month=YYYY-MM`) with a dot per event (in its accent) and per series date.
-- **Stats:** upcoming events, sign-ups over 30 days, turnout (checked in ÷ going over the last five events) and feedback over 30 days. No invented scores.
-- **Events:** link tabs Upcoming (default) / Drafts (managers) / Past, a GET search (`?q=`), "Show more" (`?show=n`), privacy and status chips, a fill meter, and quick Check-in and Copy link actions. Past rows show "34 of 40 came" and feedback. No countdown timers.
-- **Series** (`#series`) with the recurrence in words and the next date; **Team** with member initials, a role breakdown and Invite (owners).
-- **Roles:** members see no management links, check-in or pending-approval counts; rows are not links for them.
-- **New organisation:** with no events and no series, a four-step checklist (profile, first event, team, public page) replaces the page.
-
-### 5.4 Event dashboard tabs
-
-- **Overview:** adds a **Short link** control for owners/admins (Create → copy `/aB3x9Kq`; Regenerate confirms that the old link stops working).
-- **Publishing** (`components/event/PublishingSection.tsx`, the "Publishing" card on the Event page tab): three plain questions instead of a grid of switches.
-  1. *Who can see this event?* option cards Draft / Live / Offline.
-  2. *Who can find it?* option cards Everyone / People with the link / Invited people only, then an "Approve each sign-up" switch row whose description explains the current effect. Shows "Takes effect when the event is live." while not live.
-  3. *Sign-ups:* one bordered list of rows: Limit the number of spots (switch + number), **Close sign-ups** as one segmented control (At the end / Before start / Set time) with a single follow-up field, so only one cutoff exists, and Show how many are going.
-
-  A **live summary line** sits on top (`role="status"`): a status dot + bold headline + detail, e.g. "**Live.** Listed publicly, anyone can sign up · 120 spots · closes 2 hours before." on `bg-success-bg`; Draft and Offline use `bg-subtle` with a warning or muted dot.
-- **Event page:** the accent row is the preset swatches + Custom colour picker (§4.3); the cover uses the photo editor (§4.16). No phone preview; "Open public page" sits at the top of the column. **Registration form** lists the fixed Name/Email rows, then questions; "Add question" opens the answer-type picker at the end of the list, scrolls it into view clear of the sticky bar and focuses the first type. A sticky live preview sits on the right at `lg` (Hide/Show preview).
-- **Emails:** numbered steps: a "Pick a starting point" template row, then audience and message cards on the left and, on the right at `lg`, the design picker and preview (desktop / mobile width), then send history. **Design picker** (`components/broadcasts/DesignPicker.tsx`): a 3-column radio grid of small drawn thumbnails (Classic, Minimal, Accent band, Photo header, Letter) using the option-card checked style plus an ink check badge top-right; Photo header says "Add a cover to use a photo" when there is none. Designs change only the frame. Send opens the review dialog (§4.15); confirming turns the **send bar** into "Sending to {n} people in **5**…" with Undo. Nothing reaches the server until the countdown ends; the reviewed content is snapshotted; leaving the page cancels.
-- **Analytics funnel** ("From sign-up to thank-you"): one row per step (Responded, Going, Checked in, Feedback): label + one-line plain hint · a rounded bar sized as a share of everyone who responded (ink, accent, success, marigold) · the number (Bricolage 800) with "{n}% of {previous}" (never over 100%) or "after the event". Caption: "Each bar is measured against everyone who responded."
-- **Feedback results:** rating rows are label · dots · count; the label column fits the longest label (numbers right-aligned, words such as "Excellent" left-aligned, capped at 16ch and truncated with a `title`).
-- **Certificate designer** (`components/feedback/CertificateBuilder.tsx`): upload the background artwork, then a canvas with an "Add layers" toolbar (text, image for logos, signatures and seals; up to 20 layers) beside a 340px column holding the **Layers** panel and the **inspector** for the selected layer. Text layers take merge tags (Attendee name, event, date, organisation, issue date). A warning callout appears when no layer includes the attendee name. Sample values + "Generate exact preview" render the real output.
-
-### 5.5 Account area
-
-`/account` (layout `components/account/AccountSettingsLayout.tsx`): a **header card** (`rounded-2xl` bordered canvas) with avatar, "Account" kicker, name as `text-h1`, email, chips (Email verified, Two-step on / off) and "Member since". Below it, underline tabs **Profile · Registrations · Organisations · Security** (`accountTabs.ts`; add a tab there). Each tab is a column of `AccountCard`s (§4.17):
-
-- **Profile:** name and photo, email status with resend, appearance (Light / Dark / System).
-- **Registrations:** upcoming and past tickets (View ticket, Event page, Cancel), certificates, Download my data.
-- **Organisations:** memberships and roles, co-organiser roles, pending invites, Leave (blocked for a sole owner).
-- **Security:** password, two-step, sign-in methods, recent security activity, and Sign out everywhere in a danger card.
-
-### 5.6 About page
-
-- **Building note** (`components/landing/about/BuildingNote.tsx`): the hero holds a sealed envelope (hover lifts it 6px, tilts −1° and lifts the flap 16°). Opening it: the envelope travels to the centre (shared `layoutId`, spring 140/22) over a `rgba(17,17,19,.6)` blurred backdrop → the dot-sign wax seal is pressed and cracks, its halves falling under gravity → the flap swings back (spring 85/12) showing a lining of marigold dots → the folded letter slides out as the envelope gives a little → the envelope drops away → the letter unfolds its top then bottom third (spring 100/13, overlapping) and settles into the full note. About four seconds; "Skip to the letter" is always there. Closing (button, Escape or outside click) reverses it: the letter shrinks into the sheet, folds bottom then top, flies onto the envelope, which is already back on the page, and tucks in with a gentle settle. Focus returns to the envelope.
-- **Materials stay paper in both themes:** letter `#FBF7EF` with ink `#2B2620`, paper back `#F1EADB`, kraft envelope gradients (`#F1E4CA → #E2CDA6`), a red wax seal. The letter is serif (17–18px / 1.7, italic title 30–36px), max 640px, with a 34px `DotMark` and an Ember (`#C2410C`) rule beside the list. Never re-tint these for dark mode.
-- **Reduced motion** skips straight to the letter (120ms fades) and closes instantly.
-- **Who makes Yuyu** (`MakerSection.tsx`): two equal cards in a 2-column grid: the maker (peach tint, `rounded-[24px]`, a 64px Happy `DotFace`, "The maker", name, role, a short first-person note, link) and "Hosted on" IdliStack (`bg-subtle` + border, its logo at 48px tall, never stretched). Names in the heading link out with an sr-only "(opens in a new tab)".
+- **Event page:** organiser header → cover (16:7) → two columns ≥ 960 (content left: title in accent
+  display, date block + venue, section nav, About, Schedule, Speakers, Venue, FAQ; sticky registration
+  card right). Mobile: title → registration card → sections + sticky Register bar.
+- **Dashboard home:** greeting with one real-number sentence, a "Needs you" warning callout (managers
+  only), Next up in its event accent, stats from real queries, Your events (Upcoming / Drafts / Past),
+  Activity (names only, never emails), Organisations.
+- **Organisation workspace:** banner, Needs you, Next up + mini calendar, stats, events list with search,
+  series and team. Members see no management links.
+- **Event dashboard tabs:** Overview, Guests, Event page (publishing questions, accent picker, cover
+  editor, registration form), Emails, Check-in, Feedback, Analytics, Settings.
+- **Account area:** header card + tabs Profile · Registrations · Organisations · Security, each a column
+  of `AccountCard`s.
 
 ---
 
 ## 6. Content & voice
 
-- Plain, warm, short. Second person. Sentence case everywhere (buttons, headings, tabs).
-- Name the action: "Register — it's free", "Save new password", "Download guest list" — not "Submit", "OK".
-- Say what happens next: "We'll send your ticket and the call link here."
-- Errors: what went wrong + how to fix, no blame: "This code isn't for Demo Summit. Try searching by name instead."
-- Never show raw internals: no RRULE strings, no full secret URLs, no seconds in times, no `10/14/2026`.
-- Use "organisation", "organiser" (en-GB spelling, as in the codebase).
-- Don't over-promise legal/privacy claims beyond what the system enforces.
-
-### 6.1 Dates & times (one formatter)
-
-All formatting goes through one helper (e.g. `lib/format/datetime.ts`) using the **event's timezone**, `Intl.DateTimeFormat`, and these named styles:
-
-| Style | Example |
-|---|---|
-| `dateBlock` | `OCT` / `14` |
-| `dayLong` | Wednesday, 14 October |
-| `dayShort` | Wed 14 Oct |
-| `time` | 9:30 AM |
-| `timeRange` | 9:30 AM – 5:30 PM IST (date shown once if same day) |
-| `relativeDay` | Today / Tomorrow / In 9 days / Every Tuesday |
-| `relativeTime` | 2 min ago / Yesterday / 13 Oct 2026 |
-
-Show the timezone abbreviation once per page/section, not on every row. Never show seconds. Never output US `MM/DD/YYYY`. Countdown timers in lists are banned; use `relativeDay`.
+- Clear, warm, specific. Second person. Sentence case everywhere (buttons, headings, tabs).
+- Name the action: "Register — it's free", "Save new password" — not "Submit" or "OK".
+- Empty states name the next step. Errors say what happened and how to fix it, without blame:
+  "Couldn't save. Try again." **Banned:** "Oops", "Something went wrong".
+- Never show raw internals: no RRULE strings, no full secret URLs, no seconds, no `10/14/2026`.
+- en-GB spelling: "organisation", "organiser".
+- Dates and times go through one formatter in the event's timezone (`Wed 14 Oct`, `9:30 AM – 5:30 PM IST`,
+  `Today / Tomorrow / In 9 days`). Show the timezone once per section. No countdown timers in lists.
 
 ---
 
 ## 7. Accessibility checklist
 
-- Text contrast ≥ 4.5:1 (≥ 3:1 for ≥ 24px). `--yy-text-muted` is the lightest allowed body text.
-- Status never by colour alone (word or icon too).
+- Every text/background token pair is ≥ 4.5:1 (checked for light and dark when tokens change).
+  `text-ink-muted` is the lightest readable text. Form-control outlines and focus rings are ≥ 3:1.
+- No translucent text (`text-*/75` is banned); use a solid token.
+- Status never by colour alone (word required, icon optional).
 - Every input has a `<label>`; errors linked with `aria-describedby`.
-- Interactive elements are real `<button>` / `<a href>`; tabs use `role="tab"` + `aria-selected`; toggles use `aria-pressed`; nav uses `aria-current`.
-- Visible focus ring on everything (2px, offset 2px).
+- Real `<button>` / `<a href>`; tabs `role="tab"` + `aria-selected`; toggles `aria-pressed`; nav
+  `aria-current`.
+- Visible focus ring everywhere: 2px, offset 2px, teal (light) / Citron (dark), accent text on event pages.
 - Touch targets ≥ 44px; kiosk ≥ 64px.
-- Live regions: check-in result panel `aria-live="polite"`; toasts `role="status"`.
-- Works at 360px width with no horizontal page scroll (tables scroll inside their own box).
-- `prefers-reduced-motion` respected; `prefers-color-scheme` drives the default theme with a manual toggle stored per user.
+- Works at 360px with no horizontal page scroll.
+- `prefers-reduced-motion` respected; `prefers-color-scheme` sets the default theme, with a Light/Dark
+  toggle stored in the `swe.color-mode` cookie and `swe:color-mode` local storage.
 
 ---
 
 ## 8. Dark mode
 
-- Dark is a full theme, not an inversion filter. Use the dark column of every token.
-- Primary (ink) buttons become light (`#F4F4F5` bg, ink text). Inverse bands become `#1C1C1F`.
-- Event accents keep their fill colour; text uses `--yy-accent-text` (lighter). Tints are re-mixed against `#111113`.
-- Status: dark bg + light fg (see §2.4). Solid success/danger panels stay solid.
-- QR codes always on a white plate.
-- Physical materials stay themselves: the About letter and envelope stay paper, badges stay black on white, and the cover photo editor stage is always dark `#111113`.
-- Shadows → `rgba(0,0,0,.5)`; rely more on borders.
-- Cover images: no automatic dimming.
-- The dot sign swaps its base dot to `#F4F4F5` and soft dots to `#2A2A2E`. Marigold stays the same.
-- The mode is chosen by `data-color-mode` on `<html>` (set from a cookie on the server, so there is no flash), or follows the system when unset. `.yy-dark-band` forces dark tokens on one band, such as the "At the door" section and the closing CTA.
+- A full theme built from the brand's reversed pairings: Deep Ink ground, teal-lit panels, cream text.
+  **No black.**
+- Primary stays Maker Teal with cream labels. Focus becomes Citron.
+- Status pills switch from solid pastels to soft fills with the brand colour as the word.
+- Event accents keep their fill; text uses the lighter `--yy-accent-text`.
+- Overlays keep the same Deep Ink shadow; rely on hairlines and panel steps for structure.
+- QR codes stay on a white plate. Physical materials (letter, badges, photo-editor stage) keep their own
+  colours.
+- The mode is `data-color-mode` on `<html>` (set from the cookie on the server, so there is no flash),
+  or follows the system when unset. `.yy-dark-band` forces dark tokens on one band.
 
 ---
 
-## 9. Implementing in the Yuyu codebase
+## 9. Implementing in this codebase
 
-Stack: Next.js 16 App Router, React 19, TypeScript, **Tailwind 4**, **Radix UI** primitives, **lucide-react** icons and framer-motion. MUI and Emotion have been removed. Fonts are self-hosted with `@fontsource` (Bricolage Grotesque, Figtree, JetBrains Mono); no font CDN. Follow the repo's AGENTS.md/CLAUDE.md, keep Server Components by default, and never weaken the security invariants (CSP nonce, tenant isolation, etc.). Inline SVG and inline styles are fine under the CSP; don't add external scripts, fonts or image hosts.
+Stack: Next.js 16 App Router, React 19, TypeScript, **Tailwind 4**, **Radix UI**, **lucide-react**,
+framer-motion. Fonts are self-hosted (§2.6). Keep Server Components by default and never weaken the
+security invariants (CSP nonce, tenant isolation). Don't add external scripts, fonts or image hosts.
 
 ### 9.1 One source of truth for tokens
 
-1. `app/styles/tokens.css` declares every token as a CSS variable named `--yy-*` exactly as in §2. Light values go under `:root`. Dark values go under `:root[data-color-mode="dark"], .yy-dark-band` and under `@media (prefers-color-scheme: dark) { :root:not([data-color-mode]) }`.
-2. **Tailwind 4** maps them in `@theme inline` in `app/globals.css` (e.g. `--color-canvas: var(--yy-bg-canvas)`, `--color-accent: var(--yy-accent)`, `--color-brand-marigold: var(--yy-brand-marigold)`). The type scale lives there as `text-display-*`, `text-h*`, `text-body*`, `text-label`, `text-caption` and `text-overline`.
-3. UI primitives live in `components/ui/*` (Button, Field, Select, Choice, Tabs, Menu, Dialog, Table, display helpers such as `EmptyState`), built on Radix with Tailwind classes.
-4. Brand components live in `components/brand/*`; see §2.3. Never redraw the mark by hand. Use `DotMark`/`DotLockup`, or the SVG/PNG masters in `public/brand/` where React can't render, such as email and OG images.
-5. Emails use the hosted `public/brand/email-lockup.png`, built from `NEXT_PUBLIC_BASE_URL` with `width`/`height`/`alt="Yuyu"`, never inline SVG. Share cards (`lib/og/shareCard.tsx`) and the report PDF (`lib/eventReportPdf.ts`, pdf-lib circles) use the same mark. The PDF embeds static Bricolage Grotesque and Figtree instances from `public/brand/fonts/`, built from the same `@fontsource-variable` files the site uses.
+1. `app/styles/tokens.css` declares every token as `--yy-*` (plus raw `--sw-*` brand colours). Light
+   values go under `:root`. Dark values go under `:root[data-color-mode="dark"], .yy-dark-band` **and**
+   the `@media (prefers-color-scheme: dark) { :root:not([data-color-mode]) }` mirror. Keep all three in
+   sync.
+2. `app/globals.css` maps them in `@theme inline` (`--color-canvas: var(--yy-bg-canvas)`, …), defines
+   fonts, radii, the type scale (`text-display-*`, `text-h*`, `text-body*`, `text-label`, `text-caption`,
+   `text-overline`) and `.font-accent`.
+3. Utility names other code relies on: `canvas panel surface subtle muted emphasis track line
+   line-strong ink ink-secondary ink-muted ink-disabled primary primary-hover primary-active on-primary
+   inverse on-inverse highlight highlight-hover on-highlight highlight-soft sidebar sidebar-hover
+   sidebar-active on-sidebar-active success-bg/fg/solid warning-bg/fg/solid info-bg/fg/solid
+   danger-bg/fg/solid/border danger-hover on-danger on-success on-warning on-info accent accent-soft
+   on-accent accent-text
+   sw-ink sw-teal sw-orange sw-citron sw-sky sw-yellow sw-cream`, shadows `shadow-raised shadow-float
+   shadow-ticket shadow-segment`, radius `rounded-control`, fonts `font-sans font-display font-accent
+   font-mono`.
+4. UI primitives live in `components/ui/*`; brand components in `components/brand/*`.
 
 ### 9.2 Event accent at runtime
 
-In the event layout (server component) compute accent tokens with a small pure helper (`lib/theme/accent.ts`: `getAccentTokens(hex, scheme)` returning `--yy-accent`, `--yy-accent-soft`, `--yy-on-accent`, `--yy-accent-text` with WCAG contrast checks) and set them as inline `style` CSS variables on the page root. Validate the hex server-side (zod) — never inject raw user strings into CSS.
+The event page root sets `style={accentStyle(event.accentColor)}` and `className="yy-accent-scope"`.
+`accentStyle` returns `--yy-accent-*-light` / `-dark` pairs; the scope picks the right set for the
+current mode. Validate the hex server-side (zod); only a normalised `#RRGGBB` ever reaches CSS.
 
-### 9.3 Shared components
+### 9.3 Do / Don't
 
-Most of these now exist in `components/ui`, `components/chrome` and `components/brand`. Reuse them before adding new ones: `Button`, `Field` (label + input + helper + error), `SearchField`, `PasswordField`, `Chip`, `StatusChip`, `DateBlock`, `Avatar` (initials fallback), `OrgLogo`, `EventCard`, `EventRow`, `StatTile`, `Callout`, `EmptyState`, `DangerZone`, `SectionNav`, `ScheduleList`, `ProgrammeGrid`, `RegistrationCard`, `StickyRegisterBar`, `Ticket`, `PinInput`, `RatingInput`, `CheckinResult`, `AppShell` (Sidebar + OrgSwitcher), `EventHeader`, `SiteHeader`, `EventContextHeader`, `SiteFooter`, `ConfirmDialog`, `Toast`, `Dropdown` (`components/ui/select.tsx`), `ColorPicker`, `AvatarImage`, `DotLoader` / `PageLoader`, `PhotoEditor` (`components/media`), `AccountCard`, `AdminPanel` / `MetricRows` (`components/super-admin`).
+**Do:** use tokens; one primary action per view; label fields above; keep event accents on event
+surfaces; test light + dark + 360px.
 
-### 9.4 Do / Don't
-
-**Do:** use tokens; one primary action per view; label fields above; show the timezone once; keep event accents on event surfaces; keep content visible without JS animations; test light + dark + 360px.
-
-**Don't:** gradient text or gradient buttons (including the retired mint→lavender logo tile); hard-coded blues; floating labels or filled inputs; marigold text; restyling organiser logos, covers, certificates or accents with Yuyu's brand; cards in cards in cards; left-border accent cards; emoji; countdown timers; raw RRULE/URLs/seconds; Idlistack in the top nav; colour-only status; white text on a light accent.
+**Don't:** shadows on cards; hover lifts; `opacity-50` for disabled buttons; orange text; translucent
+text; `text-white` on a status fill; black; gradient text or buttons; Unbounded in dashboard chrome or
+more than once per layout; icons in the sidebar; recoloured or re-typed logos; cards in cards in cards;
+emoji; countdown timers; colour-only status.
 
 ---
 
-*Version 1.2 · 15 Oct 2026 · Direction A+ (chosen after comparing Commons, Signal and Marquee). 1.1: dot-sign rebrand, Tailwind/Radix implementation notes, open-source links, motion and dark-mode details. 1.2: Dropdown, colour picker and photo editor; Publishing, Emails, Analytics, badge printing and certificate designer; live ticket tear; account area; super-admin chrome; About building note; 404 and loading screens; motion principles.*
+*Version 2.0 · 18 Oct 2026 · Space Works Events rebrand of the Yuyu design system (v1.2, 15 Oct 2026).
+Brand values from SpaceWorks-HQ/SpaceWorks-Design.*

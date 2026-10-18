@@ -11,7 +11,7 @@ describe("colour picker maths", () => {
   });
 
   it("round-trips every preset and a spread of colours exactly", () => {
-    for (const hex of ["#C2410C", "#4B3FA8", "#0F766E", "#18181B", "#FFFFFF", "#7F7F7F", "#12AB34", "#FEDCBA"]) {
+    for (const hex of ["#006E63", "#FF7447", "#B5CDFF", "#142C2A", "#FFF4E8", "#C2410C", "#4B3FA8", "#FFFFFF", "#7F7F7F", "#12AB34", "#FEDCBA"]) {
       expect(hsvToHex(hexToHsv(hex)!)).toBe(hex);
     }
   });
