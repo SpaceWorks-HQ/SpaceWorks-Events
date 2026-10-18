@@ -44,7 +44,8 @@ export default async function LoginPage() {
             <div className="flex flex-col gap-2">
               <h1 className="text-display-l text-ink">Welcome back.</h1>
               <p className="text-body-ui text-ink-secondary">
-                Sign in with Google or your email and password. New here? Create an account in seconds.
+                {googleSsoConfigured ? "Sign in with Google or your email and password." : "Sign in with your email and password."}
+                {accountCreationEnabled ? " New here? Create an account in seconds." : null}
               </p>
             </div>
             <Suspense fallback={<p className="text-body-ui text-ink-muted">Loading sign in…</p>}>
