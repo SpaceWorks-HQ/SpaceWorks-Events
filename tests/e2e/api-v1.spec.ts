@@ -97,7 +97,7 @@ test.afterAll(async () => {
 });
 
 test("rejects missing credentials without accepting browser authentication", async ({ request }) => {
-  const response = await request.get("/api/v1/events", { headers: { Cookie: "yuyu.session-token.v2=not-a-machine-credential" } });
+  const response = await request.get("/api/v1/events", { headers: { Cookie: "swe.session-token.v1=not-a-machine-credential" } });
   expect(response.status()).toBe(401);
   expect(response.headers()["cache-control"]).toBe("no-store");
   await expect(response.json()).resolves.toEqual({ error: { code: "INVALID_CREDENTIAL", message: "A valid API credential is required." } });

@@ -17,7 +17,7 @@ type OutboxWorkerState = {
 };
 
 function workerState() {
-  return globalThis as typeof globalThis & { __yuyuOutboxWorker?: OutboxWorkerState };
+  return globalThis as typeof globalThis & { __sweOutboxWorker?: OutboxWorkerState };
 }
 
 /** Runs one complete delivery/retention pass and records its operational state. */
@@ -42,10 +42,10 @@ export async function runOutboxScheduler() {
  */
 export function startOutboxWorker() {
   const runtime = workerState();
-  if (runtime.__yuyuOutboxWorker?.started) return;
+  if (runtime.__sweOutboxWorker?.started) return;
 
   const state: OutboxWorkerState = { started: true, running: false };
-  runtime.__yuyuOutboxWorker = state;
+  runtime.__sweOutboxWorker = state;
 
   const tick = async () => {
     if (state.running) return;

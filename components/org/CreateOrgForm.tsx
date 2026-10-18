@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
 import { Field, Input, PrefixInput, Textarea } from "@/components/ui/field";
 
-/** Host shown before the slug, e.g. `yuyu.example.org/`. Inlined at build time, so server and client agree. */
+/** Host shown before the slug, e.g. `events.example.org/`. Inlined at build time, so server and client agree. */
 const SITE_PREFIX = `${(process.env.NEXT_PUBLIC_BASE_URL ?? "").replace(/^https?:\/\//, "").replace(/\/$/, "")}/`;
 
 export function CreateOrgForm() {

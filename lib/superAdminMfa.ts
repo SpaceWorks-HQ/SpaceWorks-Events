@@ -2,7 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 
-export const SUPER_ADMIN_MFA_COOKIE = "yuyu.super-admin-mfa.v1";
+export const SUPER_ADMIN_MFA_COOKIE = "swe.super-admin-mfa.v1";
 export const SUPER_ADMIN_MFA_MAX_AGE_SECONDS = 10 * 60;
 
 type SuperAdminMfaPayload = {

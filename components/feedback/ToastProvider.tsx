@@ -20,10 +20,12 @@ type ToastState = { id: number; message: string; severity: Severity; action: Toa
 const ToastContext = createContext<ToastContextValue | null>(null);
 
 const icons: Record<Severity, React.ReactNode> = {
-  success: <CheckCircle2 className="text-[#86EFAC]" />,
-  error: <XCircle className="text-[#F87171]" />,
-  warning: <AlertTriangle className="text-[#FCD34D]" />,
-  info: <Info className="text-current opacity-80" />,
+  // Toasts sit on Deep Ink in both modes: Citron, Warm Yellow, Sky Blue and the
+  // spec's light danger red all clear 4.5:1 there.
+  success: <CheckCircle2 className="text-sw-citron" />,
+  error: <XCircle className="text-[#FCA5A5]" />,
+  warning: <AlertTriangle className="text-sw-yellow" />,
+  info: <Info className="text-sw-sky" />,
 };
 
 /**

@@ -25,7 +25,7 @@ export type PendingOfflineCheckIn = {
   force: boolean;
 };
 
-const DB_NAME = "yuyu-offline-checkin";
+const DB_NAME = "swe-offline-checkin";
 const DB_VERSION = 1;
 const ROSTER_STORE = "rosters";
 const QUEUE_STORE = "queue";

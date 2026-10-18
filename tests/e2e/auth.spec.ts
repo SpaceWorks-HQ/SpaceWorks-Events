@@ -33,7 +33,7 @@ test("login rejects bad credentials, honors local return paths, and clears revok
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/account\/security$/);
   const cookies = await context.cookies();
-  const sessionCookie = cookies.find((cookie) => cookie.name === "yuyu.session-token.v2");
+  const sessionCookie = cookies.find((cookie) => cookie.name === "swe.session-token.v1");
   expect(Boolean(sessionCookie?.httpOnly && sessionCookie.sameSite === "Lax")).toBe(true);
   await prisma.user.update({ where: { id: userId }, data: { sessionVersion: { increment: 1 } } });
   const response = await page.request.get("/api/auth/session");
