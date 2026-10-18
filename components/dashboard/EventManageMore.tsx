@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition, type ReactNode } from "react";
+import { useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { EventClientDto } from "@/lib/eventDto";
 import { Copy, CopyPlus, Link2 } from "lucide-react";
@@ -11,9 +11,11 @@ import { cloneEvent, deleteEvent, updateEventSlug } from "@/app/actions/event";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { cn } from "@/lib/cn";
 
-function originFromWindow() {
-  if (typeof window === "undefined") return "";
-  return window.location.origin;
+const noSubscription = () => () => {};
+
+/** The page origin, empty during SSR and hydration so the snippets match the server render. */
+function useOrigin() {
+  return useSyncExternalStore(noSubscription, () => window.location.origin, () => "");
 }
 
 function escapeHtml(value: string) {
@@ -59,11 +61,9 @@ export function EventManageMore(props: {
   // A fresh key per opening remounts the dialog so the typed slug always starts empty.
   const [deleteKey, setDeleteKey] = useState(0);
 
-  const publicUrl = useMemo(() => {
-    const o = originFromWindow();
-    const path = `/${organisationSlug}/${slug}`;
-    return o ? `${o}${path}` : path;
-  }, [organisationSlug, slug]);
+  const origin = useOrigin();
+  // Snippets use the saved address, not the one being typed.
+  const publicUrl = `${origin}/${organisationSlug}/${event.slug}`;
 
   const embedButtonSnippet = useMemo(() => {
     const label = `Register for ${event.title}`;
@@ -71,9 +71,9 @@ export function EventManageMore(props: {
   }, [event.title, publicUrl]);
 
   const embedPageSnippet = useMemo(() => {
-    const embedUrl = `${originFromWindow()}/embed/${organisationSlug}/${slug}`;
+    const embedUrl = `${origin}/embed/${organisationSlug}/${event.slug}`;
     return `<iframe src="${embedUrl}" title="${escapeHtml(`${event.title} registration`)}" style="width:100%;height:720px;border:1px solid rgba(255,255,255,0.12);border-radius:16px;overflow:hidden;"></iframe>`;
-  }, [event.title, organisationSlug, slug]);
+  }, [event.title, event.slug, organisationSlug, origin]);
 
   const doUpdateSlug = () => {
     startTransition(async () => {
@@ -83,7 +83,7 @@ export function EventManageMore(props: {
         slug,
       });
       if (!res.ok) {
-        showToast(res.error, "error");
+        showToast(res.fieldErrors?.slug?.[0] ?? res.error, "error");
         return;
       }
       showToast("Event URL updated", "success");
@@ -111,7 +111,7 @@ export function EventManageMore(props: {
         return;
       }
       setDeleteOpen(false);
-      showToast("Event cancelled", "success");
+      showToast("Event deleted", "success");
       router.push(`/dashboard/${organisationSlug}`);
       router.refresh();
     });
