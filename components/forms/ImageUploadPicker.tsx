@@ -48,7 +48,7 @@ export function ImageUploadPicker(props: {
   return (
     <div className="flex flex-col gap-2.5">
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
-      <div className="flex flex-col gap-4 rounded-lg border-[1.5px] border-dashed border-line-strong bg-canvas p-4 sm:flex-row sm:items-center">
+      <div className="flex flex-col gap-4 rounded-lg border-[1.5px] border-dashed border-line-strong bg-panel p-4 sm:flex-row sm:items-center">
         <div className="flex h-[112px] w-[144px] shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
           {previewUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- local object URLs and managed uploads

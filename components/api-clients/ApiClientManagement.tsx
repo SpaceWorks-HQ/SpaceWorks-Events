@@ -155,7 +155,7 @@ function ClientPanel(props: {
           {API_SCOPES.map((scope) => (
             <CheckboxField
               key={scope}
-              label={<span className="font-mono text-sm">{scope}</span>}
+              label={<span className="tabular-nums text-sm">{scope}</span>}
               checked={selectedScopes.includes(scope)}
               onCheckedChange={(checked) =>
                 setSelectedScopes((current) =>
@@ -360,7 +360,7 @@ export function ApiClientManagement(props: {
               {API_SCOPES.map((scope) => (
                 <CheckboxCard
                   key={scope}
-                  label={<span className="font-mono text-sm">{scope}</span>}
+                  label={<span className="tabular-nums text-sm">{scope}</span>}
                   checked={scopes.includes(scope)}
                   onCheckedChange={(checked) =>
                     setScopes((current) =>

@@ -39,7 +39,7 @@ export function InstanceServiceSettingsForm({ initial }: { initial: Values }) {
       className="flex flex-col gap-5"
     >
       {status ? <Callout tone={status === "Settings saved." ? "success" : "danger"} role={status === "Settings saved." ? "status" : "alert"}>{status}</Callout> : null}
-      <Card padding="none" className="rounded-2xl px-5">
+      <Card padding="none" className="rounded-xl px-5">
         <SettingsRow title="SMTP">
           <div className="flex flex-col gap-4">
             {field("emailFrom", "Sender address")}

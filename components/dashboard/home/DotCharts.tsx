@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/cn";
+import { accentStyle, normalizeAccentHex } from "@/lib/theme/accent";
 
 /* Small dot charts for the dashboard home. Decorative: every chart sits next
    to the number it illustrates, so they are hidden from assistive tech. */
 
 const TONES = {
-  ink: "bg-primary",
+  ink: "bg-accent-text",
   marigold: "bg-brand-marigold",
   success: "bg-success-solid",
   amber: "bg-warning-solid",
@@ -29,13 +30,21 @@ export function DotColumns({ levels, max = 4, tone, dot = 6, className }: { leve
   );
 }
 
-/** A row of dots, the first `filled` of `total` lit. `color` is a validated hex (an event accent). */
+/**
+ * A row of dots, the first `filled` of `total` lit. `color` is a validated hex
+ * (an event accent) or a CSS colour token such as `var(--yy-success-solid)`.
+ * A hex accent is scoped like an event page: the dots use the accent itself in
+ * light mode and its lightened text tone in dark mode, so a dark accent (the
+ * default Maker Teal) never sinks into a dark panel.
+ */
 export function DotMeter({ filled, total, color, dot = 7, className, style }: { filled: number; total: number; color: string; dot?: number; className?: string; style?: CSSProperties }) {
   const lit = Math.max(0, Math.min(total, filled));
+  const isToken = color.startsWith("var(");
+  const scope = isToken ? undefined : ({ ...accentStyle(color), "--yy-accent-text-light": normalizeAccentHex(color) } as CSSProperties);
   return (
-    <span aria-hidden className={cn("flex flex-wrap", className)} style={{ gap: Math.max(3, Math.round(dot / 2)), ...style }}>
+    <span aria-hidden className={cn("flex flex-wrap", !isToken && "yy-accent-scope", className)} style={{ gap: Math.max(3, Math.round(dot / 2)), ...scope, ...style }}>
       {Array.from({ length: total }, (_, index) => (
-        <span key={index} className={cn("shrink-0 rounded-full", index >= lit && "bg-track")} style={{ width: dot, height: dot, backgroundColor: index < lit ? color : undefined }} />
+        <span key={index} className={cn("shrink-0 rounded-full", index >= lit && "bg-track")} style={{ width: dot, height: dot, backgroundColor: index < lit ? (isToken ? color : "var(--yy-accent-text)") : undefined }} />
       ))}
     </span>
   );

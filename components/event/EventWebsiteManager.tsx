@@ -259,7 +259,7 @@ function ContentCollection({
   const photoPicker =
     kind === "speaker" || kind === "sponsor" ? (
       <div className="flex flex-wrap items-center gap-2.5">
-        <label className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--yy-focus)", (pending || uploadingPhoto) && "pointer-events-none opacity-50")}>
+        <label className={cn("inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full border border-line-strong bg-panel px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-(--yy-focus)", (pending || uploadingPhoto) && "pointer-events-none opacity-50")}>
           <Upload aria-hidden className="size-4" />
           Choose {kind === "speaker" ? "speaker photo" : "sponsor logo"}
           <input
@@ -338,7 +338,7 @@ function ContentCollection({
     </>
   );
   return (
-    <section id={collectionId(kind)} aria-labelledby={headingId} tabIndex={-1} className="scroll-mt-24 rounded-2xl border border-line bg-canvas p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--yy-focus)">
+    <section id={collectionId(kind)} aria-labelledby={headingId} tabIndex={-1} className="scroll-mt-24 rounded-xl border border-line bg-panel p-5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--yy-focus)">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h3 id={headingId} className="text-title text-ink">{title}</h3>
@@ -506,8 +506,8 @@ export function EventWebsiteManager(props: Props) {
   };
   const savePage = () => {
     if (!accent.valid) {
-      setError("Use a hex colour such as #C2410C, or choose a preset.");
-      showToast("Use a hex colour such as #C2410C, or choose a preset.", "error");
+      setError("Use a hex colour such as #006E63, or choose a preset.");
+      showToast("Use a hex colour such as #006E63, or choose a preset.", "error");
       return;
     }
     const draft = { accentColor: accent.value, sections };
@@ -616,7 +616,7 @@ export function EventWebsiteManager(props: Props) {
           {saved ? <Callout tone="success" role="status">Changes saved.</Callout> : null}
           {props.programme}
 
-          <section aria-labelledby="event-page-colour-title" className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-5">
+          <section aria-labelledby="event-page-colour-title" className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
             <div>
               <h2 id="event-page-colour-title" className="text-h4 text-ink">Colour</h2>
               <p className="mt-0.5 text-body-ui text-ink-muted">The accent for the hero band, buttons and links on the event page.</p>
@@ -634,7 +634,7 @@ export function EventWebsiteManager(props: Props) {
                       touch();
                     }}
                     className={cn(
-                      "inline-flex min-h-10 items-center gap-2 rounded-full bg-canvas pl-2 pr-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle",
+                      "inline-flex min-h-10 items-center gap-2 rounded-full bg-panel pl-2 pr-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle",
                       selected ? "border-2 border-ink" : "border border-line-strong",
                     )}
                   >
@@ -655,7 +655,7 @@ export function EventWebsiteManager(props: Props) {
                     type="button"
                     aria-label={customAccent ? `Custom colour ${accentPreview}, change` : "Choose a custom colour"}
                     className={cn(
-                      "inline-flex min-h-10 items-center gap-2 rounded-full bg-canvas pl-2 pr-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle",
+                      "inline-flex min-h-10 items-center gap-2 rounded-full bg-panel pl-2 pr-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle",
                       customAccent ? "border-2 border-ink" : "border border-line-strong",
                     )}
                   >
@@ -664,7 +664,7 @@ export function EventWebsiteManager(props: Props) {
                       className="size-6 rounded-full"
                       style={{ background: customAccent ? accentPreview : "conic-gradient(#f43f5e, #f59e0b, #22c55e, #06b6d4, #6366f1, #d946ef, #f43f5e)" }}
                     />
-                    {customAccent ? <span className="font-mono">{accentPreview}</span> : "Custom"}
+                    {customAccent ? <span className="tabular-nums">{accentPreview}</span> : "Custom"}
                   </button>
                 }
               />
@@ -672,7 +672,7 @@ export function EventWebsiteManager(props: Props) {
             {accent.valid ? null : <p className="text-caption text-danger-fg">The saved colour isn&apos;t a valid hex colour. Pick a preset or a custom colour.</p>}
           </section>
 
-          <section aria-labelledby="event-page-sections-title" className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-5">
+          <section aria-labelledby="event-page-sections-title" className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
             <div>
               <h2 id="event-page-sections-title" className="text-h4 text-ink">Sections</h2>
               <p className="mt-0.5 text-body-ui text-ink-muted">Reorder with the arrows. Turn off anything you don&apos;t need. Open a section to edit what&apos;s in it.</p>
@@ -683,7 +683,7 @@ export function EventWebsiteManager(props: Props) {
                 return (
                   <li
                     key={section.type}
-                    className={cn("flex items-center gap-2 rounded-xl border border-line py-2 pl-2.5 pr-2 sm:gap-3 sm:pl-3.5", section.isVisible ? "bg-canvas" : "bg-subtle")}
+                    className={cn("flex items-center gap-2 rounded-xl border border-line py-2 pl-2.5 pr-2 sm:gap-3 sm:pl-3.5", section.isVisible ? "bg-panel" : "bg-subtle")}
                   >
                     <GripVertical aria-hidden className="size-4 shrink-0 text-ink-disabled" />
                     <div className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-3">

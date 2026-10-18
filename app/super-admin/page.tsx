@@ -172,7 +172,7 @@ export default async function SuperAdminOverviewPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {stats.map((stat) => (
-          <StatTile key={stat.label} className="rounded-2xl" label={stat.label} value={stat.value.toLocaleString()} />
+          <StatTile key={stat.label} className="rounded-xl" label={stat.label} value={stat.value.toLocaleString()} />
         ))}
       </div>
 

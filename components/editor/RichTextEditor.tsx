@@ -92,7 +92,7 @@ export function RichTextEditor({ name, label, defaultValue = "", helperText, min
     <div className="flex flex-col gap-1.5">
       <span id={labelId} className="text-label text-ink">{label}</span>
       <input type="hidden" name={name} value={html} readOnly />
-      <div className="overflow-hidden rounded-md border border-line-strong bg-canvas transition-colors focus-within:border-[var(--yy-focus)]">
+      <div className="overflow-hidden rounded-md border border-line-strong bg-panel transition-colors focus-within:border-[var(--yy-focus)]">
         <div role="toolbar" aria-label={`${label} formatting`} className="flex flex-wrap gap-0.5 border-b border-line bg-subtle p-1">
           {button("Heading", editor?.isActive("heading") ?? false, () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading />)}
           {button("Bold", editor?.isActive("bold") ?? false, () => editor?.chain().focus().toggleBold().run(), <Bold />)}

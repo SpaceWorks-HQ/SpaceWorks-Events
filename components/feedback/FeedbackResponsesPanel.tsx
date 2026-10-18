@@ -44,7 +44,7 @@ export function FeedbackResponsesPanel(props: {
       {responses.length === 0 ? (
         <p className="text-body-ui text-ink-muted">No feedback responses yet.</p>
       ) : (
-        <Accordion type="multiple" className="rounded-xl border border-line bg-canvas px-4 [&>*:last-child]:border-b-0">
+        <Accordion type="multiple" className="rounded-xl border border-line bg-panel px-4 [&>*:last-child]:border-b-0">
           {responses.map((response, index) => (
             <AccordionItem key={response.id} value={response.id} title={<span className="text-[15px]">Response {responses.length - index} · {when(response.submittedAt)}</span>}>
               <div className="flex flex-col gap-3">

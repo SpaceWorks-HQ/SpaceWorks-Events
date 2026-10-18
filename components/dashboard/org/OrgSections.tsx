@@ -40,7 +40,7 @@ export function OrgBanner({
   actions: ReactNode;
 }) {
   return (
-    <header className="overflow-hidden rounded-2xl border border-line bg-canvas">
+    <header className="overflow-hidden rounded-xl border border-line bg-panel">
       <div aria-hidden className="yy-dot-strip h-20 sm:h-24" />
       <div className="flex flex-col gap-5 px-5 pb-6 sm:px-7 lg:flex-row lg:items-end">
         <OrgLogo name={organisation.name} src={organisation.logoUrl} size="xl" className="-mt-12 border-4 border-canvas" />
@@ -48,7 +48,7 @@ export function OrgBanner({
           <h1 className="text-h1 text-ink">{organisation.name}</h1>
           {organisation.description.trim() ? <p className="line-clamp-2 max-w-[680px] text-body-ui text-ink-secondary">{organisation.description}</p> : null}
           <div className="mt-1 flex flex-wrap items-center gap-2 text-caption text-ink-muted">
-            <span className="rounded-full bg-muted px-2.5 py-0.5 font-mono text-[13px] text-ink-secondary">/{organisation.slug}</span>
+            <span className="rounded-full bg-muted px-2.5 py-0.5 tabular-nums text-[13px] text-ink-secondary">/{organisation.slug}</span>
             <CopyOrganisationUrl slug={organisation.slug} />
             <Link href={`/${organisation.slug}`} className="inline-flex items-center gap-1 font-semibold text-ink-secondary underline-offset-4 hover:text-ink hover:underline">
               Public page
@@ -87,7 +87,7 @@ export function OrgMiniCalendar({ calendar, prevHref, nextHref }: { calendar: Or
     calendar.seriesDates ? `${calendar.seriesDates} series date${calendar.seriesDates === 1 ? "" : "s"}` : null,
   ].filter(Boolean).join(" and ");
   return (
-    <section aria-labelledby="org-calendar-title" className="flex flex-col gap-3 rounded-xl border border-line bg-canvas p-5">
+    <section aria-labelledby="org-calendar-title" className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 id="org-calendar-title" className="text-h4 text-ink">{calendar.label}</h2>
         <span className="flex gap-1">
@@ -144,7 +144,7 @@ function OrgEventRowItem({ row, now }: { row: OrgEventRow; now: Date }) {
     </>
   );
   return (
-    <li className={cn("flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-canvas px-4 py-3.5 sm:flex-nowrap", row.isDraft ? "border-[1.5px] border-dashed border-line-strong" : "border border-line")}>
+    <li className={cn("flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-panel px-4 py-3.5 sm:flex-nowrap", row.isDraft ? "border-[1.5px] border-dashed border-line-strong" : "border border-line")}>
       {row.linkable && row.href ? (
         <Link href={row.href} className="group flex min-w-0 flex-1 items-center gap-4 rounded-md">
           {body}
@@ -165,7 +165,7 @@ function OrgEventRowItem({ row, now }: { row: OrgEventRow; now: Date }) {
         {row.checkInHref || row.publicPath ? (
           <span className="flex gap-1.5">
             {row.checkInHref ? (
-              <Link href={row.checkInHref} aria-label={`Open check-in for ${row.title}`} title="Open check-in" className="inline-flex size-9 items-center justify-center rounded-full border border-line-strong bg-canvas text-ink hover:bg-subtle">
+              <Link href={row.checkInHref} aria-label={`Open check-in for ${row.title}`} title="Open check-in" className="inline-flex size-9 items-center justify-center rounded-full border border-line-strong bg-panel text-ink hover:bg-subtle">
                 <ScanLine aria-hidden className="size-[18px]" />
               </Link>
             ) : null}
@@ -205,7 +205,7 @@ export function OrgEventList({
         <form action={base} method="get" role="search" className="w-full sm:w-auto">
           {events.view !== "upcoming" ? <input type="hidden" name="view" value={events.view} /> : null}
           {query.month ? <input type="hidden" name="month" value={query.month} /> : null}
-          <label className="flex min-h-10 items-center gap-2 rounded-full border border-line-strong bg-canvas px-3.5 focus-within:border-[var(--yy-focus)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] sm:w-[260px]">
+          <label className="flex min-h-10 items-center gap-2 rounded-full border border-line-strong bg-panel px-3.5 focus-within:border-[var(--yy-focus)] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[var(--yy-focus)] sm:w-[260px]">
             <Search aria-hidden className="size-4 shrink-0 text-ink-muted" />
             <span className="sr-only">Search events</span>
             <input type="search" name="q" defaultValue={query.q} placeholder="Search events" maxLength={100} className="w-full bg-transparent text-sm text-ink outline-none placeholder:text-ink-muted" />
@@ -252,7 +252,7 @@ export function OrgEventList({
 
 export function OrgSeriesPanel({ base, series, now, action }: { base: string; series: { cards: OrgSeriesCard[]; total: number }; now: Date; action: ReactNode }) {
   return (
-    <section id="series" aria-labelledby="org-series-title" className="flex scroll-mt-6 flex-col gap-3 rounded-xl border border-line bg-canvas p-5">
+    <section id="series" aria-labelledby="org-series-title" className="flex scroll-mt-6 flex-col gap-3 rounded-xl border border-line bg-panel p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 id="org-series-title" className="text-h4 text-ink">Series</h2>
         {action}
@@ -289,7 +289,7 @@ export function OrgTeamPanel({ members, membersHref, canInvite }: { members: Org
     members.members ? `${members.members} ${members.members === 1 ? "member" : "members"}` : null,
   ].filter(Boolean);
   return (
-    <section aria-labelledby="org-team-title" className="flex flex-col gap-3 rounded-xl border border-line bg-canvas p-5">
+    <section aria-labelledby="org-team-title" className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-5">
       <div className="flex items-center justify-between gap-2">
         <h2 id="org-team-title" className="text-h4 text-ink">Team</h2>
         <Link href={membersHref} className="text-sm font-semibold text-ink underline-offset-4 hover:underline">Members</Link>
@@ -333,10 +333,10 @@ export function OrgSetup({
   const nextIndex = steps.findIndex((step) => !step.done);
   return (
     <section aria-labelledby="org-setup-title" className="flex flex-col gap-3.5">
-      <div className="flex flex-col items-start gap-5 rounded-2xl bg-tint-peach p-6 sm:flex-row sm:items-center">
+      <div className="flex flex-col items-start gap-5 rounded-xl bg-tint-peach p-6 sm:flex-row sm:items-center">
         <MoodTile mood="cheering" size={72} />
         <div className="flex flex-col gap-1">
-          <h2 id="org-setup-title" className="font-display text-[28px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{name} is ready</h2>
+          <h2 id="org-setup-title" className="font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] text-ink">{name} is ready</h2>
           <p className="text-body-ui text-ink-secondary">A few steps and your community has its own page, events and team.</p>
         </div>
       </div>
@@ -344,7 +344,7 @@ export function OrgSetup({
         {steps.map((step, index) => {
           const isNext = index === nextIndex;
           return (
-            <li key={step.title} className={cn("flex flex-col gap-3 rounded-lg px-5 py-4 sm:flex-row sm:items-center sm:gap-4", step.done ? "border border-line bg-subtle" : isNext ? "border-2 border-primary bg-canvas" : "border border-line bg-canvas")}>
+            <li key={step.title} className={cn("flex flex-col gap-3 rounded-lg px-5 py-4 sm:flex-row sm:items-center sm:gap-4", step.done ? "border border-line bg-subtle" : isNext ? "border-2 border-primary bg-panel" : "border border-line bg-panel")}>
               <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", step.done ? "bg-success-bg text-success-fg" : isNext ? "bg-primary text-on-primary" : "bg-muted text-ink-secondary")}>
                 {step.done ? <Check aria-label="Done" className="size-4" /> : index + 1}
               </span>

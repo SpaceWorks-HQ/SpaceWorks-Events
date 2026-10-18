@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 import type { AccountCertificateRow, AccountRegistrationRow } from "@/lib/accountRegistrations";
 import { CancelRegistrationButton } from "./CancelRegistrationButton";
 
-export const accountSectionCard = "rounded-2xl border border-line bg-canvas p-5 sm:p-6";
+export const accountSectionCard = "rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export function AccountSection({ id, title, description, children, className }: { id: string; title: ReactNode; description: ReactNode; children: ReactNode; className?: string }) {
   return (

@@ -236,7 +236,7 @@ export function CertificateBuilder(props: Props) {
           </fieldset>
         </div>
 
-        <section aria-labelledby="certificate-samples-title" className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-3.5">
+        <section aria-labelledby="certificate-samples-title" className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-3.5">
           <h4 id="certificate-samples-title" className="text-label text-ink">Sample values</h4>
           <Field label="Preview attendee name" helperText="For preview only. Downloads use the attendee’s registered name.">
             <Input value={name} maxLength={200} disabled={busyOrDisabled} onChange={(e) => { setName(e.target.value); setPreview(null); }} />

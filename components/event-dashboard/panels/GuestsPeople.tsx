@@ -32,11 +32,11 @@ const PAGE_SIZE = 25;
 
 const FILTER_DOTS: Record<GuestStatusFilter, string> = {
   all: "bg-ink",
-  going: "bg-success-fg",
-  waitlist: "bg-warning-fg",
-  approve: "bg-warning-fg",
+  going: "bg-success-solid",
+  waitlist: "bg-warning-solid",
+  approve: "bg-highlight",
   declined: "bg-danger-fg",
-  checkedIn: "bg-accent",
+  checkedIn: "bg-primary",
 };
 
 type ActionResult = { ok: true } | { ok: false; error: string };
@@ -173,12 +173,12 @@ export function GuestsPeople({
                     onClick={() => resetPage(setStatus)(value)}
                     className={cn(
                       "inline-flex min-h-[38px] items-center gap-2 rounded-full border px-3.5 text-sm font-semibold transition-colors",
-                      on ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-canvas text-ink hover:bg-subtle",
+                      on ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink hover:bg-subtle",
                     )}
                   >
                     <span aria-hidden className={cn("size-2 rounded-full", value === "all" && on ? "bg-on-primary" : FILTER_DOTS[value])} />
                     {label}
-                    <span className="opacity-75">{counts[value]}</span>
+                    <span className="font-medium tabular-nums">{counts[value]}</span>
                   </button>
                 );
               })}

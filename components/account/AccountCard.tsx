@@ -23,7 +23,7 @@ export function AccountCard({
   return (
     <section
       aria-labelledby={titleId}
-      className={cn("rounded-2xl border bg-canvas p-5 sm:p-6", tone === "danger" ? "border-danger-border" : "border-line", className)}
+      className={cn("rounded-xl border bg-panel p-5 sm:p-6", tone === "danger" ? "border-danger-border" : "border-line", className)}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">

@@ -13,7 +13,7 @@ import { Spinner } from "./spinner";
  * - `highlight`: Workshop Orange with an ink label; one bold public moment per layout, never in dashboard chrome.
  * - `danger` / `dangerOutline`: red outline that opens a confirmation.
  * - `dangerSolid`: red fill for the final destructive confirmation.
- * - `inverse`: cream on dark bands.
+ * - `inverse`: Warm Cream fill with a Deep Ink label; the main action on dark bands and bars (teal would sink into them).
  * No hover lift or shadow; disabled is an explicit surface/muted/line state, never opacity.
  */
 export type ButtonVariant =
@@ -52,7 +52,7 @@ const variants: Record<ButtonVariant, string> = {
   dangerOutline,
   dangerSolid: "bg-danger-solid text-on-danger hover:bg-danger-hover",
   dangerQuiet: "text-danger-fg hover:underline underline-offset-4",
-  inverse: "bg-on-inverse text-inverse hover:bg-subtle",
+  inverse: "bg-sw-cream text-sw-ink hover:bg-[color-mix(in_srgb,var(--sw-cream)_90%,var(--sw-ink))] active:bg-[color-mix(in_srgb,var(--sw-cream)_80%,var(--sw-ink))]",
 };
 
 const filledDisabled =

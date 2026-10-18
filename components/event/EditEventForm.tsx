@@ -42,7 +42,7 @@ function zonedInputValue(value: Date | string, timeZone: string) {
 function FormCard({ title, description, children }: { title: ReactNode; description: string; children: ReactNode }) {
   const titleId = useId();
   return (
-    <section aria-labelledby={titleId} className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+    <section aria-labelledby={titleId} className="flex flex-col gap-5 rounded-xl border border-line bg-panel p-5 sm:p-6">
       <div>
         <h2 id={titleId} className="flex flex-wrap items-center gap-2 text-h4 text-ink">{title}</h2>
         <p className="mt-0.5 text-body-ui text-ink-muted">{description}</p>
@@ -221,7 +221,7 @@ export function EditEventForm(props: {
 
   return (
     <div className="flex flex-col gap-5">
-      <section aria-label="Public URL" className="flex flex-col gap-3 rounded-2xl border border-line bg-subtle p-5 sm:flex-row sm:items-center sm:justify-between">
+      <section aria-label="Public URL" className="flex flex-col gap-3 rounded-xl border border-line bg-subtle p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-caption text-ink-muted">Public URL</p>
           <Link href={`/${organisationSlug}/${event.slug}`} className="block truncate text-[15px] font-semibold text-ink underline underline-offset-4">

@@ -160,7 +160,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
     <div className="flex flex-col gap-5">
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {warning ? <Callout tone="warning" action={<Button size="sm" variant="quiet" onClick={() => setWarning("")}>Dismiss</Button>}>{warning}</Callout> : null}
-      <section className="flex flex-col gap-4 rounded-lg border border-line bg-canvas p-4 sm:p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4 sm:p-6">
         <div>
           <h2 className="text-title text-ink">Programme tracks</h2>
           <p className="mt-1 text-body-ui text-ink-muted">Each track is an independent room, stage, or stream. Delays shift only later sessions in that track.</p>
@@ -194,7 +194,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
         {sortedTracks.map((track) => {
           const sessionsInTrack = trackSessions(track.id);
           return (
-            <section key={track.id} className="flex h-full flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:p-5">
+            <section key={track.id} className="flex h-full flex-col gap-3 rounded-lg border border-line bg-panel p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-title text-ink">{track.name}</h3>

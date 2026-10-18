@@ -73,10 +73,10 @@ export default async function SuperAdminSecurityPage() {
       <PageHeader title="Security" description="Account protection, sign-in methods, sensitive activity, and machine API access across the instance." />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile className="rounded-2xl" label="Users with MFA" value={formatShare(mfaUsers, users)} hint={`${mfaUsers.toLocaleString()} of ${users.toLocaleString()} users`} progress={{ value: mfaUsers, max: Math.max(users, 1), tone: "success" }} />
-        <StatTile className="rounded-2xl" label="Owners and admins without MFA" value={managersWithoutMfa.toLocaleString()} hint={`of ${managers.toLocaleString()} owners and admins`} tone={managersWithoutMfa > 0 ? "attention" : "default"} />
-        <StatTile className="rounded-2xl" label="Unverified email" value={unverifiedUsers.toLocaleString()} hint={`${formatShare(unverifiedUsers, users)} of users`} />
-        <StatTile className="rounded-2xl" label="Active API clients" value={activeClients.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Users with MFA" value={formatShare(mfaUsers, users)} hint={`${mfaUsers.toLocaleString()} of ${users.toLocaleString()} users`} progress={{ value: mfaUsers, max: Math.max(users, 1), tone: "success" }} />
+        <StatTile className="rounded-xl" label="Owners and admins without MFA" value={managersWithoutMfa.toLocaleString()} hint={`of ${managers.toLocaleString()} owners and admins`} tone={managersWithoutMfa > 0 ? "attention" : "default"} />
+        <StatTile className="rounded-xl" label="Unverified email" value={unverifiedUsers.toLocaleString()} hint={`${formatShare(unverifiedUsers, users)} of users`} />
+        <StatTile className="rounded-xl" label="Active API clients" value={activeClients.toLocaleString()} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -93,7 +93,7 @@ export default async function SuperAdminSecurityPage() {
           {sortedActions.length === 0 ? (
             <EmptyState mood="sleepy">No sensitive actions recorded this week.</EmptyState>
           ) : (
-            <MetricRows rows={sortedActions.map((row) => ({ label: <span className="font-mono text-sm">{row.action}</span>, value: row._count._all.toLocaleString() }))} />
+            <MetricRows rows={sortedActions.map((row) => ({ label: <span className="tabular-nums text-sm">{row.action}</span>, value: row._count._all.toLocaleString() }))} />
           )}
         </AdminPanel>
       </div>
@@ -129,7 +129,7 @@ export default async function SuperAdminSecurityPage() {
                     <TD className="align-top"><Chip size="sm" tone={client.status === ApiClientStatus.ACTIVE ? "success" : "neutral"}>{client.status === ApiClientStatus.ACTIVE ? "Active" : "Disabled"}</Chip></TD>
                     <TD className="align-top">
                       <span className="flex flex-wrap gap-1">
-                        {client.scopes.length === 0 ? <span className="text-ink-muted">None</span> : client.scopes.map((scope) => <Chip key={scope.scope} size="sm" tone="outline" className="font-mono">{scope.scope}</Chip>)}
+                        {client.scopes.length === 0 ? <span className="text-ink-muted">None</span> : client.scopes.map((scope) => <Chip key={scope.scope} size="sm" tone="outline" className="tabular-nums">{scope.scope}</Chip>)}
                       </span>
                     </TD>
                     <TD className="align-top text-right tabular-nums">{`${active} active / ${states.length}`}</TD>

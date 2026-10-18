@@ -57,7 +57,7 @@ export function WaitingForYou({
   const more = pendingTotal - requests.length;
 
   return (
-    <section aria-labelledby="overview-waiting-title" className="flex flex-col gap-1 rounded-xl border border-line bg-canvas p-5">
+    <section aria-labelledby="overview-waiting-title" className="flex flex-col gap-1 rounded-xl border border-line bg-panel p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 id="overview-waiting-title" className="text-h4 text-ink">
           Waiting for you

@@ -80,7 +80,7 @@ export default async function DashboardPage() {
       <ul className="grid gap-3 md:grid-cols-2">
         {coOrganizedEvents.map((item) => (
           <li key={`${item.label}-${item.id}`}>
-            <Link href={item.href} className="flex h-full flex-col gap-1 rounded-lg border border-line bg-canvas p-5 transition-colors hover:bg-subtle">
+            <Link href={item.href} className="flex h-full flex-col gap-1 rounded-lg border border-line bg-panel p-5 transition-colors hover:bg-subtle">
               <span className="text-caption text-ink-muted">{item.label} · {item.organisation.name}</span>
               <span className="text-[17px] font-bold text-ink">{item.title}</span>
               <span className="text-caption text-ink-muted">{item.permissions.map((permission) => permission.replaceAll("_", " ").toLowerCase()).join(" · ")}</span>

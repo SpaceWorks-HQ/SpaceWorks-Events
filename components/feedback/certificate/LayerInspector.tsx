@@ -60,7 +60,7 @@ function Toggle({ pressed, label, icon, onChange }: { pressed: boolean; label: s
       onClick={() => onChange(!pressed)}
       className={cn(
         "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm font-semibold transition-colors [&_svg]:size-4",
-        pressed ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-canvas text-ink-secondary hover:bg-subtle hover:text-ink",
+        pressed ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink-secondary hover:bg-subtle hover:text-ink",
       )}
     >
       {icon}{label}
@@ -77,7 +77,7 @@ export function LayerInspector({
   onReplaceImage: (file: File) => void;
 }) {
   return (
-    <section aria-labelledby="certificate-inspector-title" className="flex flex-col gap-4 rounded-lg border border-line bg-canvas p-3.5">
+    <section aria-labelledby="certificate-inspector-title" className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-3.5">
       <h4 id="certificate-inspector-title" className="text-label text-ink">{element.type === "text" ? "Text layer" : "Image layer"}</h4>
       {element.type === "text"
         ? <TextControls key={element.id} element={element} onChange={onChange} />

@@ -77,7 +77,7 @@ export function ScheduleManager({ organisationSlug, eventId, eventSeriesId, item
       {items.length > 0 ? (
         <ol className="flex flex-col gap-2.5">
           {items.map((item) => (
-            <li key={item.id} className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+            <li key={item.id} className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <p className="font-semibold text-ink">{item.title}</p>
                 <p className="text-sm text-ink-muted">{new Date(item.startDateTime).toLocaleString()} – {new Date(item.endDateTime).toLocaleTimeString()}</p>

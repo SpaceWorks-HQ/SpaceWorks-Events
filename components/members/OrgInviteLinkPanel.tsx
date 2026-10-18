@@ -55,7 +55,7 @@ export function OrgInviteLinkPanel(props: {
   }
 
   return (
-    <section aria-labelledby="invite-title" className="flex min-w-0 flex-col gap-3.5 rounded-2xl bg-tint-peach p-5">
+    <section aria-labelledby="invite-title" className="flex min-w-0 flex-col gap-3.5 rounded-xl bg-tint-peach p-5">
       <div className="flex items-center gap-3">
         <MoodTile mood="cheering" size={52} className="shrink-0" />
         <div className="min-w-0">
@@ -72,7 +72,7 @@ export function OrgInviteLinkPanel(props: {
           value={latestUrl}
           placeholder="No open link yet"
           onFocus={(event) => event.currentTarget.select()}
-          className="block min-h-11 w-full min-w-0 truncate rounded-md border border-line bg-canvas px-3.5 font-mono text-[13px] text-ink-secondary placeholder:font-sans placeholder:text-ink-muted"
+          className="block min-h-11 w-full min-w-0 truncate rounded-md border border-line bg-panel px-3.5 tabular-nums text-[13px] text-ink-secondary placeholder:font-sans placeholder:text-ink-muted"
         />
         <div className="flex flex-wrap gap-2">
           {latestUrl ? (

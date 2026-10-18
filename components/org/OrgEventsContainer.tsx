@@ -166,7 +166,7 @@ export function OrgEventsContainer({ orgSlug, initialNow, items, goingCounts = {
         )
       ) : (
         <div className="flex flex-col gap-5">
-          <section aria-label="Calendar" className="rounded-lg border border-line bg-canvas p-4 sm:p-5">
+          <section aria-label="Calendar" className="rounded-lg border border-line bg-panel p-4 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-h4 text-ink">{monthName} {currentYear}</h2>
               <div className="flex gap-1.5">
@@ -192,7 +192,7 @@ export function OrgEventsContainer({ orgSlug, initialNow, items, goingCounts = {
                     key={dayNum}
                     className={cn(
                       "relative min-h-[52px] border-b border-r border-line p-1.5 md:min-h-[110px]",
-                      isSelected ? "bg-emphasis" : hasEvents ? "bg-subtle" : "bg-canvas",
+                      isSelected ? "bg-emphasis" : hasEvents ? "bg-subtle" : "bg-panel",
                     )}
                   >
                     <button

@@ -43,7 +43,7 @@ async function copyToClipboard(text: string) {
   document.body.removeChild(el);
 }
 
-const card = "flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-5 sm:p-6";
+const card = "flex flex-col gap-3 rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export function EventManageMore(props: {
   organisationSlug: string;
@@ -67,7 +67,7 @@ export function EventManageMore(props: {
 
   const embedButtonSnippet = useMemo(() => {
     const label = `Register for ${event.title}`;
-    return `<a href="${publicUrl}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${label} (opens in a new tab)`)}" style="display:inline-block;padding:10px 16px;border-radius:999px;background:#ffffff;color:#111111;text-decoration:none;font-family:system-ui;font-weight:600;">${escapeHtml(label)}</a>`;
+    return `<a href="${publicUrl}" target="_blank" rel="noopener noreferrer" aria-label="${escapeHtml(`${label} (opens in a new tab)`)}" style="display:inline-block;padding:10px 16px;border-radius:10px;background:#006E63;color:#FFF4E8;text-decoration:none;font-family:system-ui,sans-serif;font-weight:600;">${escapeHtml(label)}</a>`;
   }, [event.title, publicUrl]);
 
   const embedPageSnippet = useMemo(() => {
@@ -134,7 +134,7 @@ export function EventManageMore(props: {
               disabled={pending}
               autoComplete="off"
               spellCheck={false}
-              className="font-mono text-sm"
+              className="tabular-nums text-sm"
             />
           </Field>
           <p className="text-caption text-warning-fg">Changing it breaks links you&apos;ve already shared.</p>
@@ -183,7 +183,7 @@ export function EventManageMore(props: {
             onCopy={() => copySnippet(embedButtonSnippet)}
             preview={(
               <div className="flex min-h-22.5 items-center justify-center rounded-xl bg-subtle p-3">
-                <span className="max-w-full truncate rounded-full border border-line bg-canvas px-4 py-2.5 text-sm font-semibold text-ink">
+                <span className="max-w-full truncate rounded-full border border-line bg-panel px-4 py-2.5 text-sm font-semibold text-ink">
                   Register for {event.title}
                 </span>
               </div>
@@ -209,7 +209,7 @@ export function EventManageMore(props: {
         </div>
       </section>
 
-      <section aria-labelledby="event-delete-title" className="flex flex-col gap-4 rounded-2xl border-[1.5px] border-danger-border bg-canvas p-5 sm:p-6 md:flex-row md:items-center">
+      <section aria-labelledby="event-delete-title" className="flex flex-col gap-4 rounded-xl border-[1.5px] border-danger-border bg-panel p-5 sm:p-6 md:flex-row md:items-center">
         <div className="min-w-0 flex-1">
           <h2 id="event-delete-title" className="text-h4 text-danger-fg">Delete event</h2>
           <p className="mt-0.5 text-body-ui text-ink-secondary">

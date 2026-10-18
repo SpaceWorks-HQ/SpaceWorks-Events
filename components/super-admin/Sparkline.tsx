@@ -39,7 +39,7 @@ export function SparklineCard(props: {
   const headline = props.total ?? latest;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-canvas p-4">
+    <div className="overflow-hidden rounded-xl border border-line bg-panel p-4">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-sm text-ink-muted">{props.title}</span>
         <span className="font-display text-[22px] font-semibold tabular-nums leading-tight text-ink">{headline.toLocaleString()}</span>

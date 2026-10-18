@@ -64,7 +64,7 @@ export default async function OrgDashboardPage({
               <li key={grant.id}>
                 <Link
                   href={`/dashboard/${organisation.slug}/event/${grant.event.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-canvas p-4 font-semibold text-ink transition-colors hover:bg-subtle"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-panel p-4 font-semibold text-ink transition-colors hover:bg-subtle"
                 >
                   {grant.event.title}
                   <ChevronRight aria-hidden className="size-4 text-ink-muted" />
@@ -74,7 +74,7 @@ export default async function OrgDashboardPage({
               <li key={grant.id}>
                 <Link
                   href={`/dashboard/${organisation.slug}/series/${grant.series.id}`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-canvas p-4 font-semibold text-ink transition-colors hover:bg-subtle"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-panel p-4 font-semibold text-ink transition-colors hover:bg-subtle"
                 >
                   {grant.series.title}
                   <ChevronRight aria-hidden className="size-4 text-ink-muted" />

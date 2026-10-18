@@ -48,7 +48,7 @@ export function ResponsesCard({
   };
 
   return (
-    <section aria-labelledby="feedback-responses-title" className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-5">
+    <section aria-labelledby="feedback-responses-title" className="flex flex-col gap-5 rounded-xl border border-line bg-panel p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="feedback-responses-title" className="text-h4 text-ink">Responses</h2>

@@ -4,7 +4,7 @@ export function Histogram(props: {
 }) {
   const max = Math.max(1, ...props.buckets.map((b) => b.count));
   return (
-    <div className="rounded-2xl border border-line bg-canvas p-4">
+    <div className="rounded-xl border border-line bg-panel p-4">
       <p className="mb-2 text-sm text-ink-muted">{props.title}</p>
       <div className="flex h-14 items-end gap-1">
         {props.buckets.map((b) => (

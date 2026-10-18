@@ -54,7 +54,7 @@ export function DataExportCard({ className }: { className?: string }) {
   }
 
   return (
-    <section id="data-export" aria-labelledby="data-export-title" className={cn("rounded-2xl border border-line bg-canvas p-5 sm:p-6", className)}>
+    <section id="data-export" aria-labelledby="data-export-title" className={cn("rounded-xl border border-line bg-panel p-5 sm:p-6", className)}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center">
         <div className="min-w-0 flex-1">
           <h2 id="data-export-title" className="text-h4 text-ink">Download my data</h2>

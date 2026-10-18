@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/cn";
 import type { ShellOrganisation, ShellUser } from "@/lib/appShell";
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from "@/lib/sidebar";
-import { SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
+import { SpaceWorksEventsLogo, SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
 import { useAppColorMode } from "@/components/providers";
 import { Avatar, OrgLogo } from "@/components/ui/display";
 import { IconButton } from "@/components/ui/button";
@@ -96,11 +96,11 @@ function PendingBadge({ count, collapsed }: { count: number; collapsed: boolean 
   if (count <= 0) return null;
   const label = `${count} waiting for approval`;
   return collapsed ? (
-    <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-warning-solid" title={label}>
+    <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-highlight ring-2 ring-sidebar" title={label}>
       <span className="sr-only">{label}</span>
     </span>
   ) : (
-    <span className="shrink-0 rounded-full bg-warning-bg px-[7px] text-xs font-bold leading-5 text-warning-fg" title={label}>
+    <span className="shrink-0 rounded-full bg-highlight px-[7px] text-xs font-semibold leading-5 tabular-nums text-on-highlight" title={label}>
       {count}
       <span className="sr-only"> waiting for approval</span>
     </span>
@@ -335,7 +335,9 @@ export function AppShell({ user, organisations, initialCollapsed = false, childr
       </aside>
 
       <div className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-line bg-canvas px-4 md:hidden">
-        <BrandHomeLink href="/dashboard" />
+        <Link href="/dashboard" aria-label="Space Works Events home" className="inline-flex shrink-0 items-center rounded-md">
+          <SpaceWorksEventsLogo height={30} label={null} />
+        </Link>
         <DialogPrimitive.Root open={menuOpen} onOpenChange={setMenuOpen}>
           <DialogPrimitive.Trigger asChild>
             <IconButton label="Open navigation menu">

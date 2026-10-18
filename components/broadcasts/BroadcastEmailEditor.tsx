@@ -156,10 +156,10 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
     <div className="flex flex-col gap-1.5">
       <div
         className={cn(
-          "overflow-hidden rounded-md border border-line-strong bg-canvas transition-colors focus-within:border-[var(--yy-focus)]",
+          "overflow-hidden rounded-md border border-line-strong bg-panel transition-colors focus-within:border-[var(--yy-focus)]",
           disabled && "opacity-70",
           "[&_.ProseMirror_a]:cursor-text [&_.ProseMirror_blockquote]:rounded-r-md [&_.ProseMirror_blockquote]:border-primary [&_.ProseMirror_blockquote]:bg-subtle [&_.ProseMirror_blockquote]:py-1",
-          "[&_.ProseMirror_a.cta]:inline-block [&_.ProseMirror_a.cta]:rounded-full [&_.ProseMirror_a.cta]:bg-primary [&_.ProseMirror_a.cta]:px-5 [&_.ProseMirror_a.cta]:py-2 [&_.ProseMirror_a.cta]:font-semibold [&_.ProseMirror_a.cta]:text-on-primary [&_.ProseMirror_a.cta]:no-underline",
+          "[&_.ProseMirror_a.cta]:inline-block [&_.ProseMirror_a.cta]:rounded-control [&_.ProseMirror_a.cta]:bg-primary [&_.ProseMirror_a.cta]:px-5 [&_.ProseMirror_a.cta]:py-2 [&_.ProseMirror_a.cta]:font-semibold [&_.ProseMirror_a.cta]:text-on-primary [&_.ProseMirror_a.cta]:no-underline",
         )}
       >
         <div role="toolbar" aria-label="Message formatting" className="flex flex-wrap items-center gap-0.5 border-b border-line bg-subtle p-1">
@@ -200,7 +200,7 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
             </MenuTrigger>
             <MenuContent align="start" onCloseAutoFocus={(event) => event.preventDefault()} className="max-h-[360px] overflow-y-auto">
               {BROADCAST_PLACEHOLDERS.map((placeholder) => (
-                <MenuItem key={placeholder.token} description={<span className="font-mono">{placeholder.token}</span>} onSelect={() => insertPlaceholder(placeholder.token)}>
+                <MenuItem key={placeholder.token} description={<span className="tabular-nums">{placeholder.token}</span>} onSelect={() => insertPlaceholder(placeholder.token)}>
                   {placeholder.label}
                 </MenuItem>
               ))}

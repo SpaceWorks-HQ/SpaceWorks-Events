@@ -87,8 +87,8 @@ export default async function SuperAdminInvitesPage() {
                   <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.expiresAt ? i.expiresAt.toLocaleString() : "—"}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TD>
-                  <TD className="font-mono text-sm">{i.createdBy.email ?? "—"}</TD>
-                  <TD className="font-mono text-sm">{i.usedBy?.email ?? "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.createdBy.email ?? "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.usedBy?.email ?? "—"}</TD>
                 </TR>
               ))
             )}
@@ -114,7 +114,7 @@ export default async function SuperAdminInvitesPage() {
                 <TR key={i.id}>
                   <TD className="font-semibold">{i.event.title}</TD>
                   <TD><NameCell href={`/super-admin/orgs/${i.event.organisation.id}`} name={i.event.organisation.name} /></TD>
-                  <TD className="font-mono text-sm">{i.email}</TD>
+                  <TD className="tabular-nums text-sm">{i.email}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
                 </TR>
               ))
@@ -141,7 +141,7 @@ export default async function SuperAdminInvitesPage() {
                 <TR key={i.id}>
                   <TD className="font-semibold">{i.series.title}</TD>
                   <TD><NameCell href={`/super-admin/orgs/${i.series.organisation.id}`} name={i.series.organisation.name} /></TD>
-                  <TD className="font-mono text-sm">{i.email}</TD>
+                  <TD className="tabular-nums text-sm">{i.email}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
                 </TR>
               ))

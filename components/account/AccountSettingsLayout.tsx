@@ -16,7 +16,7 @@ export function AccountSettingsLayout({ account, children }: { account: AccountH
   const displayName = account.name?.trim() || account.email || "Your account";
   return (
     <div className="flex w-full flex-col gap-6">
-      <header className="flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
+      <header className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 sm:flex-row sm:items-center sm:gap-5 sm:p-6">
         <Avatar name={displayName} src={account.image} size="lg" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <p className="text-sm text-ink-muted">Account</p>

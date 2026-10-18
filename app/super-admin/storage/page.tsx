@@ -87,13 +87,13 @@ export default async function SuperAdminStoragePage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
         <StatTile
-          className="rounded-2xl"
+          className="rounded-xl"
           label="Database size"
           value={dbSizeBytes == null ? "—" : formatBytes(dbSizeBytes)}
           hint={dbSizeBytes == null ? "Unavailable (DB functions may be restricted)." : undefined}
         />
-        <StatTile className="rounded-2xl" label="Stored files" value={assetSummary._count._all.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Stored file size" value={formatBytes(assetSummary._sum.byteSize == null ? 0 : Number(assetSummary._sum.byteSize))} />
+        <StatTile className="rounded-xl" label="Stored files" value={assetSummary._count._all.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Stored file size" value={formatBytes(assetSummary._sum.byteSize == null ? 0 : Number(assetSummary._sum.byteSize))} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -113,8 +113,8 @@ export default async function SuperAdminStoragePage() {
               <TBody>
                 {sortedTypes.map((row) => (
                   <TR key={`${row.provider}:${row.contentType ?? ""}`}>
-                    <TD className="font-mono text-sm">{row.provider}</TD>
-                    <TD className="font-mono text-sm">{row.contentType ?? "unknown"}</TD>
+                    <TD className="tabular-nums text-sm">{row.provider}</TD>
+                    <TD className="tabular-nums text-sm">{row.contentType ?? "unknown"}</TD>
                     <TD className="text-right tabular-nums">{row._count._all.toLocaleString()}</TD>
                     <TD className="text-right tabular-nums">{formatBytes(row._sum.byteSize == null ? 0 : Number(row._sum.byteSize))}</TD>
                   </TR>
@@ -141,7 +141,7 @@ export default async function SuperAdminStoragePage() {
                 {recentAssets.map((asset) => (
                   <TR key={asset.id}>
                     <TD>{asset.organisation ? <NameCell href={`/super-admin/orgs/${asset.organisation.id}`} name={asset.organisation.name} /> : "—"}</TD>
-                    <TD className="font-mono text-sm">{asset.contentType ?? "unknown"}</TD>
+                    <TD className="tabular-nums text-sm">{asset.contentType ?? "unknown"}</TD>
                     <TD className="text-right tabular-nums">{formatBytes(asset.byteSize == null ? null : Number(asset.byteSize))}</TD>
                     <TD className="whitespace-nowrap text-ink-secondary">{asset.createdAt.toLocaleString()}</TD>
                   </TR>
@@ -167,7 +167,7 @@ export default async function SuperAdminStoragePage() {
             <TBody>
               {tableSizes.map((t) => (
                 <TR key={t.table_name}>
-                  <TD className="font-mono text-sm">{t.table_name}</TD>
+                  <TD className="tabular-nums text-sm">{t.table_name}</TD>
                   <TD className="text-right tabular-nums">{t.total_bytes.toLocaleString()}</TD>
                   <TD className="text-right tabular-nums">{t.total_pretty}</TD>
                 </TR>

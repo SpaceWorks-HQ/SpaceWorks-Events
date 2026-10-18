@@ -25,7 +25,7 @@ export type HomeEventRowView = {
 
 function EventRow({ row }: { row: HomeEventRowView }) {
   const className = cn(
-    "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-canvas px-4 py-3.5 sm:flex-nowrap",
+    "flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-panel px-4 py-3.5 sm:flex-nowrap",
     row.href && "transition-colors hover:bg-subtle",
     row.isDraft ? "border-[1.5px] border-dashed border-line-strong" : "border border-line",
   );
