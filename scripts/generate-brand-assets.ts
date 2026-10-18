@@ -1,7 +1,8 @@
 /**
- * Rasterises the Yuyu dot-sign SVG masters in public/brand into the PNG/ICO
- * files browsers, PWAs, social cards and email need. Run after changing a
- * master and commit the outputs:
+ * Rasterises the Space Works logo masters in public/brand/logo (copied
+ * unaltered from the SpaceWorks-Design kit) into the PNG/ICO files browsers,
+ * PWAs, social cards and email need. Run after changing a master and commit
+ * the outputs:
  *
  *   node scripts/generate-brand-assets.ts
  *
@@ -11,16 +12,39 @@ import { copyFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
+const CREAM = "#FFF4E8";
+
 const root = path.resolve(import.meta.dirname, "..");
 const brand = (file: string) => path.join(root, "public", "brand", file);
+const logo = (file: string) => path.join(root, "public", "brand", "logo", file);
 const appFile = (file: string) => path.join(root, "app", file);
 
-async function rasterise(master: string, width: number, height: number, options: { flatten?: string } = {}): Promise<Buffer> {
-  const svg = await readFile(brand(master));
-  // Render at a high density so circles stay round and crisp after resizing.
-  let image = sharp(svg, { density: Math.max(72, Math.ceil((72 * width) / 100)) }).resize(width, height, { fit: "fill" });
-  if (options.flatten) image = image.flatten({ background: options.flatten });
-  return image.png({ compressionLevel: 9 }).toBuffer();
+/** Renders a master SVG at `width` px wide (height follows its aspect ratio). */
+async function rasterise(master: string, width: number): Promise<Buffer> {
+  const svg = await readFile(logo(master));
+  const viewBoxWidth = Number(/viewBox="0 0 ([\d.]+)/.exec(svg.toString())?.[1] ?? width);
+  // Render at a density that gives at least the target size, then downsample for crisp edges.
+  return sharp(svg, { density: Math.max(72, Math.ceil((72 * width * 2) / viewBoxWidth)) })
+    .resize({ width })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+/** A solid Warm Cream square or rectangle with `artwork` centred on it. */
+async function onCream(width: number, height: number, artwork: Buffer): Promise<Buffer> {
+  return sharp({ create: { width, height, channels: 4, background: CREAM } })
+    .composite([{ input: artwork, gravity: "centre" }])
+    .flatten({ background: CREAM })
+    .png({ compressionLevel: 9 })
+    .toBuffer();
+}
+
+/**
+ * Maskable icon: the symbol on a full-bleed cream square, scaled so every
+ * point stays inside the 80% safe-zone circle that platforms may crop to.
+ */
+async function maskable(size: number): Promise<Buffer> {
+  return onCream(size, size, await rasterise("symbol.svg", Math.round(size * 0.54)));
 }
 
 /** Minimal ICO container holding PNG images (supported by every current browser). */
@@ -49,24 +73,21 @@ function ico(images: Array<{ size: number; png: Buffer }>): Buffer {
 
 async function main() {
   const outputs: Array<[string, Buffer]> = [
-    // Web app manifest
-    [brand("icon-192.png"), await rasterise("app-icon.svg", 192, 192)],
-    [brand("icon-512.png"), await rasterise("app-icon.svg", 512, 512)],
-    [brand("maskable-512.png"), await rasterise("maskable.svg", 512, 512, { flatten: "#18181B" })],
-    // iOS home screen: full ink square, no transparency (iOS rounds the corners).
-    [brand("apple-touch-icon.png"), await rasterise("apple-touch-icon.svg", 180, 180, { flatten: "#18181B" })],
-    // Default social card for Yuyu's own pages
-    [brand("og-default.png"), await rasterise("og-default.svg", 1200, 630, { flatten: "#18181B" })],
-    // Email header: hosted PNG (never inline SVG in email), 3× for sharp rendering at 36px tall.
-    [brand("email-lockup.png"), await rasterise("lockup-horizontal.svg", Math.round((203 * 108) / 60), 108)],
+    // Web app manifest: the app tile (symbol at 62% on a rounded Warm Cream tile).
+    [brand("icon-192.png"), await rasterise("app-icon.svg", 192)],
+    [brand("icon-512.png"), await rasterise("app-icon.svg", 512)],
+    [brand("maskable-192.png"), await maskable(192)],
+    [brand("maskable-512.png"), await maskable(512)],
+    // iOS home screen: no transparency (iOS rounds the corners itself).
+    [appFile("apple-icon.png"), await onCream(180, 180, await rasterise("app-icon.svg", 180))],
+    // Default social card: Warm Cream 1200×630, primary lockup 600px wide, centred.
+    [brand("og-default.png"), await onCream(1200, 630, await rasterise("lockup-stacked.svg", 600))],
+    // Email header: hosted PNG (never inline SVG in email), primary lockup @2x for 180px wide.
+    [brand("email-lockup.png"), await rasterise("lockup-stacked.svg", 360)],
   ];
 
-  // favicon.ico: bright dots only at 16 and 32 (Figma Favicon); full grid at 48.
-  const favicon = ico([
-    { size: 16, png: await rasterise("favicon-16.svg", 16, 16) },
-    { size: 32, png: await rasterise("favicon-32.svg", 32, 32) },
-    { size: 48, png: await rasterise("app-icon.svg", 48, 48) },
-  ]);
+  // favicon.ico: below 48px the app tile is the brand's small-size asset.
+  const favicon = ico(await Promise.all([16, 32, 48].map(async (size) => ({ size, png: await rasterise("app-icon.svg", size) }))));
 
   for (const [file, data] of outputs) {
     await writeFile(file, data);
@@ -74,10 +95,9 @@ async function main() {
   }
   await writeFile(appFile("favicon.ico"), favicon);
   console.log("wrote app/favicon.ico", `${favicon.length} bytes`);
-  // Next.js file conventions: /icon.svg for modern browsers, /apple-icon.png for iOS.
-  await copyFile(brand("favicon-32.svg"), appFile("icon.svg"));
-  await copyFile(brand("apple-touch-icon.png"), appFile("apple-icon.png"));
-  console.log("copied app/icon.svg and app/apple-icon.png");
+  // Next.js file convention: /icon.svg for modern browsers (the kit's favicon.svg is the app tile).
+  await copyFile(logo("app-icon.svg"), appFile("icon.svg"));
+  console.log("copied app/icon.svg");
 }
 
 await main();

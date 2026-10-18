@@ -25,7 +25,7 @@ export function googleCalendarEventUrl(event: CalendarEvent) {
   url.searchParams.set("action", "TEMPLATE");
   url.searchParams.set("text", event.title);
   url.searchParams.set("dates", `${formatCalendarDate(event.startDateTime)}/${formatCalendarDate(event.endDateTime)}`);
-  url.searchParams.set("details", `Your confirmed Yuyu RSVP. Event timezone: ${event.timezone}`);
+  url.searchParams.set("details", `Your confirmed Space Works Events RSVP. Event timezone: ${event.timezone}`);
   if (event.location?.trim()) url.searchParams.set("location", event.location.trim());
   return url.toString();
 }
@@ -56,7 +56,7 @@ export function createCalendarInvite(event: CalendarEvent & { uid: string; creat
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Yuyu//Event Calendar//EN",
+    "PRODID:-//Space Works//Space Works Events//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
@@ -65,7 +65,7 @@ export function createCalendarInvite(event: CalendarEvent & { uid: string; creat
     `DTSTART:${formatCalendarDate(event.startDateTime)}`,
     `DTEND:${formatCalendarDate(event.endDateTime)}`,
     `SUMMARY:${escapeCalendarText(event.title)}`,
-    `DESCRIPTION:${escapeCalendarText(`Your confirmed Yuyu RSVP. Event timezone: ${event.timezone}`)}`,
+    `DESCRIPTION:${escapeCalendarText(`Your confirmed Space Works Events RSVP. Event timezone: ${event.timezone}`)}`,
     ...(event.location?.trim() ? [`LOCATION:${escapeCalendarText(event.location.trim())}`] : []),
     "STATUS:CONFIRMED",
     "END:VEVENT",

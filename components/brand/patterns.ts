@@ -1,4 +1,7 @@
 /**
+ * @deprecated Yuyu dot-sign data, kept only so existing imports compile while
+ * screens move to `SpaceWorksLogo`. Do not use in new code.
+ *
  * Yuyu dot sign patterns, read from the Figma "Brand — Dot sign" components
  * (file oVuNh4VRXQ9fIpdnUCoZqt, page 111:292). Rows are separated by "|".
  *
@@ -60,6 +63,9 @@ export const ICONS: Record<DotIconName, string> = {
   lock: "  OOO  | O   O | O   O |OOOOOOO|OOOXOOO|OOOXOOO|OOOOOOO",
   code: "       | O   O |O  X  O|O  X  O|O  X  O| O   O |       ",
 };
+
+/** Neutral decorative dot diamond in Space Works colours (stands in for the retired faces). */
+export const BRAND_DIAMOND = ["   D   ", "  X.X  ", " X.O.X ", "X.OOO.X", " X.O.X ", "  X.X  ", "   X   "].join("|");
 
 /** Split a pattern into equal-width rows of cells. */
 export function parsePattern(pattern: string): string[][] {

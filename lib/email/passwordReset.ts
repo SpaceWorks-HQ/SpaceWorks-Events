@@ -1,5 +1,5 @@
 import { assertEmailAccepted, getEmailTransport } from "./transporter";
-import { emailBrandHeader } from "./brand";
+import { EMAIL_BUTTON_STYLE, EMAIL_COLORS, emailLayout } from "./brand";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]!);
@@ -14,45 +14,26 @@ export async function sendPasswordResetEmail(params: {
   const { transporter, from } = await getEmailTransport();
   const safeResetUrl = escapeHtml(params.resetUrl);
 
-  const html = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <title>Reset Your Password</title>
-      </head>
-      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;">
-        <div style="max-width: 600px; margin: 40px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; box-shadow: 0 4px 12px rgba(0,0,0,0.05); overflow: hidden;">
-          ${emailBrandHeader()}
-          <div style="padding: 32px;">
-            <h2 style="margin-top: 0; color: #18181B; font-size: 20px; font-weight: 600;">Reset Your Password</h2>
-            <p style="font-size: 16px; line-height: 1.5; color: #49454f; margin-bottom: 24px;">
+  const html = emailLayout("Reset Your Password", `
+            <h2 style="margin-top: 0; color: ${EMAIL_COLORS.ink}; font-size: 20px; font-weight: 600;">Reset Your Password</h2>
+            <p style="font-size: 16px; line-height: 1.5; color: ${EMAIL_COLORS.inkMuted}; margin-bottom: 24px;">
               Hello,<br><br>
               We received a request to reset the password for your account. Click the button below to set a new password. This link will expire in 1 hour.
             </p>
             <div style="text-align: center; margin: 32px 0;">
-              <a href="${safeResetUrl}" style="background-color: #18181B; color: #ffffff; padding: 14px 28px; border-radius: 100px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <a href="${safeResetUrl}" style="${EMAIL_BUTTON_STYLE}">
                 Reset Password
               </a>
             </div>
-            <p style="font-size: 14px; text-align: center; color: #79747e; margin-bottom: 24px;">
+            <p style="font-size: 14px; text-align: center; color: ${EMAIL_COLORS.inkMuted}; margin-bottom: 24px;">
               Or copy and paste this link: <br>
-              <a href="${safeResetUrl}" style="color: #18181B; text-decoration: underline; word-break: break-all;">${safeResetUrl}</a>
+              <a href="${safeResetUrl}" style="color: ${EMAIL_COLORS.teal}; text-decoration: underline; word-break: break-all;">${safeResetUrl}</a>
             </p>
-            <p style="font-size: 13px; color: #79747e; line-height: 1.5;">
+            <p style="font-size: 13px; color: ${EMAIL_COLORS.inkMuted}; line-height: 1.5;">
               If you didn't request a password reset, you can safely ignore this email. Your password will not be changed.
-            </p>
-          </div>
-          <div style="background-color: #f4f4f2; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
-            This email was sent by Yuyu Events.<br>
-            &copy; ${new Date().getFullYear()} Yuyu. All rights reserved.
-          </div>
-        </div>
-      </body>
-    </html>
-  `;
+            </p>`);
 
-  const text = `Reset Your Password\n\nHello,\n\nWe received a request to reset your password. Visit the following link to set a new password (expires in 1 hour):\n\n${params.resetUrl}\n\nIf you didn't request this, you can safely ignore this email.\n\nBest regards,\nYuyu Events`;
+  const text = `Reset Your Password\n\nHello,\n\nWe received a request to reset your password. Visit the following link to set a new password (expires in 1 hour):\n\n${params.resetUrl}\n\nIf you didn't request this, you can safely ignore this email.\n\nBest regards,\nSpace Works Events`;
 
   if (!transporter) {
     // Never print reset capabilities or account identifiers, including in
@@ -65,7 +46,7 @@ export async function sendPasswordResetEmail(params: {
     messageId: params.messageId,
     from,
     to: params.to,
-    subject: "Reset your Yuyu password",
+    subject: "Reset your Space Works Events password",
     text,
     html,
   });

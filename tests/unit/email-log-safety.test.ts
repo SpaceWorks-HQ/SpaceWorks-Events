@@ -4,7 +4,7 @@ import { RsvpStatus } from "@prisma/client";
 vi.mock("@/lib/email/transporter", () => ({
   getEmailTransport: vi.fn().mockResolvedValue({
     transporter: null,
-    from: "Yuyu <noreply@example.test>",
+    from: "Space Works Events <noreply@example.test>",
   }),
 }));
 

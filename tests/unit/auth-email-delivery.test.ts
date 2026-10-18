@@ -8,7 +8,7 @@ vi.mock("@/lib/email/transporter", async (importOriginal) => {
     ...actual,
     getEmailTransport: vi.fn().mockResolvedValue({
       transporter: { sendMail: mocks.sendMail },
-      from: "Yuyu <noreply@example.test>",
+      from: "Space Works Events <noreply@example.test>",
     }),
   };
 });

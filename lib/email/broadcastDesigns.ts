@@ -1,4 +1,5 @@
 import { getAccentTokens, normalizeAccentHex, DEFAULT_EVENT_ACCENT } from "@/lib/theme/accent";
+import { EMAIL_COLORS, EMAIL_FONT } from "./brand";
 
 /*
  * Visual designs for organiser broadcasts. The content (sanitised HTML with
@@ -9,11 +10,11 @@ import { getAccentTokens, normalizeAccentHex, DEFAULT_EVENT_ACCENT } from "@/lib
  */
 
 export const BROADCAST_DESIGNS = [
-  { id: "classic", name: "Classic", description: "Dark header with your organisation's name." },
+  { id: "classic", name: "Classic", description: "Deep ink header with your organisation's name." },
   { id: "minimal", name: "Minimal", description: "Plain and quiet, like a personal note." },
   { id: "accent", name: "Accent band", description: "A bold header in the event's colour." },
   { id: "photo", name: "Photo header", description: "Leads with the event's cover photo." },
-  { id: "letter", name: "Letter", description: "Warm paper and a serif heading." },
+  { id: "letter", name: "Letter", description: "Warm cream paper and a serif heading." },
 ] as const;
 
 export type BroadcastDesignId = (typeof BROADCAST_DESIGNS)[number]["id"];
@@ -46,19 +47,19 @@ type Palette = {
   headingFont?: string;
 };
 
-const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const SANS = EMAIL_FONT;
 const SERIF = "Georgia, 'Times New Roman', Times, serif";
 
-/** The original palette. Kept byte-for-byte so Classic emails are unchanged. */
+/** Space Works palette: Deep Ink text, Maker Teal links and buttons with cream labels. */
 const CLASSIC: Palette = {
-  text: "#1c1b1f",
-  heading: "#1c1b1f",
-  muted: "#49454f",
-  link: "#18181B",
-  buttonBg: "#18181B",
-  buttonText: "#ffffff",
-  quoteBorder: "#18181B",
-  quoteBg: "#f6f2fb",
+  text: EMAIL_COLORS.ink,
+  heading: EMAIL_COLORS.ink,
+  muted: EMAIL_COLORS.inkMuted,
+  link: EMAIL_COLORS.teal,
+  buttonBg: EMAIL_COLORS.teal,
+  buttonText: EMAIL_COLORS.cream,
+  quoteBorder: EMAIL_COLORS.teal,
+  quoteBg: EMAIL_COLORS.cream,
 };
 
 export function escapeHtml(value: string): string {
@@ -105,7 +106,7 @@ function blockStyles(p: Palette): Record<string, string> {
 export function inlineBroadcastStyles(html: string, palette: Palette = CLASSIC): string {
   const styles = blockStyles(palette);
   const linkStyle = `color: ${palette.link}; text-decoration: underline; overflow-wrap: anywhere;`;
-  const buttonStyle = `display: inline-block; background-color: ${palette.buttonBg}; color: ${palette.buttonText}; padding: 14px 28px; border-radius: 999px; text-decoration: none; font-weight: 600; font-size: 16px;`;
+  const buttonStyle = `display: inline-block; background-color: ${palette.buttonBg}; color: ${palette.buttonText}; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px;`;
   return html
     .replace(/<a\b([^>]*)>/g, (_match, attributes: string) => {
       const href = attributes.match(/href="([^"]*)"/)?.[1] ?? "";
@@ -171,16 +172,16 @@ function classic(input: FrameInput): string {
   const org = escapeHtml(input.organisationName);
   return document(
     input.subject,
-    `font-family: ${SANS}; background-color: #f8f9fa; margin: 0; padding: 20px; color: #1c1b1f;`,
-    `<div style="max-width: 600px; margin: 24px auto; background-color: #ffffff; border-radius: 16px; border: 1px solid #e0e0e0; overflow: hidden;">
-          <div style="background-color: #18181B; padding: 24px; text-align: center; color: #ffffff;">
+    `font-family: ${SANS}; background-color: ${EMAIL_COLORS.cream}; margin: 0; padding: 20px; color: ${EMAIL_COLORS.ink};`,
+    `<div style="max-width: 600px; margin: 24px auto; background-color: ${EMAIL_COLORS.panel}; border-radius: 16px; border: 1px solid ${EMAIL_COLORS.line}; overflow: hidden;">
+          <div style="background-color: ${EMAIL_COLORS.ink}; padding: 24px; text-align: center; color: ${EMAIL_COLORS.cream};">
             <h1 style="margin: 0; font-size: 20px; font-weight: 600;">${org}</h1>
             <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.85;">${title}</p>
           </div>
           <div style="padding: 32px;">${inlineBroadcastStyles(input.bodyHtml)}</div>
-          <div style="background-color: #f4f4f2; padding: 16px; text-align: center; font-size: 12px; color: #79747e; border-top: 1px solid #e0e0e0;">
+          <div style="background-color: ${EMAIL_COLORS.cream}; padding: 16px; text-align: center; font-size: 12px; color: ${EMAIL_COLORS.inkMuted}; border-top: 1px solid ${EMAIL_COLORS.line};">
             You are receiving this because you registered for ${title} with ${org}.<br>
-            Sent through Yuyu Events.
+            Sent through Space Works Events.
           </div>
         </div>`,
   );
@@ -194,15 +195,15 @@ function minimal(input: FrameInput): string {
     : "";
   return document(
     input.subject,
-    `font-family: ${SANS}; background-color: #ffffff; margin: 0; padding: 20px; color: #1c1b1f;`,
+    `font-family: ${SANS}; background-color: ${EMAIL_COLORS.panel}; margin: 0; padding: 20px; color: ${EMAIL_COLORS.ink};`,
     `<div style="max-width: 560px; margin: 16px auto;">
-          <div style="padding: 0 0 20px; border-bottom: 1px solid #e7e6e2; margin-bottom: 28px;">
-            ${mark}<p style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #6b6a70;">${org}</p>
-            <p style="margin: 4px 0 0; font-size: 13px; color: #8a8990;">${escapeHtml(input.eventTitle)}</p>
+          <div style="padding: 0 0 20px; border-bottom: 1px solid ${EMAIL_COLORS.line}; margin-bottom: 28px;">
+            ${mark}<p style="margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: ${EMAIL_COLORS.inkMuted};">${org}</p>
+            <p style="margin: 4px 0 0; font-size: 13px; color: ${EMAIL_COLORS.inkMuted};">${escapeHtml(input.eventTitle)}</p>
           </div>
           <div>${inlineBroadcastStyles(input.bodyHtml)}</div>
-          <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #e7e6e2; font-size: 12px; line-height: 1.6; color: #8a8990;">
-            ${footerText(input.eventTitle, input.organisationName)}${eventLink(input.brand, input.baseUrl, "#6b6a70")}
+          <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid ${EMAIL_COLORS.line}; font-size: 12px; line-height: 1.6; color: ${EMAIL_COLORS.inkMuted};">
+            ${footerText(input.eventTitle, input.organisationName)}${eventLink(input.brand, input.baseUrl, EMAIL_COLORS.teal)}
           </div>
         </div>`,
   );
@@ -219,8 +220,8 @@ function accentBand(input: FrameInput, withPhoto: boolean): string {
     ? `<img src="${escapeHtml(cover)}" alt="" width="600" style="display: block; width: 100%; max-width: 600px; height: auto; border: 0;">
           <div style="padding: 24px 32px 0;">
             <p style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: ${palette.link};">${org}</p>
-            <h1 style="margin: 6px 0 0; font-size: 26px; line-height: 1.2; color: #1c1b1f;">${title}</h1>
-            ${input.brand.dateLine ? `<p style="margin: 8px 0 0; font-size: 14px; color: #6b6a70;">${escapeHtml(input.brand.dateLine)}</p>` : ""}
+            <h1 style="margin: 6px 0 0; font-size: 26px; line-height: 1.2; color: ${EMAIL_COLORS.ink};">${title}</h1>
+            ${input.brand.dateLine ? `<p style="margin: 8px 0 0; font-size: 14px; color: ${EMAIL_COLORS.inkMuted};">${escapeHtml(input.brand.dateLine)}</p>` : ""}
           </div>`
     : `<div style="background-color: ${accent}; color: ${onAccent}; padding: 32px;">
             <p style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.85;">${org}</p>
@@ -229,11 +230,11 @@ function accentBand(input: FrameInput, withPhoto: boolean): string {
           </div>`;
   return document(
     input.subject,
-    `font-family: ${SANS}; background-color: #f4f4f2; margin: 0; padding: 20px; color: #1c1b1f;`,
-    `<div style="max-width: 600px; margin: 24px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden;">
+    `font-family: ${SANS}; background-color: ${EMAIL_COLORS.cream}; margin: 0; padding: 20px; color: ${EMAIL_COLORS.ink};`,
+    `<div style="max-width: 600px; margin: 24px auto; background-color: ${EMAIL_COLORS.panel}; border-radius: 16px; border: 1px solid ${EMAIL_COLORS.line}; overflow: hidden;">
           ${header}
           <div style="padding: 28px 32px 32px;">${inlineBroadcastStyles(input.bodyHtml, palette)}</div>
-          <div style="padding: 18px 32px; font-size: 12px; line-height: 1.6; color: #79747e; border-top: 1px solid #ecebe8;">
+          <div style="padding: 18px 32px; font-size: 12px; line-height: 1.6; color: ${EMAIL_COLORS.inkMuted}; border-top: 1px solid ${EMAIL_COLORS.line};">
             ${footerText(input.eventTitle, input.organisationName)}${eventLink(input.brand, input.baseUrl, palette.link)}
           </div>
         </div>`,
@@ -241,22 +242,22 @@ function accentBand(input: FrameInput, withPhoto: boolean): string {
 }
 
 function letter(input: FrameInput): string {
-  const { palette } = accentPalette(input.brand.accentColor, { text: "#2b2a28", heading: "#2b2a28", headingFont: SERIF, quoteBg: "#f6efe3" });
+  const { palette } = accentPalette(input.brand.accentColor, { headingFont: SERIF, quoteBg: EMAIL_COLORS.panel });
   const org = escapeHtml(input.organisationName);
   const logo = safeEmailUrl(input.brand.logoUrl, input.baseUrl);
   const mark = logo ? `<img src="${escapeHtml(logo)}" alt="${org}" height="40" style="display: inline-block; height: 40px; width: auto; border: 0; margin-bottom: 10px;">` : "";
   return document(
     input.subject,
-    `font-family: ${SANS}; background-color: #f6f1e9; margin: 0; padding: 20px; color: #2b2a28;`,
-    `<div style="max-width: 580px; margin: 24px auto; background-color: #fffdf8; border: 1px solid #e9e1d3; border-radius: 6px; padding: 40px 40px 32px;">
-          <div style="text-align: center; padding-bottom: 24px; margin-bottom: 28px; border-bottom: 1px solid #e9e1d3;">
+    `font-family: ${SANS}; background-color: ${EMAIL_COLORS.line}; margin: 0; padding: 20px; color: ${EMAIL_COLORS.ink};`,
+    `<div style="max-width: 580px; margin: 24px auto; background-color: ${EMAIL_COLORS.cream}; border: 1px solid ${EMAIL_COLORS.line}; border-radius: 16px; padding: 40px 40px 32px;">
+          <div style="text-align: center; padding-bottom: 24px; margin-bottom: 28px; border-bottom: 1px solid ${EMAIL_COLORS.line};">
             ${mark}
-            <p style="margin: 0; font-family: ${SERIF}; font-size: 22px; color: #2b2a28;">${escapeHtml(input.eventTitle)}</p>
-            <p style="margin: 6px 0 0; font-size: 13px; color: #8b8273;">${org}${input.brand.dateLine ? ` · ${escapeHtml(input.brand.dateLine)}` : ""}</p>
+            <p style="margin: 0; font-family: ${SERIF}; font-size: 22px; color: ${EMAIL_COLORS.ink};">${escapeHtml(input.eventTitle)}</p>
+            <p style="margin: 6px 0 0; font-size: 13px; color: ${EMAIL_COLORS.inkMuted};">${org}${input.brand.dateLine ? ` · ${escapeHtml(input.brand.dateLine)}` : ""}</p>
           </div>
           <div>${inlineBroadcastStyles(input.bodyHtml, palette)}</div>
-          <p style="margin: 28px 0 0; font-family: ${SERIF}; font-size: 16px; font-style: italic; color: #5c564c;">— ${org}</p>
-          <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid #e9e1d3; font-size: 12px; line-height: 1.6; color: #8b8273; text-align: center;">
+          <p style="margin: 28px 0 0; font-family: ${SERIF}; font-size: 16px; font-style: italic; color: ${EMAIL_COLORS.inkMuted};">— ${org}</p>
+          <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid ${EMAIL_COLORS.line}; font-size: 12px; line-height: 1.6; color: ${EMAIL_COLORS.inkMuted}; text-align: center;">
             ${footerText(input.eventTitle, input.organisationName)}${eventLink(input.brand, input.baseUrl, palette.link)}
           </div>
         </div>`,

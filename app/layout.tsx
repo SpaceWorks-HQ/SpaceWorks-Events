@@ -1,8 +1,4 @@
-import type { Metadata } from "next";
-import "@fontsource-variable/bricolage-grotesque/opsz.css";
-import "@fontsource-variable/figtree/wght.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ChromeSwitch } from "@/components/chrome/ChromeSwitch";
@@ -12,17 +8,26 @@ import { COLOR_MODE_COOKIE, isColorMode } from "@/lib/colorMode";
 
 export const metadata: Metadata = {
   title: {
-    default: "Yuyu — Events",
-    template: "%s · Yuyu",
+    default: "Space Works Events",
+    template: "%s · Space Works Events",
   },
   description: "Create organisations, publish events, and collect RSVPs.",
   // The installed app's name on every platform (Android reads the manifest; iOS reads these).
-  applicationName: "Yuyu",
-  appleWebApp: { capable: true, title: "Yuyu", statusBarStyle: "default" },
+  applicationName: "Space Works Events",
+  // iOS shows this under the home-screen icon, where long names are cut off.
+  appleWebApp: { capable: true, title: "SW Events", statusBarStyle: "default" },
   metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"),
-  // Default social card for Yuyu's own pages; event pages set their own image.
-  openGraph: { siteName: "Yuyu", images: [{ url: "/brand/og-default.png", width: 1200, height: 630, alt: "Yuyu" }] },
+  // Default social card for Space Works Events' own pages; event pages set their own image.
+  openGraph: { siteName: "Space Works Events", images: [{ url: "/brand/og-default.png", width: 1200, height: 630, alt: "Space Works" }] },
   twitter: { card: "summary_large_image", images: ["/brand/og-default.png"] },
+};
+
+// Browser chrome matches the page canvas: Warm Cream in light mode, Deep Ink in dark.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFF4E8" },
+    { media: "(prefers-color-scheme: dark)", color: "#142C2A" },
+  ],
 };
 
 export default async function RootLayout({

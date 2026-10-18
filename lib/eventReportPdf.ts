@@ -2,9 +2,9 @@ import "server-only";
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { inflateSync } from "node:zlib";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, setCharacterSpacing, type Color, type PDFFont, type PDFPage } from "pdf-lib";
-import { MARK, MARK_BRIGHT } from "@/components/brand/patterns";
 import { busiestDay, percentOf, signupTimeline } from "@/components/event-dashboard/analytics/metrics";
 import type { EventReportMetrics, ReportQuestion } from "@/lib/eventReport";
 import { formatDate, formatDateBlock, formatDayLong, formatTime, formatTimeRange, formatTimeZoneName } from "@/lib/format/datetime";
@@ -12,13 +12,14 @@ import { getAccentTokens } from "@/lib/theme/accent";
 import { safeTimeZone } from "@/lib/timeZone";
 
 /*
- * The post-event report, drawn with pdf-lib in the Yuyu look (docs/DESIGN.md):
- * Bricolage Grotesque for display type, Figtree for text, quiet neutrals,
- * the event's accent colour for its title and charts, and the dot sign in
- * the footer. Attendee data arrives as counts only (see EventReportMetrics).
+ * The post-event report, drawn with pdf-lib in the Space Works look: Gilroy
+ * (600 for headings, 400 for text), Deep Ink on white with Warm Cream panels,
+ * the event's accent colour for its title and charts, and the Space Works
+ * lockup and symbol drawn from the master SVGs. Attendee data arrives as
+ * counts only (see EventReportMetrics).
  */
 
-// ---------- Colour (light tokens from app/styles/tokens.css) ----------
+// ---------- Colour (Space Works palette; tints are cream deepened toward ink) ----------
 
 function hex(value: string): Color {
   const n = Number.parseInt(value.slice(1), 16);
@@ -27,23 +28,20 @@ function hex(value: string): Color {
 
 const C = {
   canvas: hex("#FFFFFF"),
-  subtle: hex("#FAFAF9"),
-  muted: hex("#F4F4F2"),
-  track: hex("#F0EFEB"),
-  border: hex("#E7E6E2"),
-  ink: hex("#18181B"),
-  textSecondary: hex("#3F3F46"),
-  textMuted: hex("#5F5E5A"),
-  marigold: hex("#FFB547"),
-  marigoldDeep: hex("#E8930C"),
-  dotOff: hex("#E7E6E2"),
-  tintPeach: hex("#FFF4E5"),
-  successBg: hex("#DCFCE7"),
-  successFg: hex("#166534"),
-  successSolid: hex("#15803D"),
-  warningBg: hex("#FEF3C7"),
-  warningFg: hex("#92400E"),
-  dangerBg: hex("#FEE2E2"),
+  subtle: hex("#FFF4E8"),
+  muted: hex("#F8EBDC"),
+  track: hex("#EFE3D4"),
+  border: hex("#E6DCCF"),
+  ink: hex("#142C2A"),
+  textSecondary: hex("#2E4442"),
+  textMuted: hex("#4A5D5B"),
+  teal: hex("#006E63"),
+  orange: hex("#FF7447"),
+  successBg: hex("#DFFF8F"),
+  successFg: hex("#142C2A"),
+  warningBg: hex("#FFD447"),
+  warningFg: hex("#142C2A"),
+  dangerBg: hex("#FDE2E2"),
   dangerFg: hex("#B91C1C"),
 };
 
@@ -51,16 +49,56 @@ const C = {
 
 type Fonts = { display: PDFFont; regular: PDFFont; bold: PDFFont; supports: (codePoint: number) => boolean };
 
-const FONT_DIR = path.join(process.cwd(), "public", "brand", "fonts");
-let fontBytes: Promise<{ display: Buffer; regular: Buffer; bold: Buffer } | null> | null = null;
+const BRAND_DIR = path.join(process.cwd(), "public", "brand");
+let fontBytes: Promise<{ regular: Buffer; semibold: Buffer; supports: (codePoint: number) => boolean } | null> | null = null;
 
+/**
+ * Unwraps a WOFF 1.0 file into the plain TrueType/OpenType font it holds.
+ * fontkit reads WOFF directly but re-inflates tables while laying out text,
+ * which makes every report many times slower than with the plain font.
+ */
+export function woffToSfnt(woff: Buffer): Buffer {
+  if (woff.readUInt32BE(0) !== 0x774f4646) return woff; // not "wOFF": already a plain font
+  const numTables = woff.readUInt16BE(12);
+  const tables = Array.from({ length: numTables }, (_, index) => {
+    const entry = 44 + index * 20;
+    const offset = woff.readUInt32BE(entry + 4);
+    const compressed = woff.readUInt32BE(entry + 8);
+    const length = woff.readUInt32BE(entry + 12);
+    const raw = woff.subarray(offset, offset + compressed);
+    return { tag: woff.readUInt32BE(entry), checksum: woff.readUInt32BE(entry + 16), data: compressed === length ? raw : inflateSync(raw) };
+  });
+  const entrySelector = Math.floor(Math.log2(numTables));
+  const header = Buffer.alloc(12 + 16 * numTables);
+  header.writeUInt32BE(woff.readUInt32BE(4), 0); // sfnt flavour
+  header.writeUInt16BE(numTables, 4);
+  header.writeUInt16BE(2 ** entrySelector * 16, 6);
+  header.writeUInt16BE(entrySelector, 8);
+  header.writeUInt16BE(numTables * 16 - 2 ** entrySelector * 16, 10);
+  const parts: Buffer[] = [header];
+  let offset = header.length;
+  tables.forEach((table, index) => {
+    header.writeUInt32BE(table.tag, 12 + index * 16);
+    header.writeUInt32BE(table.checksum, 16 + index * 16);
+    header.writeUInt32BE(offset, 20 + index * 16);
+    header.writeUInt32BE(table.data.length, 24 + index * 16);
+    const padding = (4 - (table.data.length % 4)) % 4;
+    parts.push(table.data, Buffer.alloc(padding));
+    offset += table.data.length + padding;
+  });
+  return Buffer.concat(parts);
+}
+
+/** Reads the Gilroy faces once per process, with the characters both can draw. */
 function loadFontBytes() {
   fontBytes ??= Promise.all([
-    readFile(path.join(FONT_DIR, "BricolageGrotesque-ExtraBold.ttf")),
-    readFile(path.join(FONT_DIR, "Figtree-Regular.ttf")),
-    readFile(path.join(FONT_DIR, "Figtree-Bold.ttf")),
+    readFile(path.join(BRAND_DIR, "fonts", "Gilroy-Regular.woff")).then(woffToSfnt),
+    readFile(path.join(BRAND_DIR, "fonts", "Gilroy-SemiBold.woff")).then(woffToSfnt),
   ])
-    .then(([display, regular, bold]) => ({ display, regular, bold }))
+    .then(([regular, semibold]) => {
+      const sets = [regular, semibold].map((data) => new Set(fontkit.create(data).characterSet));
+      return { regular, semibold, supports: (codePoint: number) => sets.every((set) => set.has(codePoint)) };
+    })
     // Without the brand fonts the report still renders, in Helvetica.
     .catch(() => null);
   return fontBytes;
@@ -70,13 +108,32 @@ async function embedFonts(pdf: PDFDocument): Promise<Fonts> {
   const bytes = await loadFontBytes();
   if (bytes) {
     pdf.registerFontkit(fontkit);
-    const [display, regular, bold] = await Promise.all([pdf.embedFont(bytes.display), pdf.embedFont(bytes.regular), pdf.embedFont(bytes.bold)]);
-    // Text uses all three fonts, so keep only characters every one of them can draw.
-    const sets = [bytes.display, bytes.regular, bytes.bold].map((data) => new Set(fontkit.create(data).characterSet));
-    return { display, regular, bold, supports: (codePoint) => sets.every((set) => set.has(codePoint)) };
+    const [regular, semibold] = await Promise.all([pdf.embedFont(bytes.regular), pdf.embedFont(bytes.semibold)]);
+    return { display: semibold, regular, bold: semibold, supports: bytes.supports };
   }
   const [regular, bold] = await Promise.all([pdf.embedFont(StandardFonts.Helvetica), pdf.embedFont(StandardFonts.HelveticaBold)]);
   return { display: bold, regular, bold, supports: (codePoint) => codePoint >= 0x20 && codePoint <= 0x7e };
+}
+
+// ---------- Logo ----------
+
+type LogoArt = { width: number; height: number; paths: Array<{ d: string; color: Color }> };
+const logoArt = new Map<string, Promise<LogoArt | null>>();
+
+/** A Space Works master SVG (public/brand/logo) as filled paths pdf-lib can draw unaltered. */
+function loadLogo(name: "lockup-horizontal" | "symbol"): Promise<LogoArt | null> {
+  let art = logoArt.get(name);
+  if (!art) {
+    art = readFile(path.join(BRAND_DIR, "logo", `${name}.svg`), "utf8")
+      .then((svg) => {
+        const [, width, height] = /viewBox="0 0 ([\d.]+) ([\d.]+)"/.exec(svg) ?? [];
+        const paths = [...svg.matchAll(/<path d="([^"]+)" fill="(#[0-9A-Fa-f]{6})"/g)].map(([, d, fill]) => ({ d: d!, color: hex(fill!) }));
+        return width && height && paths.length ? { width: Number(width), height: Number(height), paths } : null;
+      })
+      .catch(() => null);
+    logoArt.set(name, art);
+  }
+  return art;
 }
 
 const ASCII_FALLBACK: Record<string, string> = { "–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "·": "-", "•": "-", " ": " " };
@@ -151,18 +208,19 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${metrics.title} – event report`);
   pdf.setAuthor(metrics.organisationName);
-  pdf.setCreator("Yuyu");
-  pdf.setProducer("Yuyu");
+  pdf.setCreator("Space Works Events");
+  pdf.setProducer("Space Works Events");
   pdf.setCreationDate(now);
 
   const fonts = await embedFonts(pdf);
+  const [lockup, symbol] = await Promise.all([loadLogo("lockup-horizontal"), loadLogo("symbol")]);
   const clean = cleaner(fonts.supports);
   const tz = safeTimeZone(metrics.timeZone);
   const accent = getAccentTokens(metrics.accentColor, "light");
   const A = { solid: hex(accent["--yy-accent"]), soft: hex(accent["--yy-accent-soft"]), on: hex(accent["--yy-on-accent"]), text: hex(accent["--yy-accent-text"]) };
 
   const T = {
-    display: (size: number, color = C.ink): Style => ({ font: fonts.display, size, color, tracking: -0.03 }),
+    display: (size: number, color = C.ink): Style => ({ font: fonts.display, size, color, tracking: -0.015 }),
     heading: (size: number, color = C.ink): Style => ({ font: fonts.display, size, color, tracking: -0.01 }),
     body: (size = 10.5, color = C.textSecondary): Style => ({ font: fonts.regular, size, color }),
     strong: (size = 10.5, color = C.ink): Style => ({ font: fonts.bold, size, color }),
@@ -220,16 +278,12 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
     if (filled > 0) box(page, x, y + height, Math.max(filled, height), height, { fill: color, radius: height / 2 });
   };
 
-  /** The dot sign: lit dots in marigold, the base dot in ink and, at larger sizes, soft dots. */
-  const dotMark = (page: PDFPage, x: number, top: number, size: number) => {
-    const dot = size / 6;
-    const step = dot * 1.25;
-    const pattern = size >= 36 ? MARK : MARK_BRIGHT;
-    const lit = size < 24 ? C.marigoldDeep : C.marigold;
-    pattern.split("|").forEach((row, r) => [...row].forEach((cell, c) => {
-      const color = cell === "X" ? lit : cell === "O" ? C.ink : cell === "." ? C.dotOff : null;
-      if (color) page.drawCircle({ x: x + dot / 2 + c * step, y: top - dot / 2 - r * step, size: dot / 2, color });
-    }));
+  /** Draws a logo master `height` points tall with its top-left corner at (x, top); returns its width. */
+  const drawLogo = (page: PDFPage, art: LogoArt | null, x: number, top: number, height: number) => {
+    if (!art) return 0;
+    const scale = height / art.height;
+    for (const part of art.paths) page.drawSvgPath(part.d, { x, y: top, scale, color: part.color });
+    return art.width * scale;
   };
 
   // ---------- Pages and flow ----------
@@ -394,8 +448,14 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   const tagline = metrics.tagline?.trim() ? fit(metrics.tagline, T.body(11.5), CONTENT_WIDTH) : "";
   const bandHeight = 112 + titleLines.length * titleStyle.size * 1.04 + (tagline ? 22 : 0);
   page.drawRectangle({ x: 0, y: PAGE[1] - bandHeight, width: PAGE[0], height: bandHeight, color: A.soft });
-  dotMark(page, MARGIN, PAGE[1] - 36, 20);
-  drawText(page, "yuyu", MARGIN + 26, PAGE[1] - 51, T.display(15));
+  // Space Works lockup (≥180px wide), a hairline, then the product name.
+  const lockupWidth = drawLogo(page, lockup, MARGIN, PAGE[1] - 32, 23);
+  if (lockupWidth) {
+    page.drawLine({ start: { x: MARGIN + lockupWidth + 9, y: PAGE[1] - 36 }, end: { x: MARGIN + lockupWidth + 9, y: PAGE[1] - 51 }, thickness: 0.75, color: C.ink, opacity: 0.35 });
+    drawText(page, "Events", MARGIN + lockupWidth + 18, PAGE[1] - 48, T.heading(12.5));
+  } else {
+    drawText(page, "Space Works Events", MARGIN, PAGE[1] - 48, T.heading(13));
+  }
   const reportLabel = metrics.targetType === "occurrence" ? "SERIES DATE REPORT" : "EVENT REPORT";
   drawText(page, reportLabel, PAGE[0] - MARGIN - textWidth(reportLabel, T.overline()), PAGE[1] - 48, T.overline());
   let bandY = PAGE[1] - 96;
@@ -426,8 +486,8 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   y -= 84;
 
   const summary = metrics.total === 0
-    ? "Nobody signed up for this event through Yuyu."
-    : `${plural(metrics.total, "person", "people")} signed up and ${metrics.confirmed.toLocaleString("en-GB")} had a place on the day. ${metrics.checkedIn ? `${metrics.checkedIn.toLocaleString("en-GB")} of them were checked in at the door (${percentLabel(metrics.checkedIn, metrics.confirmed)})` : "Nobody was checked in with Yuyu"}${metrics.feedbackResponseCount ? `, and ${plural(metrics.feedbackResponseCount, "person", "people")} shared feedback afterwards` : ""}.`;
+    ? "Nobody signed up for this event through Space Works Events."
+    : `${plural(metrics.total, "person", "people")} signed up and ${metrics.confirmed.toLocaleString("en-GB")} had a place on the day. ${metrics.checkedIn ? `${metrics.checkedIn.toLocaleString("en-GB")} of them were checked in at the door (${percentLabel(metrics.checkedIn, metrics.confirmed)})` : "Nobody was checked in with Space Works Events"}${metrics.feedbackResponseCount ? `, and ${plural(metrics.feedbackResponseCount, "person", "people")} shared feedback afterwards` : ""}.`;
   paragraph(summary, T.body(11.5, C.textSecondary), CONTENT_WIDTH, MARGIN, 10);
 
   const detailRows: Array<[string, string]> = [
@@ -493,8 +553,8 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   barRows([
     { label: "Signed up", value: metrics.total, whole: metrics.total, color: C.ink, note: metrics.total.toLocaleString("en-GB") },
     { label: "Going", value: metrics.confirmed, whole: metrics.total, color: A.solid },
-    { label: "Checked in", value: metrics.checkedIn, whole: metrics.total, color: C.successSolid },
-    ...(metrics.feedbackResponseCount != null ? [{ label: "Shared feedback", value: metrics.feedbackResponseCount, whole: metrics.total, color: C.marigoldDeep }] : []),
+    { label: "Checked in", value: metrics.checkedIn, whole: metrics.total, color: C.teal },
+    ...(metrics.feedbackResponseCount != null ? [{ label: "Shared feedback", value: metrics.feedbackResponseCount, whole: metrics.total, color: C.orange }] : []),
   ]);
   chips([
     { label: `Going ${metrics.confirmed}`, bg: C.successBg, fg: C.successFg },
@@ -526,10 +586,10 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
 
   section("Check-in", "At the door", "Who arrived, and when.");
   if (metrics.checkedIn === 0) {
-    paragraph("Nobody was checked in with Yuyu for this event. If you checked people in another way, this section stays empty.", T.body(), CONTENT_WIDTH);
+    paragraph("Nobody was checked in with Space Works Events for this event. If you checked people in another way, this section stays empty.", T.body(), CONTENT_WIDTH);
   } else {
     barRows([
-      { label: "Checked in", value: metrics.checkedIn, whole: metrics.confirmed, color: C.successSolid },
+      { label: "Checked in", value: metrics.checkedIn, whole: metrics.confirmed, color: C.teal },
       { label: "Did not come", value: metrics.noShows, whole: metrics.confirmed, color: C.textMuted },
     ]);
     const arrivals = arrivalWindows(metrics.checkInTimes ?? [], tz);
@@ -550,7 +610,7 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
     facts(doorFacts);
     if (arrivals && arrivals.columns.length > 1) {
       subheading("Arrivals", `Check-ins per ${arrivals.minutes < 60 ? `${arrivals.minutes} minutes` : arrivals.minutes === 60 ? "hour" : `${arrivals.minutes / 60} hours`}, in ${formatTimeZoneName(metrics.startDateTime, tz)}.`, 210);
-      columnChart(arrivals.columns, C.successSolid, `Times show when each guest was checked in, from the first arrival to the last.`);
+      columnChart(arrivals.columns, C.teal,`Times show when each guest was checked in, from the first arrival to the last.`);
     }
   }
 
@@ -660,7 +720,7 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   if (metrics.targetType === "occurrence") {
     // Emails belong to one-off events; a series date has no email history of its own.
   } else if (broadcasts.length) {
-    subheading("Emails to guests", `${plural(broadcasts.length, "email")} sent from Yuyu, ${plural(broadcasts.reduce((sum, item) => sum + item.recipientCount, 0), "delivery", "deliveries")} in total. Confirmation and ticket emails are not included.`);
+    subheading("Emails to guests", `${plural(broadcasts.length, "email")} sent from Space Works Events, ${plural(broadcasts.reduce((sum, item) => sum + item.recipientCount, 0), "delivery", "deliveries")} in total. Confirmation and ticket emails are not included.`);
     for (const broadcast of broadcasts) {
       ensure(30);
       drawText(page, formatDate(broadcast.sentAt, tz), MARGIN, y - 11, T.strong(9.5, C.textSecondary));
@@ -672,7 +732,7 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
     }
     y -= 8;
   } else {
-    paragraph("No emails were sent to guests from Yuyu, apart from confirmations and tickets.", T.body(), CONTENT_WIDTH);
+    paragraph("No emails were sent to guests from Space Works Events, apart from confirmations and tickets.", T.body(), CONTENT_WIDTH);
   }
   if (metrics.targetType !== "occurrence") subheading("Team");
   facts([
@@ -683,22 +743,23 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
 
   ensure(172);
   y -= 12;
-  box(page, MARGIN, y, CONTENT_WIDTH, 140, { fill: C.tintPeach, radius: 16 });
-  dotMark(page, MARGIN + 18, y - 18, 22);
-  drawText(page, "About this report", MARGIN + 50, y - 32, T.heading(13));
+  box(page, MARGIN, y, CONTENT_WIDTH, 140, { fill: C.subtle, radius: 16 });
+  // The symbol at its 48px (36pt) minimum.
+  const symbolWidth = drawLogo(page, symbol, MARGIN + 18, y - 18, 36);
+  const aboutX = MARGIN + 18 + (symbolWidth ? symbolWidth + 16 : 0);
+  drawText(page, "About this report", aboutX, y - 32, T.heading(13));
   const generated = `Report generated on ${formatDayLong(now, tz, new Date(0))} at ${formatTime(now, tz)} ${formatTimeZoneName(now, tz)}`;
-  drawText(page, generated, MARGIN + 50, y - 52, T.strong(10));
-  const about = `Numbers reflect Yuyu's records at that moment. Times are in ${formatTimeZoneName(metrics.startDateTime, tz)} (${tz}). This report holds counts only: no guest is named, and no email address, phone number, ticket or written answer is included. Keep it with your event records, or share it with your team, partners and sponsors.`;
-  const aboutLines = wrap(about, T.body(9.5), CONTENT_WIDTH - 68);
-  aboutLines.slice(0, 5).forEach((line, index) => drawText(page, line, MARGIN + 50, y - 74 - index * 14, T.body(9.5)));
+  drawText(page, generated, aboutX, y - 52, T.strong(10));
+  const about = `Numbers reflect what Space Works Events recorded at that moment. Times are in ${formatTimeZoneName(metrics.startDateTime, tz)} (${tz}). This report holds counts only: no guest is named, and no email address, phone number, ticket or written answer is included. Keep it with your event records, or share it with your team, partners and sponsors.`;
+  const aboutLines = wrap(about, T.body(9.5), PAGE[0] - MARGIN - 18 - aboutX);
+  aboutLines.slice(0, 5).forEach((line, index) => drawText(page, line, aboutX, y - 74 - index * 14, T.body(9.5)));
   y -= 152;
 
   // ---------- Footers ----------
 
   pages.forEach((current, index) => {
     current.drawLine({ start: { x: MARGIN, y: 52 }, end: { x: PAGE[0] - MARGIN, y: 52 }, thickness: 0.75, color: C.border });
-    dotMark(current, MARGIN, 38, 14);
-    drawText(current, "Made with Yuyu  ·  Counts only, no guest is named", MARGIN + 20, 28, T.body(8, C.textMuted));
+    drawText(current, "Space Works Events  ·  Counts only, no guest is named", MARGIN, 28, T.body(8, C.textMuted));
     const label = `Page ${index + 1} of ${pages.length}`;
     drawText(current, label, PAGE[0] - MARGIN - textWidth(label, T.strong(8, C.textMuted)), 28, T.strong(8, C.textMuted));
   });
