@@ -49,9 +49,9 @@ export default async function SuperAdminAuthPage() {
       <PageHeader title="Auth" description="Account creation, sign-in accounts, sessions, and verification tokens." />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <StatTile className="rounded-2xl" label="Accounts" value={accountsCount.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Sessions" value={sessionsCount.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Verification tokens" value={tokensCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Accounts" value={accountsCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Sessions" value={sessionsCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Verification tokens" value={tokensCount.toLocaleString()} />
       </div>
 
       <AccountCreationControl initialEnabled={accountCreationEnabled} />
@@ -71,8 +71,8 @@ export default async function SuperAdminAuthPage() {
               <TR key={a.id}>
                 <TD>{a.provider}</TD>
                 <TD>{a.type}</TD>
-                <TD className="font-mono text-sm [overflow-wrap:anywhere]">{a.providerAccountId}</TD>
-                <TD className="font-mono text-sm">{a.user.email ?? a.user.id}</TD>
+                <TD className="tabular-nums text-sm [overflow-wrap:anywhere]">{a.providerAccountId}</TD>
+                <TD className="tabular-nums text-sm">{a.user.email ?? a.user.id}</TD>
               </TR>
             ))}
           </TBody>
@@ -91,9 +91,9 @@ export default async function SuperAdminAuthPage() {
           <TBody>
             {sessions.map((s) => (
               <TR key={s.id}>
-                <TD className="font-mono text-sm">{s.user.email ?? s.user.id}</TD>
+                <TD className="tabular-nums text-sm">{s.user.email ?? s.user.id}</TD>
                 <TD className="whitespace-nowrap text-ink-secondary">{s.expires.toLocaleString()}</TD>
-                <TD className="font-mono text-sm [overflow-wrap:anywhere]">{s.id}</TD>
+                <TD className="tabular-nums text-sm [overflow-wrap:anywhere]">{s.id}</TD>
               </TR>
             ))}
           </TBody>

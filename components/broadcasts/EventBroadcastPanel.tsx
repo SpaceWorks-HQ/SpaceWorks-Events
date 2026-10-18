@@ -67,7 +67,7 @@ const ATTENDANCE_OPTIONS: ReadonlyArray<{ value: BroadcastAttendanceFilter; labe
 function StepHeading({ step, id, title, aside }: { step: number; id: string; title: string; aside?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-      <span aria-hidden className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-bold text-on-primary">{step}</span>
+      <span aria-hidden className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-semibold tabular-nums text-on-primary">{step}</span>
       <h2 id={id} className="text-h4 text-ink">
         <span className="sr-only">Step {step}: </span>
         {title}
@@ -77,7 +77,7 @@ function StepHeading({ step, id, title, aside }: { step: number; id: string; tit
   );
 }
 
-const cardClass = "flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-canvas p-4 sm:p-5";
+const cardClass = "flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-panel p-4 sm:p-5";
 
 const UNDO_SECONDS = 5;
 type SendPayload = { statuses: RsvpStatus[]; attendance: BroadcastAttendanceFilter; subject: string; body: string; design: BroadcastDesignId; count: number };
@@ -247,8 +247,8 @@ export function EventBroadcastPanel(props: {
           onClick={() => applyTemplate(template.id)}
           disabled={pending}
           className={cn(
-            "flex w-full flex-col items-start gap-1 rounded-xl p-3.5 text-left transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:opacity-60",
-            selected ? "border-2 border-primary bg-tint-peach" : "border border-line bg-canvas hover:bg-subtle",
+            "flex w-full flex-col items-start gap-1 rounded-xl p-3.5 text-left transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:bg-surface disabled:text-ink-muted",
+            selected ? "border-2 border-primary bg-accent-soft" : "border border-line bg-panel hover:bg-subtle",
           )}
         >
           <span className="font-bold text-ink">{template.name}</span>
@@ -275,7 +275,7 @@ export function EventBroadcastPanel(props: {
                 type="button"
                 aria-expanded={false}
                 onClick={() => setShowAllTemplates(true)}
-                className="flex w-full flex-col items-start gap-1 rounded-xl border border-dashed border-line-strong bg-canvas p-3.5 text-left transition-colors duration-[180ms] ease-yy hover:bg-subtle"
+                className="flex w-full flex-col items-start gap-1 rounded-xl border border-dashed border-line-strong bg-panel p-3.5 text-left transition-colors duration-[180ms] ease-yy hover:bg-subtle"
               >
                 <span className="inline-flex items-center gap-1 font-bold text-ink">
                   More templates <ChevronDown aria-hidden className="size-4" />
@@ -304,12 +304,12 @@ export function EventBroadcastPanel(props: {
                       onClick={() => toggleStatus(option.value)}
                       disabled={pending}
                       className={cn(
-                        "inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:opacity-50",
-                        selected ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-canvas text-ink hover:bg-subtle",
+                        "inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:border-line disabled:bg-surface disabled:text-ink-muted",
+                        selected ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink hover:bg-subtle",
                       )}
                     >
                       {STATUS_PILL_LABEL[option.value]}
-                      <span className="tabular-nums opacity-75">{statusCounts[option.value] ?? 0}</span>
+                      <span className="font-medium tabular-nums">{statusCounts[option.value] ?? 0}</span>
                     </button>
                   </Tooltip>
                 );
@@ -353,7 +353,7 @@ export function EventBroadcastPanel(props: {
                     type="button"
                     onClick={() => insertSubjectPlaceholder(placeholder.token)}
                     disabled={pending}
-                    className="inline-flex min-h-8 items-center rounded-full border border-line-strong bg-canvas px-3 text-[13px] font-semibold text-ink transition-colors hover:bg-subtle disabled:pointer-events-none disabled:opacity-50"
+                    className="inline-flex min-h-8 items-center rounded-full border border-line-strong bg-panel px-3 text-[13px] font-semibold text-ink transition-colors hover:bg-subtle disabled:pointer-events-none disabled:border-line disabled:bg-surface disabled:text-ink-muted"
                   >
                     {placeholder.label}
                   </button>
@@ -379,7 +379,7 @@ export function EventBroadcastPanel(props: {
                 ]}
               />
             </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-line bg-canvas p-3">
+            <div className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-3">
               <p className="text-label text-ink">Design</p>
               <DesignPicker value={design} onChange={setDesign} accentColor={brand.accentColor} coverImageUrl={brand.coverImageUrl} />
             </div>
@@ -393,7 +393,7 @@ export function EventBroadcastPanel(props: {
             ) : (
               <div className="relative flex flex-col gap-2 rounded-xl border border-line bg-muted p-2.5 sm:p-3.5">
                 {!previewReady ? (
-                  <div aria-live="polite" className="absolute right-3 top-3 z-[1] flex items-center gap-2 rounded-full bg-canvas px-2.5 py-1 text-caption text-ink-secondary">
+                  <div aria-live="polite" className="absolute right-3 top-3 z-[1] flex items-center gap-2 rounded-full bg-panel px-2.5 py-1 text-caption text-ink-secondary">
                     <BrandLoader size={20} label="Updating preview" /> Updating…
                   </div>
                 ) : null}
@@ -438,12 +438,12 @@ export function EventBroadcastPanel(props: {
           <p className="flex-1 text-sm text-ink">
             Sending to {countdown.count} {countdown.count === 1 ? "person" : "people"} in <span className="font-bold tabular-nums">{countdown.left}</span>…
           </p>
-          <Button variant="primary" onClick={undoSend}>
+          <Button variant="inverse" onClick={undoSend}>
             Undo
           </Button>
         </div>
       ) : (
-      <div className="yy-dark-band sticky bottom-4 z-10 flex flex-col gap-2 rounded-2xl bg-[var(--yy-inverse-surface)] p-3 text-ink shadow-float sm:flex-row sm:items-center sm:rounded-full sm:py-2.5 sm:pl-6 sm:pr-3">
+      <div className="yy-dark-band sticky bottom-4 z-10 flex flex-col gap-2 rounded-xl bg-[var(--yy-inverse-surface)] p-3 text-ink shadow-float sm:flex-row sm:items-center sm:rounded-full sm:py-2.5 sm:pl-6 sm:pr-3">
         <p aria-live="polite" className="flex-1 px-1 text-sm text-ink-secondary sm:px-0">
           {sendBarLabel({ count: recipientCount, hasStatuses: statuses.length > 0, hasContent })}
         </p>
@@ -463,7 +463,7 @@ export function EventBroadcastPanel(props: {
           >
             Send a test to me
           </Button>
-          <Button variant="primary" startIcon={<Send />} disabled={!canSend} onClick={() => setConfirmOpen(true)}>
+          <Button variant="inverse" startIcon={<Send />} disabled={!canSend} onClick={() => setConfirmOpen(true)}>
             {sendLabel}
           </Button>
         </div>

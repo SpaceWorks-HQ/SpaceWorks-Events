@@ -49,7 +49,7 @@ export function EventManageHeader({
         <ArrowLeft aria-hidden className="size-4" />
         {back.label}
       </Link>
-      <header style={accentStyle(event.accentColor)} className="yy-accent-scope overflow-hidden rounded-2xl border border-line bg-canvas">
+      <header style={accentStyle(event.accentColor)} className="yy-accent-scope overflow-hidden rounded-xl border border-line bg-panel">
         <div className="flex flex-col sm:flex-row">
           <div aria-hidden className={cn("flex h-24 shrink-0 items-center justify-center sm:h-auto sm:w-32", isDraft ? "yy-dot-strip" : "yy-cover-placeholder")}>
             <DateBlock month={dateBlock.month} day={dateBlock.day} size="lg" tone={isDraft ? "draft" : "ink"} className="border-white/50" />
@@ -61,7 +61,7 @@ export function EventManageHeader({
                 <Chip size="sm">{privacyLabels[event.privacyType] ?? event.privacyType}</Chip>
                 <Chip size="sm" tone="accent">{relative}</Chip>
               </span>
-              <h1 className="break-words font-display text-[28px] font-extrabold leading-[1.1] tracking-[-0.02em] text-ink sm:text-[32px]">{event.title}</h1>
+              <h1 className="break-words font-display text-[28px] font-semibold leading-[1.1] tracking-[-0.02em] text-ink sm:text-[32px]">{event.title}</h1>
               <p className="text-body-ui text-ink-secondary">
                 {when}
                 {where ? ` · ${where}` : ""}
@@ -76,7 +76,7 @@ export function EventManageHeader({
               <div key={stat.label} className={cn("flex min-w-0 flex-col gap-1 px-5 py-3", index % 2 === 1 && "border-l border-line", index >= 2 && "border-t border-line sm:border-t-0", index === 2 && "sm:border-l")}>
                 <dt className="text-caption text-ink-muted">{stat.label}</dt>
                 <dd className="flex flex-wrap items-center gap-2.5">
-                  <span className="font-display text-[22px] font-extrabold leading-tight text-ink">{stat.value}</span>
+                  <span className="font-display text-[22px] font-semibold leading-tight text-ink">{stat.value}</span>
                   {stat.meter ? (
                     <DotMeter
                       filled={meterDots(stat.meter.filled, stat.meter.total, 10)}

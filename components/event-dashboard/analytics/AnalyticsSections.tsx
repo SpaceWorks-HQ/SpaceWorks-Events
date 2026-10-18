@@ -3,7 +3,7 @@ import { cn } from "@/lib/cn";
 import { OpenTabButton } from "../EventDashboardTabs";
 import { percentOf, type FunnelStep, type SignupTimeline } from "./metrics";
 
-const card = "flex flex-col gap-4 rounded-xl border border-line bg-canvas p-5 sm:p-6";
+const card = "flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 /** A rounded track with a filled share (0..1). Decorative: the number sits beside it. */
 function Bar({ share, tone, className }: { share: number; tone: string; className?: string }) {
@@ -23,12 +23,12 @@ export function KeyNumbers({ items }: { items: KeyNumber[] }) {
   return (
     <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {items.map((item) => (
-        <li key={item.key} className="flex flex-col gap-1.5 rounded-xl border border-line bg-canvas p-4">
+        <li key={item.key} className="flex flex-col gap-1.5 rounded-xl border border-line bg-panel p-4">
           <span className="flex items-center gap-2 text-sm font-semibold text-ink-secondary">
             <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", item.tone)} />
             {item.label}
           </span>
-          <strong className="font-display text-3xl font-extrabold leading-none text-ink">{item.value}</strong>
+          <strong className="font-display text-3xl font-semibold leading-none tabular-nums text-ink">{item.value}</strong>
           {item.bar != null ? <Bar share={item.bar} tone={item.tone} className="h-1.5" /> : null}
           <span className="text-caption text-ink-muted">{item.detail}</span>
           {item.action ? (
@@ -45,10 +45,10 @@ export function KeyNumbers({ items }: { items: KeyNumber[] }) {
 /* ---------- Funnel ---------- */
 
 const FUNNEL_TONE: Record<FunnelStep["key"], string> = {
-  responded: "bg-primary",
-  going: "bg-accent",
+  responded: "bg-ink",
+  going: "bg-accent-text",
   checkedIn: "bg-success-solid",
-  feedback: "bg-brand-marigold",
+  feedback: "bg-highlight",
 };
 
 export function FunnelCard({ steps, summary }: { steps: FunnelStep[]; summary: string }) {
@@ -74,11 +74,11 @@ export function FunnelCard({ steps, summary }: { steps: FunnelStep[]; summary: s
             <span className="text-right">
               {step.value == null ? (
                 <>
-                  <span className="font-display text-xl font-extrabold text-ink-muted">—</span> <span className="block text-caption text-ink-muted">after the event</span>
+                  <span className="font-display text-xl font-semibold text-ink-muted">—</span> <span className="block text-caption text-ink-muted">after the event</span>
                 </>
               ) : (
                 <>
-                  <strong className="font-display text-xl font-extrabold text-ink">{step.value}</strong>
+                  <strong className="font-display text-xl font-semibold text-ink">{step.value}</strong>
                   {step.percent != null ? (
                     <span className="block text-caption text-ink-muted">
                       {step.percent}% of {step.of}
@@ -167,7 +167,7 @@ export function TimelineCard({ timeline, busiest, lastWeek }: { timeline: Signup
         {stats.map((stat) => (
           <div key={stat.label} className="flex flex-col-reverse gap-0.5">
             <dt className="text-caption text-ink-muted">{stat.label}</dt>
-            <dd className="font-display text-xl font-extrabold text-ink">{stat.value}</dd>
+            <dd className="font-display text-xl font-semibold text-ink">{stat.value}</dd>
           </div>
         ))}
       </dl>
@@ -177,7 +177,7 @@ export function TimelineCard({ timeline, busiest, lastWeek }: { timeline: Signup
           <span key={index} title={`${column.label}: ${column.count} sign-up${column.count === 1 ? "" : "s"}`} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
             {column.count > 0 ? <span className="text-[11px] font-semibold tabular-nums text-ink-secondary">{column.count}</span> : null}
             <span
-              className={cn("w-full max-w-8 rounded-full", column.count > 0 ? "bg-brand-marigold" : "bg-track")}
+              className={cn("w-full max-w-8 rounded-full", column.count > 0 ? "bg-accent-text" : "bg-track")}
               style={{ height: column.count > 0 ? `max(6px, ${Math.round((column.count / largest) * 75)}%)` : 6 }}
             />
           </span>

@@ -109,7 +109,7 @@ export const QuestionEditor = forwardRef<HTMLInputElement, Props>(function Quest
 
       {caps.hasOptions ? <ChoicesEditor choices={draft.options} onChange={(options) => set({ options })} error={errors.options} disabled={pending} /> : null}
 
-      <div className="flex flex-col gap-3 rounded-xl border border-line bg-canvas p-4">
+      <div className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4">
         <SwitchRow label="Required" description="Guests must answer before they can register." checked={draft.required} onCheckedChange={(required) => set({ required })} />
         {caps.supportsOther ? (
           <SwitchRow label="Allow an “Other” answer" description="Adds an “Other” choice with a short text box." checked={draft.allowOther} onCheckedChange={(allowOther) => set({ allowOther })} />
@@ -228,7 +228,7 @@ function ShowIfSection({
   };
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line bg-canvas p-4" aria-labelledby={`${id}-title`}>
+    <section className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4" aria-labelledby={`${id}-title`}>
       <div className="flex items-center justify-between gap-4">
         <label htmlFor={`${id}-switch`} className="min-w-0 flex-1 cursor-pointer select-none">
           <span id={`${id}-title`} className="flex items-center gap-1.5 text-label text-ink">
@@ -247,7 +247,7 @@ function ShowIfSection({
       {enabled ? (
         <div className="flex flex-col gap-3 border-t border-line pt-3">
           {brokenRule ? (
-            <p className="flex items-start gap-1.5 text-caption text-warning-fg">
+            <p className="flex items-start gap-1.5 text-caption text-warning-solid">
               <AlertCircle aria-hidden className="mt-px size-4 shrink-0" />
               <span>The question this rule used is no longer above this one. Pick another, or turn the rule off.</span>
             </p>

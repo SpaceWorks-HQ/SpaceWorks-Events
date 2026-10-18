@@ -22,7 +22,7 @@ import { certificateMergeTags, fillCertificateText, parseCertificateTemplate, ty
 
 type Field = { id: string; key: string; label: string; type: RegistrationFieldType; required: boolean; options: string[] };
 
-const card = "flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5";
+const card = "flex flex-col gap-4 rounded-xl border border-line bg-panel p-5";
 
 export function FeedbackFormEditor(props: {
   organisationSlug: string;
@@ -171,8 +171,8 @@ export function FeedbackFormEditor(props: {
 
   return (
     <div className="flex flex-col gap-5">
-      <section aria-labelledby="feedback-form-title" className="flex flex-wrap items-center gap-4 rounded-2xl bg-tint-peach px-4 py-4 sm:px-5">
-        <MoodTile mood="love" size={52} className="shrink-0" />
+      <section aria-labelledby="feedback-form-title" className="flex flex-wrap items-center gap-4 rounded-xl bg-tint-peach px-4 py-4 sm:px-5">
+        <MoodTile mood="love" size={52} className="yy-face shrink-0" />
         <div className="min-w-0 flex-[1_1_220px]">
           {editingTitle ? (
             <div className="flex flex-wrap items-end gap-2">
@@ -270,7 +270,7 @@ export function FeedbackFormEditor(props: {
       </div>
 
       {dirty || certificateBusy ? (
-        <div role="status" className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-inverse px-4 py-3 text-on-inverse shadow-float">
+        <div role="status" className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-inverse px-4 py-3 text-on-inverse shadow-float">
           <span className="text-label">{certificateBusy ? "Working on the certificate…" : "You have unsaved changes"}</span>
           <Button variant="inverse" size="sm" onClick={saveSettings} disabled={pending || certificateBusy || !dirty}>{pending ? "Saving…" : "Save changes"}</Button>
         </div>
@@ -358,7 +358,7 @@ function CertificatePreview({ template, eventTitle, eventDateLabel, organisation
     issueDate: certificateMergeTags.issueDate.sample,
   };
   return (
-    <div aria-hidden className={cn("overflow-hidden rounded-xl border border-line bg-canvas transition-opacity", muted && "opacity-50")}>
+    <div aria-hidden className={cn("overflow-hidden rounded-xl border border-line bg-panel transition-opacity", muted && "opacity-50")}>
       {template ? (
         <div className="relative">
           {/* eslint-disable-next-line @next/next/no-img-element -- served by the app's private upload route */}
@@ -383,7 +383,7 @@ function CertificatePreview({ template, eventTitle, eventDateLabel, organisation
       ) : (
         <div className="flex aspect-[1.414] flex-col items-center justify-center gap-1.5 p-4 text-center">
           <span className="text-[10px] font-bold tracking-[0.12em] text-ink-muted">CERTIFICATE OF ATTENDANCE</span>
-          <span className="rounded-lg border-[1.5px] border-dashed border-accent px-3 py-1 font-display text-lg font-extrabold text-ink">Attendee name</span>
+          <span className="rounded-lg border-[1.5px] border-dashed border-accent px-3 py-1 font-display text-lg font-semibold text-ink">Attendee name</span>
           {eventTitle ? <span className="line-clamp-2 text-xs text-ink-secondary">{eventTitle}{eventDateLabel ? ` · ${eventDateLabel}` : ""}</span> : null}
         </div>
       )}

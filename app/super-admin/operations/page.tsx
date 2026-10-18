@@ -147,7 +147,7 @@ export default async function SuperAdminOperationsPage() {
             <TBody>
               {failedMessages.map((message) => (
                 <TR key={message.id}>
-                  <TD className="align-top font-mono text-sm">{message.kind}</TD>
+                  <TD className="align-top tabular-nums text-sm">{message.kind}</TD>
                   <TD className="align-top tabular-nums">{message.attempts}</TD>
                   <TD className="align-top whitespace-nowrap text-ink-secondary">{message.createdAt.toLocaleString()}</TD>
                   <TD className="align-top text-ink-secondary [overflow-wrap:anywhere]">{safeErrorSummary(message.lastError)}</TD>
@@ -158,7 +158,7 @@ export default async function SuperAdminOperationsPage() {
         )}
       </AdminPanel>
 
-      <Callout tone="info" title="Operational guardrail" className="rounded-2xl">
+      <Callout tone="info" title="Operational guardrail" className="rounded-xl">
         These controls do not create or delete provider backups. Backup creation, retention, encryption, and restore access must remain controlled by the managed database provider and deployment credentials. Use this page to verify posture and record evidence, not to expose infrastructure secrets in the application.
       </Callout>
     </div>

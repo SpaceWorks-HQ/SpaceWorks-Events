@@ -78,7 +78,7 @@ export function ShortLinkControl({
   return (
     <div className="flex flex-col gap-2">
       <p className="text-label text-ink">Short link</p>
-      <p className="truncate rounded-lg bg-subtle px-3 py-2.5 font-mono text-[13px] text-ink" title={url}>
+      <p className="truncate rounded-lg bg-subtle px-3 py-2.5 tabular-nums text-[13px] text-ink" title={url}>
         {url.replace(/^https?:\/\//, "")}
       </p>
       <div className="flex flex-wrap gap-2">

@@ -85,7 +85,7 @@ export function EventInvitePanel(props: {
       ) : (
         <ul aria-label="Invited emails" className="flex flex-col gap-2">
           {invites.map((inv) => (
-            <li key={inv.id} className="flex min-w-0 items-center gap-3.5 rounded-xl border border-line bg-canvas px-4 py-3">
+            <li key={inv.id} className="flex min-w-0 items-center gap-3.5 rounded-xl border border-line bg-panel px-4 py-3">
               <Avatar name={inv.email} size="md" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-bold text-ink">{inv.email}</p>

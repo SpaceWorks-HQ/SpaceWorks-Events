@@ -100,7 +100,7 @@ export function ChoicesEditor({ choices, onChange, error, disabled }: { choices:
       </ol>
 
       {dupes.size > 0 ? (
-        <p role="status" className="flex items-start gap-1.5 text-caption text-warning-fg">
+        <p role="status" className="flex items-start gap-1.5 text-caption text-warning-solid">
           <AlertCircle aria-hidden className="mt-px size-4 shrink-0" />
           <span>Some choices appear twice. Duplicates are merged when you save.</span>
         </p>

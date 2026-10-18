@@ -22,13 +22,13 @@ export function NextUpCard({ next, now }: { next: NonNullable<DashboardHome["nex
     <section
       aria-labelledby="home-next-title"
       style={accentStyle(next.accent)}
-      className="yy-accent-scope flex flex-col overflow-hidden rounded-2xl border border-line bg-canvas shadow-raised md:flex-row"
+      className="yy-accent-scope flex flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-raised md:flex-row"
     >
       <div className="yy-cover-placeholder relative flex min-h-[200px] flex-col justify-between gap-6 p-6 md:w-[44%] md:shrink-0 md:p-7">
-        <span className="self-start rounded-full bg-white px-3 py-1 text-overline text-[#18181B]">Next up · {when}</span>
+        <span className="self-start rounded-full bg-sw-cream px-3 py-1 text-overline text-sw-ink">Next up · {when}</span>
         <div className="flex items-end gap-4">
           <DateBlock month={block.month} day={block.day} size="lg" tone="ink" className="border-white/40" />
-          <h2 id="home-next-title" className={cn("line-clamp-3 min-w-0 font-display font-extrabold leading-[1.05] tracking-[-0.02em] text-on-accent", next.title.length > 40 ? "text-[24px] sm:text-[26px]" : "text-[30px] sm:text-[34px]")}>
+          <h2 id="home-next-title" className={cn("line-clamp-3 min-w-0 font-display font-semibold leading-[1.05] tracking-[-0.02em] text-on-accent", next.title.length > 40 ? "text-[24px] sm:text-[26px]" : "text-[30px] sm:text-[34px]")}>
             {next.title}
           </h2>
         </div>
@@ -90,25 +90,25 @@ export function LiveEventPanel({ live, now }: { live: NonNullable<DashboardHome[
   const busiest = Math.max(0, ...live.arrivals.map((bucket) => bucket.count));
   return (
     <div className="flex flex-col gap-5">
-      <section aria-labelledby="home-live-title" className="yy-dark-band flex flex-col gap-8 rounded-2xl bg-[var(--yy-inverse-surface)] p-6 text-ink sm:p-8 lg:flex-row lg:items-center">
+      <section aria-labelledby="home-live-title" className="yy-dark-band flex flex-col gap-8 rounded-xl bg-[var(--yy-inverse-surface)] p-6 text-ink sm:p-8 lg:flex-row lg:items-center">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <span className="inline-flex items-center gap-2 self-start rounded-full bg-success-bg px-3 py-1 text-overline text-success-fg">
             <span aria-hidden className="size-2 rounded-full bg-success-solid" />
             {live.started ? `Happening now · started ${formatTime(live.startDateTime, live.timezone)}` : `Today · starts ${formatTime(live.startDateTime, live.timezone)}`}
           </span>
-          <h2 id="home-live-title" className="font-display text-[34px] font-extrabold leading-[1.02] tracking-[-0.03em] text-ink sm:text-[44px]">{live.title}</h2>
+          <h2 id="home-live-title" className="font-display text-[34px] font-semibold leading-[1.02] tracking-[-0.03em] text-ink sm:text-[44px]">{live.title}</h2>
           <p className="text-body-ui text-ink-secondary">
             {live.location ? `${live.location} · ` : ""}until {formatTime(live.endDateTime, live.timezone)}
           </p>
           <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="font-display text-[56px] font-extrabold leading-none text-ink">{live.checkedIn}</span>
+            <span className="font-display text-[56px] font-semibold leading-none text-ink">{live.checkedIn}</span>
             <span className="text-body text-ink-secondary">
               of {live.confirmed} checked in{toCome > 0 ? ` · ${toCome} still to come` : ""}
             </span>
           </p>
           <div className="flex flex-wrap gap-2.5">
             {live.checkInHref ? (
-              <Button asChild variant="primary" size="lg">
+              <Button asChild variant="inverse" size="lg">
                 <Link href={live.checkInHref}>
                   <ScanLine aria-hidden className="size-5" />
                   Open check-in
@@ -131,7 +131,7 @@ export function LiveEventPanel({ live, now }: { live: NonNullable<DashboardHome[
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {live.onStage.now || live.onStage.next ? (
-          <section aria-labelledby="home-stage-title" className="flex flex-col gap-3.5 rounded-xl border border-line bg-canvas p-5">
+          <section aria-labelledby="home-stage-title" className="flex flex-col gap-3.5 rounded-xl border border-line bg-panel p-5">
             <h3 id="home-stage-title" className="text-h4 text-ink">On stage</h3>
             {live.onStage.now ? (
               <div className="flex flex-col gap-1 rounded-lg bg-tint-peach px-4 py-3">
@@ -153,7 +153,7 @@ export function LiveEventPanel({ live, now }: { live: NonNullable<DashboardHome[
           </section>
         ) : null}
 
-        <section aria-labelledby="home-arrivals-title" className="flex flex-col gap-3.5 rounded-xl border border-line bg-canvas p-5">
+        <section aria-labelledby="home-arrivals-title" className="flex flex-col gap-3.5 rounded-xl border border-line bg-panel p-5">
           <h3 id="home-arrivals-title" className="text-h4 text-ink">Arrivals</h3>
           <div className="flex items-end gap-1">
             {live.arrivals.map((bucket, index) => (
@@ -169,13 +169,13 @@ export function LiveEventPanel({ live, now }: { live: NonNullable<DashboardHome[
           </p>
         </section>
 
-        <section aria-labelledby="home-door-title" className="flex flex-col gap-1 rounded-xl border border-line bg-canvas p-5">
+        <section aria-labelledby="home-door-title" className="flex flex-col gap-1 rounded-xl border border-line bg-panel p-5">
           <h3 id="home-door-title" className="mb-1.5 text-h4 text-ink">At the door</h3>
           {live.door.length ? (
             <ul className="flex flex-col">
               {live.door.map((entry) => (
                 <li key={entry.key} className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
-                  <MoodTile mood="wink" size={24} />
+                  <MoodTile mood="wink" size={24} className="yy-face" />
                   <span className="min-w-0 flex-1 truncate text-sm text-ink"><strong>{entry.who}</strong> checked in</span>
                   <span className="shrink-0 text-caption text-ink-muted">{formatRelativeTime(entry.at, live.timezone, now)}</span>
                 </li>
@@ -202,7 +202,7 @@ const ACTIVITY: Record<HomeActivity["kind"], { mood: Mood; text: string }> = {
 
 export function ActivityFeed({ activity, now }: { activity: HomeActivity[]; now: Date }) {
   return (
-    <section aria-labelledby="home-activity-title" className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-canvas p-5">
+    <section aria-labelledby="home-activity-title" className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-panel p-5">
       <h2 id="home-activity-title" className="text-h4 text-ink">Activity</h2>
       {activity.length === 0 ? (
         <p className="py-2 text-body-ui text-ink-muted">Registrations, check-ins and feedback will show up here.</p>
@@ -210,7 +210,7 @@ export function ActivityFeed({ activity, now }: { activity: HomeActivity[]; now:
         <ul className="flex flex-col">
           {activity.map((item) => (
             <li key={item.key} className="flex items-center gap-3 border-b border-line py-2.5 last:border-b-0">
-              <MoodTile mood={ACTIVITY[item.kind].mood} size={32} />
+              <MoodTile mood={ACTIVITY[item.kind].mood} size={32} className="yy-face" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-ink">
                   <strong>{item.who}</strong> {ACTIVITY[item.kind].text}
@@ -232,10 +232,10 @@ export function StatRow({ stats }: { stats: DashboardHome["stats"] }) {
   return (
     <section aria-label="At a glance" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {stats.map((stat) => (
-        <div key={stat.label} className="flex min-w-0 flex-col gap-2.5 rounded-lg border border-line bg-canvas px-5 py-4">
+        <div key={stat.label} className="flex min-w-0 flex-col gap-2.5 rounded-lg border border-line bg-panel px-5 py-4">
           <span className="text-sm text-ink-muted">{stat.label}</span>
           <span className="flex items-end justify-between gap-3">
-            <span className="font-display text-[34px] font-extrabold leading-none text-ink">{stat.value}</span>
+            <span className="font-display text-[34px] font-semibold leading-none text-ink">{stat.value}</span>
             <DotColumns levels={stat.levels} tone={stat.tone} />
           </span>
           <span className="truncate text-caption text-ink-muted">{stat.hint}</span>
@@ -254,7 +254,7 @@ export function OrganisationCards({ organisations }: { organisations: DashboardH
       <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {organisations.map((organisation) => (
           <li key={organisation.id}>
-            <Link href={`/dashboard/${organisation.slug}`} className="group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-canvas transition-colors hover:bg-subtle">
+            <Link href={`/dashboard/${organisation.slug}`} className="group flex h-full flex-col overflow-hidden rounded-xl border border-line bg-panel transition-colors hover:bg-subtle">
               <span aria-hidden className="yy-dot-strip h-14" />
               <span className="flex flex-1 flex-col gap-2.5 px-5 pb-5">
                 <OrgLogo name={organisation.name} src={organisation.logoUrl} size="lg" className="-mt-7 border-[3px] border-canvas" />
@@ -302,10 +302,10 @@ export function FirstRunSetup({ setup, name, compact = false }: { setup: NonNull
   return (
     <section aria-labelledby={compact ? "home-setup-steps" : "home-setup-title"} className="flex flex-col gap-6">
       {compact ? null : (
-      <div className="flex flex-col items-start gap-6 rounded-2xl bg-tint-peach p-6 sm:flex-row sm:items-center sm:p-8">
-        <MoodTile mood="happy" size={104} />
+      <div className="flex flex-col items-start gap-6 rounded-xl bg-tint-peach p-6 sm:flex-row sm:items-center sm:p-8">
+        <MoodTile mood="happy" size={104} className="yy-face" />
         <div className="flex flex-col gap-2">
-          <h2 id="home-setup-title" className="font-display text-[34px] font-extrabold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[40px]">Welcome to Space Works Events, {name}</h2>
+          <h2 id="home-setup-title" className="font-display text-[34px] font-semibold leading-[1.05] tracking-[-0.03em] text-ink sm:text-[40px]">Welcome to Space Works Events, {name}</h2>
           <p className="max-w-[640px] text-body-l text-ink-secondary">Four small steps and your first event is ready to share.</p>
         </div>
       </div>
@@ -330,7 +330,7 @@ export function FirstRunSetup({ setup, name, compact = false }: { setup: NonNull
                 key={step.title}
                 className={cn(
                   "flex flex-col gap-3 rounded-lg px-5 py-4 sm:flex-row sm:items-center sm:gap-4",
-                  step.done ? "border border-line bg-subtle" : isNext ? "border-2 border-primary bg-canvas" : "border border-line bg-canvas",
+                  step.done ? "border border-line bg-subtle" : isNext ? "border-2 border-primary bg-panel" : "border border-line bg-panel",
                 )}
               >
                 <span

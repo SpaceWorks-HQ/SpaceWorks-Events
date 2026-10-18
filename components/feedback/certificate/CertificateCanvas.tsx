@@ -119,7 +119,7 @@ export function CertificateCanvas({
               <rect
                 {...box}
                 fill="transparent"
-                stroke="#2563eb"
+                stroke="#006E63"
                 strokeWidth={1.5}
                 vectorEffect="non-scaling-stroke"
                 strokeDasharray={isSelected ? "6 4" : undefined}
@@ -130,8 +130,8 @@ export function CertificateCanvas({
             </g>
           );
         })}
-        {guides.vertical && <line x1={W / 2} x2={W / 2} y1={0} y2={H} stroke="#ec4899" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
-        {guides.horizontal && <line x1={0} x2={W} y1={H / 2} y2={H / 2} stroke="#ec4899" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+        {guides.vertical && <line x1={W / 2} x2={W / 2} y1={0} y2={H} stroke="#FF7447" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
+        {guides.horizontal && <line x1={0} x2={W} y1={H / 2} y2={H / 2} stroke="#FF7447" strokeWidth={1} vectorEffect="non-scaling-stroke" pointerEvents="none" />}
         {selected && selectedBox && !disabled && (
           <rect
             x={selectedBox.x + selectedBox.width - unit * 1.2}
@@ -139,8 +139,8 @@ export function CertificateCanvas({
             width={unit * 2.4}
             height={unit * 2.4}
             rx={unit / 2}
-            fill="#2563eb"
-            stroke="#ffffff"
+            fill="#006E63"
+            stroke="#FFF4E8"
             strokeWidth={1.5}
             vectorEffect="non-scaling-stroke"
             style={{ cursor: "nwse-resize" }}

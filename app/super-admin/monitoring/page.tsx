@@ -72,7 +72,7 @@ export default async function SuperAdminMonitoringPage() {
               <TBody>
                 {snapshot.routes.map((r) => (
                   <TR key={r.routeId}>
-                    <TD className="font-mono text-sm">{r.routeId}</TD>
+                    <TD className="tabular-nums text-sm">{r.routeId}</TD>
                     <TD className="text-right tabular-nums">{r.total.toLocaleString()}</TD>
                     <TD className="text-right tabular-nums">{r.errors.toLocaleString()}</TD>
                     <TD className="text-ink-secondary">{r.lastErrorAt ? `${new Date(r.lastErrorAt).toLocaleString()} · ${r.lastErrorMessage ?? ""}` : "—"}</TD>

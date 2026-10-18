@@ -11,7 +11,7 @@ export function AccountCreationControl({ initialEnabled }: { initialEnabled: boo
   const [pending, startTransition] = useTransition();
 
   return (
-    <Card as="section" className="rounded-2xl">
+    <Card as="section" className="rounded-xl">
       <CardHeader title="New account creation" description="When disabled, password and Google sign-in remain available only for existing users." />
       <div className="flex flex-col gap-3">
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}

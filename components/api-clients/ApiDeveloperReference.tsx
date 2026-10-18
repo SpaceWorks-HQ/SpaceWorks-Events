@@ -174,14 +174,14 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
         <p className="mt-1 text-body-ui text-ink-muted">Use this tenant-bound REST API from your backend service or automation.</p>
       </div>
       <Callout tone="warning">Credentials are shown only when created. Keep them in a secret manager; never expose them in browser code, URLs, source control, or logs.</Callout>
-      <div className="rounded-lg border border-line bg-canvas px-5">
+      <div className="rounded-lg border border-line bg-panel px-5">
         <Accordion type="multiple" defaultValue={["getting-started"]}>
           <AccordionItem
             value="getting-started"
             title={
               <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                 <span>Getting started</span>
-                <span className="break-all font-mono text-xs font-normal text-ink-muted">{apiBaseUrl}</span>
+                <span className="break-all tabular-nums text-xs font-normal text-ink-muted">{apiBaseUrl}</span>
               </span>
             }
           >
@@ -199,7 +199,7 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
             <ul className="flex flex-col divide-y divide-line">
               {scopes.map((scope) => (
                 <li key={scope.scope} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
-                  <Chip size="sm" tone="outline" className="self-start font-mono">{scope.scope}</Chip>
+                  <Chip size="sm" tone="outline" className="self-start tabular-nums">{scope.scope}</Chip>
                   <p className="text-body-ui text-ink">{scope.capability}</p>
                   <p className="text-body-ui text-ink-secondary"><strong className="text-ink">Includes:</strong> {scope.includes}</p>
                   <p className="text-body-ui text-ink-secondary"><strong className="text-ink">Does not include:</strong> {scope.excludes}</p>
@@ -214,7 +214,7 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
               title={
                 <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <span>{endpoint.title}</span>
-                  <Chip size="sm" tone="outline" className="self-start font-mono sm:self-center">{endpoint.scope}</Chip>
+                  <Chip size="sm" tone="outline" className="self-start tabular-nums sm:self-center">{endpoint.scope}</Chip>
                 </span>
               }
             >

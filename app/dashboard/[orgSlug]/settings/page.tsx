@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   description: "Edit organisation details.",
 };
 
-const sectionCard = "rounded-2xl border border-line bg-canvas p-5 sm:p-6";
+const sectionCard = "rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export default async function OrgSettingsPage({ params }: Props) {
   const { orgSlug } = await params;
@@ -78,7 +78,7 @@ export default async function OrgSettingsPage({ params }: Props) {
             <p className="mt-0.5 text-body-ui text-ink-muted">One link that always lists what is coming up. The address can&apos;t be changed.</p>
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="max-w-full truncate rounded-full bg-muted px-3.5 py-2 font-mono text-sm text-ink-secondary">/{org.slug}</span>
+            <span className="max-w-full truncate rounded-full bg-muted px-3.5 py-2 tabular-nums text-sm text-ink-secondary">/{org.slug}</span>
             <CopyOrganisationUrl slug={org.slug} />
             <Link
               href={`/${org.slug}`}

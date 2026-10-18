@@ -19,9 +19,9 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext }) {
   const summary = funnelSentence({ responded: counts.total, going: counts.confirmed, checkedIn, ended });
 
   const parts: MixPart[] = [
-    { key: "going", label: "Going", hint: "Have a place and a ticket", value: counts.confirmed, tone: "bg-success-solid" },
-    { key: "waitlist", label: "Waitlist", hint: "Signed up after the event was full", value: counts.waitlisted, tone: "bg-warning-solid" },
-    { key: "pending", label: "Waiting for approval", hint: "Need a decision from an organiser", value: counts.pendingApproval, tone: "bg-primary" },
+    { key: "going", label: "Going", hint: "Have a place and a ticket", value: counts.confirmed, tone: "bg-accent-text" },
+    { key: "waitlist", label: "Waitlist", hint: "Signed up after the event was full", value: counts.waitlisted, tone: "bg-info-solid" },
+    { key: "pending", label: "Waiting for approval", hint: "Need a decision from an organiser", value: counts.pendingApproval, tone: "bg-highlight" },
     { key: "declined", label: "Declined", hint: "Declined by an organiser", value: counts.rejected, tone: "bg-danger-solid" },
   ];
 
@@ -32,7 +32,7 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext }) {
       key: "going",
       label: "Going",
       value: String(counts.confirmed),
-      tone: "bg-success-solid",
+      tone: "bg-accent-text",
       bar: capacity ? capacity.percent / 100 : undefined,
       detail: capacity ? (capacity.full ? `Full · all ${event.capacity} places taken` : `${capacity.left} of ${event.capacity} places left`) : "No capacity limit set",
     },
@@ -40,14 +40,14 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext }) {
       key: "waitlist",
       label: "Waitlist",
       value: String(counts.waitlisted),
-      tone: "bg-warning-solid",
+      tone: "bg-info-solid",
       detail: counts.waitlisted ? "Waiting for a place" : "Nobody waiting",
     },
     {
       key: "pending",
       label: "Waiting for approval",
       value: String(counts.pendingApproval),
-      tone: "bg-primary",
+      tone: "bg-highlight",
       detail: counts.pendingApproval ? "Need your decision" : "Nothing to review",
       action: counts.pendingApproval && !ended ? { tab: "guests", label: "Review" } : undefined,
     },
@@ -55,7 +55,7 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext }) {
       key: "turnout",
       label: "Turnout",
       value: turnout != null && checkedIn! <= counts.confirmed ? `${turnout}%` : checkedIn != null ? String(checkedIn) : "—",
-      tone: "bg-accent",
+      tone: "bg-success-solid",
       bar: turnout != null ? Math.min(100, turnout) / 100 : undefined,
       detail:
         checkedIn == null

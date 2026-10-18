@@ -40,12 +40,12 @@ export function SubTabs({ items, label, className }: { items: SubTab[]; label: s
       }}
       className={cn("flex flex-col gap-5", className)}
     >
-      <TabsPrimitive.List aria-label={label} className="inline-flex max-w-full gap-1 self-start overflow-x-auto rounded-full bg-muted p-1 [scrollbar-width:none]">
+      <TabsPrimitive.List aria-label={label} className="inline-flex max-w-full gap-1 self-start overflow-x-auto rounded-lg border border-line bg-surface p-1 [scrollbar-width:none]">
         {items.map((item) => (
           <TabsPrimitive.Trigger
             key={item.value}
             value={item.value}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 text-sm font-semibold text-ink-secondary transition-colors hover:text-ink data-[state=active]:bg-canvas data-[state=active]:font-bold data-[state=active]:text-ink data-[state=active]:shadow-[0_1px_2px_rgba(24,24,27,0.08)]"
+            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-4 text-sm font-semibold text-ink-muted transition-[background-color,color,box-shadow] duration-[120ms] ease-yy hover:text-ink data-[state=active]:bg-panel data-[state=active]:text-ink data-[state=active]:shadow-segment"
           >
             {item.label}
             {item.count != null ? <span className="font-medium text-ink-muted">{item.count}</span> : null}

@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 /** A titled card used across the super-admin pages. */
 export function AdminPanel({ title, description, action, children, className }: { title?: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <Card as="section" className={cn("min-w-0 rounded-2xl", className)}>
+    <Card as="section" className={cn("min-w-0 rounded-xl", className)}>
       {title ? <CardHeader title={title} description={description} action={action} /> : null}
       {children}
     </Card>
@@ -51,7 +51,7 @@ export function NameCell({ href, name, sub, external }: { href?: string; name: R
 /** GET search form shared by the list pages; resets to the first page. */
 export function AdminSearchForm({ action, label, defaultValue, children, submitLabel = "Search" }: { action: string; label: string; defaultValue: string; children?: ReactNode; submitLabel?: string }) {
   return (
-    <form action={action} method="GET" className="flex flex-col gap-2.5 rounded-2xl border border-line bg-canvas p-4 sm:flex-row sm:items-end">
+    <form action={action} method="GET" className="flex flex-col gap-2.5 rounded-xl border border-line bg-panel p-4 sm:flex-row sm:items-end">
       <label className="flex min-w-0 flex-1 flex-col gap-1.5">
         <span className="text-label text-ink">{label}</span>
         <Input name="q" defaultValue={defaultValue} />

@@ -17,7 +17,7 @@ export function SuperAdminMfaPrompt() {
   return (
     <div className="mx-auto w-full max-w-[440px] py-10 sm:py-16">
       <form
-        className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-6 sm:p-8"
+        className="flex flex-col gap-5 rounded-xl border border-line bg-panel p-6 sm:p-8"
         onSubmit={(event) => {
           event.preventDefault();
           startTransition(async () => {

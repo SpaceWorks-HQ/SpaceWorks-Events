@@ -37,7 +37,7 @@ export const QuestionCard = forwardRef<HTMLButtonElement, Props>(function Questi
   const typeLabel = fieldTypeMeta(field.type).label;
 
   return (
-    <li className={cn("overflow-hidden rounded-xl border bg-canvas transition-colors", expanded ? "border-line-strong shadow-raised" : "border-line hover:border-line-strong")}>
+    <li className={cn("overflow-hidden rounded-xl border bg-panel transition-colors", expanded ? "border-line-strong shadow-raised" : "border-line hover:border-line-strong")}>
       <div className="flex gap-3 px-3 pt-3 sm:px-4 sm:pt-4">
         <span aria-hidden className="mt-0.5 inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-ink-secondary">
           {number}

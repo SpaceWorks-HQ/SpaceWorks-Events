@@ -47,10 +47,10 @@ export function EditorSlider({
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       <div className={cn("flex items-center justify-between gap-3", hideLabel && "sr-only")}>
-        <span id={labelId} className={cn("text-label", dark ? "text-white" : "text-ink")}>
+        <span id={labelId} className={cn("text-label", dark ? "text-sw-cream" : "text-ink")}>
           {label}
         </span>
-        <span aria-hidden className={cn("font-mono text-caption tabular-nums", dark ? "text-white/70" : "text-ink-muted")}>
+        <span aria-hidden className={cn("tabular-nums text-caption", "text-ink-muted")}>
           {valueText}
         </span>
       </div>
@@ -65,15 +65,15 @@ export function EditorSlider({
           onValueCommit={onValueCommit ? ([next]) => onValueCommit(next ?? value) : undefined}
           className="relative flex h-9 min-w-0 flex-1 touch-none select-none items-center"
         >
-          <SliderPrimitive.Track className={cn("relative h-1.5 grow overflow-hidden rounded-full", dark ? "bg-white/20" : "bg-track")}>
+          <SliderPrimitive.Track className={cn("relative h-1.5 grow overflow-hidden rounded-full", dark ? "bg-sw-cream/20" : "bg-track")}>
             {centred ? (
               <span
                 aria-hidden
-                className={cn("absolute h-full rounded-full", dark ? "bg-white" : "bg-primary")}
+                className={cn("absolute h-full rounded-full", dark ? "bg-sw-cream" : "bg-primary")}
                 style={{ left: `${Math.min(zeroAt, valueAt)}%`, width: `${Math.abs(valueAt - zeroAt)}%` }}
               />
             ) : (
-              <SliderPrimitive.Range className={cn("absolute h-full rounded-full", dark ? "bg-white" : "bg-primary")} />
+              <SliderPrimitive.Range className={cn("absolute h-full rounded-full", dark ? "bg-sw-cream" : "bg-primary")} />
             )}
           </SliderPrimitive.Track>
           <SliderPrimitive.Thumb
@@ -81,7 +81,7 @@ export function EditorSlider({
             aria-valuetext={valueText}
             className={cn(
               "block size-5 rounded-full border-2 shadow-raised transition-shadow duration-[180ms] ease-yy hover:shadow-float",
-              dark ? "border-white bg-[#111113] focus-visible:outline-white" : "border-primary bg-canvas",
+              dark ? "border-sw-cream bg-sw-ink focus-visible:outline-sw-cream" : "border-primary bg-panel",
             )}
           />
         </SliderPrimitive.Root>

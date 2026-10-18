@@ -61,7 +61,7 @@ export function EditOrgForm(props: {
     <form
       id={id}
       aria-labelledby={titleId}
-      className="scroll-mt-20 overflow-hidden rounded-2xl border border-line bg-canvas lg:scroll-mt-8"
+      className="scroll-mt-20 overflow-hidden rounded-xl border border-line bg-panel lg:scroll-mt-8"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
@@ -140,11 +140,11 @@ export function EditOrgForm(props: {
 
         <aside aria-label="Public page preview" className="flex min-w-0 flex-col gap-2">
           <span className="text-overline text-ink-muted">Preview · public page</span>
-          <div className="overflow-hidden rounded-xl border border-line bg-canvas shadow-raised">
+          <div className="overflow-hidden rounded-xl border border-line bg-panel shadow-raised">
             <div aria-hidden className="yy-dot-strip h-14" />
             <div className="flex flex-col gap-2 px-4 pb-4 sm:px-5 sm:pb-5">
               <OrgLogo name={previewName} src={logoPreviewUrl || null} size="lg" className="-mt-7 border-[3px] border-canvas" />
-              <span className="wrap-break-word font-display text-[22px] font-extrabold leading-tight text-ink">{previewName}</span>
+              <span className="wrap-break-word font-display text-[22px] font-semibold leading-tight text-ink">{previewName}</span>
               {description.trim() ? (
                 <p className="line-clamp-4 whitespace-pre-line wrap-break-word text-sm text-ink-secondary">{description}</p>
               ) : (
@@ -157,7 +157,7 @@ export function EditOrgForm(props: {
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line bg-subtle px-5 py-3.5 sm:px-6">
-        <span role="status" className="min-w-0 flex-1 text-sm text-warning-fg">
+        <span role="status" className="min-w-0 flex-1 text-sm text-warning-solid">
           {dirty ? "You have unsaved changes" : null}
         </span>
         <Button type="button" variant="quiet" onClick={discard} disabled={!dirty || pending}>

@@ -189,7 +189,7 @@ export const CropStage = forwardRef<HTMLDivElement, {
       onPointerCancel={onPointerEnd}
       onKeyDown={onKeyDown}
       className={cn(
-        "relative cursor-grab touch-none select-none overflow-hidden bg-[#111113] outline-none focus-visible:shadow-[inset_0_0_0_3px_rgba(255,255,255,0.85)]",
+        "relative cursor-grab touch-none select-none overflow-hidden bg-sw-ink outline-none focus-visible:shadow-[inset_0_0_0_3px_rgba(255,255,255,0.85)]",
         active && "cursor-grabbing",
         className,
       )}
@@ -215,10 +215,10 @@ export const CropStage = forwardRef<HTMLDivElement, {
                 return (
                   <div
                     key={guide.id}
-                    className="absolute border border-dashed border-white/75"
+                    className="absolute border border-dashed border-sw-cream/75"
                     style={{ left: `${rect.left * 100}%`, top: `${rect.top * 100}%`, width: `${rect.width * 100}%`, height: `${rect.height * 100}%` }}
                   >
-                    <span className={cn("absolute whitespace-nowrap rounded bg-black/60 px-1.5 py-px text-[11px] font-semibold leading-4 text-white", GUIDE_LABEL_POSITIONS[index % GUIDE_LABEL_POSITIONS.length])}>
+                    <span className={cn("absolute whitespace-nowrap rounded bg-sw-ink/70 px-1.5 py-px text-[11px] font-semibold leading-4 text-sw-cream", GUIDE_LABEL_POSITIONS[index % GUIDE_LABEL_POSITIONS.length])}>
                       {guide.label}
                     </span>
                   </div>

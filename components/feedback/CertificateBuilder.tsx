@@ -179,7 +179,7 @@ export function CertificateBuilder(props: Props) {
         <p className="mt-1 text-body-ui text-ink-secondary">Upload your certificate artwork, then add text and images on top. Text can include values such as the attendee’s name, which are filled in for each certificate and reduced automatically to fit their box.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <label className={cn(buttonClasses({ variant: "secondary" }), busyOrDisabled ? "pointer-events-none opacity-60" : "cursor-pointer")} aria-disabled={busyOrDisabled || undefined}>
+        <label className={cn(buttonClasses({ variant: "secondary" }), busyOrDisabled ? "pointer-events-none border-line bg-surface text-ink-muted" : "cursor-pointer")} aria-disabled={busyOrDisabled || undefined}>
           <Upload aria-hidden className="size-[18px]" />
           {busy ? "Working…" : value ? "Replace background" : "Upload background"}
           <input hidden type="file" accept="image/jpeg,image/png,image/webp" disabled={busyOrDisabled} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void uploadBackground(file); }} />
@@ -193,7 +193,7 @@ export function CertificateBuilder(props: Props) {
           <div className="flex min-w-0 flex-col gap-3">
             <div role="toolbar" aria-label="Add layers" className="flex flex-wrap items-center gap-2">
               <Button variant="secondary" size="sm" startIcon={<Type />} disabled={busyOrDisabled || atLimit} onClick={addText}>Add text</Button>
-              <label className={cn(buttonClasses({ variant: "secondary", size: "sm" }), busyOrDisabled || atLimit ? "pointer-events-none opacity-60" : "cursor-pointer")} aria-disabled={busyOrDisabled || atLimit || undefined}>
+              <label className={cn(buttonClasses({ variant: "secondary", size: "sm" }), busyOrDisabled || atLimit ? "pointer-events-none border-line bg-surface text-ink-muted" : "cursor-pointer")} aria-disabled={busyOrDisabled || atLimit || undefined}>
                 <ImagePlus aria-hidden className="size-4" />
                 Add image
                 <input hidden type="file" accept="image/png,image/jpeg,image/webp" disabled={busyOrDisabled || atLimit} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void addImage(file); }} />
@@ -236,7 +236,7 @@ export function CertificateBuilder(props: Props) {
           </fieldset>
         </div>
 
-        <section aria-labelledby="certificate-samples-title" className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-3.5">
+        <section aria-labelledby="certificate-samples-title" className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-3.5">
           <h4 id="certificate-samples-title" className="text-label text-ink">Sample values</h4>
           <Field label="Preview attendee name" helperText="For preview only. Downloads use the attendee’s registered name.">
             <Input value={name} maxLength={200} disabled={busyOrDisabled} onChange={(e) => { setName(e.target.value); setPreview(null); }} />

@@ -66,7 +66,7 @@ export function SeriesInvitePanel(props: {
       {invites.length === 0 ? (
         <EmptyState mood="sleepy">No invites yet.</EmptyState>
       ) : (
-        <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-canvas">
+        <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-panel">
           {invites.map((inv) => (
             <li key={inv.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <div className="min-w-0">

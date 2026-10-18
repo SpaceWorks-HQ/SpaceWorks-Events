@@ -64,7 +64,7 @@ export default async function SuperAdminOrgsPage({ searchParams }: Props) {
             orgs.map((o) => (
               <TR key={o.id}>
                 <TD className="font-semibold">{o.name}</TD>
-                <TD className="font-mono text-sm">{o.slug}</TD>
+                <TD className="tabular-nums text-sm">{o.slug}</TD>
                 <TD className="text-right tabular-nums">{o._count.memberships}</TD>
                 <TD className="text-right tabular-nums">{o._count.events}</TD>
                 <TD className="text-right tabular-nums">{o._count.eventSeries}</TD>

@@ -256,7 +256,7 @@ function EditorBody({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden lg:flex-row lg:overflow-hidden">
         {/* Crop area and zoom: the backdrop stays dark in both themes. */}
-        <div className="flex shrink-0 flex-col bg-[#111113] text-white lg:min-w-0 lg:flex-1 lg:shrink">
+        <div className="yy-dark-band flex shrink-0 flex-col bg-sw-ink text-ink lg:min-w-0 lg:flex-1 lg:shrink">
           <CropStage
             image={image}
             crop={crop}
@@ -267,7 +267,7 @@ function EditorBody({
             onCropChange={updateCrop}
             className="h-[min(42dvh,300px)] sm:h-[360px] lg:h-auto lg:min-h-0 lg:flex-1"
           />
-          <div className="flex flex-col gap-1 border-t border-white/10 px-3 pb-3 pt-2 sm:px-5">
+          <div className="flex flex-col gap-1 border-t border-line px-3 pb-3 pt-2 sm:px-5">
             <div className="flex items-center gap-1">
               <button
                 type="button"
@@ -290,11 +290,11 @@ function EditorBody({
               >
                 <Plus aria-hidden />
               </button>
-              <span aria-hidden className="w-12 shrink-0 text-right font-mono text-caption tabular-nums text-white/80">
+              <span aria-hidden className="w-12 shrink-0 text-right tabular-nums text-caption text-ink-secondary">
                 {zoomPercent}
               </span>
             </div>
-            <p className="text-center text-caption text-white/60">
+            <p className="text-center text-caption text-ink-muted">
               <span className="hidden sm:inline">Drag to move · scroll or pinch to zoom · arrow keys nudge</span>
               <span className="sm:hidden">Drag to move · pinch to zoom</span>
             </p>
@@ -378,7 +378,7 @@ function EditorBody({
 }
 
 const darkIconButton =
-  "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-white/85 transition-colors duration-[180ms] ease-yy hover:bg-white/10 hover:text-white disabled:pointer-events-none disabled:text-white/30 [&_svg]:size-[18px]";
+  "inline-flex size-10 shrink-0 items-center justify-center rounded-full text-ink-secondary transition-colors duration-[180ms] ease-yy hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:text-ink-disabled [&_svg]:size-[18px]";
 
 function ZoomSlider({ value, valueText, onChange }: { value: number; valueText: string; onChange: (value: number) => void }) {
   return (
@@ -448,7 +448,7 @@ function ShapePicker({ value, onChange }: { value: ShapeId; onChange: (value: Sh
                 />
               </span>
               <span className="text-caption font-semibold leading-tight">{shape.label}</span>
-              <span className="font-mono text-[11px] leading-none text-ink-muted">
+              <span className="tabular-nums text-[11px] leading-none text-ink-muted">
                 {shape.ratioLabel}
                 {id === DEFAULT_SHAPE ? " · best" : ""}
               </span>

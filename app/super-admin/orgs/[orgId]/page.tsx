@@ -132,7 +132,7 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <Chip tone="outline" className="font-mono">{`/${org.slug}`}</Chip>
+          <Chip tone="outline" className="tabular-nums">{`/${org.slug}`}</Chip>
           <Chip tone="outline">{`${org._count.memberships} members`}</Chip>
           <Chip tone="outline">{`${org._count.events} events`}</Chip>
           <Chip tone="outline">{`${org._count.eventSeries} series`}</Chip>
@@ -142,11 +142,11 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <StatTile className="rounded-2xl" label="Registrations" value={rsvpCount.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Checked in" value={checkedInCount.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Feedback responses" value={feedbackCount.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Broadcasts" value={broadcastStats._count._all.toLocaleString()} hint={`${(broadcastStats._sum.recipientCount ?? 0).toLocaleString()} recipients`} />
-        <StatTile className="rounded-2xl" label="Stored files" value={assetStats._count._all.toLocaleString()} hint={formatBytes(assetStats._sum.byteSize == null ? 0 : Number(assetStats._sum.byteSize))} />
+        <StatTile className="rounded-xl" label="Registrations" value={rsvpCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Checked in" value={checkedInCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Feedback responses" value={feedbackCount.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Broadcasts" value={broadcastStats._count._all.toLocaleString()} hint={`${(broadcastStats._sum.recipientCount ?? 0).toLocaleString()} recipients`} />
+        <StatTile className="rounded-xl" label="Stored files" value={assetStats._count._all.toLocaleString()} hint={formatBytes(assetStats._sum.byteSize == null ? 0 : Number(assetStats._sum.byteSize))} />
       </div>
 
       <AdminPanel title="Members">
@@ -163,7 +163,7 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
             {members.map((m) => (
               <TR key={m.id}>
                 <TD>{m.user ? <NameCell href={`/super-admin/users/${m.user.id}`} name={m.user.name ?? "—"} /> : "—"}</TD>
-                <TD className="font-mono text-sm">{m.user?.email ?? "—"}</TD>
+                <TD className="tabular-nums text-sm">{m.user?.email ?? "—"}</TD>
                 <TD><Chip size="sm" tone={m.role === "OWNER" ? "ink" : "neutral"}>{m.role}</Chip></TD>
                 <TD className="whitespace-nowrap text-ink-secondary">{m.createdAt.toLocaleString()}</TD>
               </TR>
@@ -256,8 +256,8 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
                   <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.expiresAt ? i.expiresAt.toLocaleString() : "—"}</TD>
                   <TD className="whitespace-nowrap text-ink-secondary">{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TD>
-                  <TD className="font-mono text-sm">{i.createdBy.email ?? "—"}</TD>
-                  <TD className="font-mono text-sm">{i.usedBy?.email ?? "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.createdBy.email ?? "—"}</TD>
+                  <TD className="tabular-nums text-sm">{i.usedBy?.email ?? "—"}</TD>
                 </TR>
               ))
             )}
@@ -289,7 +289,7 @@ export default async function SuperAdminOrgDetailPage({ params }: Props) {
                     <TD><Chip size="sm" tone={client.status === "ACTIVE" ? "success" : "neutral"}>{client.status === "ACTIVE" ? "Active" : "Disabled"}</Chip></TD>
                     <TD>
                       <span className="flex flex-wrap gap-1">
-                        {client.scopes.length === 0 ? <span className="text-ink-muted">None</span> : client.scopes.map((scope) => <Chip key={scope.scope} size="sm" tone="outline" className="font-mono">{scope.scope}</Chip>)}
+                        {client.scopes.length === 0 ? <span className="text-ink-muted">None</span> : client.scopes.map((scope) => <Chip key={scope.scope} size="sm" tone="outline" className="tabular-nums">{scope.scope}</Chip>)}
                       </span>
                     </TD>
                     <TD className="text-right tabular-nums">{`${active} active / ${client.credentials.length}`}</TD>

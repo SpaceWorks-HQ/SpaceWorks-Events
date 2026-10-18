@@ -124,7 +124,7 @@ export function ColorPicker({
             maxLength={7}
             autoComplete="off"
             spellCheck={false}
-            className="min-w-0 flex-1 py-2 font-mono uppercase"
+            className="min-w-0 flex-1 py-2 tabular-nums uppercase"
           />
           {canEyedrop ? (
             <IconButton label="Pick a colour from the screen" variant="secondary" size="sm" onClick={eyedrop}>
@@ -153,7 +153,7 @@ export function ColorPicker({
           type="button"
           onClick={() => onChange("")}
           disabled={!value}
-          className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-ink-secondary hover:text-ink disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 self-start text-sm font-semibold text-ink-secondary hover:text-ink disabled:text-ink-muted"
         >
           <RotateCcw aria-hidden className="size-4" />
           Use the default colour

@@ -12,18 +12,18 @@ import type { EventTeam } from "@/lib/eventDashboard/overview";
 import { OpenTabButton } from "../EventDashboardTabs";
 import type { ReadinessItem, SignupTrend } from "./readiness";
 
-const card = "flex flex-col gap-3 rounded-xl border border-line bg-canvas p-5";
+const card = "flex flex-col gap-3 rounded-xl border border-line bg-panel p-5";
 const textLink = "inline-flex min-h-9 items-center gap-1 self-start text-sm font-semibold text-ink underline-offset-4 hover:underline";
 
 /* ---------- Readiness ---------- */
 
 export function ReadinessCard({ title, summary, complete, items, organisationSlug, eventSlug }: { title: string; summary: string; complete: boolean; items: ReadinessItem[]; organisationSlug: string; eventSlug: string }) {
   return (
-    <section aria-labelledby="overview-ready-title" className="flex flex-col gap-4 rounded-2xl bg-tint-peach p-5 sm:p-6 lg:flex-row lg:items-center">
+    <section aria-labelledby="overview-ready-title" className="flex flex-col gap-4 rounded-xl bg-tint-peach p-5 sm:p-6 lg:flex-row lg:items-center">
       <div className="flex min-w-0 items-center gap-4 lg:w-[300px] lg:shrink-0">
-        <MoodTile mood={complete ? "done" : "happy"} size={56} className="shrink-0" />
+        <MoodTile mood={complete ? "cheering" : "happy"} size={56} className={cn("yy-face shrink-0", complete && "yy-success-in")} />
         <div className="min-w-0">
-          <h2 id="overview-ready-title" className="font-display text-[22px] font-extrabold leading-tight text-ink">
+          <h2 id="overview-ready-title" className="font-display text-[22px] font-semibold leading-tight text-ink">
             {title}
           </h2>
           <p className="mt-0.5 text-body-ui text-ink-secondary">{summary}</p>
@@ -31,7 +31,7 @@ export function ReadinessCard({ title, summary, complete, items, organisationSlu
       </div>
       <ul className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
         {items.map((item) => (
-          <li key={item.key} className="flex min-h-11 items-center gap-2.5 rounded-lg bg-canvas px-3 py-2 text-sm">
+          <li key={item.key} className="flex min-h-11 items-center gap-2.5 rounded-lg bg-panel px-3 py-2 text-sm">
             <span aria-hidden className={cn("flex size-5 shrink-0 items-center justify-center rounded-full", item.done ? "bg-success-bg text-success-fg" : "bg-warning-bg text-warning-fg")}>
               {item.done ? <Check className="size-3" strokeWidth={3} /> : <span className="text-xs font-bold leading-none">!</span>}
             </span>
@@ -41,7 +41,7 @@ export function ReadinessCard({ title, summary, complete, items, organisationSlu
             </span>
             {item.action?.kind === "publish" ? <PublishEventButton organisationSlug={organisationSlug} eventSlug={eventSlug} /> : null}
             {item.action?.kind === "tab" ? (
-              <OpenTabButton tab={item.action.tab} sub={item.action.sub} className="inline-flex min-h-9 shrink-0 items-center rounded-full px-2 text-[13px] font-bold text-ink underline-offset-4 hover:underline">
+              <OpenTabButton tab={item.action.tab} sub={item.action.sub} className="inline-flex min-h-9 shrink-0 items-center rounded-control px-2 text-[13px] font-semibold text-ink underline-offset-4 hover:underline">
                 {item.action.label}
               </OpenTabButton>
             ) : null}
@@ -97,14 +97,14 @@ export function ShareCard({ url, path, title, published, canEmbed, shortLink }: 
       <h2 id="overview-share-title" className="text-h4 text-ink">
         Share
       </h2>
-      <p className="truncate rounded-lg bg-subtle px-3 py-2.5 font-mono text-[13px] text-ink" title={url}>
+      <p className="truncate rounded-lg bg-subtle px-3 py-2.5 tabular-nums text-[13px] text-ink" title={url}>
         {url.replace(/^https?:\/\//, "")}
       </p>
       {published ? null : <p className="text-caption text-ink-muted">Guests can open this link once the event is published.</p>}
       <div className="flex flex-wrap gap-2">
         {published ? <CopyEventLink path={path} title={title} /> : null}
         {canEmbed ? (
-          <OpenTabButton tab="settings" className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3.5 text-sm font-semibold text-ink hover:bg-subtle">
+          <OpenTabButton tab="settings" className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-line bg-panel px-3.5 text-sm font-semibold text-ink hover:bg-subtle">
             <Code2 aria-hidden className="size-4" />
             Embed on a website
           </OpenTabButton>

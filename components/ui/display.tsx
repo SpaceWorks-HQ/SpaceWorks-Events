@@ -110,7 +110,7 @@ export function Callout({ tone = "info", title, children, action, className, rol
 export function EmptyState({ title, children, action, className, icon, mood }: { title?: ReactNode; children?: ReactNode; action?: ReactNode; className?: string; icon?: ReactNode; mood?: Mood }) {
   return (
     <div className={cn("flex flex-col items-center gap-2 rounded-xl border border-line bg-panel px-6 py-7 text-center", className)}>
-      {mood ? <MoodTile mood={mood} size={48} className="mb-1" /> : null}
+      {mood ? <MoodTile mood={mood} size={48} className="yy-face mb-1" /> : null}
       {icon ? <span aria-hidden className="text-ink-muted [&_svg]:size-7">{icon}</span> : null}
       {title ? <p className="text-label text-ink">{title}</p> : null}
       {children ? <div className="max-w-md text-body-ui text-ink-muted">{children}</div> : null}

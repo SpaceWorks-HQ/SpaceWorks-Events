@@ -104,7 +104,7 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
             users.map((u) => (
               <TR key={u.id}>
                 <TD><NameCell href={`/super-admin/users/${u.id}`} name={u.name ?? "—"} sub={u.id} /></TD>
-                <TD className="font-mono text-sm">{u.email ?? "—"}</TD>
+                <TD className="tabular-nums text-sm">{u.email ?? "—"}</TD>
                 <TD>{u.emailVerified ? <Chip size="sm" tone="success">Yes</Chip> : <Chip size="sm" tone="warning">No</Chip>}</TD>
                 <TD>{u.mfaEnabledAt ? <Chip size="sm" tone="success">On</Chip> : <Chip size="sm" tone="neutral">Off</Chip>}</TD>
                 <TD className="text-right tabular-nums">{u._count.memberships}</TD>

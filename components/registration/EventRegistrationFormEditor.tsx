@@ -402,7 +402,7 @@ export function EventRegistrationFormEditor(props: { organisationSlug: string; e
     <div className="flex flex-col gap-5">
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-7">
         <div className="flex min-w-0 flex-col gap-5">
-          <section aria-labelledby={`${baseId}-standard`} className="flex flex-col gap-3 rounded-2xl border border-line bg-subtle p-4 sm:p-5">
+          <section aria-labelledby={`${baseId}-standard`} className="flex flex-col gap-3 rounded-xl border border-line bg-subtle p-4 sm:p-5">
             <div>
               <h2 id={`${baseId}-standard`} className="text-h4 text-ink">
                 Always collected
@@ -414,7 +414,7 @@ export function EventRegistrationFormEditor(props: { organisationSlug: string; e
                 { name: "Name", description: "Shown on the guest list and tickets." },
                 { name: "Email", description: "Used to send the ticket and event updates." },
               ].map((item) => (
-                <li key={item.name} className="flex items-center gap-3 rounded-xl border border-line bg-canvas px-3.5 py-2.5">
+                <li key={item.name} className="flex items-center gap-3 rounded-xl border border-line bg-panel px-3.5 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-label text-ink">{item.name}</p>
                     <p className="text-caption text-ink-muted">{item.description}</p>
@@ -427,7 +427,7 @@ export function EventRegistrationFormEditor(props: { organisationSlug: string; e
             </ul>
           </section>
 
-          <section aria-labelledby={`${baseId}-questions`} className="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 sm:p-5">
+          <section aria-labelledby={`${baseId}-questions`} className="flex flex-col gap-3 rounded-xl border border-line bg-panel p-4 sm:p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <h2 id={`${baseId}-questions`} className="text-h4 text-ink">
@@ -496,7 +496,7 @@ export function EventRegistrationFormEditor(props: { organisationSlug: string; e
                   </QuestionCard>
                 ))}
                 {editing?.id === NEW_ID ? (
-                  <li className="overflow-hidden rounded-xl border border-line-strong bg-canvas shadow-raised">
+                  <li className="overflow-hidden rounded-xl border border-line-strong bg-panel shadow-raised">
                     <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
                       <span aria-hidden className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-text">
                         {fields.length + 1}

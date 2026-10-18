@@ -26,7 +26,7 @@ export function AddQuestionPanel({
   onClose?: () => void;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="rounded-2xl border border-line bg-canvas p-4 sm:p-5">
+    <section id={id} aria-labelledby={`${id}-title`} className="rounded-xl border border-line bg-panel p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 id={`${id}-title`} className="text-h4 text-ink">
@@ -53,7 +53,7 @@ export function AddQuestionPanel({
                   type="button"
                   disabled={pending}
                   onClick={() => onPickType(item.type)}
-                  className="flex h-full w-full items-start gap-3 rounded-xl border border-line bg-canvas p-3 text-left transition-colors duration-[180ms] ease-yy hover:border-line-strong hover:bg-subtle disabled:opacity-60"
+                  className="flex h-full w-full items-start gap-3 rounded-xl border border-line bg-panel p-3 text-left transition-colors duration-[180ms] ease-yy hover:border-line-strong hover:bg-subtle disabled:bg-surface disabled:text-ink-muted"
                 >
                   <span className="mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-ink-secondary">
                     <FieldTypeIcon type={item.type} />
@@ -79,7 +79,7 @@ export function AddQuestionPanel({
                     disabled={pending || added}
                     onClick={() => onAddTemplate(template)}
                     aria-label={added ? `${template.label} (already on the form)` : `Add ${template.label} (${typeLabel})`}
-                    className="flex h-full w-full items-center gap-3 rounded-xl border border-line bg-canvas p-3 text-left transition-colors duration-[180ms] ease-yy hover:border-line-strong hover:bg-subtle disabled:cursor-default disabled:bg-subtle disabled:hover:border-line"
+                    className="flex h-full w-full items-center gap-3 rounded-xl border border-line bg-panel p-3 text-left transition-colors duration-[180ms] ease-yy hover:border-line-strong hover:bg-subtle disabled:cursor-default disabled:bg-subtle disabled:hover:border-line"
                   >
                     <span className="min-w-0 flex-1">
                       <span className={added ? "block text-label text-ink-muted" : "block text-label text-ink"}>{template.label}</span>

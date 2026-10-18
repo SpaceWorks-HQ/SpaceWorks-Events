@@ -154,7 +154,7 @@ export function CollaboratorInvitePanel({
   const empty = collaborators.length === 0 && pendingInvites.length === 0;
 
   return (
-    <section aria-labelledby="co-organisers-title" className="flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+    <section aria-labelledby="co-organisers-title" className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 sm:p-6">
       <div>
         <h2 id="co-organisers-title" className="text-h4 text-ink">Co-organisers</h2>
         <p className="mt-0.5 text-body-ui text-ink-muted">

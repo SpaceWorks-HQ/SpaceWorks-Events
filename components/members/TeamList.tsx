@@ -70,7 +70,7 @@ export function TeamList({
             ) : (
               <ul className="flex flex-col gap-2">
                 {visible.map((row) => (
-                  <li key={row.id} className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-lg border border-line bg-canvas px-4 py-3">
+                  <li key={row.id} className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-lg border border-line bg-panel px-4 py-3">
                     <Avatar name={row.name ?? row.email ?? null} size="md" tone={AVATAR_TONES[row.role]} />
                     <div className="flex min-w-0 flex-[1_1_200px] flex-col">
                       <span className="flex min-w-0 items-center gap-2">

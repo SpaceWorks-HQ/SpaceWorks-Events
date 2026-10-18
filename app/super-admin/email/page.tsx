@@ -63,10 +63,10 @@ export default async function SuperAdminEmailPage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatTile className="rounded-2xl" label="Queued now" value={totals.pending.toLocaleString()} />
-        <StatTile className="rounded-2xl" label="Waiting over 15 min" value={(stuckPending + stuckProcessing).toLocaleString()} tone={stuckPending + stuckProcessing > 0 ? "attention" : "default"} hint={stuckProcessing > 0 ? `${stuckProcessing} locked by a worker` : undefined} />
-        <StatTile className="rounded-2xl" label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "attention" : "default"} hint={`${formatShare(totals.failed, totals.total)} of all messages`} />
-        <StatTile className="rounded-2xl" label="Delivered (retained)" value={totals.sent.toLocaleString()} hint="Link-bearing messages are deleted after delivery" />
+        <StatTile className="rounded-xl" label="Queued now" value={totals.pending.toLocaleString()} />
+        <StatTile className="rounded-xl" label="Waiting over 15 min" value={(stuckPending + stuckProcessing).toLocaleString()} tone={stuckPending + stuckProcessing > 0 ? "attention" : "default"} hint={stuckProcessing > 0 ? `${stuckProcessing} locked by a worker` : undefined} />
+        <StatTile className="rounded-xl" label="Failed" value={totals.failed.toLocaleString()} tone={totals.failed > 0 ? "attention" : "default"} hint={`${formatShare(totals.failed, totals.total)} of all messages`} />
+        <StatTile className="rounded-xl" label="Delivered (retained)" value={totals.sent.toLocaleString()} hint="Link-bearing messages are deleted after delivery" />
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -93,7 +93,7 @@ export default async function SuperAdminEmailPage() {
             <TBody>
               {kinds.map((row) => (
                 <TR key={row.kind}>
-                  <TD className="font-mono text-sm">{row.kind}</TD>
+                  <TD className="tabular-nums text-sm">{row.kind}</TD>
                   <TD className="text-right tabular-nums">{row.pending.toLocaleString()}</TD>
                   <TD className="text-right tabular-nums">{row.processing.toLocaleString()}</TD>
                   <TD className="text-right tabular-nums">{row.sent.toLocaleString()}</TD>

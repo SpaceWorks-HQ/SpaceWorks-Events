@@ -3,6 +3,7 @@
 import * as RadioGroupPrimitive from "@radix-ui/react-radio-group";
 import { Check } from "lucide-react";
 import { BROADCAST_DESIGNS, type BroadcastDesignId } from "@/lib/email/broadcastDesigns";
+import { EMAIL_COLORS } from "@/lib/email/brand";
 import { getAccentTokens, normalizeAccentHex } from "@/lib/theme/accent";
 
 /**
@@ -35,14 +36,14 @@ export function DesignPicker({
           key={design.id}
           value={design.id}
           title={design.description}
-          className="group relative flex min-w-0 flex-col gap-1.5 rounded-xl border border-line bg-canvas p-1.5 text-left outline-none transition-colors hover:bg-subtle focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 data-[state=checked]:border-ink data-[state=checked]:shadow-[inset_0_0_0_0.5px_var(--color-ink)]"
+          className="group relative flex min-w-0 flex-col gap-1.5 rounded-xl border border-line bg-panel p-1.5 text-left outline-none transition-colors hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--yy-focus)] data-[state=checked]:border-primary data-[state=checked]:shadow-[inset_0_0_0_1px_var(--color-primary)]"
         >
           <Thumbnail design={design.id} accent={accent} onAccent={onAccent} cover={coverImageUrl} />
           <span className="px-0.5 pb-0.5">
             <span className="block text-[12px] font-semibold leading-tight text-ink">{design.name}</span>
             {design.id === "photo" && !coverImageUrl ? <span className="block text-[11px] leading-tight text-ink-muted">Add a cover to use a photo</span> : null}
           </span>
-          <span aria-hidden className="absolute right-2.5 top-2.5 hidden size-4 items-center justify-center rounded-full bg-ink text-canvas group-data-[state=checked]:flex">
+          <span aria-hidden className="absolute right-2.5 top-2.5 hidden size-4 items-center justify-center rounded-full bg-primary text-on-primary group-data-[state=checked]:flex">
             <Check className="size-3" strokeWidth={3} />
           </span>
         </RadioGroupPrimitive.Item>
@@ -52,32 +53,38 @@ export function DesignPicker({
 }
 
 /** Abstract lines standing in for the message body. */
-function Lines({ color = "#d8d6d0", button }: { color?: string; button: string }) {
+function Lines({ color = EMAIL_COLORS.line, button }: { color?: string; button: string }) {
   return (
     <span className="flex flex-col gap-[3px] px-2 py-1.5">
       <span className="h-[3px] w-4/5 rounded-full" style={{ backgroundColor: color }} />
       <span className="h-[3px] w-full rounded-full" style={{ backgroundColor: color }} />
       <span className="h-[3px] w-3/5 rounded-full" style={{ backgroundColor: color }} />
-      <span className="mt-0.5 h-[7px] w-7 rounded-full" style={{ backgroundColor: button }} />
+      <span className="mt-0.5 h-[7px] w-7 rounded-[3px]" style={{ backgroundColor: button }} />
     </span>
   );
 }
 
+/*
+ * Miniatures of the real email frames (lib/email/broadcastDesigns.ts). Email
+ * clients have no dark mode we control, so these use the fixed email palette
+ * in both colour modes, exactly like the preview below.
+ */
 function Thumbnail({ design, accent, onAccent, cover }: { design: BroadcastDesignId; accent: string; onAccent: string; cover: string | null }) {
   const frame = "flex aspect-[4/3] w-full flex-col overflow-hidden rounded-lg";
+  const c = EMAIL_COLORS;
   switch (design) {
     case "minimal":
       return (
-        <span aria-hidden className={`${frame} border border-line bg-white`}>
-          <span className="mx-2 mt-2 h-[3px] w-8 rounded-full bg-[#8a8990]" />
-          <span className="mx-2 mt-1.5 h-px bg-[#e7e6e2]" />
-          <Lines button="#18181B" />
+        <span aria-hidden className={`${frame} border border-line`} style={{ backgroundColor: c.panel }}>
+          <span className="mx-2 mt-2 h-[3px] w-8 rounded-full" style={{ backgroundColor: c.inkMuted }} />
+          <span className="mx-2 mt-1.5 h-px" style={{ backgroundColor: c.line }} />
+          <Lines button={c.teal} />
         </span>
       );
     case "accent":
       return (
-        <span aria-hidden className={`${frame} bg-[#f4f4f2] p-1`}>
-          <span className="flex flex-1 flex-col overflow-hidden rounded-md bg-white">
+        <span aria-hidden className={`${frame} p-1`} style={{ backgroundColor: c.cream }}>
+          <span className="flex flex-1 flex-col overflow-hidden rounded-md" style={{ backgroundColor: c.panel }}>
             <span className="flex h-[38%] flex-col justify-end gap-[3px] px-2 pb-1.5" style={{ backgroundColor: accent }}>
               <span className="h-[3px] w-6 rounded-full opacity-70" style={{ backgroundColor: onAccent }} />
               <span className="h-[5px] w-12 rounded-full" style={{ backgroundColor: onAccent }} />
@@ -88,39 +95,39 @@ function Thumbnail({ design, accent, onAccent, cover }: { design: BroadcastDesig
       );
     case "photo":
       return (
-        <span aria-hidden className={`${frame} bg-[#f4f4f2] p-1`}>
-          <span className="flex flex-1 flex-col overflow-hidden rounded-md bg-white">
+        <span aria-hidden className={`${frame} p-1`} style={{ backgroundColor: c.cream }}>
+          <span className="flex flex-1 flex-col overflow-hidden rounded-md" style={{ backgroundColor: c.panel }}>
             {cover ? (
               // eslint-disable-next-line @next/next/no-img-element -- tiny decorative thumbnail of the organiser's own cover
               <img src={cover} alt="" className="h-[38%] w-full object-cover" />
             ) : (
-              <span className="h-[38%] w-full" style={{ background: `linear-gradient(135deg, ${accent}, #f59e0b)` }} />
+              <span className="yy-cover-placeholder h-[38%] w-full" style={{ backgroundColor: accent }} />
             )}
-            <span className="mx-2 mt-1 h-[5px] w-12 rounded-full bg-[#1c1b1f]" />
+            <span className="mx-2 mt-1 h-[5px] w-12 rounded-full" style={{ backgroundColor: c.ink }} />
             <Lines button={accent} />
           </span>
         </span>
       );
     case "letter":
       return (
-        <span aria-hidden className={`${frame} bg-[#f6f1e9] p-1`}>
-          <span className="flex flex-1 flex-col items-center overflow-hidden rounded-sm border border-[#e9e1d3] bg-[#fffdf8]">
-            <span className="mt-2 font-serif text-[10px] italic leading-none text-[#2b2a28]">Aa</span>
-            <span className="mt-1 h-px w-4/5 bg-[#e9e1d3]" />
+        <span aria-hidden className={`${frame} p-1`} style={{ backgroundColor: c.line }}>
+          <span className="flex flex-1 flex-col items-center overflow-hidden rounded-md border" style={{ backgroundColor: c.cream, borderColor: c.line }}>
+            <span className="mt-2 font-serif text-[10px] italic leading-none" style={{ color: c.ink }}>Aa</span>
+            <span className="mt-1 h-px w-4/5" style={{ backgroundColor: c.line }} />
             <span className="w-full">
-              <Lines color="#e6dccb" button={accent} />
+              <Lines button={accent} />
             </span>
           </span>
         </span>
       );
     default:
       return (
-        <span aria-hidden className={`${frame} bg-[#f8f9fa] p-1`}>
-          <span className="flex flex-1 flex-col overflow-hidden rounded-md border border-[#e0e0e0] bg-white">
-            <span className="flex h-[30%] items-center justify-center bg-[#18181B]">
-              <span className="h-[4px] w-10 rounded-full bg-white" />
+        <span aria-hidden className={`${frame} p-1`} style={{ backgroundColor: c.cream }}>
+          <span className="flex flex-1 flex-col overflow-hidden rounded-md border" style={{ backgroundColor: c.panel, borderColor: c.line }}>
+            <span className="flex h-[30%] items-center justify-center" style={{ backgroundColor: c.ink }}>
+              <span className="h-[4px] w-10 rounded-full" style={{ backgroundColor: c.cream }} />
             </span>
-            <Lines button="#18181B" />
+            <Lines button={c.teal} />
           </span>
         </span>
       );

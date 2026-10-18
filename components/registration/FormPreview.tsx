@@ -28,7 +28,7 @@ export function FormPreview({ fields, activeId }: { fields: PreviewField[]; acti
   const setAnswer = (key: string, value: unknown) => setAnswers((current) => ({ ...current, [key]: value }));
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5 shadow-raised">
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 shadow-raised">
       <div>
         <p className="text-h4 text-ink">Register</p>
         <p className="mt-1 text-caption text-ink-muted">This is what guests fill in. Try answering to test your rules.</p>

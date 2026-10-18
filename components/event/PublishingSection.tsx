@@ -248,7 +248,7 @@ function OptionCard({ value, icon, title, description }: { value: string; icon: 
   return (
     <RadioGroupPrimitive.Item
       value={value}
-      className="group flex min-w-0 items-start gap-3 rounded-xl border border-line bg-canvas p-3.5 text-left transition-colors duration-[180ms] ease-yy hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[state=checked]:border-ink data-[state=checked]:shadow-[inset_0_0_0_0.5px_var(--color-ink)]"
+      className="group flex min-w-0 items-start gap-3 rounded-xl border border-line bg-panel p-3.5 text-left transition-colors duration-[180ms] ease-yy hover:bg-subtle focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary data-[state=checked]:border-ink data-[state=checked]:shadow-[inset_0_0_0_0.5px_var(--color-ink)]"
     >
       <span aria-hidden className="flex size-8 shrink-0 items-center justify-center rounded-full bg-subtle text-ink-secondary group-data-[state=checked]:bg-ink group-data-[state=checked]:text-canvas [&_svg]:size-4">
         {icon}

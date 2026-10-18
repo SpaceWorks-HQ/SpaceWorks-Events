@@ -211,7 +211,7 @@ export function CoverImagePicker(props: {
             <img src={previewUrl} alt="Current cover image" className="size-full object-cover" />
             <span
               aria-hidden
-              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-caption font-semibold text-white opacity-0 transition-opacity duration-[180ms] ease-yy group-hover:opacity-100 group-focus-visible:opacity-100 [&_svg]:size-3.5"
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-sw-ink/80 px-3 py-1.5 text-caption font-semibold text-sw-cream opacity-0 transition-opacity duration-[180ms] ease-yy group-hover:opacity-100 group-focus-visible:opacity-100 [&_svg]:size-3.5"
             >
               <Crop /> Edit photo
             </span>
@@ -221,9 +221,9 @@ export function CoverImagePicker(props: {
             type="button"
             disabled={disabled || loading}
             onClick={() => inputRef.current?.click()}
-            className="flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-line-strong bg-subtle px-4 text-center transition-colors duration-[180ms] ease-yy hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-line-strong bg-subtle px-4 text-center transition-colors duration-[180ms] ease-yy hover:bg-muted disabled:cursor-not-allowed disabled:bg-surface disabled:text-ink-muted"
           >
-            <span aria-hidden className="inline-flex size-10 items-center justify-center rounded-full bg-canvas text-ink-secondary shadow-raised [&_svg]:size-5">
+            <span aria-hidden className="inline-flex size-10 items-center justify-center rounded-full bg-panel text-ink-secondary shadow-raised [&_svg]:size-5">
               <ImagePlus />
             </span>
             <span className="text-label text-ink">Drop an image, paste one, or choose a file</span>
@@ -234,7 +234,7 @@ export function CoverImagePicker(props: {
         {dragging ? (
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary bg-canvas/90 text-ink"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary bg-panel/90 text-ink"
           >
             <Upload className="size-6" />
             <span className="text-label">{previewUrl ? "Drop to replace the cover" : "Drop to use this image"}</span>
@@ -242,7 +242,7 @@ export function CoverImagePicker(props: {
         ) : null}
 
         {loading ? (
-          <div role="status" className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-canvas/80 text-label text-ink">
+          <div role="status" className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-panel/80 text-label text-ink">
             <Spinner className="size-4" />
             Opening photo…
           </div>

@@ -41,7 +41,7 @@ export function LayersPanel({
                 key={element.id}
                 className={cn(
                   "flex items-center gap-1 rounded-lg border pr-1 transition-colors",
-                  selected ? "border-accent bg-canvas" : "border-transparent hover:bg-canvas",
+                  selected ? "border-accent bg-panel" : "border-transparent hover:bg-panel",
                 )}
               >
                 <button

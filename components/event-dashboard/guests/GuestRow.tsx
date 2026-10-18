@@ -44,7 +44,7 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
   const answers = guest.answers ?? [];
 
   return (
-    <li className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl border border-line bg-canvas px-4 py-3">
+    <li className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl border border-line bg-panel px-4 py-3">
       <Avatar name={name} size="md" tone={guest.checkedInAt ? "success" : AVATAR_TONES[guest.status]} />
       <div className="flex min-w-0 flex-[1_1_200px] flex-col">
         <span className="truncate font-bold text-ink">{name}</span>

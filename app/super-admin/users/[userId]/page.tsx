@@ -89,7 +89,7 @@ export default async function SuperAdminUserDetailPage({ params }: Props) {
           <Chip tone={user.mfaEnabledAt ? "success" : "neutral"}>{user.mfaEnabledAt ? `MFA since ${user.mfaEnabledAt.toLocaleDateString()}` : "MFA off"}</Chip>
           <Chip tone="outline">{hasPassword > 0 ? "Password set" : "No password"}</Chip>
           {accounts.map((account) => <Chip key={account.id} tone="outline">{`${account.provider} (${account.type})`}</Chip>)}
-          <Chip tone="outline" className="font-mono">{user.id}</Chip>
+          <Chip tone="outline" className="tabular-nums">{user.id}</Chip>
         </div>
       </header>
 

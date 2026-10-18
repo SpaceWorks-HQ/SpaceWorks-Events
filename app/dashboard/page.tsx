@@ -80,7 +80,7 @@ export default async function DashboardPage() {
       <ul className="grid gap-3 md:grid-cols-2">
         {coOrganizedEvents.map((item) => (
           <li key={`${item.label}-${item.id}`}>
-            <Link href={item.href} className="flex h-full flex-col gap-1 rounded-lg border border-line bg-canvas p-5 transition-colors hover:bg-subtle">
+            <Link href={item.href} className="flex h-full flex-col gap-1 rounded-lg border border-line bg-panel p-5 transition-colors hover:bg-subtle">
               <span className="text-caption text-ink-muted">{item.label} · {item.organisation.name}</span>
               <span className="text-[17px] font-bold text-ink">{item.title}</span>
               <span className="text-caption text-ink-muted">{item.permissions.map((permission) => permission.replaceAll("_", " ").toLowerCase()).join(" · ")}</span>
@@ -105,7 +105,7 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-5 md:flex-row md:items-center">
-        <MoodTile mood={home.mood} size={64} className="shrink-0" />
+        <MoodTile mood={home.mood} size={64} className="yy-face shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <HomeGreeting name={firstName} />
           <p className="text-body-ui text-ink-secondary">{home.summary}</p>

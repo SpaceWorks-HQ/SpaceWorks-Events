@@ -44,7 +44,7 @@ export function PlacementPreviews({ url, updating, className }: { url: string | 
 function Preview({ label, url, imageStyle, framed = false, children }: { label: string; url: string | null; imageStyle: CSSProperties; framed?: boolean; children: ReactNode }) {
   return (
     <figure className="flex min-w-0 flex-col gap-1.5">
-      <div className={cn("overflow-hidden rounded-lg border border-line bg-canvas", framed && "p-2")}>
+      <div className={cn("overflow-hidden rounded-lg border border-line bg-panel", framed && "p-2")}>
         {url ? (
           // Local blob preview of the editor output.
           // eslint-disable-next-line @next/next/no-img-element

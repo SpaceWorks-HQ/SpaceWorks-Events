@@ -160,7 +160,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
     <div className="flex flex-col gap-5">
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {warning ? <Callout tone="warning" action={<Button size="sm" variant="quiet" onClick={() => setWarning("")}>Dismiss</Button>}>{warning}</Callout> : null}
-      <section className="flex flex-col gap-4 rounded-lg border border-line bg-canvas p-4 sm:p-6">
+      <section className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-4 sm:p-6">
         <div>
           <h2 className="text-title text-ink">Programme tracks</h2>
           <p className="mt-1 text-body-ui text-ink-muted">Each track is an independent room, stage, or stream. Delays shift only later sessions in that track.</p>
@@ -194,7 +194,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
         {sortedTracks.map((track) => {
           const sessionsInTrack = trackSessions(track.id);
           return (
-            <section key={track.id} className="flex h-full flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:p-5">
+            <section key={track.id} className="flex h-full flex-col gap-3 rounded-lg border border-line bg-panel p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-title text-ink">{track.name}</h3>
@@ -232,7 +232,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
                                 {session.hasConflict ? <Chip size="sm" tone="warning">Time overlap</Chip> : null}
                               </div>
                               <p className="text-sm text-ink-muted">Planned: {display(session.startDateTime, timeZone)} – {display(session.endDateTime, timeZone)}</p>
-                              <p className={cn("text-sm", session.cumulativeDelayMinutes ? "font-semibold text-warning-fg" : "text-ink-muted")}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</p>
+                              <p className={cn("text-sm", session.cumulativeDelayMinutes ? "font-semibold text-warning-solid" : "text-ink-muted")}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</p>
                               {session.speakerNames?.length ? <p className="text-sm text-ink-muted">Speakers: {session.speakerNames.join(", ")}</p> : null}
                             </div>
                             <div className="flex shrink-0 gap-1">
@@ -245,7 +245,7 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
                               Delay from this session (min)
                               <Input type="number" min={0} max={1440} defaultValue={session.delayMinutes} className="w-24" disabled={pending} onBlur={(event) => { const delay = Number(event.target.value); if (Number.isInteger(delay) && delay !== session.delayMinutes) updateDelay(session.id, delay); }} />
                             </label>
-                            {session.hasConflict ? <p className="text-caption text-warning-fg">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</p> : <p className="text-caption text-ink-muted">Affects only later sessions in {track.name}.</p>}
+                            {session.hasConflict ? <p className="text-caption text-warning-solid">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</p> : <p className="text-caption text-ink-muted">Affects only later sessions in {track.name}.</p>}
                           </div>
                         </>
                       )}

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 /** Programme summary at the top of "Page & programme". The schedule link appears only with schedule permission. */
 export function ProgrammeCard({ summary, scheduleHref }: { summary: string; scheduleHref: string | null }) {
   return (
-    <section aria-labelledby="programme-card-title" className="flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-subtle p-5">
+    <section aria-labelledby="programme-card-title" className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-subtle p-5">
       <div className="min-w-0 flex-[1_1_240px]">
         <h2 id="programme-card-title" className="text-h4 text-ink">Programme</h2>
         <p className="mt-0.5 text-body-ui text-ink-secondary">
