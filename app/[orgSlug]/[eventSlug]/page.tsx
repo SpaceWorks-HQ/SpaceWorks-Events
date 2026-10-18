@@ -55,7 +55,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: event.title,
       description,
       type: "website",
-      images: event.coverImageUrl ? [{ url: event.coverImageUrl }] : undefined,
+      // Without a cover, leave `images` out so the generated share card (opengraph-image.tsx) is used.
+      ...(event.coverImageUrl ? { images: [{ url: event.coverImageUrl }] } : {}),
     },
   };
 }
