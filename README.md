@@ -12,7 +12,8 @@
 </p>
 
 <p align="center">
-  <a href="#run-it-for-free">Run it for free</a> ·
+  <a href="#host-it-on-a-vps-with-docker">Host on a VPS</a> ·
+  <a href="#run-it-for-free">Free cloud hosting</a> ·
   <a href="#quick-start-local">Quick start</a> ·
   <a href="docs/README.md">Documentation</a> ·
   <a href="CONTRIBUTING.md">Contributing</a> ·
@@ -123,9 +124,84 @@ The full list lives in [Features](docs/FEATURES.md).
   </tr>
 </table>
 
+## Host it on a VPS with Docker
+
+**Yes — the complete application can run on your own VPS.** The production Docker
+Compose stack runs the UI and backend, PostgreSQL, Redis, private S3-compatible
+file storage, automatic public HTTPS, database migrations and an independent
+email-queue scheduler. Only a domain and an authenticated SMTP relay are external;
+Render, Supabase, Upstash and Cloudflare are optional hosting choices.
+
+Start with a Linux VPS, Docker Engine + Compose, Git, a domain pointing at the
+server, and a verified SMTP sending domain. For a small installation, plan around
+2 vCPU, 4 GB RAM and 30 GB SSD, plus upload/backup space; this is a starting estimate,
+not a capacity guarantee. Allow ports 80/443 and keep data-service ports private.
+
+For a guided first installation, check out a reviewed release and run:
+
+```bash
+git clone https://github.com/SpaceWorks-HQ/SpaceWorks-Events.git
+cd SpaceWorks-Events
+git checkout <reviewed-commit-or-tag>
+bash scripts/setup-vps.sh
+```
+
+The installer asks for the hostname, admin email and SMTP settings (password
+hidden), shows a summary, then generates configuration, builds the containers,
+applies migrations, starts the stack and checks readiness. Docker + Compose must
+already be installed. It never replaces an existing installation's secrets.
+
+For a manual first installation from that checkout:
+
+```bash
+SWE_VERSION="vps-$(git rev-parse --short HEAD)"
+export SWE_CONFIG_DIR=/etc/spaceworks-events
+sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$SWE_CONFIG_DIR"
+
+docker build --target ops --tag swevents-ops:bootstrap .
+docker run --rm --user "$(id -u):$(id -g)" \
+  --volume "$SWE_CONFIG_DIR:/config" \
+  swevents-ops:bootstrap node docker/vps/setup.mjs \
+  events.example.com admin@example.com "$SWE_VERSION"
+# Edit the external app.env: set EMAIL_FROM and SMTP_* to your relay's values.
+scripts/vps-compose.sh config --quiet
+scripts/vps-compose.sh build ops migrator app
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs preflight
+scripts/vps-compose.sh up -d
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
+```
+
+Replace the hostname, admin email and reviewed revision before running. Setup
+generates secrets and internal TLS certificates without printing them; migrations
+run in a separate service before the app starts. Open your HTTPS domain, create
+and verify the configured admin account, and enable authenticator MFA. Test email,
+uploads and ticket check-in before taking real registrations.
+
+The **[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers prerequisites, first
+installation, health checks, updates, rollback, internal certificate renewal and
+backups. Keep encrypted copies of the configuration, database and uploaded files
+off-server. Persistent Docker volumes do not provide backups or automatic PITR.
+Use `compose.production.yml`; the development and staging Compose files are not
+production setups.
+
+### Can the frontend live on Netlify and the backend on the VPS?
+
+[SpaceWorks](https://github.com/SpaceWorks-HQ/SpaceWorks) supports that arrangement
+with its separate Vite frontend and Django backend. **This Events app currently
+combines its UI, server rendering, Auth.js, Server Actions and API in one Next.js
+application.** A frontend-only Netlify deployment talking to an Events backend on
+a VPS requires a separate frontend and API/authentication work; it is not supplied
+by this repository. You can host a separate marketing site on Netlify and link to
+or embed public Events pages on your VPS. See
+[hosting arrangements](docs/DEPLOYMENT_VPS.md#a-separate-frontend-on-netlify).
+
+For a Docker app with managed dependencies, use the
+[Docker deployment guide](docs/DEPLOYMENT_DOCKER.md). For Kubernetes, use the
+[Helm chart](charts/spaceworks-events/README.md).
+
 ## Run it for free
 
-The default production setup runs entirely on free plans. One Docker service on Render serves the app;
+The optional cloud production setup runs on free plans. One Docker service on Render serves the app;
 everything else is a managed free tier, and a Cloudflare Worker keeps the instance awake and sends the
 email queue every minute.
 
@@ -168,8 +244,8 @@ In five steps (the [free-tier cloud guide](docs/DEPLOYMENT_CLOUD.md) has every c
    [cron Worker](docs/DEPLOYMENT_CLOUD.md#8-cloudflare-dns-and-the-cron-worker), then
    [sign in as super admin](docs/DEPLOYMENT_CLOUD.md#9-first-super-admin-login) and turn on MFA.
 
-Prefer your own servers? There's a [Docker guide](docs/DEPLOYMENT_DOCKER.md), a [Helm chart](charts/spaceworks-events/README.md)
-and a [release checklist](docs/PRODUCTION_RELEASE.md).
+Prefer your own server? Follow the [complete Docker VPS guide](docs/DEPLOYMENT_VPS.md)
+and the [release checklist](docs/PRODUCTION_RELEASE.md).
 
 ## Quick start (local)
 
@@ -226,6 +302,7 @@ Rebuild the README artwork with `npm run readme:art`.
 | [Machine API v1](docs/API.md) | Connect another system |
 | [Security](docs/SECURITY.md) | Review authentication, isolation and privacy |
 | [Testing](docs/TESTING.md) | Run the suites and quality gates |
+| [Complete Docker VPS deployment](docs/DEPLOYMENT_VPS.md) | Host the app and data services on one server; operate and update the stack |
 | [Free-tier cloud deployment](docs/DEPLOYMENT_CLOUD.md) | Go live on Render, Supabase, Upstash, R2 and Brevo |
 | [Production release](docs/PRODUCTION_RELEASE.md) and [operations](docs/production-operations.md) | Ship and run it |
 

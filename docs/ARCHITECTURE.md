@@ -94,4 +94,4 @@ This per-request nonce makes application pages dynamically rendered. There is de
 
 ## Deployment shape
 
-`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are external production dependencies.
+`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage, Caddy and the recovery scheduler alongside the application; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The UI, server rendering, authentication, Server Actions and API share one Next.js runtime; a frontend-only Netlify build is not supplied.

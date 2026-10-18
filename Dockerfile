@@ -22,6 +22,15 @@ COPY prisma ./prisma
 COPY scripts/prisma.mjs ./scripts/prisma.mjs
 CMD ["node", "scripts/prisma.mjs", "migrate", "deploy"]
 
+# Operator-only image for VPS setup, preflight, schema checks and backups.
+# Never serve requests from this image or publish it as the application image.
+FROM migrator AS ops
+USER root
+RUN apk add --no-cache openssl postgresql16-client
+COPY scripts ./scripts
+COPY docker/vps ./docker/vps
+CMD ["node", "scripts/check-production-env.mjs"]
+
 # Prisma CLI only, pinned to the lockfile's version, so the runner can apply
 # migrations on start (MIGRATE_ON_START=1) on platforms without a release job,
 # such as the Render free plan. Kept apart from the app's node_modules.

@@ -1,0 +1,20 @@
+{
+  log default {
+    format filter {
+      wrap json
+      fields {
+        request>uri delete
+        request>headers delete
+      }
+    }
+  }
+}
+
+{$PUBLIC_HOST} {
+  # No access log: application URLs can contain bearer capabilities.
+  reverse_proxy app:3000 {
+    header_up X-Real-IP {remote_host}
+    header_up -CF-Connecting-IP
+    flush_interval -1
+  }
+}

@@ -1,0 +1,58 @@
+// Run only in the operator container with an empty, owner-only /config mount.
+import { randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+
+process.umask(0o077);
+const dir = "/config";
+const [host, email, version] = process.argv.slice(2);
+const renew = host === "renew-certificates";
+if (!renew && (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i.test(host ?? "") || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email ?? "") || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(version ?? ""))) {
+  throw new Error("Usage: setup.mjs events.example.com admin@example.com release-version (or renew-certificates)");
+}
+if (!renew && existsSync(`${dir}/compose.env`)) throw new Error("Configuration exists; refusing to replace secrets. Use renew-certificates only for TLS renewal.");
+if (renew && !existsSync(`${dir}/tls/ca.key`)) throw new Error("Existing CA required for certificate renewal.");
+const write = (name, value) => writeFileSync(`${dir}/${name}`, value, { mode: 0o600 });
+const openssl = (...args) => execFileSync("openssl", args, { stdio: "ignore" });
+mkdirSync(`${dir}/tls`, { recursive: true });
+if (!renew) {
+  openssl("req", "-x509", "-newkey", "rsa:3072", "-nodes", "-sha256", "-days", "3650", "-subj", "/CN=Space Works Events private CA", "-addext", "basicConstraints=critical,CA:TRUE", "-keyout", `${dir}/tls/ca.key`, "-out", `${dir}/tls/ca.crt`);
+}
+for (const service of ["postgres", "redis", "storage"]) {
+  mkdirSync(`${dir}/tls/${service}`, { recursive: true });
+  openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", `/CN=${service}`, "-keyout", `${dir}/tls/${service}/private.key`, "-out", `${dir}/tls/${service}/request.csr`);
+  write(`tls/${service}/extensions.cnf`, `subjectAltName=DNS:${service}\nextendedKeyUsage=serverAuth\n`);
+  openssl("x509", "-req", "-sha256", "-days", "365", "-in", `${dir}/tls/${service}/request.csr`, "-CA", `${dir}/tls/ca.crt`, "-CAkey", `${dir}/tls/ca.key`, "-CAcreateserial", "-extfile", `${dir}/tls/${service}/extensions.cnf`, "-out", `${dir}/tls/${service}/public.crt`);
+}
+// Public CA only; never mount the CA signing key into application services.
+chmodSync(`${dir}/tls/ca.crt`, 0o644);
+if (renew) {
+  console.log("Internal TLS certificates renewed for one year. Recreate postgres, redis, storage and app. Keep the original CA and credentials.");
+  process.exit(0);
+}
+const hex = () => randomBytes(32).toString("hex");
+const key = () => randomBytes(32).toString("base64");
+const adminPassword = hex(), appPassword = hex(), redisPassword = hex(), storageRoot = hex(), storageApp = hex();
+const actionsKey = key(), cronSecret = hex(), readinessSecret = hex();
+const dbUrl = (user, password) => `postgresql://${user}:${password}@postgres:5432/swevents?sslmode=require&sslcert=/tls/ca.crt&sslaccept=strict`;
+const envText = (values) => Object.entries(values).map(([name, value]) => `${name}='${String(value).replaceAll("'", "\\'")}'`).join("\n") + "\n";
+write("compose.env", envText({ PUBLIC_HOST: host, SWE_VERSION: version }));
+write("actions-key", actionsKey);
+write("postgres.env", envText({ POSTGRES_USER: "swevents", POSTGRES_DB: "swevents", POSTGRES_PASSWORD: adminPassword, POSTGRES_APP_PASSWORD: appPassword, POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256" }));
+write("migrator.env", envText({ DATABASE_URL: dbUrl("swevents", adminPassword), DIRECT_URL: dbUrl("swevents", adminPassword) }));
+write("storage.env", envText({ MINIO_ROOT_USER: "swevents-root", MINIO_ROOT_PASSWORD: storageRoot }));
+write("storage-init.env", envText({ MC_HOST_local: `https://swevents-root:${storageRoot}@storage:9000`, S3_APP_PASSWORD: storageApp, SSL_CERT_FILE: "/tls/ca.crt" }));
+write("scheduler.env", envText({ CRON_SECRET: cronSecret }));
+write("app.env", envText({
+  NODE_ENV: "production", AUTH_URL: `https://${host}`, NEXT_PUBLIC_BASE_URL: `https://${host}`,
+  DATABASE_URL: dbUrl("swevents_app", appPassword), DIRECT_URL: dbUrl("swevents_app", appPassword),
+  REDIS_URL: `rediss://default:${redisPassword}@redis:6379`, NODE_EXTRA_CA_CERTS: "/tls/ca.crt",
+  AUTH_SECRET: hex(), CRON_SECRET: cronSecret, HEALTHCHECK_SECRET: readinessSecret,
+  NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: actionsKey, MFA_ENCRYPTION_KEY: key(), SUPER_ADMIN_EMAIL: email,
+  TRUSTED_PROXY_IP_HEADER: "x-real-ip", S3_BUCKET: "spaceworks-events", S3_REGION: "us-east-1",
+  S3_ENDPOINT: "https://storage:9000", S3_ACCESS_KEY_ID: "swevents-app", S3_SECRET_ACCESS_KEY: storageApp, S3_FORCE_PATH_STYLE: "1",
+  EMAIL_FROM: `Space Works Events <events@${host}>`, SMTP_HOST: "CHANGE_ME", SMTP_PORT: "587",
+  SMTP_SECURE: "false", SMTP_USER: "CHANGE_ME", SMTP_PASSWORD: "CHANGE_ME",
+}));
+write("redis.conf", `port 0\ntls-port 6379\ntls-cert-file /data/tls/public.crt\ntls-key-file /data/tls/private.key\ntls-ca-cert-file /tls/ca.crt\ntls-auth-clients no\nrequirepass ${redisPassword}\nappendonly yes\nmaxmemory-policy noeviction\n`);
+console.log("Configuration created without printing secrets. Edit app.env: EMAIL_FROM and SMTP_* must use your verified sending domain and authenticated relay. Back up /config securely; do not rerun setup for updates.");

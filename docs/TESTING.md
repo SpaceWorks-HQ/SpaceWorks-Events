@@ -107,3 +107,31 @@ For every release, prioritize tests around:
 5. Ticket eligibility, online/offline check-in, undo, and the live ticket tear (with and without Redis, and behind the production reverse proxy).
 6. Anonymous feedback and certificate-enabled feedback.
 7. Upload rejection, object storage, outbox delivery, and retention.
+
+## Production VPS stack
+
+For the full single-host deployment, follow [VPS deployment](DEPLOYMENT_VPS.md).
+Use a disposable VPS or an isolated Compose project for deployment tests, with
+fresh generated credentials. Do not reuse a production configuration directory.
+
+```bash
+scripts/vps-compose.sh config --quiet
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs preflight
+scripts/vps-compose.sh up -d --wait --wait-timeout 180
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
+```
+
+On a disposable stack only, the additional smoke test creates and rolls back
+an audited organisation and checks an object upload/download/delete roundtrip,
+anonymous storage rejection, plain-text database rejection and page rendering:
+
+```bash
+scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/smoke.mjs
+```
+
+The final check verifies real database TLS and the runtime role, the schema,
+authenticated Redis over TLS, bucket access and protected readiness. Also verify
+anonymous storage rejection, plain-text database rejection, repeated migrations,
+setup refusing existing credentials and internal-certificate renewal. Validate
+Caddy configuration and complete public HTTPS, sign-in, mail, upload and streaming
+checks on a reachable test domain before deploying to production.
