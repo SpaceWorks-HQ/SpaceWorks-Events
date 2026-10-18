@@ -76,6 +76,7 @@ export default async function SeriesManagePage({ params }: Props) {
     status: r.status,
     createdAt: r.createdAt.toISOString(),
     guestEmail: r.guestEmail,
+    guestName: r.guestName,
     user: r.user
       ? { id: r.user.id, name: r.user.name, email: r.user.email }
       : null,
