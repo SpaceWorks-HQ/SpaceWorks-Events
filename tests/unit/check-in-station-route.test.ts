@@ -112,4 +112,14 @@ describe("venue check-in station route", () => {
     }));
     expect(mocks.checkInEventCreate).toHaveBeenCalledTimes(1);
   });
+
+  it("gives the badge only the attendee's own uploaded photo, never a remote avatar", async () => {
+    const photo = "/api/uploads/users/user_1/profile-images/123e4567-e89b-42d3-a456-426614174000.webp";
+    mocks.rsvpFindFirst.mockResolvedValueOnce({ ...rsvp, user: { id: "user_1", name: "Ada", email: "ada@example.test", profileImageUrl: photo, image: null } });
+    const managed = await (await POST(request("previewRsvp", { rsvpId: rsvp.id }))).json();
+    expect(managed.data.photoUrl).toBe(photo);
+    mocks.rsvpFindFirst.mockResolvedValueOnce({ ...rsvp, user: { id: "user_1", name: "Ada", email: "ada@example.test", profileImageUrl: null, image: "https://lh3.googleusercontent.com/a/abc" } });
+    const remote = await (await POST(request("previewRsvp", { rsvpId: rsvp.id }))).json();
+    expect(remote.data.photoUrl).toBeNull();
+  });
 });
