@@ -1,6 +1,10 @@
 # Space Works Events documentation
 
-This directory is the source of truth for the current product, its operation, and future plans. The code and Prisma migrations take precedence if a document becomes stale.
+[Back to the project README](../README.md)
+
+Everything you need to understand, run and change Space Works Events, the free, open-source event platform from Space Works. These pages describe what the product does today, how to operate it, and what's planned. If a page and the code ever disagree, the code and Prisma migrations win, and the page needs fixing.
+
+New here? Start with [Features](FEATURES.md) for what it does, then [Local development](DEVELOPMENT.md) to run it. To go live on free plans, follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md).
 
 ## Product and engineering
 
