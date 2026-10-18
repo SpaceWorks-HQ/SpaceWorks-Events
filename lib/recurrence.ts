@@ -1,5 +1,4 @@
 import { RRule, rrulestr } from "rrule";
-import { zonedDatetimeLocalValue, zonedInputToIso } from "@/lib/timeZone";
 
 const DEFAULT_MAX_INSTANCES = 48;
 const ABSOLUTE_MAX_INSTANCES = 500;
@@ -27,14 +26,19 @@ export function materializeInstances(
   }
 
   // Wall-clock times are expanded as if they were UTC, then mapped back into the zone.
-  const toWall = (date: Date) => (timeZone ? new Date(`${zonedDatetimeLocalValue(date, timeZone)}:00.000Z`) : date);
-  const fromWall = (date: Date) => {
-    if (!timeZone) return date;
-    const iso = zonedInputToIso(date.toISOString().slice(0, 16), timeZone);
-    return iso ? new Date(iso) : null;
+  // Conversions keep seconds and milliseconds, so SECONDLY/BYSECOND rules survive.
+  const toWall = (date: Date) => (timeZone ? new Date(date.getTime() + zoneOffsetMs(date, timeZone)) : date);
+  const fromWall = (wall: Date) => {
+    if (!timeZone) return wall;
+    const guess = new Date(wall.getTime() - zoneOffsetMs(wall, timeZone));
+    const instant = new Date(wall.getTime() - zoneOffsetMs(guess, timeZone));
+    // A wall time skipped by a daylight-saving change has no instant.
+    return toWall(instant).getTime() === wall.getTime() ? instant : null;
   };
   if (timeZone && rule instanceof RRule && rule.options.dtstart) {
-    rule = new RRule({ ...rule.origOptions, dtstart: toWall(rule.options.dtstart) });
+    const { until: ruleUntil } = rule.origOptions;
+    // UNTIL is a real instant; move it onto the same wall-clock basis as DTSTART.
+    rule = new RRule({ ...rule.origOptions, dtstart: toWall(rule.options.dtstart), ...(ruleUntil ? { until: toWall(ruleUntil) } : {}) });
   }
 
   const out: { startDateTime: Date; endDateTime: Date }[] = [];
@@ -57,6 +61,24 @@ export function materializeInstances(
     });
   }
   return out;
+}
+
+/** The zone's offset from UTC at `date`, in milliseconds (wall clock minus real time). */
+function zoneOffsetMs(date: Date, timeZone: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
+  const wallSeconds = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), Number(parts.hour), Number(parts.minute), Number(parts.second));
+  return wallSeconds - (date.getTime() - date.getUTCMilliseconds());
 }
 
 export function buildRecurrenceIcs(dtStart: Date, rruleLine: string): string {

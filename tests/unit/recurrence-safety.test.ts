@@ -41,6 +41,46 @@ describe("recurrence safety", () => {
     ]);
   });
 
+  it("applies UNTIL as a real instant in a non-UTC series", () => {
+    // 10:00 daily in Kolkata (04:30 UTC); UNTIL is the third start exactly.
+    const start = new Date("2030-01-01T04:30:00.000Z");
+    const windows = materializeInstances(buildRecurrenceIcs(start, "FREQ=DAILY;UNTIL=20300103T043000Z"), 3_600_000, {
+      from: start,
+      timeZone: "Asia/Kolkata",
+    });
+    expect(windows.map((window) => window.startDateTime.toISOString())).toEqual([
+      "2030-01-01T04:30:00.000Z",
+      "2030-01-02T04:30:00.000Z",
+      "2030-01-03T04:30:00.000Z",
+    ]);
+  });
+
+  it("keeps seconds when a timezone is supplied", () => {
+    const start = new Date("2030-01-01T00:00:00.000Z");
+    const windows = materializeInstances(buildRecurrenceIcs(start, "FREQ=SECONDLY;COUNT=3"), 1_000, {
+      from: start,
+      timeZone: "UTC",
+    });
+    expect(windows.map((window) => window.startDateTime.toISOString())).toEqual([
+      "2030-01-01T00:00:00.000Z",
+      "2030-01-01T00:00:01.000Z",
+      "2030-01-01T00:00:02.000Z",
+    ]);
+  });
+
+  it("skips local times that a daylight-saving change removes", () => {
+    // 02:30 New York does not exist on 8 March 2026 (clocks jump 02:00 → 03:00).
+    const start = new Date("2026-03-07T07:30:00.000Z");
+    const windows = materializeInstances(buildRecurrenceIcs(start, "FREQ=DAILY;COUNT=3"), 3_600_000, {
+      from: start,
+      timeZone: "America/New_York",
+    });
+    expect(windows.map((window) => window.startDateTime.toISOString())).toEqual([
+      "2026-03-07T07:30:00.000Z",
+      "2026-03-09T06:30:00.000Z",
+    ]);
+  });
+
   it("clamps caller-provided expansion limits", () => {
     const start = new Date("2030-01-01T00:00:00.000Z");
     const windows = materializeInstances(buildRecurrenceIcs(start, "FREQ=SECONDLY"), 1_000, {
