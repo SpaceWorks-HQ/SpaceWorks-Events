@@ -272,6 +272,17 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
     where: { id: data.eventId, organisationId: org.id },
   });
   if (!event) return { ok: false, error: "Event not found." };
+  const startMinute = (date: Date) => Math.floor(date.getTime() / 60_000);
+  if (
+    startMinute(data.startDateTime) !== startMinute(event.startDateTime) &&
+    data.startDateTime < new Date()
+  ) {
+    return {
+      ok: false,
+      error: "Start time must be now or in the future.",
+      fieldErrors: { startDateTime: ["Start time must be now or in the future"] },
+    };
+  }
   const aboutHtml =
     data.pageAboutHtml !== undefined
       ? sanitizeRichText(data.pageAboutHtml)

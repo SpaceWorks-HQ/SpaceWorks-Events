@@ -89,7 +89,7 @@ export async function createEventSeries(
   }
 
   const ics = buildRecurrenceIcs(data.anchorStartDateTime, data.rruleLine);
-  const windows = materializeInstances(ics, durationMs);
+  const windows = materializeInstances(ics, durationMs, { timeZone: data.timezone });
   if (windows.length === 0) {
     return {
       ok: false,

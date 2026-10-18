@@ -132,22 +132,26 @@ export default async function DiscoverPage({
   const validFrom = dateRangeError ? null : fromDate;
   const validToExclusive = dateRangeError ? null : toExclusive;
   const searchPattern = `%${q}%`;
+  // The columns hold UTC wall-clock timestamps without a zone. Compare them with UTC wall-clock
+  // values: NOW() and bound Date parameters (timestamptz) would shift by the session time zone.
+  const utc = (date: Date) => Prisma.sql`(${date}::timestamptz AT TIME ZONE 'UTC')`;
+  const now = new Date();
   const eventFilters = [
     Prisma.sql`e."status" = ${EventStatus.PUBLISHED}::"EventStatus"`,
     Prisma.sql`(e."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType" OR (e."privacyType" = ${EventPrivacyType.APPROVAL_REQUIRED}::"EventPrivacyType" AND e."listedPublicly" = TRUE))`,
     Prisma.sql`EXISTS (SELECT 1 FROM "EventPage" ep WHERE ep."eventId" = e."id" AND ep."isPublished" = TRUE)`,
-    Prisma.sql`e."endDateTime" >= NOW()`,
+    Prisma.sql`e."endDateTime" >= ${utc(now)}`,
     ...(q ? [Prisma.sql`(e."title" ILIKE ${searchPattern} OR e."description" ILIKE ${searchPattern} OR ${q.toLowerCase()} = ANY(e."tags") OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = e."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
-    ...(validFrom ? [Prisma.sql`e."startDateTime" >= ${validFrom}`] : []),
-    ...(validToExclusive ? [Prisma.sql`e."startDateTime" < ${validToExclusive}`] : []),
+    ...(validFrom ? [Prisma.sql`e."startDateTime" >= ${utc(validFrom)}`] : []),
+    ...(validToExclusive ? [Prisma.sql`e."startDateTime" < ${utc(validToExclusive)}`] : []),
   ];
   const instanceFilters = [
     Prisma.sql`s."status" = ${EventStatus.PUBLISHED}::"EventStatus"`,
     Prisma.sql`s."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType"`,
-    Prisma.sql`i."endDateTime" >= NOW()`,
+    Prisma.sql`i."endDateTime" >= ${utc(now)}`,
     ...(q ? [Prisma.sql`(s."title" ILIKE ${searchPattern} OR s."description" ILIKE ${searchPattern} OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = s."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
-    ...(validFrom ? [Prisma.sql`i."startDateTime" >= ${validFrom}`] : []),
-    ...(validToExclusive ? [Prisma.sql`i."startDateTime" < ${validToExclusive}`] : []),
+    ...(validFrom ? [Prisma.sql`i."startDateTime" >= ${utc(validFrom)}`] : []),
+    ...(validToExclusive ? [Prisma.sql`i."startDateTime" < ${utc(validToExclusive)}`] : []),
   ];
   const ordering = sort === "popular"
     ? Prisma.sql`"popularity" DESC, "startDateTime" ASC, "id" ASC`

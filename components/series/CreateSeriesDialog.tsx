@@ -9,6 +9,7 @@ import { Callout } from "@/components/ui/display";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Field, Input, Dropdown, Textarea } from "@/components/ui/field";
 import { createEventSeries } from "@/app/actions/series";
+import { zonedInputToIso } from "@/lib/timeZone";
 
 const timezones = [
   "UTC",
@@ -55,15 +56,24 @@ export function CreateSeriesDialog(props: {
                 fd.get("privacyType") ?? EventPrivacyType.PUBLIC,
               ) as EventPrivacyType;
 
+              // The first occurrence is entered as wall-clock time in the series timezone.
+              const timezone = String(fd.get("timezone") ?? "UTC");
+              const anchorStartDateTime = zonedInputToIso(String(fd.get("anchorStartDateTime") ?? ""), timezone);
+              const anchorEndDateTime = zonedInputToIso(String(fd.get("anchorEndDateTime") ?? ""), timezone);
+              if (!anchorStartDateTime || !anchorEndDateTime) {
+                setError("Choose a valid first occurrence start and end in the series timezone.");
+                return;
+              }
+
               startTransition(async () => {
                 const res = await createEventSeries({
                   organisationSlug,
                   title: String(fd.get("title") ?? ""),
                   description: String(fd.get("description") ?? ""),
-                  anchorStartDateTime: String(fd.get("anchorStartDateTime") ?? ""),
-                  anchorEndDateTime: String(fd.get("anchorEndDateTime") ?? ""),
+                  anchorStartDateTime,
+                  anchorEndDateTime,
                   rruleLine: String(fd.get("rruleLine") ?? ""),
-                  timezone: String(fd.get("timezone") ?? "UTC"),
+                  timezone,
                   capacity: capacityRaw,
                   status,
                   privacyType,

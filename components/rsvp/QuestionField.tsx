@@ -61,6 +61,18 @@ function setPhoneValue(current: unknown, next: { dial?: string; number?: string 
   return number ? `${dial}${number}` : "";
 }
 
+/**
+ * The stored phone value after typing or pasting into the number box. Digits are
+ * capped here rather than with `maxLength`, which would cut a pasted
+ * "+91 98765 43210" or "98765 43210" short before it is normalised.
+ */
+export function phoneNumberInputValue(current: unknown, typed: string): string {
+  if (typed.trimStart().startsWith("+") || typed.trimStart().startsWith("00")) return normalizePhoneInput(typed);
+  const { dial } = getPhoneParts(current);
+  const maxLength = dial === "+91" ? 10 : Math.max(1, 15 - (dial.length - 1));
+  return setPhoneValue(current, { number: typed.replace(/[^\d]/g, "").slice(0, maxLength) });
+}
+
 /* ---------- Small pieces ---------- */
 
 function LabelText({ field }: { field: RegistrationFieldDefinition }) {
@@ -205,7 +217,6 @@ export function QuestionField({ field, value, other, error, onChange }: Question
     }
     case "PHONE": {
       const parts = getPhoneParts(value);
-      const maxLength = parts.dial === "+91" ? 10 : Math.max(1, 15 - (parts.dial.length - 1));
       const describe = describedBy(help && id.help, id.hint, error && id.error);
       return (
         <div className="flex flex-col gap-1.5">
@@ -241,16 +252,12 @@ export function QuestionField({ field, value, other, error, onChange }: Question
               required={field.required}
               value={parts.number}
               onChange={(event) => {
-                const next = event.target.value;
-                onChange(next.trimStart().startsWith("+") || next.trimStart().startsWith("00")
-                  ? normalizePhoneInput(next)
-                  : setPhoneValue(value, { number: next }));
+                onChange(phoneNumberInputValue(value, event.target.value));
               }}
               inputMode="tel"
               autoComplete="tel-national"
               placeholder={placeholder ?? "Phone number"}
               pattern="[0-9]*"
-              maxLength={maxLength}
               className={cn(controlClasses, "min-w-0 flex-1")}
               aria-invalid={invalid || undefined}
               aria-describedby={describe}

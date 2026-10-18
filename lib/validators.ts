@@ -72,8 +72,9 @@ function validateEventScheduleAndLocation(
     location: string;
   },
   ctx: z.RefinementCtx,
+  { requireFutureStart = true }: { requireFutureStart?: boolean } = {},
 ) {
-  if (data.startDateTime < new Date()) {
+  if (requireFutureStart && data.startDateTime < new Date()) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["startDateTime"],
@@ -308,7 +309,8 @@ export const updateEventSchema = z
     ...registrationCutoffSchema,
   })
   .superRefine((data, ctx) => {
-    validateEventScheduleAndLocation(data, ctx);
+    // A started event stays editable; updateEvent only rejects moving the start into the past.
+    validateEventScheduleAndLocation(data, ctx, { requireFutureStart: false });
     if (data.registrationClosesAt && data.registrationLeadMinutes != null)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

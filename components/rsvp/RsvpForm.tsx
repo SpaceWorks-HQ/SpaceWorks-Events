@@ -85,6 +85,7 @@ export function RsvpForm(props: {
 }) {
   const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved } = props;
   const { data: session, status } = useSession();
+  const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
   const [guestEmail, setGuestEmail] = useState("");
   const [name, setName] = useState("");
@@ -103,7 +104,6 @@ export function RsvpForm(props: {
     return () => window.clearTimeout(timer);
   }, [lsKey]);
   const [pending, startTransition] = useTransition();
-  const router = useRouter();
 
   const fields = useMemo(() => registrationFields ?? [], [registrationFields]);
   const questionsState = useRegistrationAnswers(fields);

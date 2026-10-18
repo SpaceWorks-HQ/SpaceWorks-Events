@@ -11,7 +11,6 @@ import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
-import { isReservedOrganisationSlug } from "@/lib/slug";
 
 export type ActionResult<T = void> =
   | { ok: true; data?: T }
@@ -170,20 +169,20 @@ export async function updateOrganisation(
   }
 }
 
-export async function checkSlugAvailability(slug: string): Promise<boolean> {
-  const sanitized = slug.toLowerCase().trim();
-
-  if (!sanitized) {
-    return false;
-  }
-
-  if (isReservedOrganisationSlug(sanitized)) {
-    return false;
+/** Format, reserved-word and uniqueness check for the create form; `error` explains an unusable slug. */
+export async function checkSlugAvailability(
+  slug: string,
+): Promise<{ available: boolean; error?: string }> {
+  const parsed = createOrganisationSchema.shape.slug.safeParse(String(slug ?? "").toLowerCase());
+  if (!parsed.success) {
+    return { available: false, error: parsed.error.issues[0]?.message ?? "That URL can't be used" };
   }
 
   const count = await prisma.organisation.count({
-    where: { slug: sanitized },
+    where: { slug: parsed.data },
   });
 
-  return count === 0;
+  return count === 0
+    ? { available: true }
+    : { available: false, error: "That URL is already taken" };
 }
