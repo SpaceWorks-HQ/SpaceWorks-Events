@@ -12,6 +12,15 @@ export function AvatarImage({ src, fallback }: { src: string; fallback: ReactNod
   if (failedSrc === src) return <>{fallback}</>;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- user images are served by the app's own upload route
-    <img src={src} alt="" className="size-full object-cover" onError={() => setFailedSrc(src)} />
+    <img
+      src={src}
+      alt=""
+      className="size-full object-cover"
+      onError={() => setFailedSrc(src)}
+      // A server-rendered image can fail before hydration attaches onError.
+      ref={(img) => {
+        if (img?.complete && img.naturalWidth === 0) setFailedSrc(src);
+      }}
+    />
   );
 }
