@@ -10,7 +10,7 @@ function preflight(overrides: Record<string, string | undefined> = {}) {
   for (const [name, value] of Object.entries({ ...freeTierCloudEnv(), ...overrides })) {
     if (value !== undefined) env[name] = value;
   }
-  const result = spawnSync(process.execPath, [script], { env, encoding: "utf8" });
+  const result = spawnSync(process.execPath, [script], { env: env as NodeJS.ProcessEnv, encoding: "utf8" });
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
