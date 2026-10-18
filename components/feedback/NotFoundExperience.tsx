@@ -216,7 +216,7 @@ export function NotFoundExperience() {
                   )}
                 >
                   <div className="relative w-[104px] rounded-[10px] border border-line bg-white p-2">
-                    <svg viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`} className="block w-full text-[#142C2A]" shapeRendering="crispEdges" aria-hidden>
+                    <svg viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`} className="block w-full text-sw-ink" shapeRendering="crispEdges" aria-hidden>
                       {qr.map(([x, y]) => (
                         <rect key={`${x}-${y}`} x={x} y={y} width={1} height={1} fill="currentColor" />
                       ))}

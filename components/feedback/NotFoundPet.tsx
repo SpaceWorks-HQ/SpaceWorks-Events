@@ -6,8 +6,8 @@ type PetState = "walk" | "run" | "sit" | "sleep";
 
 const EDGE = 12;
 /** Golden coat: Warm Yellow and Workshop Orange mixed 70/30; shading 50/50. */
-const COAT = "color-mix(in srgb, #FFD447 70%, #FF7447)";
-const SHADE = "color-mix(in srgb, #FFD447 50%, #FF7447)";
+const COAT = "color-mix(in srgb, var(--sw-yellow) 70%, var(--sw-orange))";
+const SHADE = "color-mix(in srgb, var(--sw-yellow) 50%, var(--sw-orange))";
 const WANDER_AFTER_MS = 4_500;
 const SLEEP_AFTER_MS = 15_000;
 
