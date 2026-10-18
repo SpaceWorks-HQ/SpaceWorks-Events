@@ -11,7 +11,7 @@ describe("real Nodemailer composition and access restrictions", () => {
     disableFileAccess: true, disableUrlAccess: true,
   });
   const envelope = {
-    from: "Yuyu <noreply@example.test>", to: "Attendee <attendee@example.test>",
+    from: "Space Works Events <noreply@example.test>", to: "Attendee <attendee@example.test>",
     subject: "Your event", messageId: "<stable-outbox@example.test>",
   };
   let directory: string;
@@ -24,7 +24,7 @@ describe("real Nodemailer composition and access restrictions", () => {
   });
 
   beforeAll(async () => {
-    directory = await mkdtemp(join(tmpdir(), "yuyu-mail-test-"));
+    directory = await mkdtemp(join(tmpdir(), "swe-mail-test-"));
     file = join(directory, "message.txt");
     await writeFile(file, "Subject: fixture\r\n\r\ndisposable file fixture");
     await new Promise<void>((resolve, reject) => {

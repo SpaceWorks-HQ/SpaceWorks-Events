@@ -2,14 +2,18 @@ import type { CSSProperties } from "react";
 import { cn } from "@/lib/cn";
 import { parsePattern } from "./patterns";
 
-/** Default colour per pattern letter; brand tokens follow light/dark mode. */
+/**
+ * Default colour per pattern letter, in Space Works colours: Maker Teal lit
+ * dots, ink dots that follow the text colour (cream in dark mode), faint
+ * unlit dots, one Workshop Orange highlight, cream and citron.
+ */
 export const DOT_COLORS: Record<string, string> = {
-  X: "var(--yy-brand-marigold)",
-  O: "var(--yy-brand-dot-base)",
-  ".": "var(--yy-brand-dot-off)",
-  D: "var(--yy-brand-marigold-deep)",
-  W: "#FFFFFF",
-  m: "#F0A537",
+  X: "#006E63",
+  O: "currentColor",
+  ".": "color-mix(in srgb, currentColor 14%, transparent)",
+  D: "#FF7447",
+  W: "#FFF4E8",
+  m: "#DFFF8F",
 };
 
 export type DotGridProps = {
@@ -30,7 +34,11 @@ export type DotGridProps = {
   style?: CSSProperties;
 };
 
-/** Renders a dot pattern as a CSS grid of perfect circles. */
+/**
+ * @deprecated Yuyu dot-sign renderer, kept so existing imports compile. Use
+ * `SpaceWorksLogo` for the brand and lucide-react for icons.
+ * Renders a dot pattern as a CSS grid of perfect circles.
+ */
 export function DotGrid({ pattern, dot, gap = dot / 4, colors, label, className, cellClassName, cellStyle, style }: DotGridProps) {
   const rows = parsePattern(pattern);
   const columns = rows[0]?.length ?? 0;

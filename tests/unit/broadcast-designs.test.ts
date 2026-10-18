@@ -4,10 +4,10 @@ import { sendEventBroadcastSchema } from "@/lib/validators";
 
 const base = {
   subject: "Doors open at 6",
-  bodyHtml: '<p>Hello</p><p><a class="cta" href="https://yuyu.test/t">Ticket</a></p>',
+  bodyHtml: '<p>Hello</p><p><a class="cta" href="https://events.test/t">Ticket</a></p>',
   eventTitle: "Demo <Summit>",
   organisationName: "Org & Co",
-  baseUrl: "https://yuyu.test",
+  baseUrl: "https://events.test",
 };
 
 describe("broadcast designs", () => {
@@ -21,6 +21,18 @@ describe("broadcast designs", () => {
     }
   });
 
+  it("draws Classic in the Space Works palette and never uses Workshop Orange as text", () => {
+    const html = renderBroadcastDesign("classic", { ...base, brand: {} });
+    expect(html).toContain("background-color: #142C2A; padding: 24px; text-align: center; color: #FFF4E8;");
+    expect(html).toContain("background-color: #006E63; color: #FFF4E8;");
+    expect(html).toContain("Sent through Space Works Events.");
+    for (const design of BROADCAST_DESIGN_IDS) {
+      const rendered = renderBroadcastDesign(design, { ...base, brand: {} });
+      expect(rendered).not.toMatch(/yuyu/i);
+      expect(rendered).not.toMatch(/(?<!-)color: #FF7447/i);
+    }
+  });
+
   it("uses the event accent for buttons, with readable text on light colours", () => {
     const html = renderBroadcastDesign("accent", { ...base, brand: { accentColor: "#0EA5E9" } });
     expect(html).toContain("background-color: #0EA5E9; color: #142C2A;");
@@ -30,7 +42,7 @@ describe("broadcast designs", () => {
   });
 
   it("leads with the cover photo, or falls back to the accent band without one", () => {
-    expect(renderBroadcastDesign("photo", { ...base, brand: { coverImageUrl: "/api/uploads/c.webp" } })).toContain('src="https://yuyu.test/api/uploads/c.webp"');
+    expect(renderBroadcastDesign("photo", { ...base, brand: { coverImageUrl: "/api/uploads/c.webp" } })).toContain('src="https://events.test/api/uploads/c.webp"');
     const noCover = renderBroadcastDesign("photo", { ...base, brand: { coverImageUrl: "javascript:alert(1)" } });
     expect(noCover).not.toContain("javascript:");
     expect(noCover).not.toContain("<img");

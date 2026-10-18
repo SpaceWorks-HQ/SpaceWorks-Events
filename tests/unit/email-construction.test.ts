@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ sendMail: vi.fn() }));
 vi.mock("@/lib/email/transporter", () => ({
   getEmailTransport: vi.fn().mockResolvedValue({
     transporter: { sendMail: mocks.sendMail },
-    from: "Yuyu <noreply@example.test>",
+    from: "Space Works Events <noreply@example.test>",
   }),
 }));
 
@@ -26,6 +26,21 @@ describe("email construction", () => {
     expect(message.subject).not.toMatch(/[\r\n]/);
     expect(message.html).not.toContain("</title><script>");
     expect(message.html).toContain("&lt;script&gt;");
+  });
+
+  it("wears the Space Works brand: hosted lockup, teal buttons with cream labels, Space Works footer", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://events.test/");
+    await sendRSVPConfirmation({ to: "person@example.test", eventTitle: "Meetup", status: RsvpStatus.CONFIRMED, checkInToken: "tok" });
+    vi.unstubAllEnvs();
+    const message = mocks.sendMail.mock.calls[0]?.[0];
+    expect(message.html).toContain('<img src="https://events.test/brand/email-lockup.png" width="180" height="64" alt="Space Works"');
+    expect(message.html).toContain("background-color: #006E63; color: #FFF4E8;");
+    expect(message.html).toContain("This email was sent by Space Works Events.");
+    expect(message.html).toMatch(/&copy; \d{4} Space Works\s*<\/div>/);
+    expect(message.text).toContain("Space Works Events");
+    // Workshop Orange is never text, and nothing of the old brand remains.
+    expect(message.html).not.toMatch(/color: #FF7447/i);
+    expect(`${message.html}${message.text}`).not.toMatch(/yuyu/i);
   });
 
   it("HTML-escapes capability URLs in links and visible content", async () => {
@@ -88,8 +103,8 @@ describe("event broadcast email", () => {
     });
     const message = mocks.sendMail.mock.calls[0]?.[0];
     expect(message.subject).not.toMatch(/[\r\n]/);
-    expect(message.html).toContain('<a href="https://events.test/ticket/abc?x=1&amp;y=2" style="display: inline-block; background-color: #18181B;');
-    expect(message.html).toContain('<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #1c1b1f;"><br></p>');
+    expect(message.html).toContain('<a href="https://events.test/ticket/abc?x=1&amp;y=2" style="display: inline-block; background-color: #006E63; color: #FFF4E8;');
+    expect(message.html).toContain('<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #142C2A;"><br></p>');
     expect(message.html).toContain('<li style="');
     expect(message.html).toContain("Org &amp; Co");
     expect(message.html).toContain("Mixer &lt;script&gt;");

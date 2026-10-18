@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { calculateReportRsvpMetrics, countCheckInSources, createEventReportPdf, isReportAvailable, reportFilename, summariseQuestions, type EventReportMetrics } from "@/lib/eventReport";
-import { arrivalWindows } from "@/lib/eventReportPdf";
+import { readFileSync } from "node:fs";
+import fontkit from "@pdf-lib/fontkit";
+import { arrivalWindows, woffToSfnt } from "@/lib/eventReportPdf";
+
+describe("report fonts", () => {
+  it("unwraps the Gilroy WOFF into a plain TrueType font with the same glyphs", () => {
+    const woff = readFileSync("public/brand/fonts/Gilroy-SemiBold.woff");
+    const sfnt = woffToSfnt(woff);
+    expect(sfnt.readUInt32BE(0)).toBe(0x00010000);
+    const [plain, wrapped] = [fontkit.create(sfnt), fontkit.create(woff)];
+    expect(plain.numGlyphs).toBe(wrapped.numGlyphs);
+    expect(plain.characterSet).toEqual(wrapped.characterSet);
+    expect(woffToSfnt(sfnt)).toBe(sfnt);
+  });
+});
 
 describe("event reports", () => {
   it("calculates RSVP funnel and attendance metrics without capacity assumptions", () => {
@@ -27,7 +41,7 @@ describe("event reports", () => {
       targetType: "event",
       targetId: "event-1",
       organisationId: "org-1",
-      organisationName: "Yuyu Events",
+      organisationName: "Space Works Events",
       title: "Community Meetup",
       startDateTime: new Date("2030-01-01T10:00:00Z"),
       endDateTime: new Date("2030-01-01T12:00:00Z"),
@@ -49,8 +63,11 @@ describe("event reports", () => {
     const pdf = await createEventReportPdf(report);
     expect(Buffer.from(pdf).subarray(0, 4).toString()).toBe("%PDF");
     expect(pdf.byteLength).toBeGreaterThan(500);
+    const document = await PDFDocument.load(pdf, { updateMetadata: false });
+    expect(document.getCreator()).toBe("Space Works Events");
+    expect(document.getProducer()).toBe("Space Works Events");
     expect(reportFilename(report)).toBe("community-meetup-event-report-2030-01-01.pdf");
-  });
+  }, 20_000);
 
   it("reduces form answers to counts and never copies typed answers", () => {
     const summary = summariseQuestions(
@@ -129,5 +146,5 @@ describe("event reports", () => {
     const document = await PDFDocument.load(await createEventReportPdf(report));
     expect(document.getPageCount()).toBeGreaterThan(2);
     expect(document.getTitle()).toBe("Maker Conference – Trivandrum – event report");
-  });
+  }, 20_000);
 });
