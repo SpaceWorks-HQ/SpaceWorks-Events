@@ -1,7 +1,7 @@
 import "server-only";
 
 import fontkit from "@pdf-lib/fontkit";
-import { fill, PDFDocument, popGraphicsState, pushGraphicsState, rectangle, rgb, setCharacterSpacing, setFillingColor, type Color, type PDFEmbeddedPage, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
+import { degrees, fill, PDFDocument, popGraphicsState, pushGraphicsState, rectangle, rgb, setCharacterSpacing, setFillingColor, type Color, type PDFEmbeddedPage, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import { containBox, imageCache, loadSymbolPaths, qrModules, roundedRectPath, SYMBOL_VIEWBOX, type PreparedImage } from "./assets";
 import { FONT_WEIGHTS, loadBadgeFonts } from "./fonts";
 import type { BadgeScene, FontWeight } from "./layout";
@@ -83,7 +83,16 @@ async function drawScene(context: Context, page: PDFPage, scene: BadgeScene, ori
     } else if (op.kind === "text") {
       const tracking = op.trackingEm * op.sizePt;
       if (tracking) page.pushOperators(setCharacterSpacing(tracking));
-      page.drawText(op.text, { x: x(op.x), y: y(op.baseline), size: op.sizePt, font: context.fonts[op.weight], color: hex(op.color) });
+      page.drawText(op.text, {
+        x: x(op.x),
+        y: y(op.baseline),
+        size: op.sizePt,
+        font: context.fonts[op.weight],
+        color: hex(op.color),
+        // PDF space turns anticlockwise; the scene's angle is clockwise on the page.
+        ...(op.rotateDeg ? { rotate: degrees(-op.rotateDeg) } : {}),
+        ...(op.opacity !== undefined ? { opacity: op.opacity } : {}),
+      });
       if (tracking) page.pushOperators(setCharacterSpacing(0));
     } else if (op.kind === "image") {
       const box = { wMm: op.w, hMm: op.h, fit: op.fit, shape: op.shape, grayscale: op.grayscale, background: scene.background };
@@ -91,7 +100,7 @@ async function drawScene(context: Context, page: PDFPage, scene: BadgeScene, ori
       const image = await embedImage(context, prepared, JSON.stringify([op.url, box]));
       if (!image || !prepared) continue;
       const at = op.fit === "cover" ? { x: op.x, y: op.y, w: op.w, h: op.h } : containBox(op, prepared.widthPx, prepared.heightPx);
-      page.drawImage(image, { x: x(at.x), y: y(at.y + at.h), width: mmToPt(at.w), height: mmToPt(at.h) });
+      page.drawImage(image, { x: x(at.x), y: y(at.y + at.h), width: mmToPt(at.w), height: mmToPt(at.h), ...(op.opacity !== undefined ? { opacity: op.opacity } : {}) });
     } else if (op.kind === "qr") {
       // One rectangle per run of dark modules keeps large documents light.
       const qr = qrModules(op.value);

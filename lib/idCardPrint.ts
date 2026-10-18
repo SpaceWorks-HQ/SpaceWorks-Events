@@ -10,7 +10,7 @@ import {
 
 export const ID_CARD_LAYOUT_ELEMENTS = [
   "header", "name", "email", "details", "qr", "footer", "logo",
-  "eventLogo", "symbol", "photo", "sponsors",
+  "eventLogo", "symbol", "photo", "sponsors", "idNumber", "validUntil",
 ] as const;
 
 export type IdCardLayoutElement = (typeof ID_CARD_LAYOUT_ELEMENTS)[number];
@@ -31,7 +31,7 @@ export function isSquareElement(element: IdCardLayoutElement) {
   return SQUARE_ELEMENTS.has(element);
 }
 
-export function isTextElement(element: IdCardLayoutElement): element is "header" | "name" | "email" | "details" | "footer" {
+export function isTextElement(element: IdCardLayoutElement): element is "header" | "name" | "email" | "details" | "footer" | "idNumber" | "validUntil" {
   return !GRAPHIC_ELEMENTS.has(element);
 }
 
@@ -44,6 +44,28 @@ export function minimumElementSizeMm(element: IdCardLayoutElement) {
 }
 
 export const SPONSOR_LIMIT_MAX = 6;
+
+export const WATERMARK_KINDS = ["none", "text", "image"] as const;
+export const WATERMARK_COLOURS = ["accent", "text"] as const;
+export const WATERMARK_OPACITY_MIN = 4;
+export const WATERMARK_OPACITY_MAX = 30;
+
+/**
+ * A faint mark behind everything on the card: a short word (rotated) or an
+ * uploaded image, in a brand-safe colour at low opacity. Image watermarks use
+ * the artwork in `BadgeBranding.watermarkUrl`.
+ */
+export type IdCardWatermark = {
+  kind: (typeof WATERMARK_KINDS)[number];
+  text: string;
+  /** Percent, 4–30. */
+  opacityPct: number;
+  colour: (typeof WATERMARK_COLOURS)[number];
+  /** Rotation for text watermarks, in degrees (clockwise). */
+  angleDeg: number;
+};
+
+export const DEFAULT_WATERMARK: IdCardWatermark = { kind: "none", text: "", opacityPct: 10, colour: "accent", angleDeg: -30 };
 
 export type IdCardPrintSettings = {
   widthMm: number;
@@ -87,10 +109,22 @@ export type IdCardPrintSettings = {
   photoShape: "circle" | "rounded";
   showSponsors: boolean;
   sponsorLimit: number;
+  /** The person's name. Off for a card back that carries only details. */
+  showName: boolean;
+  /** The QR code. Off for a side that doesn't need one. */
+  showQr: boolean;
+  /** Member ID cards: the human-readable ID number (layout item `idNumber`). */
+  showIdNumber: boolean;
+  idNumberLabel: string;
+  /** Member ID cards: the expiry date (layout item `validUntil`). */
+  showValidUntil: boolean;
+  validUntilLabel: string;
+  watermark: IdCardWatermark;
 };
 
 /** The optional items whose presence changes the default layout. */
-export type IdCardLayoutFlags = Pick<IdCardPrintSettings, "showLogo" | "showEventLogo" | "showSymbol" | "showPhoto" | "showSponsors">;
+export type IdCardLayoutFlags = Pick<IdCardPrintSettings, "showLogo" | "showEventLogo" | "showSymbol" | "showPhoto" | "showSponsors">
+  & Partial<Pick<IdCardPrintSettings, "showIdNumber" | "showValidUntil">>;
 
 export const DEFAULT_LAYOUT_FLAGS: IdCardLayoutFlags = { showLogo: true, showEventLogo: false, showSymbol: true, showPhoto: false, showSponsors: false };
 
@@ -101,6 +135,8 @@ export function layoutFlags(settings: IdCardLayoutFlags): IdCardLayoutFlags {
     showSymbol: settings.showSymbol,
     showPhoto: settings.showPhoto,
     showSponsors: settings.showSponsors,
+    ...(settings.showIdNumber ? { showIdNumber: true } : {}),
+    ...(settings.showValidUntil ? { showValidUntil: true } : {}),
   };
 }
 
@@ -165,6 +201,8 @@ export function nameSizePt(settings: IdCardPrintSettings, name: string) {
 }
 
 const MIN_DIMENSION_MM = 40;
+/** Footers on event badges are edited up to 80 characters; a member card back may carry a longer note. */
+export const FOOTER_MAX_LENGTH = 240;
 const MAX_DIMENSION_MM = 300;
 
 function boundedDimension(value: unknown, fallback: number) {
@@ -383,7 +421,12 @@ function defaultGeometry(template: IdCardPrintSettings["template"], widthMm: num
     photo = { xMm: textX, yMm: nameY };
   }
   const emailY = round1(nameY + nameBlockHeightMm(text.name) + 1.5 * k);
-  const detailsY = round1(emailY + line(text.email) + 4 * k);
+  // Member ID items stack under the email; event badges never turn them on,
+  // so their layout is unchanged.
+  const idNumberY = round1(emailY + line(text.email) + 2 * k);
+  const validUntilY = round1(idNumberY + (flags.showIdNumber ? line(text.idNumber) + 1 * k : 0));
+  const memberBottom = flags.showValidUntil ? validUntilY + line(text.validUntil) : flags.showIdNumber ? idNumberY + line(text.idNumber) : null;
+  const detailsY = round1(memberBottom === null ? emailY + line(text.email) + 4 * k : memberBottom + 3 * k);
 
   // On landscape stock the QR sits beside the text, so text stops short of it.
   const full = widthMm - contentX - m;
@@ -403,6 +446,8 @@ function defaultGeometry(template: IdCardPrintSettings["template"], widthMm: num
     symbol,
     photo,
     sponsors,
+    idNumber: { xMm: contentX, yMm: idNumberY },
+    validUntil: { xMm: contentX, yMm: validUntilY },
   };
   const sizes: IdCardElementSizes = {
     header: headerWidth,
@@ -416,6 +461,8 @@ function defaultGeometry(template: IdCardPrintSettings["template"], widthMm: num
     symbol: symbolSize,
     photo: photoSize,
     sponsors: width(sponsorsWidth),
+    idNumber: nameWidth,
+    validUntil: nameWidth,
   };
   return { positions, sizes };
 }
@@ -425,6 +472,7 @@ function geometryWithOptionalDefaults(template: IdCardPrintSettings["template"],
   const base = defaultGeometry(template, widthMm, heightMm, flags);
   const optional: Array<[keyof IdCardLayoutFlags, IdCardLayoutElement]> = [
     ["showEventLogo", "eventLogo"], ["showSymbol", "symbol"], ["showPhoto", "photo"], ["showSponsors", "sponsors"],
+    ["showIdNumber", "idNumber"], ["showValidUntil", "validUntil"],
   ];
   for (const [flag, element] of optional) {
     if (flags[flag]) continue;
@@ -456,7 +504,7 @@ export function defaultIdCardElementSizes(
 export function defaultIdCardElementBold(): IdCardElementBold {
   return {
     header: true, name: true, email: false, details: false, qr: false, footer: false, logo: false,
-    eventLogo: false, symbol: false, photo: false, sponsors: false,
+    eventLogo: false, symbol: false, photo: false, sponsors: false, idNumber: true, validUntil: false,
   };
 }
 
@@ -467,16 +515,17 @@ export function defaultIdCardElementTextSizes(
 ): IdCardElementTextSizes {
   // The name is always the largest thing on the card; the heading stays small.
   const base = template === "bold"
-    ? { header: 14, name: 28, email: 10, details: 8.5, footer: 7.5 }
+    ? { header: 14, name: 28, email: 10, details: 8.5, footer: 7.5, idNumber: 11, validUntil: 8.5 }
     : template === "minimal"
-      ? { header: 10, name: 30, email: 9.5, details: 8.5, footer: 7.5 }
-      : { header: 13, name: 30, email: 10, details: 8.5, footer: 7.5 };
+      ? { header: 10, name: 30, email: 9.5, details: 8.5, footer: 7.5, idNumber: 10, validUntil: 8.5 }
+      : { header: 13, name: 30, email: 10, details: 8.5, footer: 7.5, idNumber: 11, validUntil: 8.5 };
   const k = paperScale(widthMm, heightMm);
   const scaled = (pt: number, min: number) => Math.max(min, Math.round(pt * k * 2) / 2);
   return {
     header: scaled(base.header, 6), name: scaled(base.name, 9), email: scaled(base.email, 6),
     details: scaled(base.details, 6), qr: 0, footer: scaled(base.footer, 6), logo: 0,
     eventLogo: 0, symbol: 0, photo: 0, sponsors: 0,
+    idNumber: scaled(base.idNumber, 6), validUntil: scaled(base.validUntil, 6),
   };
 }
 
@@ -595,7 +644,41 @@ export function defaultIdCardPrintSettings(eventTitle: string, organisationName 
     ...DEFAULT_LAYOUT_FLAGS,
     photoShape: "circle",
     sponsorLimit: 4,
+    showName: true,
+    showQr: true,
+    showIdNumber: false,
+    idNumberLabel: "ID",
+    showValidUntil: false,
+    validUntilLabel: "Valid until",
+    watermark: { ...DEFAULT_WATERMARK },
   };
+}
+
+function watermark(value: unknown): IdCardWatermark {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { ...DEFAULT_WATERMARK };
+  const input = value as Partial<Record<keyof IdCardWatermark, unknown>>;
+  const opacity = Number(input.opacityPct);
+  const angle = Number(input.angleDeg);
+  return {
+    kind: oneOf(input.kind, WATERMARK_KINDS, DEFAULT_WATERMARK.kind),
+    text: typeof input.text === "string" ? input.text.trim().slice(0, 32) : "",
+    opacityPct: Number.isFinite(opacity) ? clamp(Math.round(opacity), WATERMARK_OPACITY_MIN, WATERMARK_OPACITY_MAX) : DEFAULT_WATERMARK.opacityPct,
+    colour: oneOf(input.colour, WATERMARK_COLOURS, DEFAULT_WATERMARK.colour),
+    angleDeg: Number.isFinite(angle) ? clamp(Math.round(angle), -90, 90) : DEFAULT_WATERMARK.angleDeg,
+  };
+}
+
+/**
+ * Point size for a text watermark: about three quarters of the card's
+ * diagonal (or width, unrotated), never taller than 40% of the short side.
+ * Shared by the preview and the renderer, so both draw the same size.
+ */
+export function watermarkSizePt(text: string, widthMm: number, heightMm: number, angleDeg: number) {
+  const chars = Math.max(1, [...text.trim()].length);
+  const span = angleDeg === 0 ? widthMm : Math.hypot(widthMm, heightMm) * 0.85;
+  const fitting = (span * 0.75) / (chars * 0.62 * PT_TO_MM);
+  const tallest = (Math.min(widthMm, heightMm) * 0.4) / PT_TO_MM;
+  return round1(Math.max(6, Math.min(fitting, tallest)));
 }
 
 /**
@@ -621,6 +704,8 @@ export function normalizeIdCardPrintSettings(
     showSymbol: bool(input.showSymbol, legacy ? false : fallback.showSymbol),
     showPhoto: bool(input.showPhoto, legacy ? false : fallback.showPhoto),
     showSponsors: bool(input.showSponsors, legacy ? false : fallback.showSponsors),
+    showIdNumber: bool(input.showIdNumber, fallback.showIdNumber),
+    showValidUntil: bool(input.showValidUntil, fallback.showValidUntil),
   };
   const defaults = geometryWithOptionalDefaults(template, widthMm, heightMm, flags);
   const sizes = elementSizes(input.elementSizes, defaults.sizes, widthMm);
@@ -633,7 +718,7 @@ export function normalizeIdCardPrintSettings(
     badgeLabel: boundedText(input.badgeLabel, fallback.badgeLabel, 40),
     showEmail: bool(input.showEmail, fallback.showEmail),
     template,
-    footerText: boundedText(input.footerText, fallback.footerText, 80),
+    footerText: boundedText(input.footerText, fallback.footerText, FOOTER_MAX_LENGTH),
     printFieldKeys: printableFieldKeys(input.printFieldKeys, fallback.printFieldKeys),
     printFieldLabels: printableFieldLabels(input.printFieldLabels),
     elementPositions: fitElementPositions(positions, sizes, widthMm, heightMm),
@@ -650,8 +735,15 @@ export function normalizeIdCardPrintSettings(
     accentColor: oneOf(input.accentColor, BADGE_ACCENT_KEYS, fallback.accentColor),
     textColor: oneOf(input.textColor, BADGE_TEXT_KEYS, fallback.textColor),
     ...flags,
+    showIdNumber: flags.showIdNumber ?? false,
+    showValidUntil: flags.showValidUntil ?? false,
     photoShape: oneOf(input.photoShape, ["circle", "rounded"] as const, fallback.photoShape),
     sponsorLimit: Number.isFinite(sponsorLimit) ? clamp(Math.round(sponsorLimit), 1, SPONSOR_LIMIT_MAX) : fallback.sponsorLimit,
+    showName: bool(input.showName, fallback.showName),
+    showQr: bool(input.showQr, fallback.showQr),
+    idNumberLabel: typeof input.idNumberLabel === "string" ? input.idNumberLabel.trim().slice(0, 30) : fallback.idNumberLabel,
+    validUntilLabel: typeof input.validUntilLabel === "string" ? input.validUntilLabel.trim().slice(0, 30) : fallback.validUntilLabel,
+    watermark: watermark(input.watermark),
   };
 }
 

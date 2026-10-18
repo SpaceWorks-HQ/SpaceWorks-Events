@@ -1,5 +1,6 @@
 import {
   badgeLabelPt,
+  watermarkSizePt,
   DETAILS_COLUMN_GAP_MM,
   DETAILS_ROW_GAP_MM,
   ID_CARD_LINE_HEIGHT,
@@ -33,11 +34,16 @@ export type TextMeasurer = {
   clean(text: string): string;
 };
 
-export type BadgeTextOp = { kind: "text"; x: number; baseline: number; text: string; sizePt: number; weight: FontWeight; color: string; trackingEm: number };
+export type BadgeTextOp = {
+  kind: "text"; x: number; baseline: number; text: string; sizePt: number; weight: FontWeight; color: string; trackingEm: number;
+  /** Watermarks only: clockwise rotation about (x, baseline), and 0–1 opacity. */
+  rotateDeg?: number;
+  opacity?: number;
+};
 export type BadgeOp =
   | { kind: "rect"; x: number; y: number; w: number; h: number; radius: number; fill?: string; stroke?: string; strokeWidth?: number }
   | BadgeTextOp
-  | { kind: "image"; url: string; x: number; y: number; w: number; h: number; fit: "contain" | "cover"; shape: "none" | "circle" | "rounded"; grayscale: boolean }
+  | { kind: "image"; url: string; x: number; y: number; w: number; h: number; fit: "contain" | "cover"; shape: "none" | "circle" | "rounded"; grayscale: boolean; opacity?: number }
   | { kind: "qr"; value: string; x: number; y: number; size: number; dark: string; light: string }
   | { kind: "symbol"; variant: BadgeSymbolVariant; x: number; y: number; w: number; h: number };
 
@@ -128,7 +134,22 @@ export function badgeImageUrls(settings: IdCardPrintSettings, branding: BadgeBra
     eventLogo: settings.showEventLogo ? branding.eventLogoUrl : null,
     sponsors: settings.showSponsors ? branding.sponsorLogoUrls.slice(0, settings.sponsorLimit) : [],
     photo: settings.showPhoto ? attendee?.photoUrl ?? null : null,
+    watermark: settings.watermark.kind === "image" ? branding.watermarkUrl ?? null : null,
   };
+}
+
+/** Where a watermark image sits: centred, within 70% of the card. */
+export function watermarkImageBox(widthMm: number, heightMm: number) {
+  const w = widthMm * 0.7;
+  const h = heightMm * 0.7;
+  return { x: (widthMm - w) / 2, y: (heightMm - h) / 2, w, h };
+}
+
+/** The text a member ID item prints, or "" when there is nothing to print. */
+export function memberLine(label: string, value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return "";
+  return label.trim() ? `${label.trim()} ${text}` : text;
 }
 
 export function buildBadgeScene({ settings, attendee, branding, measurer }: BadgeSceneInput): BadgeScene {
@@ -143,6 +164,34 @@ export function buildBadgeScene({ settings, attendee, branding, measurer }: Badg
   const ops: BadgeOp[] = [];
   const graphics: BadgeOp[] = [];
   const images = badgeImageUrls(settings, branding, attendee);
+
+  // The watermark sits under everything else.
+  const mark = settings.watermark;
+  const markColour = mark.colour === "text" ? palette.text : palette.accent === palette.background ? palette.text : palette.accent;
+  if (mark.kind === "text" && mark.text.trim()) {
+    const text = measurer.clean(mark.text.trim().toLocaleUpperCase("en"));
+    const sizePt = watermarkSizePt(text, settings.widthMm, settings.heightMm, mark.angleDeg);
+    const width = measurer.widthMm(text, 700, sizePt, 0.04);
+    const size = ptMm(sizePt);
+    // Centre the text box on the card, then rotate its start point about the centre.
+    const dx = -width / 2;
+    const dy = ((measurer.ascent - measurer.descent) * size) / 2;
+    const angle = (mark.angleDeg * Math.PI) / 180;
+    ops.push({
+      kind: "text",
+      x: settings.widthMm / 2 + dx * Math.cos(angle) - dy * Math.sin(angle),
+      baseline: settings.heightMm / 2 + dx * Math.sin(angle) + dy * Math.cos(angle),
+      text,
+      sizePt,
+      weight: 700,
+      color: markColour,
+      trackingEm: 0.04,
+      rotateDeg: mark.angleDeg,
+      opacity: mark.opacityPct / 100,
+    });
+  } else if (images.watermark) {
+    ops.push({ kind: "image", url: images.watermark, ...watermarkImageBox(settings.widthMm, settings.heightMm), fit: "contain", shape: "none", grayscale: mono, opacity: mark.opacityPct / 100 });
+  }
 
   if (decor.frame) {
     ops.push({
@@ -186,14 +235,25 @@ export function buildBadgeScene({ settings, attendee, branding, measurer }: Badg
     }
   }
 
-  const name = decor.nameUppercase ? attendee.displayName.toLocaleUpperCase("en") : attendee.displayName;
-  ops.push(...paragraph(measurer, name, at.name.xMm, at.name.yMm, size.name, {
-    sizePt: nameSizePt(settings, attendee.displayName),
-    weight: weight(bold.name),
-    color: palette.text,
-    trackingEm: decor.nameTrackingEm,
-    lineHeight: ID_CARD_LINE_HEIGHT.name,
-  }).ops);
+  if (settings.showName) {
+    const name = decor.nameUppercase ? attendee.displayName.toLocaleUpperCase("en") : attendee.displayName;
+    ops.push(...paragraph(measurer, name, at.name.xMm, at.name.yMm, size.name, {
+      sizePt: nameSizePt(settings, attendee.displayName),
+      weight: weight(bold.name),
+      color: palette.text,
+      trackingEm: decor.nameTrackingEm,
+      lineHeight: ID_CARD_LINE_HEIGHT.name,
+    }).ops);
+  }
+
+  const idLine = settings.showIdNumber ? memberLine(settings.idNumberLabel, attendee.idNumber) : "";
+  if (idLine) {
+    ops.push(...paragraph(measurer, idLine, at.idNumber.xMm, at.idNumber.yMm, size.idNumber, { sizePt: pt.idNumber, weight: weight(bold.idNumber), color: palette.text, trackingEm: 0.02, lineHeight: ID_CARD_LINE_HEIGHT.body }).ops);
+  }
+  const validLine = settings.showValidUntil ? memberLine(settings.validUntilLabel, attendee.validUntil) : "";
+  if (validLine) {
+    ops.push(...paragraph(measurer, validLine, at.validUntil.xMm, at.validUntil.yMm, size.validUntil, { sizePt: pt.validUntil, weight: weight(bold.validUntil), color: palette.text, lineHeight: ID_CARD_LINE_HEIGHT.body }).ops);
+  }
 
   if (settings.showEmail && attendee.email) {
     ops.push(...paragraph(measurer, attendee.email, at.email.xMm, at.email.yMm, size.email, { sizePt: pt.email, weight: weight(bold.email), color: palette.text, lineHeight: ID_CARD_LINE_HEIGHT.body }).ops);
@@ -282,8 +342,10 @@ export function buildBadgeScene({ settings, attendee, branding, measurer }: Badg
     graphics.push({ kind: "symbol", variant: palette.symbol, x: at.symbol.xMm, y: at.symbol.yMm + (side - h) / 2, w: side, h });
   }
 
-  graphics.push({ kind: "rect", x: at.qr.xMm, y: at.qr.yMm, w: size.qr + 2 * TILE_PADDING_MM, h: size.qr + 2 * TILE_PADDING_MM, radius: 0, fill: palette.qrLight });
-  graphics.push({ kind: "qr", value: attendee.checkInQrToken, x: at.qr.xMm + TILE_PADDING_MM, y: at.qr.yMm + TILE_PADDING_MM, size: size.qr, dark: palette.qrDark, light: palette.qrLight });
+  if (settings.showQr) {
+    graphics.push({ kind: "rect", x: at.qr.xMm, y: at.qr.yMm, w: size.qr + 2 * TILE_PADDING_MM, h: size.qr + 2 * TILE_PADDING_MM, radius: 0, fill: palette.qrLight });
+    graphics.push({ kind: "qr", value: attendee.checkInQrToken, x: at.qr.xMm + TILE_PADDING_MM, y: at.qr.yMm + TILE_PADDING_MM, size: size.qr, dark: palette.qrDark, light: palette.qrLight });
+  }
 
   return { widthMm: settings.widthMm, heightMm: settings.heightMm, background: palette.background, ops: [...ops, ...graphics] };
 }

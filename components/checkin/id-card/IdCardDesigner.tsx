@@ -633,16 +633,19 @@ function Inspector({
   const size = settings.elementSizes[selected];
   const visible: Record<IdCardLayoutElement, boolean> = {
     header: Boolean((settings.showBadgeLabel && settings.badgeLabel.trim()) || settings.heading.trim()),
-    name: true,
+    name: settings.showName,
     email: settings.showEmail,
     details: settings.printFieldKeys.length > 0,
-    qr: true,
+    qr: settings.showQr,
     footer: settings.showFooter && Boolean(settings.footerText.trim()),
     logo: settings.showLogo && Boolean(branding.organisationLogoUrl),
     eventLogo: settings.showEventLogo && Boolean(branding.eventLogoUrl),
     symbol: settings.showSymbol,
     photo: settings.showPhoto,
     sponsors: settings.showSponsors && branding.sponsorLogoUrls.length > 0,
+    // Member ID items; event badges don't print them.
+    idNumber: false,
+    validUntil: false,
   };
   const place = (xMm: number, yMm: number) => update({ elementPositions: { ...settings.elementPositions, [selected]: { xMm: Math.round(xMm * 10) / 10, yMm: Math.round(yMm * 10) / 10 } } });
   const height = elementHeightForMove(settings, selected);

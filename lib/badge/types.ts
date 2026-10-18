@@ -11,6 +11,10 @@ export type IdCardAttendee = {
   registrationDetails: Array<{ key: string; label: string; value: string }>;
   /** Managed (uploaded) profile image only; see lib/badge/imageUrl.ts. */
   photoUrl?: string | null;
+  /** Member ID cards: the printed ID number, e.g. SWK-2026-0042. */
+  idNumber?: string | null;
+  /** Member ID cards: the expiry date, already formatted for print. */
+  validUntil?: string | null;
 };
 
 /**
@@ -22,6 +26,8 @@ export type BadgeBranding = {
   organisationLogoUrl: string | null;
   eventLogoUrl: string | null;
   sponsorLogoUrls: string[];
+  /** Member ID cards: an uploaded watermark image (managed upload). */
+  watermarkUrl?: string | null;
 };
 
 export const EMPTY_BRANDING: BadgeBranding = { eventAccent: null, organisationLogoUrl: null, eventLogoUrl: null, sponsorLogoUrls: [] };
