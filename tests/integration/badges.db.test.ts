@@ -82,6 +82,11 @@ describe.sequential("badge design and download authorisation", { timeout: 60_000
     expect(row.settings).toMatchObject({ template: "bold", backgroundColor: "cream", accentColor: "event", heading: "Summit" });
     const read = await getBadgeDesign({ organisationSlug: orgASlug(), eventId: ids.eventA });
     expect(read.ok && read.data).toMatchObject({ saved: true, settings: { template: "bold" } });
+    // Autosaves within ten minutes share one audit row.
+    expect((await saveBadgeDesign({ organisationSlug: orgASlug(), eventId: ids.eventA, settings: { colorMode: "colour", template: "bold", heading: "Summit 2" } })).ok).toBe(true);
+    const audits = await prisma.auditEvent.findMany({ where: { action: "BADGE_DESIGN_UPDATED", targetId: ids.eventA } });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ actorUserId: ids.owner, organisationId: ids.orgA, targetType: "Event" });
   });
 
   it("lets a check-in collaborator save, but not a plain member", async () => {

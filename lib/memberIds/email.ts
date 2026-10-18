@@ -1,10 +1,11 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
+import { recordAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { EMAIL_BUTTON_STYLE, EMAIL_COLORS, emailLayout } from "@/lib/email/brand";
 import { assertEmailAccepted, getEmailTransport } from "@/lib/email/transporter";
-import { cardState, formatCardDate } from "./core";
+import { cardState, formatCardDate, MEMBER_ID_EMAIL_COOLDOWN_MS, memberIdEmailDailyCap } from "./core";
 import { memberCardPerson, memberCardSelect, programmeBranding, programmeDesign, verifyUrl } from "./data";
 import { renderMemberCard } from "./render";
 
@@ -24,6 +25,72 @@ export type MemberIdEmailPayload = { to: string; memberId: string };
 export async function enqueueMemberIdCardEmails(client: OutboxClient, recipients: MemberIdEmailPayload[]) {
   if (recipients.length === 0) return { count: 0 };
   return client.outboxMessage.createMany({ data: recipients.map((payload) => ({ kind: MEMBER_ID_EMAIL_KIND, payload: payload as Prisma.InputJsonValue })) });
+}
+
+export const MEMBER_ID_EMAIL_AUDIT = "ID_CARDS_EMAILED";
+
+export type MemberIdEmailQueueResult = { matched: number; queued: number; skippedRecent: number; skippedLimit: number };
+
+/**
+ * Who may get a card email now. Nobody is emailed twice within the cooldown.
+ * A bulk send reaches only people who joined themselves (linked account) or
+ * were never emailed, so an imported address list can't be mailed over and
+ * over; an explicit one-member send may resend once the cooldown has passed.
+ */
+export function memberIdEmailEligibleWhere(now: Date, explicit: boolean): Prisma.IdMemberWhereInput {
+  const afterCooldown = { lastEmailedAt: { lte: new Date(now.getTime() - MEMBER_ID_EMAIL_COOLDOWN_MS) } };
+  return { OR: [{ lastEmailedAt: null }, explicit ? afterCooldown : { ...afterCooldown, userId: { not: null } }] };
+}
+
+/**
+ * Queue card emails for a programme's valid cards (all, or the chosen ones)
+ * to the eligible members, up to what is left of the organisation's daily
+ * cap. The organisation row is locked so concurrent sends can't overshoot the
+ * cap, which counts the audit rows written here (they outlive deleted members
+ * and delivered messages).
+ */
+export async function queueMemberIdCardEmails(input: { actorUserId: string; organisationId: string; programmeId: string; memberIds?: string[]; explicit: boolean; take: number; now?: Date }): Promise<MemberIdEmailQueueResult> {
+  const now = input.now ?? new Date();
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Organisation" WHERE "id" = ${input.organisationId} FOR UPDATE`;
+    const organisation = await tx.organisation.findUniqueOrThrow({ where: { id: input.organisationId }, select: { createdAt: true } });
+    const recent = await tx.auditEvent.findMany({
+      where: { organisationId: input.organisationId, action: MEMBER_ID_EMAIL_AUDIT, createdAt: { gt: new Date(now.getTime() - MEMBER_ID_EMAIL_COOLDOWN_MS) } },
+      select: { metadata: true },
+    });
+    const sentToday = recent.reduce((sum, row) => {
+      const count = (row.metadata as { count?: unknown } | null)?.count;
+      return sum + (typeof count === "number" ? count : 0);
+    }, 0);
+    const remaining = Math.max(0, memberIdEmailDailyCap(organisation.createdAt, now) - sentToday);
+
+    const valid: Prisma.IdMemberWhereInput = {
+      programmeId: input.programmeId,
+      organisationId: input.organisationId,
+      status: "APPROVED",
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      ...(input.memberIds ? { id: { in: input.memberIds } } : {}),
+    };
+    const eligible: Prisma.IdMemberWhereInput = { AND: [valid, memberIdEmailEligibleWhere(now, input.explicit)] };
+    const matched = await tx.idMember.count({ where: valid });
+    const eligibleCount = await tx.idMember.count({ where: eligible });
+    const send = remaining === 0 ? [] : await tx.idMember.findMany({ where: eligible, select: { id: true, email: true }, take: Math.min(input.take, remaining), orderBy: { createdAt: "asc" } });
+    const result = { matched, queued: send.length, skippedRecent: matched - eligibleCount, skippedLimit: eligibleCount - send.length };
+    if (send.length > 0) {
+      await enqueueMemberIdCardEmails(tx, send.map((member) => ({ to: member.email, memberId: member.id })));
+      await tx.idMember.updateMany({ where: { id: { in: send.map((member) => member.id) } }, data: { lastEmailedAt: now } });
+      await recordAuditEvent({
+        client: tx,
+        action: MEMBER_ID_EMAIL_AUDIT,
+        actorUserId: input.actorUserId,
+        organisationId: input.organisationId,
+        targetType: "IdProgramme",
+        targetId: input.programmeId,
+        metadata: { count: send.length, skippedRecent: result.skippedRecent, skippedLimit: result.skippedLimit },
+      });
+    }
+    return result;
+  });
 }
 
 export function asMemberIdEmailPayload(value: Prisma.JsonValue): MemberIdEmailPayload | null {

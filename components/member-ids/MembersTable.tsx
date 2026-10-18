@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Check, Copy, Download, Mail, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Slash, UserPlus, X } from "lucide-react";
-import { addIdMember, emailIdCards, renewIdMembers, setIdMemberStatus, updateIdMember, uploadIdMemberPhoto } from "@/app/actions/member-ids";
+import { Check, Copy, Download, Mail, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Slash, Trash2, UserPlus, X } from "lucide-react";
+import { addIdMember, deleteIdMember, emailIdCard, emailIdCards, renewIdMembers, setIdMemberStatus, updateIdMember, uploadIdMemberPhoto } from "@/app/actions/member-ids";
 import { Button, IconButton } from "@/components/ui/button";
 import { Checkbox, CheckboxField } from "@/components/ui/choice";
 import { ConfirmDialog, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
@@ -13,7 +13,7 @@ import { Dropdown, Field, Input, SearchInput, Textarea } from "@/components/ui/f
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { cn } from "@/lib/cn";
-import type { CardState, FieldType, MemberStatus } from "@/lib/memberIds/core";
+import { emailQueuedNotice, type CardState, type FieldType, type MemberStatus } from "@/lib/memberIds/core";
 import { fetchDownload } from "./download";
 import { MemberStatusPill } from "./StatusPill";
 
@@ -77,6 +77,7 @@ export function MembersTable({
   const [reasonFor, setReasonFor] = useState<{ action: "reject" | "revoke"; ids: string[] } | null>(null);
   const [reason, setReason] = useState("");
   const [editing, setEditing] = useState<MemberRow | "new" | null>(null);
+  const [deleting, setDeleting] = useState<MemberRow | null>(null);
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState(filter.search);
 
@@ -112,12 +113,12 @@ export function MembersTable({
     }
   };
 
-  const simple = async (task: () => Promise<{ ok: true; data?: { count: number } } | { ok: false; error: string }>, done: (n: number) => string) => {
+  const simple = async <T extends { count: number }>(task: () => Promise<{ ok: true; data?: T } | { ok: false; error: string }>, done: (n: number, data?: T) => string) => {
     setBusy(true);
     setNotice(null);
     try {
       const result = await task();
-      if (result.ok) finish(true, done(result.data?.count ?? 0));
+      if (result.ok) finish(true, done(result.data?.count ?? 0, result.data));
       else finish(false, result.error);
     } catch {
       finish(false, "That didn't work. Check your connection and try again.");
@@ -213,7 +214,7 @@ export function MembersTable({
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-panel p-3" role="toolbar" aria-label="Selected members">
           <p className="mr-auto text-label text-ink">{selected.size} selected</p>
           <Button size="sm" variant="primary" startIcon={<Check />} disabled={busy} onClick={() => changeStatus("approve", selectedIds)}>Approve</Button>
-          <Button size="sm" variant="secondary" startIcon={<Mail />} disabled={busy} onClick={() => simple(() => emailIdCards({ ...ids, memberIds: selectedIds }), (n) => `${n} emails queued.`)}>Email cards</Button>
+          <Button size="sm" variant="secondary" startIcon={<Mail />} disabled={busy} onClick={() => simple(() => emailIdCards({ ...ids, memberIds: selectedIds }), (n, data) => emailQueuedNotice(data ?? { count: n, skippedRecent: 0, skippedLimit: 0 }))}>Email cards</Button>
           <Button size="sm" variant="secondary" startIcon={<RefreshCw />} disabled={busy} onClick={() => simple(() => renewIdMembers({ ...ids, memberIds: selectedIds }), (n) => `${n} cards renewed from today.`)}>Renew</Button>
           <Button size="sm" variant="quiet" disabled={busy} onClick={() => setReasonFor({ action: "reject", ids: selectedIds })}>Reject</Button>
           <Button size="sm" variant="dangerQuiet" disabled={busy} onClick={() => setReasonFor({ action: "revoke", ids: selectedIds })}>Revoke</Button>
@@ -294,17 +295,14 @@ export function MembersTable({
                             <>
                               <MenuItem icon={<Download />} onSelect={() => void downloadCard(row, "pdf")}>Download PDF</MenuItem>
                               <MenuItem icon={<Download />} onSelect={() => void downloadCard(row, "png")}>Download PNG (front)</MenuItem>
-                              <MenuItem icon={<Mail />} onSelect={() => simple(() => emailIdCards({ ...ids, memberIds: [row.id] }), () => `Card emailed to ${row.email ?? row.name}.`)}>Email card</MenuItem>
+                              <MenuItem icon={<Mail />} onSelect={() => simple(() => emailIdCard({ ...ids, memberId: row.id }), () => `Card emailed to ${row.email ?? row.name}.`)}>Email card</MenuItem>
                               <MenuItem icon={<RefreshCw />} onSelect={() => simple(() => renewIdMembers({ ...ids, memberIds: [row.id] }), () => `${row.name}'s card renewed from today.`)}>Renew</MenuItem>
                             </>
                           ) : null}
                           <MenuItem icon={<Pencil />} onSelect={() => setEditing(row)}>Edit details and photo</MenuItem>
-                          {row.status === "APPROVED" ? (
-                            <>
-                              <MenuSeparator />
-                              <MenuItem danger icon={<Slash />} onSelect={() => setReasonFor({ action: "revoke", ids: [row.id] })}>Revoke card</MenuItem>
-                            </>
-                          ) : null}
+                          <MenuSeparator />
+                          {row.status === "APPROVED" ? <MenuItem danger icon={<Slash />} onSelect={() => setReasonFor({ action: "revoke", ids: [row.id] })}>Revoke card</MenuItem> : null}
+                          <MenuItem danger icon={<Trash2 />} onSelect={() => setDeleting(row)}>Delete member</MenuItem>
                         </MenuContent>
                       </Menu>
                     </div>
@@ -346,6 +344,30 @@ export function MembersTable({
           <Textarea rows={2} maxLength={300} value={reason} onChange={(event) => setReason(event.target.value)} />
         </Field>
       </ConfirmDialog>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title={`Delete ${deleting?.name ?? "this member"}?`}
+        message="Their card, ID number and photo are removed for good, and the card's check page will say it can't be found. To stop a card but keep the record, revoke it instead."
+        confirmLabel="Delete member"
+        loading={busy}
+        onCancel={() => setDeleting(null)}
+        onConfirm={async () => {
+          if (!deleting) return;
+          const row = deleting;
+          setBusy(true);
+          setNotice(null);
+          try {
+            const result = await deleteIdMember({ ...ids, memberId: row.id });
+            finish(result.ok, result.ok ? `${row.name} was deleted.` : result.error);
+          } catch {
+            finish(false, "That didn't work. Check your connection and try again.");
+          } finally {
+            setBusy(false);
+            setDeleting(null);
+          }
+        }}
+      />
 
       {editing ? (
         <MemberDialog

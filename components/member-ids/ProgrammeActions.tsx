@@ -7,6 +7,7 @@ import { emailIdCards, renewIdMembers } from "@/app/actions/member-ids";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
 import { ConfirmDialog } from "@/components/ui/dialog";
+import { emailQueuedNotice } from "@/lib/memberIds/core";
 import { fetchDownload } from "./download";
 
 type Busy = "pdf" | "zip" | "email" | "renew" | null;
@@ -54,7 +55,7 @@ export function ProgrammeActions({ organisationSlug, programmeId, approved }: { 
         destructive={false}
         title={confirm === "email" ? "Email every valid card?" : "Renew every approved card?"}
         message={confirm === "email"
-          ? "Each member with a valid card gets an email with their card attached as a PDF and a link to their ID wallet."
+          ? "Members with a valid card who joined themselves or haven't been emailed yet get their card as a PDF and a link to their ID wallet. Nobody is emailed twice in 24 hours, and your organisation can send a limited number of card emails a day."
           : "Validity restarts from today under this programme's rule (Settings). Revoked cards stay revoked."}
         confirmLabel={confirm === "email" ? "Send emails" : "Renew cards"}
         onCancel={() => setConfirm(null)}
@@ -64,7 +65,7 @@ export function ProgrammeActions({ organisationSlug, programmeId, approved }: { 
           if (kind === "email") {
             void run("email", async () => {
               const result = await emailIdCards({ organisationSlug, programmeId });
-              return result.ok ? { ok: true, text: `${result.data?.count ?? 0} emails queued. They go out within a minute or two.` } : { ok: false, text: result.error };
+              return result.ok ? { ok: true, text: emailQueuedNotice(result.data ?? { count: 0, skippedRecent: 0, skippedLimit: 0 }) } : { ok: false, text: result.error };
             });
           } else if (kind === "renew") {
             void run("renew", async () => {

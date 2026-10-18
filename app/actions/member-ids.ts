@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-import { recordAuditEvent } from "@/lib/audit";
+import { recordAuditEvent, recordThrottledAuditEvent } from "@/lib/audit";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import {
@@ -22,11 +22,11 @@ import {
 import { memberIdsAccess, type MemberIdsAccess } from "@/lib/memberIds/access";
 import { loadProgramme, newVerifyToken } from "@/lib/memberIds/data";
 import { defaultMemberIdDesign, MEMBER_ID_DESIGN_MAX_BYTES, MEMBER_ID_PRESETS, normalizeMemberIdDesign } from "@/lib/memberIds/design";
-import { enqueueMemberIdCardEmails } from "@/lib/memberIds/email";
+import { queueMemberIdCardEmails, type MemberIdEmailQueueResult } from "@/lib/memberIds/email";
 import { IMPORT_CELL_MAX, IMPORT_MAX_BYTES, IMPORT_MAX_COLUMNS, IMPORT_MAX_ROWS, autoMap, parseCsv, planImport, toImportTable, type ImportTarget } from "@/lib/memberIds/importRows";
 import { approveMembers } from "@/lib/memberIds/issue";
 import { fetchGoogleSheetCsv, SheetFetchError } from "@/lib/memberIds/sheets";
-import { storeMemberIdImage } from "@/lib/memberIds/uploads";
+import { removeMemberIdImages, storeMemberIdImage } from "@/lib/memberIds/uploads";
 import { slugifyTitle } from "@/lib/slug";
 import type { ActionResult } from "./org";
 
@@ -38,6 +38,7 @@ import type { ActionResult } from "./org";
 
 const NOT_FOUND = "That ID programme wasn't found.";
 const MAX_BULK = 500;
+const DESIGN_AUDIT_WINDOW_MS = 10 * 60_000;
 
 const orgInput = z.object({ organisationSlug: z.string().trim().min(1).max(120) });
 const programmeInput = orgInput.extend({ programmeId: z.string().trim().min(1).max(128) });
@@ -161,8 +162,10 @@ export async function deleteIdProgramme(input: unknown): Promise<ActionResult> {
   const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId);
   if (!context.ok) return context;
   const { access, programme } = context;
+  const photos = await prisma.idMember.findMany({ where: { programmeId: programme.id, photoUrl: { not: null } }, select: { photoUrl: true } });
   await prisma.idProgramme.delete({ where: { id: programme.id } });
   await recordAuditEvent({ action: "ID_PROGRAMME_DELETED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdProgramme", targetId: programme.id });
+  await removeMemberIdImages(access.organisation.id, [programme.watermarkUrl, ...photos.map((member) => member.photoUrl)]);
   revalidate(access);
   return { ok: true };
 }
@@ -220,6 +223,8 @@ export async function saveIdProgrammeDesign(input: unknown): Promise<ActionResul
   const { access, programme } = context;
   const design = normalizeMemberIdDesign(parsed.data.design, { programmeName: programme.name, organisationName: access.organisation.name });
   const saved = await prisma.idProgramme.update({ where: { id: programme.id }, data: { design: design as unknown as Prisma.InputJsonValue }, select: { updatedAt: true } });
+  // The designer autosaves; one audit row per editing session is enough.
+  await recordThrottledAuditEvent({ action: "ID_PROGRAMME_DESIGN_UPDATED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdProgramme", targetId: programme.id, windowMs: DESIGN_AUDIT_WINDOW_MS });
   return { ok: true, data: { updatedAt: saved.updatedAt.toISOString() } };
 }
 
@@ -241,6 +246,7 @@ export async function uploadIdProgrammeWatermark(formData: FormData): Promise<Ac
     }
   }
   await prisma.idProgramme.update({ where: { id: programme.id }, data: { watermarkUrl: url } });
+  await recordAuditEvent({ action: "ID_PROGRAMME_WATERMARK_UPDATED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdProgramme", targetId: programme.id, metadata: { removed: url === null } });
   revalidate(access, programme.id);
   return { ok: true, data: { url } };
 }
@@ -326,6 +332,25 @@ export async function uploadIdMemberPhoto(formData: FormData): Promise<ActionRes
   }
 }
 
+const memberInput = programmeInput.extend({ memberId: z.string().trim().min(1).max(128) }).strict();
+
+/** Remove a member and their card for good, with their stored photo. */
+export async function deleteIdMember(input: unknown): Promise<ActionResult> {
+  const parsed = memberInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That member wasn't found." };
+  const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId);
+  if (!context.ok) return context;
+  const { access, programme } = context;
+  const member = await prisma.idMember.findFirst({ where: { id: parsed.data.memberId, programmeId: programme.id }, select: { id: true, photoUrl: true } });
+  if (!member) return { ok: false, error: "That member wasn't found." };
+  const { count } = await prisma.idMember.deleteMany({ where: { id: member.id, programmeId: programme.id } });
+  if (count === 0) return { ok: false, error: "That member wasn't found." };
+  await recordAuditEvent({ action: "ID_MEMBER_DELETED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdMember", targetId: member.id });
+  await removeMemberIdImages(access.organisation.id, [member.photoUrl]);
+  revalidate(access, programme.id);
+  return { ok: true };
+}
+
 const statusInput = programmeInput.extend({
   memberIds: idList,
   action: z.enum(["approve", "reject", "revoke", "reinstate"]),
@@ -376,29 +401,43 @@ export async function renewIdMembers(input: unknown): Promise<ActionResult<{ cou
 
 const emailInput = programmeInput.extend({ memberIds: idList.optional() }).strict();
 
-/** Queue "your ID card" emails for valid cards (all of them, or the chosen ones). */
-export async function emailIdCards(input: unknown): Promise<ActionResult<{ count: number }>> {
+export type EmailCardsResult = { count: number; skippedRecent: number; skippedLimit: number };
+
+function emailOutcome(result: MemberIdEmailQueueResult): ActionResult<EmailCardsResult> {
+  if (result.matched === 0) return { ok: false, error: "No valid cards to send. Approve members first." };
+  if (result.queued === 0) {
+    return result.skippedLimit > 0
+      ? { ok: false, error: "Your organisation has reached today's limit for ID card emails. Try again tomorrow." }
+      : { ok: false, error: "Those cards were already emailed. A card can be emailed again 24 hours after the last send." };
+  }
+  return { ok: true, data: { count: result.queued, skippedRecent: result.skippedRecent, skippedLimit: result.skippedLimit } };
+}
+
+/**
+ * Queue "your ID card" emails for valid cards (all of them, or the chosen
+ * ones). Only members who joined themselves or were never emailed are
+ * included, each at most once a day, within the organisation's daily cap.
+ */
+export async function emailIdCards(input: unknown): Promise<ActionResult<EmailCardsResult>> {
   const parsed = emailInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose up to 500 members and try again." };
   const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId, "broadcast");
   if (!context.ok) return context;
   const { access, programme } = context;
-  const now = new Date();
-  const members = await prisma.idMember.findMany({
-    where: {
-      programmeId: programme.id,
-      status: "APPROVED",
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-      ...(parsed.data.memberIds ? { id: { in: parsed.data.memberIds } } : {}),
-    },
-    select: { id: true, email: true },
-    take: MAX_BULK,
-    orderBy: { createdAt: "asc" },
-  });
-  if (members.length === 0) return { ok: false, error: "No valid cards to send. Approve members first." };
-  await enqueueMemberIdCardEmails(prisma, members.map((member) => ({ to: member.email, memberId: member.id })));
-  await recordAuditEvent({ action: "ID_CARDS_EMAILED", actorUserId: access.userId, organisationId: access.organisation.id, targetType: "IdProgramme", targetId: programme.id, metadata: { count: members.length } });
-  return { ok: true, data: { count: members.length } };
+  const result = await queueMemberIdCardEmails({ actorUserId: access.userId, organisationId: access.organisation.id, programmeId: programme.id, memberIds: parsed.data.memberIds, explicit: false, take: MAX_BULK });
+  return emailOutcome(result);
+}
+
+/** Email one member their card, including a resend, at most once a day and within the daily cap. */
+export async function emailIdCard(input: unknown): Promise<ActionResult<EmailCardsResult>> {
+  const parsed = memberInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That member wasn't found." };
+  const context = await requireProgramme(parsed.data.organisationSlug, parsed.data.programmeId, "broadcast");
+  if (!context.ok) return context;
+  const { access, programme } = context;
+  const result = await queueMemberIdCardEmails({ actorUserId: access.userId, organisationId: access.organisation.id, programmeId: programme.id, memberIds: [parsed.data.memberId], explicit: true, take: 1 });
+  if (result.matched === 0) return { ok: false, error: "Only approved, valid cards can be emailed." };
+  return emailOutcome(result);
 }
 
 // --- Import --------------------------------------------------------------
