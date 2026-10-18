@@ -7,13 +7,13 @@ import * as AccordionPrimitive from "@radix-ui/react-accordion";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-/* ---------- Underline tabs (docs/DESIGN.md §4.4) ---------- */
+/* ---------- Underline tabs (docs/DESIGN.md §4.4): 2px teal (or event accent) underline ---------- */
 
 export const Tabs = TabsPrimitive.Root;
 
 const tabListClasses = "flex gap-1 overflow-x-auto border-b border-line [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 const tabClasses =
-  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-[15px] font-semibold text-ink-muted transition-colors duration-[180ms] ease-yy hover:text-ink after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent [&_svg]:size-4";
+  "relative inline-flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap px-3 text-[15px] font-semibold text-ink-muted transition-colors duration-[120ms] ease-yy hover:text-ink after:absolute after:inset-x-3 after:-bottom-px after:h-0.5 after:rounded-full after:bg-transparent [&_svg]:size-4";
 
 /**
  * Tab rows scroll sideways on narrow screens. These hints show a faded arrow
@@ -77,7 +77,7 @@ function ScrollHint({ side, visible, onClick }: { side: "left" | "right"; visibl
         tabIndex={-1}
         onClick={onClick}
         className={cn(
-          "inline-flex size-8 items-center justify-center rounded-full border border-line bg-canvas text-ink-secondary shadow-[0_1px_2px_rgba(24,24,27,0.08)] transition-colors hover:text-ink",
+          "inline-flex size-8 items-center justify-center rounded-md border border-line bg-panel text-ink-secondary transition-colors hover:bg-muted hover:text-ink",
           visible && "pointer-events-auto",
         )}
       >

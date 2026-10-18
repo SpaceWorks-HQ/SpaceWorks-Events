@@ -1,10 +1,10 @@
 import type { HTMLAttributes, TdHTMLAttributes, ThHTMLAttributes } from "react";
 import { cn } from "@/lib/cn";
 
-/** Rounded, bordered table that scrolls inside its own box on small screens (docs/DESIGN.md §4.8). */
+/** Rounded (16px), bordered table with 48px rows that scrolls inside its own box on small screens (docs/DESIGN.md §4.8). */
 export function Table({ className, children, label, ...props }: HTMLAttributes<HTMLTableElement> & { label?: string }) {
   return (
-    <div className="w-full overflow-x-auto rounded-lg border border-line bg-canvas" role="region" aria-label={label} tabIndex={label ? 0 : undefined}>
+    <div className="w-full overflow-x-auto rounded-xl border border-line bg-panel" role="region" aria-label={label} tabIndex={label ? 0 : undefined}>
       <table className={cn("w-full border-collapse text-left text-body-ui", className)} {...props}>
         {children}
       </table>
@@ -13,7 +13,7 @@ export function Table({ className, children, label, ...props }: HTMLAttributes<H
 }
 
 export function THead({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
-  return <thead className={cn("bg-subtle", className)} {...props} />;
+  return <thead className={cn("bg-surface", className)} {...props} />;
 }
 
 export function TBody({ className, ...props }: HTMLAttributes<HTMLTableSectionElement>) {
@@ -21,13 +21,13 @@ export function TBody({ className, ...props }: HTMLAttributes<HTMLTableSectionEl
 }
 
 export function TR({ className, ...props }: HTMLAttributes<HTMLTableRowElement>) {
-  return <tr className={cn("transition-colors hover:bg-subtle/60", className)} {...props} />;
+  return <tr className={cn("transition-colors duration-[120ms] hover:bg-subtle", className)} {...props} />;
 }
 
 export function TH({ className, ...props }: ThHTMLAttributes<HTMLTableCellElement>) {
-  return <th scope="col" className={cn("whitespace-nowrap border-b border-line px-4 py-3 text-[13px] font-semibold text-ink-muted", className)} {...props} />;
+  return <th scope="col" className={cn("h-12 whitespace-nowrap border-b border-line px-4 py-2 text-sm font-semibold text-accent-text", className)} {...props} />;
 }
 
 export function TD({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn("border-b border-emphasis px-4 py-3 align-middle text-ink", className)} {...props} />;
+  return <td className={cn("h-12 border-b border-line px-4 py-2.5 align-middle text-ink", className)} {...props} />;
 }

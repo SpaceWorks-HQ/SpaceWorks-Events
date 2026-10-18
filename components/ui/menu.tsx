@@ -22,7 +22,7 @@ export const MenuContent = forwardRef<ElementRef<typeof DropdownMenuPrimitive.Co
         ref={ref}
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-canvas p-1.5 text-ink shadow-float", className)}
+        className={cn("z-50 min-w-[200px] overflow-hidden rounded-lg border border-line bg-panel p-1.5 text-ink shadow-float", className)}
         {...props}
       />
     </DropdownMenuPrimitive.Portal>
@@ -50,7 +50,7 @@ export const MenuItem = forwardRef<
       ref={ref}
       asChild={Boolean(slotted)}
       className={cn(
-        "flex min-h-10 cursor-pointer select-none items-center gap-2.5 rounded-md px-3 py-2 text-body-ui outline-none data-[disabled]:pointer-events-none data-[disabled]:text-ink-disabled data-[highlighted]:bg-emphasis [&_svg]:size-[18px] [&_svg]:shrink-0",
+        "flex min-h-10 cursor-pointer select-none items-center gap-2.5 rounded-md px-3 py-2 text-body-ui outline-none data-[disabled]:pointer-events-none data-[disabled]:text-ink-disabled data-[highlighted]:bg-muted [&_svg]:size-[18px] [&_svg]:shrink-0",
         danger ? "text-danger-fg" : "text-ink",
         className,
       )}
@@ -102,7 +102,7 @@ export const PopoverContent = forwardRef<ElementRef<typeof PopoverPrimitive.Cont
         ref={ref}
         sideOffset={sideOffset}
         align={align}
-        className={cn("z-50 rounded-lg border border-line bg-canvas p-3 text-ink shadow-float focus:outline-none", className)}
+        className={cn("z-50 rounded-lg border border-line bg-panel p-3 text-ink shadow-float focus:outline-none", className)}
         {...props}
       />
     </PopoverPrimitive.Portal>

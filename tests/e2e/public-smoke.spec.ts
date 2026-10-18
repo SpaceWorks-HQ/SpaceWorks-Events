@@ -117,7 +117,7 @@ test("login and crawler controls render", async ({ page }) => {
   page.on("pageerror", (error) => browserErrors.push(error.message));
   await page.goto("/login");
   await page.evaluate(() => {
-    localStorage.setItem("yuyu:color-mode", "light");
+    localStorage.setItem("swe:color-mode", "light");
     window.dispatchEvent(new Event("yuyu:color-mode-change"));
   });
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", "light");

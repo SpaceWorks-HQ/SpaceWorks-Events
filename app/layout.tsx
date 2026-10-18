@@ -1,8 +1,4 @@
 import type { Metadata } from "next";
-import "@fontsource-variable/bricolage-grotesque/opsz.css";
-import "@fontsource-variable/figtree/wght.css";
-import "@fontsource/jetbrains-mono/400.css";
-import "@fontsource/jetbrains-mono/500.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { ChromeSwitch } from "@/components/chrome/ChromeSwitch";

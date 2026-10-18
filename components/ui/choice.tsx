@@ -18,7 +18,7 @@ export const Checkbox = forwardRef<ElementRef<typeof CheckboxPrimitive.Root>, Co
     <CheckboxPrimitive.Root
       ref={ref}
       className={cn(
-        "peer inline-flex size-5 shrink-0 items-center justify-center rounded-[6px] border-[1.5px] border-line-strong bg-canvas transition-colors duration-[120ms] ease-yy hover:border-ink-muted disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-on-primary",
+        "peer inline-flex size-5 shrink-0 items-center justify-center rounded-[6px] border-[1.5px] border-line-strong bg-panel transition-colors duration-[120ms] ease-yy hover:border-ink disabled:cursor-not-allowed disabled:border-line disabled:bg-surface data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-on-primary data-[state=indeterminate]:border-primary data-[state=indeterminate]:bg-primary data-[state=indeterminate]:text-on-primary",
         className,
       )}
       {...props}
@@ -65,7 +65,7 @@ export function CheckboxCard({
     <label
       htmlFor={controlId}
       className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-canvas p-4 transition-colors duration-[180ms] ease-yy hover:bg-subtle has-[[data-state=checked]]:border-[1.5px] has-[[data-state=checked]]:border-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60",
+        "flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-panel p-4 transition-colors duration-[120ms] ease-yy hover:bg-subtle has-[[data-state=checked]]:border-[1.5px] has-[[data-state=checked]]:border-primary has-[:disabled]:cursor-not-allowed has-[:disabled]:bg-surface",
         className,
       )}
     >
@@ -110,7 +110,7 @@ export function Radio({
         id={controlId}
         value={value}
         disabled={disabled}
-        className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-line-strong bg-canvas hover:border-ink-muted disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary"
+        className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-full border-[1.5px] border-line-strong bg-panel hover:border-ink disabled:cursor-not-allowed disabled:border-line disabled:bg-surface data-[state=checked]:border-primary"
       >
         <RadioGroupPrimitive.Indicator className="block size-2.5 rounded-full bg-primary" />
       </RadioGroupPrimitive.Item>
@@ -129,11 +129,11 @@ export function RadioCard({ value, label, description, disabled, className }: { 
       value={value}
       disabled={disabled}
       className={cn(
-        "flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-line bg-canvas px-3 py-3 text-center transition-colors duration-[180ms] ease-yy hover:bg-subtle disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-[1.5px] data-[state=checked]:border-accent data-[state=checked]:bg-accent-soft",
+        "flex min-h-14 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border border-line bg-panel px-3 py-3 text-center transition-colors duration-[120ms] ease-yy hover:bg-subtle disabled:cursor-not-allowed disabled:border-line disabled:bg-surface disabled:[&_span]:text-ink-muted data-[state=checked]:border-[1.5px] data-[state=checked]:border-accent data-[state=checked]:bg-accent-soft",
         className,
       )}
     >
-      <span className="break-words text-[17px] font-bold leading-tight text-ink">{label}</span>
+      <span className="break-words text-[17px] font-semibold leading-tight tabular-nums text-ink">{label}</span>
       {description ? <span className="text-caption text-ink-muted">{description}</span> : null}
     </RadioGroupPrimitive.Item>
   );
@@ -149,12 +149,12 @@ export const Switch = forwardRef<ElementRef<typeof SwitchPrimitive.Root>, Compon
     <SwitchPrimitive.Root
       ref={ref}
       className={cn(
-        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors duration-[180ms] ease-yy disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary",
+        "relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors duration-[180ms] ease-yy disabled:cursor-not-allowed disabled:bg-line data-[state=checked]:bg-primary",
         className,
       )}
       {...props}
     >
-      <SwitchPrimitive.Thumb className="block size-[22px] translate-x-[3px] rounded-full bg-canvas shadow-segment transition-transform duration-[180ms] ease-yy data-[state=checked]:translate-x-[23px]" />
+      <SwitchPrimitive.Thumb className="block size-[22px] translate-x-[3px] rounded-full bg-panel shadow-segment transition-transform duration-[180ms] ease-yy data-[state=checked]:translate-x-[23px]" />
     </SwitchPrimitive.Root>
   );
 });
@@ -205,7 +205,7 @@ export function SegmentedControl<T extends string>({
       value={value}
       onValueChange={(next) => next && onValueChange(next as T)}
       aria-label={ariaLabel}
-      className={cn("inline-flex rounded-full bg-muted p-1", className)}
+      className={cn("inline-flex rounded-lg border border-line bg-surface p-1", className)}
     >
       {options.map((option) => (
         <ToggleGroupPrimitive.Item
@@ -213,7 +213,7 @@ export function SegmentedControl<T extends string>({
           value={option.value}
           aria-label={option.ariaLabel}
           className={cn(
-            "inline-flex items-center justify-center gap-1.5 rounded-full font-semibold text-ink-muted transition-[background-color,color,box-shadow] duration-[180ms] ease-yy hover:text-ink data-[state=on]:bg-canvas data-[state=on]:text-ink data-[state=on]:shadow-segment [&_svg]:size-4",
+            "inline-flex items-center justify-center gap-1.5 rounded-md font-semibold text-ink-muted transition-[background-color,color,box-shadow] duration-[120ms] ease-yy hover:text-ink data-[state=on]:bg-panel data-[state=on]:text-ink data-[state=on]:shadow-segment [&_svg]:size-4",
             size === "sm" ? "min-h-8 px-3 text-[13px]" : "min-h-9 px-4 text-sm",
           )}
         >
@@ -238,7 +238,7 @@ export const FilterChip = forwardRef<HTMLButtonElement, React.ButtonHTMLAttribut
       aria-pressed={selected}
       className={cn(
         "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors duration-[180ms] ease-yy [&_svg]:size-4",
-        selected ? "border-[1.5px] border-primary bg-primary text-on-primary" : "border-line-strong bg-canvas text-ink-secondary hover:bg-subtle hover:text-ink",
+        selected ? "border-[1.5px] border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink-secondary hover:bg-subtle hover:text-ink",
         className,
       )}
       {...props}

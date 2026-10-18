@@ -3,40 +3,87 @@ import { Slot } from "@radix-ui/react-slot";
 import { cn } from "@/lib/cn";
 import { Spinner } from "./spinner";
 
-export type ButtonVariant = "primary" | "accent" | "secondary" | "quiet" | "danger" | "dangerQuiet" | "inverse";
+/**
+ * Space Works button family (docs/DESIGN.md §4.1):
+ * - `primary`: Maker Teal, the screen's main action.
+ * - `accent`: the event's own colour on public event pages (teal by default).
+ * - `secondary` / `neutral`: panel fill with a hairline border.
+ * - `ghost`: teal text, soft teal on hover.
+ * - `quiet`: text-only link button.
+ * - `highlight`: Workshop Orange with an ink label; one bold public moment per layout, never in dashboard chrome.
+ * - `danger` / `dangerOutline`: red outline that opens a confirmation.
+ * - `dangerSolid`: red fill for the final destructive confirmation.
+ * - `inverse`: cream on dark bands.
+ * No hover lift or shadow; disabled is an explicit surface/muted/line state, never opacity.
+ */
+export type ButtonVariant =
+  | "primary"
+  | "accent"
+  | "secondary"
+  | "neutral"
+  | "ghost"
+  | "quiet"
+  | "highlight"
+  | "danger"
+  | "dangerOutline"
+  | "dangerSolid"
+  | "dangerQuiet"
+  | "inverse";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
-  "relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold transition-[background-color,border-color,color,box-shadow,transform] duration-[180ms] ease-yy active:scale-[0.98] disabled:pointer-events-none aria-disabled:pointer-events-none";
+  "relative inline-flex select-none items-center justify-center gap-2 whitespace-nowrap rounded-md font-semibold transition-[background-color,border-color,color] duration-[120ms] ease-yy disabled:pointer-events-none aria-disabled:pointer-events-none";
+
+/** Event accents are organiser-chosen, so hover darkens toward Deep Ink in sRGB instead of using a fixed token. */
+const accentHover = "hover:bg-[color-mix(in_srgb,var(--yy-accent)_88%,var(--sw-ink))]";
+
+const neutral = "border border-line bg-panel text-ink hover:bg-muted active:bg-emphasis";
+const dangerOutline = "border border-danger-fg bg-panel text-danger-fg hover:border-danger-hover hover:bg-muted hover:text-danger-hover";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-primary text-on-primary hover:opacity-90",
-  accent: "bg-accent text-on-accent hover:opacity-90",
-  secondary: "border border-line-strong bg-canvas text-ink hover:bg-subtle",
+  primary: "bg-primary text-on-primary hover:bg-primary-hover active:bg-primary-active",
+  accent: cn("bg-accent text-on-accent", accentHover),
+  secondary: neutral,
+  neutral,
+  ghost: "text-accent-text hover:bg-accent-soft active:bg-accent-soft active:text-ink",
   quiet: "text-ink-secondary hover:text-ink hover:underline underline-offset-4",
-  danger: "border-[1.5px] border-danger-fg bg-canvas text-danger-fg hover:bg-danger-bg",
+  highlight: "bg-highlight text-on-highlight hover:bg-highlight-hover",
+  danger: dangerOutline,
+  dangerOutline,
+  dangerSolid: "bg-danger-solid text-on-danger hover:bg-danger-hover",
   dangerQuiet: "text-danger-fg hover:underline underline-offset-4",
-  inverse: "bg-on-inverse text-inverse hover:opacity-90",
+  inverse: "bg-on-inverse text-inverse hover:bg-subtle",
 };
+
+const filledDisabled =
+  "disabled:border disabled:border-line disabled:bg-surface disabled:text-ink-muted aria-disabled:border aria-disabled:border-line aria-disabled:bg-surface aria-disabled:text-ink-muted";
 
 const disabledVariants: Partial<Record<ButtonVariant, string>> = {
-  primary: "disabled:bg-emphasis disabled:text-ink-muted aria-disabled:bg-emphasis aria-disabled:text-ink-muted",
-  accent: "disabled:bg-emphasis disabled:text-ink-muted aria-disabled:bg-emphasis aria-disabled:text-ink-muted",
-  secondary: "disabled:text-ink-muted aria-disabled:text-ink-muted",
-  danger: "disabled:border-line-strong disabled:text-ink-muted",
-  inverse: "disabled:bg-emphasis disabled:text-ink-muted",
+  primary: filledDisabled,
+  accent: filledDisabled,
+  highlight: filledDisabled,
+  dangerSolid: filledDisabled,
+  inverse: filledDisabled,
+  secondary: filledDisabled,
+  neutral: filledDisabled,
+  danger: filledDisabled,
+  dangerOutline: filledDisabled,
+  ghost: "disabled:text-ink-muted aria-disabled:text-ink-muted",
+  quiet: "disabled:text-ink-muted aria-disabled:text-ink-muted",
+  dangerQuiet: "disabled:text-ink-muted aria-disabled:text-ink-muted",
 };
 
+/** Every size keeps the 44px minimum target; `sm` is only more compact horizontally. */
 const sizes: Record<ButtonSize, string> = {
-  sm: "min-h-9 px-3.5 py-[7px] text-sm",
+  sm: "min-h-11 px-3.5 py-2 text-sm",
   md: "min-h-11 px-[18px] py-2.5 text-[15px]",
-  lg: "min-h-[52px] px-6 py-3.5 text-[17px]",
+  lg: "min-h-12 px-6 py-3 text-base",
 };
 
 const quietSizes: Record<ButtonSize, string> = {
-  sm: "min-h-9 px-1.5 text-sm",
+  sm: "min-h-11 px-1.5 text-sm",
   md: "min-h-11 px-2 text-[15px]",
-  lg: "min-h-[52px] px-2.5 text-[17px]",
+  lg: "min-h-12 px-2.5 text-base",
 };
 
 export function buttonClasses(options: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean; className?: string } = {}) {
@@ -105,12 +152,12 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       aria-label={label}
       title={label}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center rounded-full transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:text-ink-disabled [&_svg]:size-[18px]",
+        "inline-flex shrink-0 items-center justify-center rounded-md transition-colors duration-[120ms] ease-yy disabled:pointer-events-none disabled:text-ink-disabled [&_svg]:size-[18px]",
         size === "sm" ? "size-9" : "size-11",
-        variant === "quiet" && "text-ink-secondary hover:bg-emphasis hover:text-ink",
-        variant === "secondary" && "border border-line-strong bg-canvas text-ink hover:bg-subtle",
+        variant === "quiet" && "text-ink-secondary hover:bg-muted hover:text-ink",
+        variant === "secondary" && "border border-line bg-panel text-ink hover:bg-muted",
         variant === "danger" && "text-danger-fg hover:bg-danger-bg",
-        variant === "primary" && "bg-primary text-on-primary hover:opacity-90",
+        variant === "primary" && "bg-primary text-on-primary hover:bg-primary-hover disabled:bg-surface disabled:text-ink-muted",
         className,
       )}
       {...props}

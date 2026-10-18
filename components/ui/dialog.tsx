@@ -17,11 +17,11 @@ export const DialogContent = forwardRef<
 >(function DialogContent({ className, children, size = "sm", hideClose = false, ...props }, ref) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgba(17,17,19,0.48)] data-[state=open]:animate-[yy-fade-in_180ms_ease-out]" />
+      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-[rgb(20_44_42/0.48)] data-[state=open]:animate-[yy-fade-in_180ms_ease-out]" />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-line bg-canvas text-ink shadow-float focus:outline-none data-[state=open]:animate-[yy-dialog-in_240ms_cubic-bezier(0.2,0.8,0.2,1)]",
+          "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-line bg-panel text-ink shadow-float focus:outline-none data-[state=open]:animate-[yy-dialog-in_240ms_cubic-bezier(0.2,0.8,0.2,1)]",
           size === "sm" && "max-w-[480px]",
           size === "md" && "max-w-[640px]",
           size === "lg" && "max-w-[860px]",
@@ -108,7 +108,7 @@ export function ConfirmDialog({
           <DialogBody className="flex flex-col gap-3.5">
             {children}
             {confirmText ? (
-              <Field label={<>Type <span className="font-mono">{confirmText}</span> to confirm</>}>
+              <Field label={<>Type <span className="font-semibold">{confirmText}</span> to confirm</>}>
                 <Input value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" autoFocus />
               </Field>
             ) : null}
@@ -125,7 +125,7 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </Button>
-          <Button variant={destructive ? "danger" : "primary"} onClick={onConfirm} loading={loading} disabled={locked}>
+          <Button variant={destructive ? "dangerSolid" : "primary"} onClick={onConfirm} loading={loading} disabled={locked}>
             {confirmLabel}
           </Button>
         </DialogFooter>
