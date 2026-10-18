@@ -57,6 +57,14 @@ if (!["cf-connecting-ip", "x-forwarded-for", "x-real-ip"].includes(process.env.T
   process.exit(1);
 }
 
+// An unreadable hop count is silently ignored at runtime, which falls back to the
+// left-most (client-chosen) X-Forwarded-For entry behind an appending proxy.
+const proxyHops = process.env.TRUSTED_PROXY_HOPS?.trim();
+if (proxyHops && (!/^[1-9]\d?$/.test(proxyHops) || process.env.TRUSTED_PROXY_IP_HEADER !== "x-forwarded-for")) {
+  console.error("TRUSTED_PROXY_HOPS must be a positive whole number and is only used with TRUSTED_PROXY_IP_HEADER=x-forwarded-for.");
+  process.exit(1);
+}
+
 try {
   const authUrl = new URL(process.env.AUTH_URL);
   const baseUrl = new URL(process.env.NEXT_PUBLIC_BASE_URL);

@@ -63,6 +63,7 @@ export const envSchema = z.object({
   ALLOWED_ACTION_ORIGINS: z.string().optional(),
   ALLOWED_EMBED_ORIGINS: z.string().optional(),
   TRUSTED_PROXY_IP_HEADER: z.enum(["cf-connecting-ip", "x-forwarded-for", "x-real-ip"]).optional(),
+  TRUSTED_PROXY_HOPS: z.preprocess((value) => value === "" ? undefined : value, z.string().regex(/^[1-9]\d?$/, "must be a positive whole number").optional()),
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
   BACKUP_PROVIDER: z.string().max(80).optional(),
   BACKUP_LAST_SUCCESS_AT: z.preprocess((value) => value === "" ? undefined : value, z.string().datetime().optional()),

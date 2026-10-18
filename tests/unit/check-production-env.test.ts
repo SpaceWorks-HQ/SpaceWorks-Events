@@ -34,6 +34,18 @@ describe("production preflight (scripts/check-production-env.mjs)", () => {
     expect(result.output).toContain("pgbouncer=true");
   });
 
+  it("rejects an unreadable TRUSTED_PROXY_HOPS instead of silently trusting the client-chosen entry", () => {
+    const xff = { TRUSTED_PROXY_IP_HEADER: "x-forwarded-for" };
+    expect(preflight({ ...xff, TRUSTED_PROXY_HOPS: "1" }).status).toBe(0);
+    expect(preflight({ ...xff, TRUSTED_PROXY_HOPS: "" }).status).toBe(0);
+    for (const value of ["abc", "0", "-1", "1.5"]) {
+      const result = preflight({ ...xff, TRUSTED_PROXY_HOPS: value });
+      expect(result.status).toBe(1);
+      expect(result.output).toContain("TRUSTED_PROXY_HOPS");
+    }
+    expect(preflight({ TRUSTED_PROXY_HOPS: "1", TRUSTED_PROXY_IP_HEADER: "cf-connecting-ip" }).status).toBe(1);
+  });
+
   it("still rejects plaintext Redis and object storage", () => {
     expect(preflight({ REDIS_URL: "redis://default:pw@example.upstash.io:6379" }).output).toContain("rediss://");
     expect(preflight({ S3_ENDPOINT: "http://0123.r2.cloudflarestorage.com" }).output).toContain("S3_ENDPOINT must use HTTPS");
