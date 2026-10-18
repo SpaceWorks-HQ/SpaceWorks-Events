@@ -321,6 +321,7 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
           capacity: data.capacity ?? null,
           status: data.status,
           privacyType: data.privacyType,
+          listedPublicly: data.privacyType === EventPrivacyType.APPROVAL_REQUIRED && data.listedPublicly,
           registrationClosesAt: data.registrationClosesAt ?? null,
           registrationLeadMinutes: data.registrationLeadMinutes ?? null,
         },
@@ -575,6 +576,7 @@ export async function cloneEvent(
         // Clone as draft to prevent accidental double-publishing.
         status: EventStatus.DRAFT,
         privacyType: source.privacyType,
+        listedPublicly: source.listedPublicly,
       },
     });
 

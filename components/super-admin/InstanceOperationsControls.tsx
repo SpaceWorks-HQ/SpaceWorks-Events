@@ -2,8 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Button from "@mui/material/Button";
-import Stack from "@mui/material/Stack";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/feedback/ToastProvider";
 import {
   deliverInstanceOutbox,
@@ -33,19 +32,19 @@ export function InstanceOperationsControls() {
   }
 
   return (
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-      <Button disabled={pending} variant="contained" onClick={() => run(deliverInstanceOutbox, (data) => `Outbox processed: ${data?.sent ?? 0} sent, ${data?.failed ?? 0} failed.`)}>
+    <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
+      <Button disabled={pending} variant="primary" onClick={() => run(deliverInstanceOutbox, (data) => `Outbox processed: ${data?.sent ?? 0} sent, ${data?.failed ?? 0} failed.`)}>
         Deliver queued email
       </Button>
-      <Button disabled={pending} variant="outlined" onClick={() => run(retryFailedOutboxMessages, (data) => `${data?.retried ?? 0} failed message(s) requeued.`)}>
+      <Button disabled={pending} variant="secondary" onClick={() => run(retryFailedOutboxMessages, (data) => `${data?.retried ?? 0} failed message(s) requeued.`)}>
         Retry failed email
       </Button>
-      <Button disabled={pending} variant="outlined" onClick={() => run(purgeExpiredVerificationTokens, (data) => `${data?.deleted ?? 0} expired token(s) removed.`)}>
+      <Button disabled={pending} variant="secondary" onClick={() => run(purgeExpiredVerificationTokens, (data) => `${data?.deleted ?? 0} expired token(s) removed.`)}>
         Purge expired tokens
       </Button>
-      <Button disabled={pending} variant="outlined" onClick={() => run(recordBackupRestoreVerification, () => "Backup restore verification recorded.") }>
+      <Button disabled={pending} variant="secondary" onClick={() => run(recordBackupRestoreVerification, () => "Backup restore verification recorded.")}>
         Record restore drill
       </Button>
-    </Stack>
+    </div>
   );
 }

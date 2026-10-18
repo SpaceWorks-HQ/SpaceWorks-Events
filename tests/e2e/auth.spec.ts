@@ -98,15 +98,15 @@ test("reset links change the password once and revoke sessions", async ({ page, 
   const before = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true } });
   const resetPath = `/reset-password?email=${encodeURIComponent(email)}&token=${token}`;
   await page.goto(resetPath);
-  await page.getByLabel(/^New Password/).fill("replacement-browser-password");
-  await page.getByRole("button", { name: "Reset password", exact: true }).click();
+  await page.getByLabel(/^New password/).fill("replacement-browser-password");
+  await page.getByRole("button", { name: "Save new password", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/, { timeout: 10_000 });
   const after = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { sessionVersion: true, passwordHash: true } });
   expect(after.sessionVersion).toBe(before.sessionVersion + 1);
   expect(await bcrypt.compare("replacement-browser-password", after.passwordHash!)).toBe(true);
   await page.goto(resetPath);
-  await page.getByLabel(/^New Password/).fill("another-browser-password");
-  await page.getByRole("button", { name: "Reset password", exact: true }).click();
+  await page.getByLabel(/^New password/).fill("another-browser-password");
+  await page.getByRole("button", { name: "Save new password", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Invalid or expired reset link" })).toBeVisible();
 });
 
@@ -117,10 +117,10 @@ test("email verification activates an account through a single-use confirmation"
   await prisma.verificationToken.create({ data: { identifier: `email-verification:${userId}`, token: createHash("sha256").update(token).digest("hex"), expires: new Date(Date.now() + 60_000) } });
   const path = `/verify-email?token=${token}`;
   await page.goto(path);
-  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
   await expect(page).toHaveURL(/\/login\?verified=1$/);
   expect((await prisma.user.findUniqueOrThrow({ where: { id: userId } })).emailVerified).not.toBeNull();
   await page.goto(path);
-  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await page.getByRole("button", { name: "Confirm email", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "invalid or has expired" })).toBeVisible();
 });

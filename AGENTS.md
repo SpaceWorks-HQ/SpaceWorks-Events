@@ -13,16 +13,18 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ## Project at a glance
 
 Yuyu is a self-hosted, multi-tenant platform for organizing and running free events. Yuyu does not support paid events, ticket sales, payments, refunds, or event revenue. Event registration and attendance are always free for attendees. It uses Next.js 16 App
-Router, React 19, TypeScript, PostgreSQL with Prisma 6, Auth.js v5, Material
-UI 9, Redis, S3-compatible private storage, Nodemailer, Vitest, and
-Playwright. Deployment supports Docker standalone output and the Helm chart in
+Router, React 19, TypeScript, PostgreSQL with Prisma 6, Auth.js v5, Tailwind
+CSS 4 with Radix primitives, Redis, S3-compatible private storage, Nodemailer,
+Vitest, and Playwright. Deployment supports Docker standalone output and the Helm chart in
 `charts/yuyu/`.
 
 The product currently includes organisations and member roles, public/private
-events and RRULE-based series, custom RSVP forms and waitlists, QR tickets and
-offline check-in, feedback/certificates, transactional email, and a separate
-super-admin operations and instance-settings area, plus a tenant-bound machine
-API. Treat this as a production-oriented application:
+events and RRULE-based series, custom RSVP forms and waitlists, event short
+links, QR tickets with live check-in updates and offline check-in, badge
+printing, feedback and layered certificates, designed broadcast and
+transactional email, a personal account area (registrations, organisations,
+data export), and a separate super-admin operations, insights, and
+instance-settings area, plus a tenant-bound machine API. Treat this as a production-oriented application:
 tenant isolation, privacy, and secure operations are core behaviour rather
 than optional polish.
 
@@ -55,7 +57,8 @@ field, constraint, or cascade from a component alone.
 ## Working conventions
 
 - Inspect nearby code and existing tests before introducing a pattern. Keep
-  changes small, typed, and consistent with the established MUI/Emotion UI.
+  changes small, typed, and consistent with the established UI: Tailwind CSS, Radix
+  primitives and lucide icons via `components/ui/*` (see `docs/DESIGN.md`).
 - Use Server Components by default. Add `"use client"` only for browser state,
   effects, event handlers, or browser APIs.
 - Read the relevant current Next.js 16 guide in `node_modules/next/dist/docs/`
@@ -66,9 +69,18 @@ field, constraint, or cascade from a component alone.
   in actions, route handlers, or components.
 - Validate all boundary inputs with the existing Zod validators. Return UI-safe
   errors; do not leak internal details.
+- Client animations must be restart-safe under React's development
+  double-invoked effects (mount, cleanup, mount). With `useAnimate`, do not use
+  a one-shot "started" ref guard; give each effect run its own local
+  `current` flag, clear it in cleanup, and check it after every awaited step.
+- In-process singletons that must be shared across Next.js bundles (Server
+  Action vs route-handler copies of a module, such as an `EventEmitter`) live
+  on `globalThis` under a `Symbol.for(...)` key, not in module scope.
+- Verify CSS or Tailwind changes with a clean build; a stale
+  `.next/cache`/Turbopack cache can keep serving old CSS.
 - Use the project time-zone and recurrence helpers for dates and series. Avoid
   ad-hoc `Date` parsing or client-only permission decisions.
-- Preserve accessibility: use MUI semantics/labels, keyboard-operable controls,
+- Preserve accessibility: use labelled `components/ui` controls, keyboard-operable controls,
   and accessible feedback for async mutation state.
 
 ## Security and tenancy rules
@@ -78,7 +90,11 @@ field, constraint, or cascade from a component alone.
   `OWNER`/`ADMIN`/`MEMBER` permission. UI visibility is never authorization.
 - Super-admin access is distinct from organisation access. Keep its
   `SUPER_ADMIN_EMAIL` check, fresh TOTP step-up, generic not-found behaviour,
-  and audit coverage intact. Instance-managed SMTP/Google secrets are
+  and audit coverage intact. Every `app/super-admin/**/page.tsx` must call
+  `await requireSuperAdminMfa()` itself, because layout checks do not re-run on
+  client navigation; `tests/unit/super-admin-page-guards.test.ts` enforces it.
+  Super-admin insights stay read-only, capped, and parameterised, and never
+  load secrets, tokens, answers, or message bodies. Instance-managed SMTP/Google secrets are
   write-only browser inputs, encrypted at rest through the domain-separated
   `MFA_ENCRYPTION_KEY` material, and must never be placed in UI props, logs, or
   audit metadata.
@@ -89,6 +105,19 @@ field, constraint, or cascade from a component alone.
 - Preserve event privacy, invite/allowlist checks, capacity transactions,
   duplicate-RSVP protection, ticket eligibility, and feedback anonymity. These
   rules are server-owned and must not be weakened for a UI shortcut.
+- Realtime ticket check-in publishes only through `commitCheckInProjection`
+  (`lib/checkInMutations.ts` → `lib/ticketCheckInEvents.ts`). Channels are
+  keyed by RSVP id, never the ticket token; publishing is best effort and must
+  never fail a check-in. `/api/ticket/:token/status` and `/events` return only
+  check-in state, validate the token shape, and are rate limited per IP.
+- Account self-service stays scoped to the signed-in user: the personal export
+  (`/api/exports/account`) returns allow-listed own data only (no secrets or
+  tokens), is rate limited, audited, and `no-store`; leaving an organisation
+  removes only the caller's membership and blocks the sole owner under a row
+  lock.
+- Event short codes resolve only for published events with a released
+  website, and unknown, unreleased, and rate-limited codes share the
+  unknown-organisation 404 so a code never reveals a hidden event's slug.
 - Treat ticket, certificate, invite, password-reset, MFA, scheduler, and
   readiness values as secrets/bearer capabilities. Never log, expose, test
   with, or place them in audit metadata, URLs in diagnostics, or analytics.
@@ -116,6 +145,11 @@ field, constraint, or cascade from a component alone.
 - Email is queued in `OutboxMessage`; request paths must not wait for SMTP.
   Preserve safe concurrent claims, retry behaviour, retention cleanup, and the
   one-minute worker/`POST /api/internal/outbox` recovery path.
+- Sent emails need an absolute `NEXT_PUBLIC_BASE_URL` for links and images;
+  dashboard previews render stored paths site-relative. When no public address
+  is configured, leave images out rather than sending `localhost` links.
+  Organiser values in email designs are escaped and image/link URLs limited to
+  absolute http(s).
 - Instance settings override legacy environment fallbacks for SMTP, Google SSO,
   and backup posture. Backup settings are display-only; do not imply that the
   app creates, retains, or restores provider backups.
@@ -146,11 +180,36 @@ For schema or production configuration work, also run `npm run db:status`,
 run integration tests against any non-disposable database. Report checks that
 were not run and why.
 
+Other sessions may edit this tree in parallel. Commit with explicit paths, and
+do not sweep in or revert other sessions' uncommitted files. The user manual
+(`docs/manual/`, `docs/Yuyu-User-Manual.pdf`) is committed only when asked.
+
+### Branching: one branch per feature
+
+Every new feature gets its own branch; never commit a feature straight onto the
+integration branch (currently `v1-design-overhaul`; `main` and `staging` are
+release branches and are only changed when asked).
+
+- Branch from the latest integration branch: `git switch -c feat/<short-name>`
+  (use `fix/<short-name>` for a standalone bug fix). One feature per branch.
+- Commit the work there, with checks passing (lint, TypeScript, relevant tests,
+  plus the stronger checks above where they apply).
+- Merge back with a merge commit so the feature stays visible in history:
+  `git switch v1-design-overhaul && git merge --no-ff feat/<short-name>`,
+  then re-run the checks on the merged result.
+- Push the integration branch and the feature branch only when asked. Delete a
+  merged feature branch only when asked.
+- When other sessions are working in parallel, prefer a separate worktree per
+  feature branch (`git worktree add ../yuyu-<short-name> -b feat/<short-name>`)
+  so branches don't switch under someone else's uncommitted work.
+
 ## Deployment-sensitive changes
 
 - Production requires TLS-backed PostgreSQL, `rediss://`, private S3 storage,
   authenticated SMTP, stable build/runtime Server Action encryption keys, and
-  matching HTTPS `AUTH_URL`/`NEXT_PUBLIC_BASE_URL` values.
+  matching HTTPS `AUTH_URL`/`NEXT_PUBLIC_BASE_URL` values. Multiple replicas
+  need a shared `REDIS_URL` for live ticket check-in; without Redis the
+  in-process fallback only reaches tickets on the same instance.
 - Changes to public build-visible variables (including
   `NEXT_PUBLIC_BASE_URL`) require a rebuild. Google SSO is runtime
   instance-managed; do not reintroduce a build-visible feature flag for it.

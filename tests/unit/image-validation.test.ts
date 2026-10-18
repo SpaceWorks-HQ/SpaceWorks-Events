@@ -27,4 +27,16 @@ describe("image validation", () => {
     const result = await validateEventCoverImage(new File([bytes], "bomb.png", { type: "image/png" }));
     expect(result).toHaveProperty("error");
   });
+
+  it("reads real sizes from lossy and lossless WebP, like a browser-exported cover", async () => {
+    const lossy = await sharp({ create: { width: 1680, height: 735, channels: 3, background: "#e5484d" } }).webp({ quality: 90 }).toBuffer();
+    const lossless = await sharp({ create: { width: 1200, height: 1200, channels: 3, background: "#4f46e5" } }).webp({ lossless: true }).toBuffer();
+    expect(lossy.subarray(12, 16).toString()).toBe("VP8 ");
+    expect(lossless.subarray(12, 16).toString()).toBe("VP8L");
+
+    await expect(validateEventCoverImage(new File([lossy], "cover.webp", { type: "image/webp" }))).resolves.toMatchObject({ contentType: "image/webp", width: 1680, height: 735 });
+    await expect(validateEventCoverImage(new File([lossless], "cover.webp", { type: "image/webp" }))).resolves.toMatchObject({ width: 1200, height: 1200 });
+    const derivative = await createSafeWebpDerivative(new File([lossy], "cover.webp", { type: "image/webp" }), { width: 2400, height: 2400, fit: "inside" });
+    expect(derivative).not.toHaveProperty("error");
+  });
 });

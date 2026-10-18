@@ -1,33 +1,13 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import DataObjectOutlinedIcon from "@mui/icons-material/DataObjectOutlined";
-import FormatBoldIcon from "@mui/icons-material/FormatBold";
-import FormatClearIcon from "@mui/icons-material/FormatClear";
-import FormatItalicIcon from "@mui/icons-material/FormatItalic";
-import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import FormatQuoteIcon from "@mui/icons-material/FormatQuote";
-import InsertLinkIcon from "@mui/icons-material/InsertLink";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
-import RedoIcon from "@mui/icons-material/Redo";
-import SmartButtonOutlinedIcon from "@mui/icons-material/SmartButtonOutlined";
-import TitleIcon from "@mui/icons-material/Title";
-import UndoIcon from "@mui/icons-material/Undo";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Divider from "@mui/material/Divider";
-import ListItemText from "@mui/material/ListItemText";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import { Bold, Braces, Heading, Italic, Link2, Link2Off, List, ListOrdered, Quote, Redo2, RemoveFormatting, RectangleHorizontal, Undo2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/field";
+import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
+import { cn } from "@/lib/cn";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -78,8 +58,6 @@ const BUTTON_PRESETS = [
 
 export function BroadcastEmailEditor(props: { value: string; onChange: (html: string) => void; disabled?: boolean }) {
   const { value, onChange, disabled = false } = props;
-  const [placeholderAnchor, setPlaceholderAnchor] = useState<HTMLElement | null>(null);
-  const [buttonAnchor, setButtonAnchor] = useState<HTMLElement | null>(null);
   const [linkDialog, setLinkDialog] = useState<{ mode: "link" | "button"; text: string; href: string; error: string } | null>(null);
 
   const editor = useEditor({
@@ -90,6 +68,14 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
     content: value,
     editable: !disabled,
     immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "yy-prose min-h-[280px] px-4 py-3.5 text-ink focus:outline-none",
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-label": "Message",
+      },
+    },
     onUpdate: ({ editor: current }) => onChange(current.getHTML()),
   });
 
@@ -102,14 +88,25 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
   }, [editor, disabled]);
 
   const button = (label: string, active: boolean, action: () => void, icon: ReactNode) => (
-    <Button aria-label={label} title={label} aria-pressed={active} size="small" variant={active ? "contained" : "text"} onClick={action} disabled={disabled} sx={{ minWidth: 36, px: 0.75 }}>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-pressed={active}
+      onClick={action}
+      disabled={disabled}
+      className={cn(
+        "inline-flex size-9 items-center justify-center rounded-md text-ink-secondary transition-colors duration-[180ms] ease-yy hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:text-ink-disabled [&_svg]:size-[18px]",
+        active && "bg-primary text-on-primary hover:bg-primary hover:text-on-primary",
+      )}
+    >
       {icon}
-    </Button>
+    </button>
   );
+  const toolbarMenuButton = "inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-semibold text-ink-secondary transition-colors hover:bg-muted hover:text-ink disabled:pointer-events-none disabled:text-ink-disabled [&_svg]:size-4";
 
   const insertPlaceholder = (token: string) => {
     editor?.chain().focus().insertContent({ type: "text", text: token }).run();
-    setPlaceholderAnchor(null);
   };
 
   const insertButton = (text: string, href: string) => {
@@ -117,7 +114,6 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
       type: "paragraph",
       content: [{ type: "text", text, marks: [{ type: "link", attrs: { href, class: "cta" } }] }],
     }).run();
-    setButtonAnchor(null);
   };
 
   const openLinkDialog = (mode: "link" | "button") => {
@@ -129,7 +125,6 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
       href: mode === "link" ? (editor.getAttributes("link").href ?? "") : "",
       error: "",
     });
-    setButtonAnchor(null);
   };
 
   const applyLinkDialog = () => {
@@ -158,109 +153,94 @@ export function BroadcastEmailEditor(props: { value: string; onChange: (html: st
   };
 
   return (
-    <Stack spacing={0.75}>
-      <Box
-        sx={{
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 1,
-          overflow: "hidden",
-          opacity: disabled ? 0.7 : 1,
-          "& .ProseMirror": {
-            minHeight: 280,
-            p: 2,
-            outline: "none",
-            fontSize: "1rem",
-            lineHeight: 1.6,
-            "& p": { my: 0.75 },
-            "& h2": { fontSize: "1.35rem", mt: 2, mb: 1 },
-            "& h3": { fontSize: "1.1rem", mt: 1.5, mb: 0.75 },
-            "& ul, & ol": { pl: 3 },
-            "& blockquote": { borderLeft: 3, borderColor: "primary.main", bgcolor: "action.hover", pl: 1.5, py: 0.5, ml: 0, borderRadius: 1 },
-            "& a": { color: "primary.main", textDecoration: "underline", textUnderlineOffset: "2px", cursor: "text" },
-            "& a.cta": {
-              display: "inline-block",
-              bgcolor: "primary.main",
-              color: "primary.contrastText",
-              px: 2.5,
-              py: 1,
-              borderRadius: 999,
-              textDecoration: "none",
-              fontWeight: 600,
-            },
-          },
-        }}
+    <div className="flex flex-col gap-1.5">
+      <div
+        className={cn(
+          "overflow-hidden rounded-md border border-line-strong bg-canvas transition-colors focus-within:border-[var(--yy-focus)]",
+          disabled && "opacity-70",
+          "[&_.ProseMirror_a]:cursor-text [&_.ProseMirror_blockquote]:rounded-r-md [&_.ProseMirror_blockquote]:border-primary [&_.ProseMirror_blockquote]:bg-subtle [&_.ProseMirror_blockquote]:py-1",
+          "[&_.ProseMirror_a.cta]:inline-block [&_.ProseMirror_a.cta]:rounded-full [&_.ProseMirror_a.cta]:bg-primary [&_.ProseMirror_a.cta]:px-5 [&_.ProseMirror_a.cta]:py-2 [&_.ProseMirror_a.cta]:font-semibold [&_.ProseMirror_a.cta]:text-on-primary [&_.ProseMirror_a.cta]:no-underline",
+        )}
       >
-        <Stack direction="row" spacing={0.25} useFlexGap sx={{ p: 0.5, borderBottom: 1, borderColor: "divider", flexWrap: "wrap", alignItems: "center" }}>
-          {button("Bold", editor?.isActive("bold") ?? false, () => editor?.chain().focus().toggleBold().run(), <FormatBoldIcon fontSize="small" />)}
-          {button("Italic", editor?.isActive("italic") ?? false, () => editor?.chain().focus().toggleItalic().run(), <FormatItalicIcon fontSize="small" />)}
-          {button("Heading", editor?.isActive("heading") ?? false, () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <TitleIcon fontSize="small" />)}
-          {button("Bulleted list", editor?.isActive("bulletList") ?? false, () => editor?.chain().focus().toggleBulletList().run(), <FormatListBulletedIcon fontSize="small" />)}
-          {button("Numbered list", editor?.isActive("orderedList") ?? false, () => editor?.chain().focus().toggleOrderedList().run(), <FormatListNumberedIcon fontSize="small" />)}
-          {button("Quote", editor?.isActive("blockquote") ?? false, () => editor?.chain().focus().toggleBlockquote().run(), <FormatQuoteIcon fontSize="small" />)}
-          <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-          {button("Add or edit link", editor?.isActive("link") ?? false, () => openLinkDialog("link"), <InsertLinkIcon fontSize="small" />)}
-          {button("Remove link", false, () => editor?.chain().focus().unsetLink().run(), <LinkOffIcon fontSize="small" />)}
-          <Button size="small" startIcon={<SmartButtonOutlinedIcon fontSize="small" />} onClick={(event) => setButtonAnchor(event.currentTarget)} disabled={disabled} sx={{ textTransform: "none" }}>
-            Button
-          </Button>
-          <Button size="small" startIcon={<DataObjectOutlinedIcon fontSize="small" />} onClick={(event) => setPlaceholderAnchor(event.currentTarget)} disabled={disabled} sx={{ textTransform: "none" }}>
-            Placeholder
-          </Button>
-          <Box sx={{ flexGrow: 1 }} />
-          {button("Undo", false, () => editor?.chain().focus().undo().run(), <UndoIcon fontSize="small" />)}
-          {button("Redo", false, () => editor?.chain().focus().redo().run(), <RedoIcon fontSize="small" />)}
-          {button("Clear formatting", false, () => editor?.chain().focus().clearNodes().unsetAllMarks().run(), <FormatClearIcon fontSize="small" />)}
-        </Stack>
-        <EditorContent editor={editor} aria-label="Message" />
-      </Box>
-      <Typography variant="caption" color="text.secondary">
+        <div role="toolbar" aria-label="Message formatting" className="flex flex-wrap items-center gap-0.5 border-b border-line bg-subtle p-1">
+          {button("Bold", editor?.isActive("bold") ?? false, () => editor?.chain().focus().toggleBold().run(), <Bold />)}
+          {button("Italic", editor?.isActive("italic") ?? false, () => editor?.chain().focus().toggleItalic().run(), <Italic />)}
+          {button("Heading", editor?.isActive("heading") ?? false, () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading />)}
+          {button("Bulleted list", editor?.isActive("bulletList") ?? false, () => editor?.chain().focus().toggleBulletList().run(), <List />)}
+          {button("Numbered list", editor?.isActive("orderedList") ?? false, () => editor?.chain().focus().toggleOrderedList().run(), <ListOrdered />)}
+          {button("Quote", editor?.isActive("blockquote") ?? false, () => editor?.chain().focus().toggleBlockquote().run(), <Quote />)}
+          <span aria-hidden className="mx-1 h-6 w-px bg-line" />
+          {button("Add or edit link", editor?.isActive("link") ?? false, () => openLinkDialog("link"), <Link2 />)}
+          {button("Remove link", false, () => editor?.chain().focus().unsetLink().run(), <Link2Off />)}
+          <Menu modal={false}>
+            <MenuTrigger asChild disabled={disabled}>
+              <button type="button" className={toolbarMenuButton}>
+                <RectangleHorizontal aria-hidden />
+                Button
+              </button>
+            </MenuTrigger>
+            <MenuContent align="start" onCloseAutoFocus={(event) => event.preventDefault()}>
+              {BUTTON_PRESETS.map((preset) => (
+                <MenuItem key={preset.href} description={preset.href} onSelect={() => insertButton(preset.label, preset.href)}>
+                  {preset.label}
+                </MenuItem>
+              ))}
+              <MenuSeparator />
+              <MenuItem description="Your own text and link" onSelect={() => openLinkDialog("button")}>
+                Custom button…
+              </MenuItem>
+            </MenuContent>
+          </Menu>
+          <Menu modal={false}>
+            <MenuTrigger asChild disabled={disabled}>
+              <button type="button" className={toolbarMenuButton}>
+                <Braces aria-hidden />
+                Placeholder
+              </button>
+            </MenuTrigger>
+            <MenuContent align="start" onCloseAutoFocus={(event) => event.preventDefault()} className="max-h-[360px] overflow-y-auto">
+              {BROADCAST_PLACEHOLDERS.map((placeholder) => (
+                <MenuItem key={placeholder.token} description={<span className="font-mono">{placeholder.token}</span>} onSelect={() => insertPlaceholder(placeholder.token)}>
+                  {placeholder.label}
+                </MenuItem>
+              ))}
+            </MenuContent>
+          </Menu>
+          <span className="flex-1" />
+          {button("Undo", false, () => editor?.chain().focus().undo().run(), <Undo2 />)}
+          {button("Redo", false, () => editor?.chain().focus().redo().run(), <Redo2 />)}
+          {button("Clear formatting", false, () => editor?.chain().focus().clearNodes().unsetAllMarks().run(), <RemoveFormatting />)}
+        </div>
+        <EditorContent editor={editor} />
+      </div>
+      <p className="text-caption text-ink-muted">
         Formatting, links, and buttons are kept in the email. Placeholders are filled in for each recipient.
-      </Typography>
+      </p>
 
-      <Menu open={Boolean(placeholderAnchor)} anchorEl={placeholderAnchor} onClose={() => setPlaceholderAnchor(null)} disableRestoreFocus>
-        {BROADCAST_PLACEHOLDERS.map((placeholder) => (
-          <MenuItem key={placeholder.token} onClick={() => insertPlaceholder(placeholder.token)}>
-            <ListItemText primary={placeholder.label} secondary={placeholder.token} />
-          </MenuItem>
-        ))}
-      </Menu>
-
-      <Menu open={Boolean(buttonAnchor)} anchorEl={buttonAnchor} onClose={() => setButtonAnchor(null)} disableRestoreFocus>
-        {BUTTON_PRESETS.map((preset) => (
-          <MenuItem key={preset.href} onClick={() => insertButton(preset.label, preset.href)}>
-            <ListItemText primary={preset.label} secondary={preset.href} />
-          </MenuItem>
-        ))}
-        <Divider />
-        <MenuItem onClick={() => openLinkDialog("button")}>
-          <ListItemText primary="Custom button…" secondary="Your own text and link" />
-        </MenuItem>
-      </Menu>
-
-      <Dialog open={Boolean(linkDialog)} onClose={() => setLinkDialog(null)} fullWidth maxWidth="xs">
-        <DialogTitle>{linkDialog?.mode === "button" ? "Add button" : "Add link"}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            {linkDialog?.error ? <Alert severity="error">{linkDialog.error}</Alert> : null}
+      <Dialog open={Boolean(linkDialog)} onOpenChange={(open) => { if (!open) setLinkDialog(null); }}>
+        <DialogContent size="sm">
+          <DialogHeader title={linkDialog?.mode === "button" ? "Add button" : "Add link"} />
+          <DialogBody className="flex flex-col gap-4">
+            {linkDialog?.error ? <Callout tone="danger" role="alert">{linkDialog.error}</Callout> : null}
             {linkDialog?.mode === "button" || editor?.state.selection.empty ? (
-              <TextField label={linkDialog?.mode === "button" ? "Button text" : "Link text"} value={linkDialog?.text ?? ""} onChange={(event) => setLinkDialog((current) => current && { ...current, text: event.target.value })} fullWidth autoFocus />
+              <Field label={linkDialog?.mode === "button" ? "Button text" : "Link text"}>
+                <Input value={linkDialog?.text ?? ""} onChange={(event) => setLinkDialog((current) => current && { ...current, text: event.target.value })} autoFocus />
+              </Field>
             ) : null}
-            <TextField
-              label="URL or placeholder"
-              value={linkDialog?.href ?? ""}
-              onChange={(event) => setLinkDialog((current) => current && { ...current, href: event.target.value })}
-              placeholder="https://example.com or {{ticketLink}}"
-              helperText="HTTP(S), mailto:, {{ticketLink}}, {{eventUrl}}, or {{feedbackUrl}}."
-              fullWidth
-            />
-          </Stack>
+            <Field label="URL or placeholder" helperText="HTTP(S), mailto:, {{ticketLink}}, {{eventUrl}}, or {{feedbackUrl}}.">
+              <Input
+                value={linkDialog?.href ?? ""}
+                onChange={(event) => setLinkDialog((current) => current && { ...current, href: event.target.value })}
+                placeholder="https://example.com or {{ticketLink}}"
+              />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setLinkDialog(null)}>Cancel</Button>
+            <Button variant="primary" onClick={applyLinkDialog}>{linkDialog?.mode === "button" ? "Add button" : "Add link"}</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLinkDialog(null)}>Cancel</Button>
-          <Button onClick={applyLinkDialog} variant="contained">{linkDialog?.mode === "button" ? "Add button" : "Add link"}</Button>
-        </DialogActions>
       </Dialog>
-    </Stack>
+    </div>
   );
 }

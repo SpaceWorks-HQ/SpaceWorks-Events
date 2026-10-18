@@ -1,13 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
+import { Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
 import QRCode from "react-qr-code";
 import { createOrRotateCheckInStation, disableCheckInStation, revealCheckInStationPin } from "@/app/actions/checkin-station";
 import { useToast } from "@/components/feedback/ToastProvider";
@@ -36,26 +32,36 @@ export function CheckInStationSettings({ organisationSlug, eventId, stationUrl, 
     if (!result.ok) return showToast(result.error, "error");
     setPin(result.data!.pin);
   });
-  return <Paper variant="outlined" sx={{ p: 2 }}>
-    <Stack spacing={1.25}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Venue check-in station</Typography>
-      <Typography variant="body2" color="text.secondary">Give trusted door staff the station link and PIN. It permits online check-in only; roster and CSV exports stay in this dashboard.</Typography>
-      {enabled ? <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
-        <Typography variant="body2" sx={{ fontFamily: "monospace", overflowWrap: "anywhere", flex: 1 }}>{stationUrl}</Typography>
-        <Button size="small" startIcon={<ContentCopyIcon />} onClick={() => copy(stationUrl, "Station link copied.")}>Copy link</Button>
-      </Stack> : null}
-      {enabled ? <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { sm: "center" } }}>
-        <Box sx={{ bgcolor: "#fff", p: 1.25, borderRadius: 1.5, width: 156, lineHeight: 0 }}>
-          <QRCode value={stationUrl} size={132} bgColor="#FFFFFF" fgColor="#111111" level="M" style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
-        </Box>
-        <Typography variant="body2" color="text.secondary">Scan this QR code on a venue device to open the check-in station quickly. Staff will still need the current PIN.</Typography>
-      </Stack> : null}
-      {pin ? <Alert severity="warning" action={<Button color="inherit" size="small" startIcon={<ContentCopyIcon />} onClick={() => copy(pin, "PIN copied.")}>Copy</Button>}>PIN: <strong>{pin}</strong>. Organisation admins can use “Show PIN” here again until it is rotated or disabled.</Alert> : null}
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Button variant="contained" onClick={generate} disabled={pending}>{enabled ? "Rotate PIN" : "Create station PIN"}</Button>
-        {enabled ? <Button variant="outlined" onClick={reveal} disabled={pending}>Show PIN</Button> : null}
-        {enabled ? <Button color="error" onClick={disable} disabled={pending}>Disable station</Button> : null}
-      </Stack>
-    </Stack>
-  </Paper>;
+  return (
+    <section aria-labelledby="station-title" className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-5">
+      <div>
+        <h2 id="station-title" className="text-title text-ink">Venue check-in station</h2>
+        <p className="mt-1 text-body-ui text-ink-secondary">Give trusted door staff the station link and PIN. It permits online check-in only; roster and CSV exports stay in this dashboard.</p>
+      </div>
+      {enabled ? (
+        <div className="flex flex-col gap-2 rounded-md bg-subtle px-3 py-2 sm:flex-row sm:items-center">
+          <p className="flex-1 font-mono text-sm text-ink [overflow-wrap:anywhere]">{stationUrl}</p>
+          <Button size="sm" variant="quiet" startIcon={<Copy />} onClick={() => copy(stationUrl, "Station link copied.")}>Copy link</Button>
+        </div>
+      ) : null}
+      {enabled ? (
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="w-[156px] shrink-0 rounded-md border border-line bg-white p-2.5 leading-none">
+            <QRCode value={stationUrl} size={132} bgColor="#FFFFFF" fgColor="#111111" level="M" style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
+          </div>
+          <p className="text-body-ui text-ink-secondary">Scan this QR code on a venue device to open the check-in station quickly. Staff will still need the current PIN.</p>
+        </div>
+      ) : null}
+      {pin ? (
+        <Callout tone="warning" action={<Button size="sm" variant="secondary" startIcon={<Copy />} onClick={() => copy(pin, "PIN copied.")}>Copy</Button>}>
+          PIN: <strong className="font-mono tracking-[0.12em]">{pin}</strong>. Organisation admins can use “Show PIN” here again until it is rotated or disabled.
+        </Callout>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="primary" onClick={generate} disabled={pending}>{enabled ? "Rotate PIN" : "Create station PIN"}</Button>
+        {enabled ? <Button variant="secondary" onClick={reveal} disabled={pending}>Show PIN</Button> : null}
+        {enabled ? <Button variant="dangerQuiet" onClick={disable} disabled={pending}>Disable station</Button> : null}
+      </div>
+    </section>
+  );
 }

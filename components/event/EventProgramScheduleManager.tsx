@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useTransition, type FormEvent } from "react";
-import { Alert, Autocomplete, Box, Button, Chip, Divider, Grid, MenuItem, Paper, Stack, TextField, Typography } from "@mui/material";
+import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FilterChip } from "@/components/ui/choice";
+import { Callout, Chip, EmptyState } from "@/components/ui/display";
+import { Field, Input, Dropdown } from "@/components/ui/field";
+import { cn } from "@/lib/cn";
 import { useRouter } from "next/navigation";
 import { deleteScheduleTrack, deleteWebsiteContent, reorderScheduleTracks, saveScheduleTrack, saveSession, setEventSessionDelay } from "@/app/actions/event-website";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
@@ -84,15 +89,175 @@ export function EventProgramScheduleManager({ organisationSlug, eventId, eventSt
       complete(result, () => { setEditing(null); setAddingTrackId(null); setSelectedSpeakerIds([]); });
     });
   };
-  const sessionFields = (session: ProgramScheduleRow | undefined, defaultTrackId: string) => <Stack spacing={2.5}>
-    <Box><Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Session details</Typography><Grid container spacing={1.5}><Grid size={{ xs: 12 }}><TextField name="title" label="Session title" defaultValue={session?.title ?? ""} placeholder="e.g. Building inclusive communities" required fullWidth autoFocus={!session} /></Grid><Grid size={{ xs: 12 }}><RichTextEditor name="descriptionHtml" label="Session description" defaultValue={session?.descriptionHtml ?? ""} helperText="Optional details shown on the public session page." minHeight={100} /></Grid></Grid></Box>
-    <Box sx={{ p: 2, border: 1, borderColor: "divider", borderRadius: 2 }}><Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>When and where</Typography><Grid container spacing={1.5}><Grid size={{ xs: 12, sm: 6 }}><TextField name="start" label="Planned start" type="datetime-local" defaultValue={session ? localValue(session.startDateTime, timeZone) : localValue(nextSessionStart(defaultTrackId), timeZone)} slotProps={{ inputLabel: { shrink: true } }} required fullWidth /></Grid><Grid size={{ xs: 12, sm: 6 }}><TextField name="end" label="Planned end" type="datetime-local" defaultValue={session ? localValue(session.endDateTime, timeZone) : ""} slotProps={{ inputLabel: { shrink: true } }} required fullWidth /></Grid><Grid size={{ xs: 12, sm: 7 }}><TextField name="trackId" label="Track" select defaultValue={session?.trackId ?? defaultTrackId} helperText="Tracks are the room, stage, or stream shown to attendees." required fullWidth>{sortedTracks.map((track) => <MenuItem key={track.id} value={track.id}>{track.name}</MenuItem>)}</TextField></Grid><Grid size={{ xs: 12, sm: 5 }}><Autocomplete freeSolo options={types} defaultValue={displayType(session?.type ?? "Talk")} fullWidth renderInput={(params) => <TextField {...params} name="type" label="Type" required helperText="Choose or type your own." />} /></Grid></Grid></Box>
-    <Box><Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>Speakers and visibility</Typography><Grid container spacing={1.5}><Grid size={{ xs: 12 }}><Autocomplete multiple options={speakers} value={speakers.filter((speaker) => selectedSpeakerIds.includes(speaker.id))} onChange={(_, selected) => setSelectedSpeakerIds(selected.map((speaker) => speaker.id))} getOptionLabel={(speaker) => speaker.name} isOptionEqualToValue={(option, value) => option.id === value.id} renderInput={(params) => <TextField {...params} label="Speakers" helperText={speakers.length ? "Select everyone appearing in this session." : "Add speakers from the Event Page tab before assigning them."} />} /></Grid><Grid size={{ xs: 12, sm: 6 }}><TextField name="visibility" label="Visibility" select defaultValue={session?.visibility ?? "PUBLISHED"} fullWidth><MenuItem value="PUBLISHED">Published</MenuItem><MenuItem value="DRAFT">Draft</MenuItem><MenuItem value="HIDDEN">Hidden</MenuItem></TextField></Grid><Grid size={{ xs: 12, sm: 6 }}><TextField name="sortOrder" label="Display order" type="number" defaultValue={session?.sortOrder ?? trackSessions(defaultTrackId).length} slotProps={{ htmlInput: { min: 0 } }} helperText="Use when sessions share a start time." fullWidth /></Grid></Grid></Box>
-  </Stack>;
-  return <Stack spacing={2.5}>
-    {error ? <Alert severity="error">{error}</Alert> : null}{warning ? <Alert severity="warning" onClose={() => setWarning("")}>{warning}</Alert> : null}
-    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}><Stack spacing={2}><Box><Typography variant="h5">Programme tracks</Typography><Typography variant="body2" color="text.secondary">Each track is an independent room, stage, or stream. Delays shift only later sessions in that track.</Typography></Box><Stack component="form" direction={{ xs: "column", sm: "row" }} spacing={1} onSubmit={(event) => saveTrack(event)}><TextField name="name" label="New track" placeholder="e.g. Main Hall" required fullWidth /><Button type="submit" variant="contained" disabled={pending}>Add track</Button></Stack>{sortedTracks.length ? <Stack divider={<Divider flexItem />}>{sortedTracks.map((track, index) => <Stack key={track.id} component="form" direction={{ xs: "column", md: "row" }} spacing={1} sx={{ py: 1, alignItems: { md: "center" } }} onSubmit={(event) => saveTrack(event, track)}><TextField name="name" defaultValue={track.name} label="Track name" size="small" sx={{ minWidth: { md: 260 } }} /><Stack direction="row" spacing={0.5}><Button type="submit" size="small" disabled={pending}>Rename</Button><Button size="small" disabled={pending || index === 0} onClick={() => moveTrack(track, -1)}>Up</Button><Button size="small" disabled={pending || index === sortedTracks.length - 1} onClick={() => moveTrack(track, 1)}>Down</Button><Button size="small" color="error" disabled={pending} onClick={() => removeTrack(track)}>Remove</Button></Stack></Stack>)}</Stack> : <Alert severity="info">Add a track before adding sessions.</Alert>}</Stack></Paper>
-    <Grid container spacing={2}>{sortedTracks.map((track) => { const sessionsInTrack = trackSessions(track.id); return <Grid key={track.id} size={{ xs: 12, lg: 6 }}><Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, height: "100%" }}><Stack spacing={1.5}><Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}><Box><Typography variant="h6">{track.name}</Typography><Typography variant="body2" color="text.secondary">{sessionsInTrack.length} session{sessionsInTrack.length === 1 ? "" : "s"} · delays stay in this track</Typography></Box><Button variant="contained" size="small" disabled={pending || addingTrackId !== null} onClick={() => { setSelectedSpeakerIds([]); setAddingTrackId(track.id); }}>Add session</Button></Stack>{addingTrackId === track.id ? <Stack component="form" spacing={1.5} onSubmit={(event) => submitSession(event)} sx={{ pt: 1 }}>{sessionFields(undefined, track.id)}<Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={pending}>Add session</Button><Button disabled={pending} onClick={() => { setSelectedSpeakerIds([]); setAddingTrackId(null); }}>Cancel</Button></Stack></Stack> : null}{sessionsInTrack.length ? <Stack divider={<Divider flexItem />}>{sessionsInTrack.map((session) => <Stack key={session.id} spacing={1.25} sx={{ py: 1.25 }}>{editing === session.id ? <Stack component="form" spacing={1.5} onSubmit={(event) => submitSession(event, session)}>{sessionFields(session, session.trackId)}<Stack direction="row" spacing={1}><Button type="submit" variant="contained" disabled={pending}>Save changes</Button><Button disabled={pending} onClick={() => { setSelectedSpeakerIds([]); setEditing(null); }}>Cancel</Button></Stack></Stack> : <><Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}><Stack spacing={0.25}><Stack direction="row" spacing={0.75} sx={{ alignItems: "center" }}><Typography sx={{ fontWeight: 700 }}>{session.title}</Typography>{session.hasConflict ? <Chip size="small" color="warning" label="Time overlap" /> : null}</Stack><Typography variant="body2" color="text.secondary">Planned: {display(session.startDateTime, timeZone)} – {display(session.endDateTime, timeZone)}</Typography><Typography variant="body2" color={session.cumulativeDelayMinutes ? "warning.main" : "text.secondary"}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</Typography>{session.speakerNames?.length ? <Typography variant="body2" color="text.secondary">Speakers: {session.speakerNames.join(", ")}</Typography> : null}</Stack><Stack direction="row" spacing={0.5}><Button size="small" onClick={() => { setSelectedSpeakerIds(session.speakerIds); setEditing(session.id); }}>Edit</Button><Button color="error" size="small" disabled={pending} onClick={() => setRemoveTarget(session)}>Remove</Button></Stack></Stack><Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}><TextField label="Delay from this session (min)" type="number" defaultValue={session.delayMinutes} size="small" sx={{ width: { xs: "100%", sm: 260 }, flexShrink: 0 }} slotProps={{ htmlInput: { min: 0, max: 1440 } }} disabled={pending} onBlur={(event) => { const delay = Number(event.target.value); if (Number.isInteger(delay) && delay !== session.delayMinutes) updateDelay(session.id, delay); }} />{session.hasConflict ? <Typography variant="caption" color="warning.main">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</Typography> : <Typography variant="caption" color="text.secondary">Affects only later sessions in {track.name}.</Typography>}</Stack></>}</Stack>)}</Stack> : <Typography variant="body2" color="text.secondary">No sessions in this track yet.</Typography>}</Stack></Paper></Grid>; })}</Grid>
-    <ConfirmationDialog open={Boolean(removeTarget)} title="Remove programme session?" message={`Remove “${removeTarget?.title ?? "this session"}” from the event schedule? This cannot be undone.`} confirmLabel="Remove session" loading={pending} onCancel={() => setRemoveTarget(null)} onConfirm={() => { if (!removeTarget) return; const id = removeTarget.id; setRemoveTarget(null); removeSession(id); }} />
-  </Stack>;
+  const sessionFields = (session: ProgramScheduleRow | undefined, defaultTrackId: string) => {
+    const typeListId = `session-types-${session?.id ?? defaultTrackId}`;
+    return (
+      <div className="flex flex-col gap-5">
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-2 text-label text-ink">Session details</legend>
+          <Field label="Session title" required>
+            <Input name="title" defaultValue={session?.title ?? ""} placeholder="e.g. Building inclusive communities" autoFocus={!session} />
+          </Field>
+          <RichTextEditor name="descriptionHtml" label="Session description" defaultValue={session?.descriptionHtml ?? ""} helperText="Optional details shown on the public session page." minHeight={100} />
+        </fieldset>
+        <fieldset className="flex flex-col gap-3 rounded-lg border border-line p-4">
+          <legend className="px-1 text-label text-ink">When and where</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Planned start" required>
+              <Input name="start" type="datetime-local" defaultValue={session ? localValue(session.startDateTime, timeZone) : localValue(nextSessionStart(defaultTrackId), timeZone)} />
+            </Field>
+            <Field label="Planned end" required>
+              <Input name="end" type="datetime-local" defaultValue={session ? localValue(session.endDateTime, timeZone) : ""} />
+            </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[7fr_5fr]">
+            <Field label="Track" required helperText="Tracks are the room, stage, or stream shown to attendees.">
+              <Dropdown name="trackId" defaultValue={session?.trackId ?? defaultTrackId}>
+                {sortedTracks.map((track) => <option key={track.id} value={track.id}>{track.name}</option>)}
+              </Dropdown>
+            </Field>
+            <Field label="Type" required helperText="Choose or type your own.">
+              <Input name="type" list={typeListId} defaultValue={displayType(session?.type ?? "Talk")} />
+            </Field>
+            <datalist id={typeListId}>{types.map((type) => <option key={type} value={type} />)}</datalist>
+          </div>
+        </fieldset>
+        <fieldset className="flex flex-col gap-3">
+          <legend className="mb-2 text-label text-ink">Speakers and visibility</legend>
+          <div className="flex flex-col gap-1.5">
+            <p className="text-label text-ink">Speakers</p>
+            {speakers.length ? (
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Speakers">
+                {speakers.map((speaker) => {
+                  const selected = selectedSpeakerIds.includes(speaker.id);
+                  return (
+                    <FilterChip key={speaker.id} selected={selected} onClick={() => setSelectedSpeakerIds((current) => selected ? current.filter((id) => id !== speaker.id) : [...current, speaker.id])}>
+                      {speaker.name}
+                    </FilterChip>
+                  );
+                })}
+              </div>
+            ) : null}
+            <p className="text-caption text-ink-muted">{speakers.length ? "Select everyone appearing in this session." : "Add speakers from the Event Page tab before assigning them."}</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Visibility">
+              <Dropdown name="visibility" defaultValue={session?.visibility ?? "PUBLISHED"}>
+                <option value="PUBLISHED">Published</option>
+                <option value="DRAFT">Draft</option>
+                <option value="HIDDEN">Hidden</option>
+              </Dropdown>
+            </Field>
+            <Field label="Display order" helperText="Use when sessions share a start time.">
+              <Input name="sortOrder" type="number" min={0} defaultValue={session?.sortOrder ?? trackSessions(defaultTrackId).length} />
+            </Field>
+          </div>
+        </fieldset>
+      </div>
+    );
+  };
+  return (
+    <div className="flex flex-col gap-5">
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      {warning ? <Callout tone="warning" action={<Button size="sm" variant="quiet" onClick={() => setWarning("")}>Dismiss</Button>}>{warning}</Callout> : null}
+      <section className="flex flex-col gap-4 rounded-lg border border-line bg-canvas p-4 sm:p-6">
+        <div>
+          <h2 className="text-title text-ink">Programme tracks</h2>
+          <p className="mt-1 text-body-ui text-ink-muted">Each track is an independent room, stage, or stream. Delays shift only later sessions in that track.</p>
+        </div>
+        <form className="flex flex-col gap-2.5 sm:flex-row sm:items-end" onSubmit={(event) => saveTrack(event)}>
+          <Field label="New track" required className="flex-1">
+            <Input name="name" placeholder="e.g. Main Hall" />
+          </Field>
+          <Button type="submit" variant="primary" startIcon={<Plus />} disabled={pending}>Add track</Button>
+        </form>
+        {sortedTracks.length ? (
+          <ul className="divide-y divide-line">
+            {sortedTracks.map((track, index) => (
+              <li key={track.id}>
+                <form className="flex flex-col gap-2 py-3 md:flex-row md:items-center" onSubmit={(event) => saveTrack(event, track)}>
+                  <label htmlFor={`track-name-${track.id}`} className="sr-only">Track name</label>
+                  <Input id={`track-name-${track.id}`} name="name" defaultValue={track.name} className="md:max-w-[300px]" />
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button type="submit" size="sm" variant="secondary" disabled={pending}>Rename</Button>
+                    <Button size="sm" variant="quiet" startIcon={<ArrowUp />} disabled={pending || index === 0} onClick={() => moveTrack(track, -1)}>Up</Button>
+                    <Button size="sm" variant="quiet" startIcon={<ArrowDown />} disabled={pending || index === sortedTracks.length - 1} onClick={() => moveTrack(track, 1)}>Down</Button>
+                    <Button size="sm" variant="dangerQuiet" disabled={pending} onClick={() => removeTrack(track)}>Remove</Button>
+                  </div>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : <Callout tone="info">Add a track before adding sessions.</Callout>}
+      </section>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {sortedTracks.map((track) => {
+          const sessionsInTrack = trackSessions(track.id);
+          return (
+            <section key={track.id} className="flex h-full flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-title text-ink">{track.name}</h3>
+                  <p className="text-sm text-ink-muted">{sessionsInTrack.length} session{sessionsInTrack.length === 1 ? "" : "s"} · delays stay in this track</p>
+                </div>
+                <Button variant="primary" size="sm" startIcon={<Plus />} disabled={pending || addingTrackId !== null} onClick={() => { setSelectedSpeakerIds([]); setAddingTrackId(track.id); }}>Add session</Button>
+              </div>
+              {addingTrackId === track.id ? (
+                <form className="flex flex-col gap-4 rounded-lg bg-subtle p-4" onSubmit={(event) => submitSession(event)}>
+                  {sessionFields(undefined, track.id)}
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" variant="primary" disabled={pending}>Add session</Button>
+                    <Button variant="secondary" disabled={pending} onClick={() => { setSelectedSpeakerIds([]); setAddingTrackId(null); }}>Cancel</Button>
+                  </div>
+                </form>
+              ) : null}
+              {sessionsInTrack.length ? (
+                <ul className="divide-y divide-line">
+                  {sessionsInTrack.map((session) => (
+                    <li key={session.id} className="flex flex-col gap-2.5 py-3">
+                      {editing === session.id ? (
+                        <form className="flex flex-col gap-4 rounded-lg bg-subtle p-4" onSubmit={(event) => submitSession(event, session)}>
+                          {sessionFields(session, session.trackId)}
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="submit" variant="primary" disabled={pending}>Save changes</Button>
+                            <Button variant="secondary" disabled={pending} onClick={() => { setSelectedSpeakerIds([]); setEditing(null); }}>Cancel</Button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <p className="text-[16px] font-bold text-ink">{session.title}</p>
+                                {session.hasConflict ? <Chip size="sm" tone="warning">Time overlap</Chip> : null}
+                              </div>
+                              <p className="text-sm text-ink-muted">Planned: {display(session.startDateTime, timeZone)} – {display(session.endDateTime, timeZone)}</p>
+                              <p className={cn("text-sm", session.cumulativeDelayMinutes ? "font-semibold text-warning-fg" : "text-ink-muted")}>Live: {display(session.effectiveStartDateTime, timeZone)} – {display(session.effectiveEndDateTime, timeZone)}{session.cumulativeDelayMinutes ? ` (${session.cumulativeDelayMinutes} min behind)` : ""}</p>
+                              {session.speakerNames?.length ? <p className="text-sm text-ink-muted">Speakers: {session.speakerNames.join(", ")}</p> : null}
+                            </div>
+                            <div className="flex shrink-0 gap-1">
+                              <Button size="sm" variant="secondary" onClick={() => { setSelectedSpeakerIds(session.speakerIds); setEditing(session.id); }}>Edit</Button>
+                              <Button size="sm" variant="dangerQuiet" disabled={pending} onClick={() => setRemoveTarget(session)}>Remove</Button>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <label className="flex items-center gap-2 text-sm font-semibold text-ink-secondary">
+                              Delay from this session (min)
+                              <Input type="number" min={0} max={1440} defaultValue={session.delayMinutes} className="w-24" disabled={pending} onBlur={(event) => { const delay = Number(event.target.value); if (Number.isInteger(delay) && delay !== session.delayMinutes) updateDelay(session.id, delay); }} />
+                            </label>
+                            {session.hasConflict ? <p className="text-caption text-warning-fg">This overlaps another session in {track.name}; it is allowed, but attendees may need guidance.</p> : <p className="text-caption text-ink-muted">Affects only later sessions in {track.name}.</p>}
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              ) : <EmptyState mood="sleepy" className="py-6">No sessions in this track yet.</EmptyState>}
+            </section>
+          );
+        })}
+      </div>
+      <ConfirmationDialog open={Boolean(removeTarget)} title="Remove programme session?" message={`Remove “${removeTarget?.title ?? "this session"}” from the event schedule? This cannot be undone.`} confirmLabel="Remove session" loading={pending} onCancel={() => setRemoveTarget(null)} onConfirm={() => { if (!removeTarget) return; const id = removeTarget.id; setRemoveTarget(null); removeSession(id); }} />
+    </div>
+  );
 }

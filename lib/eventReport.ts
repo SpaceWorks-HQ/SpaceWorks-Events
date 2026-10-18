@@ -1,9 +1,9 @@
 import "server-only";
 
-import type { RsvpStatus } from "@prisma/client";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import type { EventPrivacyType, RegistrationFieldType, RsvpStatus, SponsorTier } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { safeTimeZone } from "@/lib/timeZone";
+
+export { createEventReportPdf } from "@/lib/eventReportPdf";
 
 export type ReportRsvp = { status: RsvpStatus; checkedInAt: Date | null };
 
@@ -17,6 +17,26 @@ export type ReportRsvpMetrics = {
   noShows: number;
 };
 
+/** One question from a registration or feedback form, reduced to counts. */
+export type ReportQuestion = {
+  label: string;
+  type: RegistrationFieldType;
+  /** People who answered it. */
+  answered: number;
+  /** Per-option counts for choice questions; null for free-text, number, date, email and phone. */
+  choices: Array<{ label: string; count: number }> | null;
+};
+
+export type ReportSession = { title: string; type: string; track: string; start: Date; end: Date; delayMinutes: number; speakers: string[] };
+export type ReportSpeaker = { name: string; detail: string };
+export type ReportSponsor = { name: string; tier: SponsorTier };
+export type ReportBroadcast = { subject: string; sentAt: Date; recipientCount: number };
+export type ReportCheckInSources = { organiser: number; offline: number; station: number };
+
+/**
+ * Everything the PDF shows. Attendee data is reduced to counts and timestamps
+ * before it gets here: no names, emails, tickets or written answers.
+ */
 export type EventReportMetrics = ReportRsvpMetrics & {
   targetType: "event" | "occurrence";
   targetId: string;
@@ -31,6 +51,27 @@ export type EventReportMetrics = ReportRsvpMetrics & {
   capacity: number | null;
   invitationCount: number;
   feedbackResponseCount: number | null;
+  accentColor?: string | null;
+  privacyType?: EventPrivacyType;
+  tags?: string[];
+  tagline?: string;
+  venueName?: string;
+  registrationClosesAt?: Date | null;
+  /** When each registration was made, for the sign-up timeline. */
+  signupDates?: Date[];
+  /** When each confirmed guest was checked in. */
+  checkInTimes?: Date[];
+  checkInSources?: ReportCheckInSources | null;
+  registrationQuestions?: ReportQuestion[];
+  feedbackTitle?: string;
+  feedbackQuestions?: ReportQuestion[];
+  certificatesEnabled?: boolean;
+  sessions?: ReportSession[];
+  speakers?: ReportSpeaker[];
+  sponsors?: ReportSponsor[];
+  resourceCount?: number;
+  broadcasts?: ReportBroadcast[];
+  coOrganiserCount?: number;
 };
 
 export function calculateReportRsvpMetrics(rsvps: ReportRsvp[]): ReportRsvpMetrics {
@@ -64,7 +105,64 @@ export function isReportAvailable(endDateTime: Date, now = new Date()) {
   return endDateTime.getTime() < now.getTime();
 }
 
+const CHOICE_TYPES = new Set<RegistrationFieldType>(["SELECT", "RADIO", "MULTI_SELECT", "CHECKBOX"]);
+
+function optionsFromJson(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((option): option is string => typeof option === "string" && option.trim().length > 0) : [];
+}
+
+type QuestionField = { id: string; label: string; type: RegistrationFieldType; options: unknown };
+type QuestionAnswer = { fieldId: string | null; respondentId: string; valueText: string | null; valueBool: boolean | null };
+
+/**
+ * Reduces form answers to counts. Choice questions get per-option counts;
+ * anything typed in ("Other", free text, email, phone) is only counted, never
+ * copied, so the report cannot leak what someone wrote.
+ */
+export function summariseQuestions(fields: QuestionField[], answers: QuestionAnswer[]): ReportQuestion[] {
+  return fields.map((field) => {
+    const own = answers.filter((answer) => answer.fieldId === field.id);
+    const answered = new Set(own.filter((answer) => answer.valueBool !== null || (answer.valueText ?? "").trim()).map((answer) => answer.respondentId)).size;
+    if (!CHOICE_TYPES.has(field.type)) return { label: field.label, type: field.type, answered, choices: null };
+
+    if (field.type === "CHECKBOX") {
+      const yes = own.filter((answer) => answer.valueBool === true).length;
+      const no = own.filter((answer) => answer.valueBool === false).length;
+      return { label: field.label, type: field.type, answered, choices: [{ label: "Yes", count: yes }, { label: "No", count: no }] };
+    }
+
+    const options = optionsFromJson(field.options);
+    const counts = new Map(options.map((option) => [option, 0]));
+    let other = 0;
+    for (const answer of own) {
+      const value = (answer.valueText ?? "").trim();
+      if (!value) continue;
+      if (counts.has(value)) counts.set(value, counts.get(value)! + 1);
+      else other += 1;
+    }
+    const choices = [...counts].map(([label, count]) => ({ label, count }));
+    if (other > 0) choices.push({ label: "Other", count: other });
+    return { label: field.label, type: field.type, answered, choices };
+  });
+}
+
+/** Counts each checked-in guest once, by the device that last checked them in. */
+export function countCheckInSources(sources: Array<string | null>): ReportCheckInSources {
+  const result: ReportCheckInSources = { organiser: 0, offline: 0, station: 0 };
+  for (const source of sources) {
+    if (source === "venue-station") result.station += 1;
+    else if (source === "offline-sync") result.offline += 1;
+    else result.organiser += 1;
+  }
+  return result;
+}
+
+function speakerDetail(headline: string, organisation: string) {
+  return [headline.trim(), organisation.trim()].filter(Boolean).join(" · ");
+}
+
 export async function getEventReportMetrics(eventId: string): Promise<EventReportMetrics | null> {
+  const published = { visibility: "PUBLISHED" } as const;
   const event = await prisma.event.findUnique({
     where: { id: eventId },
     select: {
@@ -76,13 +174,57 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
       location: true,
       isOnline: true,
       capacity: true,
+      privacyType: true,
+      tags: true,
+      registrationClosesAt: true,
       organisation: { select: { id: true, name: true } },
-      rsvps: { select: { status: true, checkedInAt: true } },
-      _count: { select: { invites: true } },
-      feedbackForm: { select: { _count: { select: { responses: true } } } },
+      page: { select: { accentColor: true, tagline: true } },
+      venue: { select: { name: true, visibility: true } },
+      rsvps: {
+        select: {
+          id: true,
+          status: true,
+          checkedInAt: true,
+          createdAt: true,
+          answers: { select: { fieldId: true, valueText: true, valueBool: true } },
+          checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
+        },
+      },
+      registrationForm: { select: { fields: { orderBy: { sortOrder: "asc" }, select: { id: true, label: true, type: true, options: true } } } },
+      feedbackForm: {
+        select: {
+          title: true,
+          certificateEnabled: true,
+          fields: { orderBy: { sortOrder: "asc" }, select: { id: true, label: true, type: true, options: true } },
+          responses: { select: { id: true, answers: { select: { fieldId: true, valueText: true, valueBool: true } } } },
+        },
+      },
+      sessions: {
+        where: published,
+        orderBy: [{ startDateTime: "asc" }, { sortOrder: "asc" }],
+        select: {
+          title: true,
+          type: true,
+          startDateTime: true,
+          endDateTime: true,
+          delayMinutes: true,
+          track: { select: { name: true } },
+          speakers: { orderBy: { sortOrder: "asc" }, select: { speaker: { select: { name: true, visibility: true } } } },
+        },
+      },
+      speakers: { where: published, orderBy: { sortOrder: "asc" }, select: { name: true, headline: true, organisation: true } },
+      sponsors: { where: published, orderBy: [{ tier: "asc" }, { sortOrder: "asc" }], select: { name: true, tier: true } },
+      resources: { where: published, select: { id: true } },
+      broadcasts: { orderBy: { createdAt: "asc" }, select: { subject: true, createdAt: true, recipientCount: true } },
+      _count: { select: { invites: true, collaborators: true } },
     },
   });
   if (!event) return null;
+
+  const confirmed = event.rsvps.filter((rsvp) => rsvp.status === "CONFIRMED");
+  const checkedIn = confirmed.filter((rsvp) => rsvp.checkedInAt);
+  const registrationAnswers = confirmed.flatMap((rsvp) => rsvp.answers.map((answer) => ({ ...answer, respondentId: rsvp.id })));
+  const feedbackAnswers = event.feedbackForm?.responses.flatMap((response) => response.answers.map((answer) => ({ ...answer, respondentId: response.id }))) ?? [];
 
   return {
     targetType: "event",
@@ -97,7 +239,34 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
     isOnline: event.isOnline,
     capacity: event.capacity,
     invitationCount: event._count.invites,
-    feedbackResponseCount: event.feedbackForm?._count.responses ?? 0,
+    feedbackResponseCount: event.feedbackForm?.responses.length ?? 0,
+    accentColor: event.page?.accentColor ?? null,
+    privacyType: event.privacyType,
+    tags: event.tags,
+    tagline: event.page?.tagline ?? "",
+    venueName: event.venue?.visibility === "PUBLISHED" ? event.venue.name : "",
+    registrationClosesAt: event.registrationClosesAt,
+    signupDates: event.rsvps.map((rsvp) => rsvp.createdAt),
+    checkInTimes: checkedIn.map((rsvp) => rsvp.checkedInAt!),
+    checkInSources: countCheckInSources(checkedIn.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)),
+    registrationQuestions: summariseQuestions(event.registrationForm?.fields ?? [], registrationAnswers),
+    feedbackTitle: event.feedbackForm?.title ?? "",
+    feedbackQuestions: summariseQuestions(event.feedbackForm?.fields ?? [], feedbackAnswers),
+    certificatesEnabled: event.feedbackForm?.certificateEnabled ?? false,
+    sessions: event.sessions.map((session) => ({
+      title: session.title,
+      type: session.type,
+      track: session.track.name,
+      start: session.startDateTime,
+      end: session.endDateTime,
+      delayMinutes: session.delayMinutes,
+      speakers: session.speakers.filter(({ speaker }) => speaker.visibility === "PUBLISHED").map(({ speaker }) => speaker.name),
+    })),
+    speakers: event.speakers.map((speaker) => ({ name: speaker.name, detail: speakerDetail(speaker.headline, speaker.organisation) })),
+    sponsors: event.sponsors,
+    resourceCount: event.resources.length,
+    broadcasts: event.broadcasts.map((broadcast) => ({ subject: broadcast.subject, sentAt: broadcast.createdAt, recipientCount: broadcast.recipientCount })),
+    coOrganiserCount: event._count.collaborators,
     ...calculateReportRsvpMetrics(event.rsvps),
   };
 }
@@ -109,20 +278,30 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
       id: true,
       startDateTime: true,
       endDateTime: true,
-      rsvps: { select: { status: true, checkedInAt: true } },
+      rsvps: {
+        select: {
+          status: true,
+          checkedInAt: true,
+          createdAt: true,
+          checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
+        },
+      },
       series: {
         select: {
           id: true,
           title: true,
           timezone: true,
           capacity: true,
+          privacyType: true,
           organisation: { select: { id: true, name: true } },
-          _count: { select: { invites: true } },
+          _count: { select: { invites: true, collaborators: true } },
         },
       },
     },
   });
   if (!instance) return null;
+
+  const checkedIn = instance.rsvps.filter((rsvp) => rsvp.status === "CONFIRMED" && rsvp.checkedInAt);
 
   return {
     targetType: "occurrence",
@@ -138,161 +317,17 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
     capacity: instance.series.capacity,
     invitationCount: instance.series._count.invites,
     feedbackResponseCount: null,
+    privacyType: instance.series.privacyType,
+    signupDates: instance.rsvps.map((rsvp) => rsvp.createdAt),
+    checkInTimes: checkedIn.map((rsvp) => rsvp.checkedInAt!),
+    checkInSources: countCheckInSources(checkedIn.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)),
+    coOrganiserCount: instance.series._count.collaborators,
     ...calculateReportRsvpMetrics(instance.rsvps),
   };
-}
-
-function cleanPdfText(value: string) {
-  return value.normalize("NFKD").replace(/[^\x20-\x7E]/g, "").trim() || "Not provided";
-}
-
-function shorten(value: string, maxLength = 80) {
-  const clean = cleanPdfText(value);
-  return clean.length > maxLength ? `${clean.slice(0, maxLength - 3)}...` : clean;
-}
-
-function dateTime(value: Date, timeZone: string) {
-  return value.toLocaleString("en-US", {
-    weekday: "short",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: safeTimeZone(timeZone),
-    timeZoneName: "short",
-  });
-}
-
-function percentage(numerator: number, denominator: number) {
-  if (denominator <= 0) return "-";
-  return `${Math.round((numerator / denominator) * 100)}%`;
 }
 
 export function reportFilename(metrics: EventReportMetrics) {
   const slug = metrics.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 72) || "event";
   const date = metrics.startDateTime.toISOString().slice(0, 10);
   return `${slug}-${metrics.targetType}-report-${date}.pdf`;
-}
-
-/** Generates a concise aggregate-only PDF; it never writes report data to disk. */
-export async function createEventReportPdf(metrics: EventReportMetrics): Promise<Uint8Array> {
-  const pdf = await PDFDocument.create();
-  const regular = await pdf.embedFont(StandardFonts.Helvetica);
-  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const pageSize: [number, number] = [595.28, 841.89];
-  const ink = rgb(0.07, 0.1, 0.16);
-  const navy = rgb(0.06, 0.18, 0.34);
-  const blue = rgb(0.08, 0.43, 0.8);
-  const teal = rgb(0.0, 0.57, 0.53);
-  const amber = rgb(0.92, 0.57, 0.07);
-  const coral = rgb(0.84, 0.25, 0.25);
-  const muted = rgb(0.36, 0.42, 0.5);
-  const line = rgb(0.86, 0.89, 0.93);
-  const paleBlue = rgb(0.93, 0.97, 1);
-  const paleTeal = rgb(0.91, 0.98, 0.96);
-  const margin = 44;
-
-  const footer = (page: ReturnType<typeof pdf.addPage>, pageNumber: number) => {
-    page.drawLine({ start: { x: margin, y: 46 }, end: { x: pageSize[0] - margin, y: 46 }, thickness: 0.8, color: line });
-    page.drawText("Aggregate metrics only - no attendee data included", { x: margin, y: 30, size: 8, font: regular, color: muted });
-    page.drawText(`${pageNumber} / 2`, { x: pageSize[0] - margin - 20, y: 30, size: 8, font: bold, color: muted });
-  };
-  const label = (page: ReturnType<typeof pdf.addPage>, value: string, x: number, y: number) =>
-    page.drawText(value.toUpperCase(), { x, y, size: 8, font: bold, color: muted });
-  const metricCard = (page: ReturnType<typeof pdf.addPage>, x: number, y: number, width: number, heading: string, value: string, detail: string, background: ReturnType<typeof rgb>) => {
-    page.drawRectangle({ x, y, width, height: 92, color: background, borderColor: line, borderWidth: 0.6 });
-    label(page, heading, x + 15, y + 68);
-    page.drawText(value, { x: x + 15, y: y + 39, size: 25, font: bold, color: ink });
-    page.drawText(shorten(detail, 30), { x: x + 15, y: y + 18, size: 8.5, font: regular, color: muted });
-  };
-  const progress = (page: ReturnType<typeof pdf.addPage>, x: number, y: number, width: number, ratio: number, color: ReturnType<typeof rgb>) => {
-    page.drawRectangle({ x, y, width, height: 8, color: line });
-    page.drawRectangle({ x, y, width: Math.max(0, Math.min(width, width * ratio)), height: 8, color });
-  };
-
-  const overview = pdf.addPage(pageSize);
-  overview.drawRectangle({ x: 0, y: 0, width: pageSize[0], height: pageSize[1], color: rgb(1, 1, 1) });
-  overview.drawRectangle({ x: 0, y: 670, width: pageSize[0], height: 171.89, color: navy });
-  overview.drawRectangle({ x: 0, y: 650, width: pageSize[0], height: 20, color: blue });
-  overview.drawText(cleanPdfText(metrics.organisationName), { x: margin, y: 797, size: 11, font: bold, color: rgb(0.82, 0.91, 1) });
-  overview.drawText("POST-EVENT REPORT", { x: margin, y: 756, size: 24, font: bold, color: rgb(1, 1, 1) });
-  overview.drawText(shorten(metrics.title, 52), { x: margin, y: 726, size: 14, font: regular, color: rgb(0.9, 0.95, 1) });
-  overview.drawText(`Completed ${dateTime(metrics.endDateTime, metrics.timeZone)}`, { x: margin, y: 696, size: 9, font: regular, color: rgb(0.77, 0.87, 0.98) });
-
-  const attendanceRate = metrics.confirmed ? metrics.checkedIn / metrics.confirmed : 0;
-  const capacityRate = metrics.capacity ? metrics.confirmed / metrics.capacity : 0;
-  metricCard(overview, margin, 530, 156, "Registrations", String(metrics.total), `${metrics.confirmed} confirmed`, paleBlue);
-  metricCard(overview, 219, 530, 156, "Attendance", percentage(metrics.checkedIn, metrics.confirmed), `${metrics.checkedIn} checked in`, paleTeal);
-  metricCard(overview, 408, 530, 143, "Feedback", metrics.feedbackResponseCount == null ? "-" : String(metrics.feedbackResponseCount), metrics.feedbackResponseCount == null ? "Not collected" : "responses received", rgb(1, 0.97, 0.9));
-
-  label(overview, "Event overview", margin, 486);
-  overview.drawLine({ start: { x: margin, y: 476 }, end: { x: 551, y: 476 }, thickness: 1, color: line });
-  const details: Array<[string, string]> = [
-    ["When", `${dateTime(metrics.startDateTime, metrics.timeZone)} - ${dateTime(metrics.endDateTime, metrics.timeZone)}`],
-    ["Format", metrics.isOnline ? "Online event" : metrics.location ? shorten(metrics.location, 62) : "Location not provided"],
-    ["Capacity", metrics.capacity == null ? "No capacity limit" : `${metrics.confirmed} of ${metrics.capacity} confirmed (${percentage(metrics.confirmed, metrics.capacity)})`],
-    ["Invitations", `${metrics.invitationCount} recorded invitation${metrics.invitationCount === 1 ? "" : "s"}`],
-  ];
-  let detailY = 445;
-  for (const [name, value] of details) {
-    overview.drawText(name, { x: margin, y: detailY, size: 9, font: bold, color: muted });
-    overview.drawText(shorten(value, 62), { x: 167, y: detailY, size: 10, font: regular, color: ink });
-    detailY -= 35;
-  }
-
-  label(overview, "At a glance", margin, 286);
-  overview.drawRectangle({ x: margin, y: 174, width: 507, height: 92, color: rgb(0.98, 0.99, 1), borderColor: line, borderWidth: 0.6 });
-  overview.drawText("Capacity filled", { x: 60, y: 237, size: 10, font: bold, color: ink });
-  overview.drawText(metrics.capacity == null ? "No capacity limit" : percentage(metrics.confirmed, metrics.capacity), { x: 60, y: 214, size: 15, font: bold, color: blue });
-  progress(overview, 60, 195, 189, metrics.capacity == null ? 0 : capacityRate, blue);
-  overview.drawText("Check-in rate", { x: 292, y: 237, size: 10, font: bold, color: ink });
-  overview.drawText(percentage(metrics.checkedIn, metrics.confirmed), { x: 292, y: 214, size: 15, font: bold, color: teal });
-  progress(overview, 292, 195, 189, attendanceRate, teal);
-  footer(overview, 1);
-
-  const analytics = pdf.addPage(pageSize);
-  analytics.drawRectangle({ x: 0, y: 0, width: pageSize[0], height: pageSize[1], color: rgb(1, 1, 1) });
-  analytics.drawRectangle({ x: 0, y: 754, width: pageSize[0], height: 87.89, color: navy });
-  analytics.drawText("ANALYTICS", { x: margin, y: 794, size: 22, font: bold, color: rgb(1, 1, 1) });
-  analytics.drawText("Registration, attendance and engagement snapshot", { x: margin, y: 771, size: 10, font: regular, color: rgb(0.8, 0.89, 0.98) });
-
-  label(analytics, "Registration outcome", margin, 718);
-  analytics.drawText(`${metrics.total} total registrations`, { x: 385, y: 718, size: 9, font: regular, color: muted });
-  const outcome = [
-    ["Confirmed", metrics.confirmed, blue],
-    ["Waitlisted", metrics.waitlisted, amber],
-    ["Pending approval", metrics.pendingApproval, rgb(0.43, 0.34, 0.78)],
-    ["Rejected", metrics.rejected, coral],
-  ] as const;
-  let chartY = 668;
-  for (const [name, value, color] of outcome) {
-    analytics.drawText(name, { x: margin, y: chartY + 4, size: 10, font: regular, color: ink });
-    progress(analytics, 174, chartY, 270, metrics.total ? value / metrics.total : 0, color);
-    analytics.drawText(`${value}  (${percentage(value, metrics.total)})`, { x: 458, y: chartY + 1, size: 9, font: bold, color: ink });
-    chartY -= 38;
-  }
-
-  label(analytics, "Attendance conversion", margin, 480);
-  analytics.drawRectangle({ x: margin, y: 337, width: 507, height: 116, color: rgb(0.97, 0.99, 0.99), borderColor: line, borderWidth: 0.6 });
-  analytics.drawText("Confirmed attendees", { x: 67, y: 418, size: 10, font: bold, color: ink });
-  analytics.drawText(String(metrics.confirmed), { x: 67, y: 378, size: 30, font: bold, color: blue });
-  analytics.drawText("Checked in", { x: 253, y: 418, size: 10, font: bold, color: ink });
-  analytics.drawText(String(metrics.checkedIn), { x: 253, y: 378, size: 30, font: bold, color: teal });
-  analytics.drawText("No-shows", { x: 413, y: 418, size: 10, font: bold, color: ink });
-  analytics.drawText(String(metrics.noShows), { x: 413, y: 378, size: 30, font: bold, color: coral });
-  progress(analytics, 67, 352, 413, attendanceRate, teal);
-  analytics.drawText(`${percentage(metrics.checkedIn, metrics.confirmed)} of confirmed attendees checked in`, { x: 67, y: 341, size: 9, font: regular, color: muted });
-
-  label(analytics, "Engagement", margin, 296);
-  const feedbackRate = metrics.feedbackResponseCount == null || metrics.confirmed === 0 ? 0 : metrics.feedbackResponseCount / metrics.confirmed;
-  analytics.drawText("Feedback response rate", { x: margin, y: 258, size: 11, font: bold, color: ink });
-  analytics.drawText(metrics.feedbackResponseCount == null ? "Not available for this occurrence" : `${metrics.feedbackResponseCount} responses from ${metrics.confirmed} confirmed attendees`, { x: margin, y: 238, size: 9, font: regular, color: muted });
-  if (metrics.feedbackResponseCount != null) {
-    progress(analytics, margin, 209, 400, feedbackRate, amber);
-    analytics.drawText(percentage(metrics.feedbackResponseCount, metrics.confirmed), { x: 460, y: 205, size: 12, font: bold, color: ink });
-  }
-  analytics.drawText("Interpret charts alongside event context; counts are aggregates and do not identify attendees.", { x: margin, y: 139, size: 8.5, font: regular, color: muted });
-  footer(analytics, 2);
-  return pdf.save();
 }

@@ -1,12 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import { useId, useRef, useState } from "react";
+import { ImageIcon } from "lucide-react";
+import { Button, buttonClasses } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { cn } from "@/lib/cn";
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -27,6 +25,7 @@ export function ImageUploadPicker(props: {
     onChange,
   } = props;
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const [previewUrl, setPreviewUrl] = useState(initialUrl ?? "");
   const [error, setError] = useState<string | null>(null);
 
@@ -47,81 +46,59 @@ export function ImageUploadPicker(props: {
   }
 
   return (
-    <Stack spacing={1.25}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <Box
-        sx={{
-          width: 180,
-          height: 140,
-          border: 1,
-          borderColor: "divider",
-          borderRadius: 2,
-          overflow: "hidden",
-          display: "grid",
-          placeItems: "center",
-          p: 1,
-          bgcolor: "rgba(255,255,255,0.025)",
-        }}
-      >
-        {previewUrl ? (
-          <Box
-            component="img"
-            src={previewUrl}
-            alt={`${label} preview`}
-            sx={{
-              maxWidth: "100%",
-              maxHeight: "100%",
-              width: "100%",
-              height: "100%",
-              objectFit,
-              borderRadius: 1,
-            }}
-          />
-        ) : (
-          <Stack
-            spacing={0.5}
-            sx={{ alignItems: "center", textAlign: "center", px: 1 }}
-          >
-            <ImageOutlinedIcon color="disabled" />
-            <Typography variant="caption" color="text.secondary">
-              {placeholder}
-            </Typography>
-          </Stack>
-        )}
-      </Box>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Button
-          component="label"
-          variant="outlined"
-          size="small"
-          disabled={disabled}
-        >
-          {previewUrl ? "Replace image" : `Choose ${label.toLowerCase()}`}
-          <input
-            ref={inputRef}
-            hidden
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={(event) => choose(event.target.files?.[0])}
-          />
-        </Button>
-        {previewUrl ? (
-          <Button
-            size="small"
-            color="inherit"
-            disabled={disabled}
-            onClick={() => {
-              setPreviewUrl("");
-              onChange(null, "");
-            }}
-          >
-            Remove
-          </Button>
-        ) : null}
-      </Stack>
-      <Typography variant="caption" color="text.secondary">
-        JPEG, PNG, or WebP · up to 5 MB
-      </Typography>
-    </Stack>
+    <div className="flex flex-col gap-2.5">
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      <div className="flex flex-col gap-4 rounded-lg border-[1.5px] border-dashed border-line-strong bg-canvas p-4 sm:flex-row sm:items-center">
+        <div className="flex h-[112px] w-[144px] shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted p-1">
+          {previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- local object URLs and managed uploads
+            <img
+              src={previewUrl}
+              alt={`${label} preview`}
+              className={cn("size-full rounded-sm", objectFit === "cover" ? "object-cover" : "object-contain")}
+            />
+          ) : (
+            <span className="flex flex-col items-center gap-1 px-2 text-center">
+              <ImageIcon aria-hidden className="size-6 text-ink-muted" />
+              <span className="text-caption text-ink-muted">{placeholder}</span>
+            </span>
+          )}
+        </div>
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label
+              htmlFor={inputId}
+              className={buttonClasses({ variant: "secondary", size: "sm", className: cn("cursor-pointer", disabled && "pointer-events-none opacity-50") })}
+              aria-disabled={disabled || undefined}
+            >
+              {previewUrl ? "Replace image" : `Choose ${label.toLowerCase()}`}
+            </label>
+            <input
+              ref={inputRef}
+              id={inputId}
+              className="sr-only"
+              type="file"
+              disabled={disabled}
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => choose(event.target.files?.[0])}
+            />
+            {previewUrl ? (
+              <Button
+                size="sm"
+                variant="quiet"
+                disabled={disabled}
+                onClick={() => {
+                  setPreviewUrl("");
+                  onChange(null, "");
+                }}
+              >
+                Remove
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-caption text-ink-muted">JPEG, PNG, or WebP · up to 5 MB</p>
+        </div>
+      </div>
+    </div>
   );
 }

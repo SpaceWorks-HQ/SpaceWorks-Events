@@ -2,16 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import IconButton from "@mui/material/IconButton";
-import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemText from "@mui/material/ListItemText";
-import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import { Trash2 } from "lucide-react";
+import { Button, IconButton } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/display";
+import { Input } from "@/components/ui/field";
 import { addSeriesInvite, removeSeriesInvite } from "@/app/actions/invites";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
@@ -32,14 +26,12 @@ export function SeriesInvitePanel(props: {
   } | null>(null);
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="body2" color="text.secondary">
+    <div className="flex flex-col gap-4">
+      <p className="text-body-ui text-ink-muted">
         For invite-only series. Emails are matched case-insensitively.
-      </Typography>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        component="form"
+      </p>
+      <form
+        className="flex flex-col gap-2.5 sm:flex-row"
         onSubmit={(e) => {
           e.preventDefault();
           startTransition(async () => {
@@ -58,46 +50,35 @@ export function SeriesInvitePanel(props: {
           });
         }}
       >
-        <TextField
-          label="Email"
+        <label htmlFor="series-invite-email" className="sr-only">Email</label>
+        <Input
+          id="series-invite-email"
           type="email"
+          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          fullWidth
-          size="small"
         />
-        <Button type="submit" variant="contained" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending}>
           Add
         </Button>
-      </Stack>
+      </form>
       {invites.length === 0 ? (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-          <Typography color="text.secondary">No invites yet.</Typography>
-        </Paper>
+        <EmptyState mood="sleepy">No invites yet.</EmptyState>
       ) : (
-        <List dense>
+        <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-canvas">
           {invites.map((inv) => (
-            <ListItem
-              key={inv.id}
-              secondaryAction={
-                <IconButton
-                  edge="end"
-                  aria-label="Remove"
-                  disabled={pending}
-                  onClick={() => setRemoveTarget(inv)}
-                >
-                  <DeleteOutlineOutlinedIcon />
-                </IconButton>
-              }
-            >
-              <ListItemText
-                primary={inv.email}
-                secondary={new Date(inv.createdAt).toLocaleString()}
-              />
-            </ListItem>
+            <li key={inv.id} className="flex items-center justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <p className="truncate text-[15px] font-semibold text-ink">{inv.email}</p>
+                <p className="text-caption text-ink-muted">{new Date(inv.createdAt).toLocaleString()}</p>
+              </div>
+              <IconButton label="Remove" disabled={pending} onClick={() => setRemoveTarget(inv)}>
+                <Trash2 />
+              </IconButton>
+            </li>
           ))}
-        </List>
+        </ul>
       )}
       <ConfirmationDialog
         open={Boolean(removeTarget)}
@@ -121,6 +102,6 @@ export function SeriesInvitePanel(props: {
           });
         }}
       />
-    </Stack>
+    </div>
   );
 }

@@ -1,11 +1,8 @@
 import { Suspense } from "react";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { connection } from "next/server";
 import { LoginForm } from "./ui";
+import { YuyuWordmark } from "@/components/chrome/SiteHeader";
+import { DotMark } from "@/components/brand/DotMark";
 import { getGoogleSsoSettings, isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
 import type { Metadata } from "next";
 
@@ -20,117 +17,36 @@ export default async function LoginPage() {
     getGoogleSsoSettings().then(Boolean),
   ]);
   return (
-    <Box
-      data-login-page
-      sx={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 0,
-        minHeight: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: { xs: 2, sm: 3, md: 4 },
-        overflow: "auto",
-        background: "var(--login-page-background)",
-      }}
-    >
-      <Paper
-        elevation={0}
-        sx={{
-          width: "min(1180px, 100%)",
-          minHeight: { md: 640 },
-          overflow: "hidden",
-          borderRadius: 3,
-          border: "1px solid",
-          borderColor: "var(--login-surface-border)",
-          backgroundColor: "background.paper",
-          backdropFilter: "blur(10px)",
-          boxShadow: "var(--login-surface-shadow)",
-        }}
-      >
-        <Grid container>
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Box sx={{ p: { xs: 3, sm: 4 } }}>
-              <Stack spacing={2.5}>
-                <Box>
-                  <Typography
-                    variant="overline"
-                    sx={{
-                      letterSpacing: 1.4,
-                      color: "var(--login-muted-text)",
-                    }}
-                  >
-                    YUYU
-                  </Typography>
-                  <Typography
-                    variant="h4"
-                    component="h1"
-                    sx={{ fontWeight: 700, color: "var(--login-heading-text)" }}
-                  >
-                    Get started now
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: "var(--login-muted-text)", mt: 0.75 }}
-                  >
-                    Sign in with Google or your email and password. New here?
-                    Create an account in seconds.
-                  </Typography>
-                </Box>
+    <div className="grid min-h-dvh bg-canvas md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="flex flex-col px-4 py-5 sm:px-8 sm:py-6">
+        <header>
+          <YuyuWordmark />
+        </header>
+        <main id="main-content" tabIndex={-1} className="flex flex-1 items-center justify-center py-10 focus:outline-none">
+          <div className="flex w-full max-w-[400px] flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <h1 className="text-display-l text-ink">Welcome back.</h1>
+              <p className="text-body-ui text-ink-secondary">
+                Sign in with Google or your email and password. New here? Create an account in seconds.
+              </p>
+            </div>
+            <Suspense fallback={<p className="text-body-ui text-ink-muted">Loading sign in…</p>}>
+              <LoginForm accountCreationEnabled={accountCreationEnabled} googleSsoConfigured={googleSsoConfigured} />
+            </Suspense>
+          </div>
+        </main>
+      </div>
 
-                <Box
-                  sx={{
-                    borderRadius: 2,
-                    border: "1px solid",
-                    borderColor: "var(--login-form-border)",
-                    backgroundColor: "var(--login-form-background)",
-                    p: { xs: 2.25, sm: 2.75 },
-                  }}
-                >
-                  <Suspense fallback={<Typography color="text.secondary">Loading sign in…</Typography>}>
-                    <LoginForm accountCreationEnabled={accountCreationEnabled} googleSsoConfigured={googleSsoConfigured} />
-                  </Suspense>
-                </Box>
-              </Stack>
-            </Box>
-          </Grid>
-
-          <Grid
-            size={{ xs: 12, md: 7 }}
-            sx={{ display: { xs: "none", md: "block" } }}
-          >
-            <Box
-              sx={{
-                height: "100%",
-                minHeight: 640,
-                backgroundColor: "var(--login-hero-background)",
-                position: "relative",
-              }}
-            >
-              <Box
-                component="img"
-                src="/login-hero.svg"
-                alt=""
-                sx={{
-                  position: "absolute",
-                  inset: 0,
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                }}
-              />
-              <Box
-                sx={{
-                  position: "absolute",
-                  inset: 0,
-                  background: "var(--login-hero-overlay)",
-                }}
-              />
-            </Box>
-          </Grid>
-        </Grid>
-      </Paper>
-    </Box>
+      <aside aria-hidden className="relative hidden overflow-hidden p-4 md:block">
+        <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-[28px] bg-tint-peach p-12">
+          <p className="max-w-[440px] font-display text-[40px] font-extrabold leading-[1.02] tracking-[-0.03em] text-ink">
+            Free events.
+            <br />
+            Your community’s data stays yours.
+          </p>
+          <DotMark size={192} label={null} className="self-end" />
+        </div>
+      </aside>
+    </div>
   );
 }

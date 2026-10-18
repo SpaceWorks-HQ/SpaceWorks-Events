@@ -1,25 +1,15 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import Alert from "@mui/material/Alert";
-import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import FormControl from "@mui/material/FormControl";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import FormLabel from "@mui/material/FormLabel";
-import MenuItem from "@mui/material/MenuItem";
-import Radio from "@mui/material/Radio";
-import RadioGroup from "@mui/material/RadioGroup";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { useRef, useState, useTransition } from "react";
+import { Pencil } from "lucide-react";
+import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
+import { identityErrors } from "@/components/rsvp/registrationAnswers";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/field";
 import { updateRsvpRegistration } from "@/app/actions/rsvp-admin";
-import type { AttendeeRow } from "@/components/attendees/AttendeeTable";
+import type { AttendeeRow } from "@/components/attendees/types";
 import type { ManualRsvpField } from "@/components/attendees/ManualRsvpDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 
@@ -70,145 +60,31 @@ export function EditRsvpDialog(props: {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(attendee.guestName ?? "");
   const [email, setEmail] = useState(attendee.guestEmail ?? "");
-  const [answers, setAnswers] = useState(() =>
-    initialAnswers(attendee, fields),
-  );
-  const setAnswer = (key: string, value: unknown) =>
-    setAnswers((current) => ({ ...current, [key]: value }));
-  const valueFor = (key: string) => answers[key];
-
-  function renderField(field: ManualRsvpField) {
-    const value = valueFor(field.key);
-    const label = field.required ? `${field.label} *` : field.label;
-    if (field.type === "CHECKBOX")
-      return (
-        <FormControlLabel
-          key={field.key}
-          control={
-            <Checkbox
-              checked={value === true}
-              onChange={(_, checked) => setAnswer(field.key, checked)}
-            />
-          }
-          label={label}
-        />
-      );
-    if (field.type === "MULTI_SELECT") {
-      const selected = Array.isArray(value)
-        ? value.filter((item): item is string => typeof item === "string")
-        : [];
-      return (
-        <FormControl
-          key={field.key}
-          required={field.required}
-          component="fieldset"
-        >
-          <FormLabel component="legend">{label}</FormLabel>
-          <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap" }}>
-            {field.options.map((option) => (
-              <FormControlLabel
-                key={option}
-                control={
-                  <Checkbox
-                    checked={selected.includes(option)}
-                    onChange={(_, checked) =>
-                      setAnswer(
-                        field.key,
-                        checked
-                          ? [...selected, option]
-                          : selected.filter((item) => item !== option),
-                      )
-                    }
-                  />
-                }
-                label={option}
-              />
-            ))}
-          </Stack>
-        </FormControl>
-      );
-    }
-    if (field.type === "RADIO")
-      return (
-        <FormControl
-          key={field.key}
-          required={field.required}
-          component="fieldset"
-        >
-          <FormLabel component="legend">{label}</FormLabel>
-          <RadioGroup
-            value={typeof value === "string" ? value : ""}
-            onChange={(event) => setAnswer(field.key, event.target.value)}
-          >
-            {field.options.map((option) => (
-              <FormControlLabel
-                key={option}
-                value={option}
-                control={<Radio />}
-                label={option}
-              />
-            ))}
-          </RadioGroup>
-        </FormControl>
-      );
-    if (field.type === "SELECT")
-      return (
-        <TextField
-          key={field.key}
-          label={label}
-          select
-          required={field.required}
-          value={typeof value === "string" ? value : ""}
-          onChange={(event) => setAnswer(field.key, event.target.value)}
-          fullWidth
-        >
-          <MenuItem value="">
-            <em>Choose one</em>
-          </MenuItem>
-          {field.options.map((option) => (
-            <MenuItem key={option} value={option}>
-              {option}
-            </MenuItem>
-          ))}
-        </TextField>
-      );
-    return (
-      <TextField
-        key={field.key}
-        label={label}
-        type={
-          field.type === "EMAIL"
-            ? "email"
-            : field.type === "PHONE"
-              ? "tel"
-              : field.type === "NUMBER"
-                ? "number"
-                : field.type === "DATE"
-                  ? "date"
-                  : "text"
-        }
-        multiline={field.type === "TEXTAREA"}
-        minRows={field.type === "TEXTAREA" ? 3 : undefined}
-        required={field.required}
-        value={
-          typeof value === "string" || typeof value === "number" ? value : ""
-        }
-        onChange={(event) => setAnswer(field.key, event.target.value)}
-        slotProps={
-          field.type === "DATE" ? { inputLabel: { shrink: true } } : undefined
-        }
-        fullWidth
-      />
-    );
-  }
+  const [identity, setIdentity] = useState<{ name?: string; email?: string }>({});
+  // Saved answers, including "Other" text and answers to questions now hidden by logic
+  // (those are dropped on save, matching the server).
+  const questions = useRegistrationAnswers(fields, initialAnswers(attendee, fields));
+  const formRef = useRef<HTMLFormElement>(null);
 
   const canTransfer = !attendee.user;
   return (
-    <Dialog open onClose={() => !pending && onClose()} fullWidth maxWidth="sm">
+    <Dialog open onOpenChange={(next) => { if (!next && !pending) onClose(); }}>
+      <DialogContent size="md">
       <form
+        ref={formRef}
+        noValidate
+        className="flex min-h-0 flex-col"
         onSubmit={(event) => {
           event.preventDefault();
           setError(null);
+          const who = attendee.user ? {} : identityErrors({ name, email, requireName: true, requireEmail: true });
+          const questionErrors = questions.validate();
+          setIdentity(who);
+          const first = who.name ? "__name" : who.email ? "__email" : fields.find((field) => questionErrors[field.key])?.key;
+          if (first) {
+            focusQuestion(formRef.current, first);
+            return;
+          }
           startTransition(async () => {
             const result = await updateRsvpRegistration({
               organisationSlug,
@@ -216,7 +92,7 @@ export function EditRsvpDialog(props: {
               eventInstanceId,
               rsvpId: attendee.id,
               ...(attendee.user ? {} : { name, guestEmail: email }),
-              answers,
+              answers: questions.payload(),
             });
             if (!result.ok) {
               setError(result.error);
@@ -231,62 +107,43 @@ export function EditRsvpDialog(props: {
           });
         }}
       >
-        <DialogTitle>
-          {canTransfer
-            ? "Edit registration or transfer ticket"
-            : "View registration"}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 0.5 }}>
-            {error ? <Alert severity="error">{error}</Alert> : null}
-            <Typography variant="body2" color="text.secondary">
-              {canTransfer
-                ? "Change the guest name and email to transfer this ticket. The ticket link, RSVP status, and check-in state stay unchanged."
-                : "Signed-in attendee ownership cannot be transferred. Their ticket and check-in status remain unchanged."}
-            </Typography>
-            {attendee.user ? (
-              <Typography variant="body2">
-                <strong>{attendee.user.name ?? "Signed-in attendee"}</strong>
-                <br />
-                {attendee.user.email ?? "No email"}
-              </Typography>
-            ) : (
-              <>
-                <TextField
-                  label="Name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                  fullWidth
-                  autoFocus
-                />
-                <TextField
-                  label="Email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                  fullWidth
-                />
-              </>
-            )}
-            {fields.map(renderField)}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={onClose} color="inherit" disabled={pending}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="contained"
-            startIcon={<EditOutlinedIcon />}
-            disabled={pending}
-          >
+        <DialogHeader
+          title={canTransfer ? "Edit registration or transfer ticket" : "View registration"}
+          description={canTransfer
+            ? "Change the guest name and email to transfer this ticket. The ticket link, RSVP status, and check-in state stay unchanged."
+            : "Signed-in attendee ownership cannot be transferred. Their ticket and check-in status remain unchanged."}
+        />
+        <DialogBody className="flex flex-col gap-4">
+          {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+          {attendee.user ? (
+            <div className="rounded-md bg-subtle px-3 py-2.5 text-body-ui">
+              <p className="font-semibold text-ink">{attendee.user.name ?? "Signed-in attendee"}</p>
+              <p className="text-ink-muted">{attendee.user.email ?? "No email"}</p>
+            </div>
+          ) : (
+            <>
+              <div data-question-key="__name">
+                <Field label="Name" required error={identity.name}>
+                  <Input value={name} onChange={(event) => { setName(event.target.value); setIdentity((current) => ({ ...current, name: undefined })); }} autoFocus />
+                </Field>
+              </div>
+              <div data-question-key="__email">
+                <Field label="Email" required error={identity.email}>
+                  <Input type="email" value={email} onChange={(event) => { setEmail(event.target.value); setIdentity((current) => ({ ...current, email: undefined })); }} />
+                </Field>
+              </div>
+            </>
+          )}
+          <RegistrationQuestions controller={questions} className="gap-4" />
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={pending}>Cancel</Button>
+          <Button type="submit" variant="primary" startIcon={<Pencil />} loading={pending}>
             {canTransfer ? "Save transfer" : "Save changes"}
           </Button>
-        </DialogActions>
+        </DialogFooter>
       </form>
+      </DialogContent>
     </Dialog>
   );
 }

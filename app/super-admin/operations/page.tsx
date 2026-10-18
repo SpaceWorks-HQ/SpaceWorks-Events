@@ -1,10 +1,5 @@
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import Box from "@mui/material/Box";
+import { requireSuperAdminMfa } from "@/lib/permissions";
+import { CheckCircle2, AlertTriangle } from "lucide-react";
 import { OutboxStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -12,9 +7,12 @@ import { InstanceOperationsControls } from "@/components/super-admin/InstanceOpe
 import { OUTBOX_SCHEDULER_HEARTBEAT_KEY } from "@/lib/operationalHeartbeat";
 import { redactSensitiveText } from "@/lib/redactSensitiveText";
 import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
+import { AdminPanel } from "@/components/super-admin/AdminPanel";
+import { Callout, Chip, EmptyState, PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 function StatusChip(props: { ok: boolean; ready: string; missing: string }) {
-  return <Chip size="small" color={props.ok ? "success" : "warning"} variant="outlined" label={props.ok ? props.ready : props.missing} />;
+  return <Chip tone={props.ok ? "success" : "warning"} icon={props.ok ? <CheckCircle2 /> : <AlertTriangle />} className="whitespace-normal">{props.ok ? props.ready : props.missing}</Chip>;
 }
 
 function ageLabel(value: Date | null) {
@@ -31,6 +29,8 @@ function safeErrorSummary(value: string | null) {
 }
 
 export default async function SuperAdminOperationsPage() {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const now = new Date();
   const heartbeat = (prisma as unknown as {
     operationalHeartbeat?: Pick<typeof prisma.operationalHeartbeat, "findUnique">;
@@ -76,98 +76,91 @@ export default async function SuperAdminOperationsPage() {
   const schedulerFresh = schedulerHeartbeat?.lastSucceededAt != null
     && now.getTime() - schedulerHeartbeat.lastSucceededAt.getTime() < 3 * 60_000;
 
+  const failedCount = outbox.get(OutboxStatus.FAILED) ?? 0;
+
   return (
-    <Stack spacing={3}>
-      <Stack spacing={0.5}>
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>Instance operations</Typography>
-        <Typography color="text.secondary">Backup posture, queue health, retention jobs, and safe maintenance controls for this deployment.</Typography>
-      </Stack>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Operations" description="Backup posture, queue health, retention jobs, and safe maintenance controls for this deployment." />
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 7 }}>
-          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, height: "100%" }}>
-            <Stack spacing={1.5}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>Database backups</Typography>
-              <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-                <StatusChip ok={Boolean(backupProvider)} ready={`Provider: ${backupProvider}`} missing="Backup provider not configured" />
-                <StatusChip ok={backupFresh} ready="Latest backup is fresh" missing="Backup status is stale or unknown" />
-                <StatusChip ok={Boolean(backupRetentionDays)} ready={`${backupRetentionDays} day retention`} missing="Retention not configured" />
-              </Stack>
-              <Typography variant="body2" color="text.secondary">Last successful backup: {reportedBackupAt ? `${reportedBackupAt.toLocaleString()} (${ageLabel(reportedBackupAt)})` : "not reported by the backup job"}.</Typography>
-              <Typography variant="body2" color="text.secondary">Last restore drill: {lastRestoreDrill ? `${lastRestoreDrill.createdAt.toLocaleString()} (${ageLabel(lastRestoreDrill.createdAt)})` : "not recorded"}.</Typography>
-              <Typography variant="caption" color="text.secondary">Update backup posture in Instance settings; backup creation remains external to the application.</Typography>
-            </Stack>
-          </Paper>
-        </Grid>
-        <Grid size={{ xs: 12, md: 5 }}>
-          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, height: "100%" }}>
-            <Stack spacing={1.5}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>Service prerequisites</Typography>
-              <StatusChip ok={Boolean(env?.REDIS_URL)} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
-              <StatusChip ok={Boolean(process.env.CRON_SECRET)} ready="Outbox scheduler secret configured" missing="Outbox scheduler secret missing" />
-              <StatusChip ok={Boolean(process.env.HEALTHCHECK_SECRET)} ready="Readiness probe protected" missing="Readiness probe secret missing" />
-              <StatusChip ok={Boolean(instanceSettings?.smtpHost || instanceSettings?.smtpService || env?.SMTP_HOST || env?.SMTP_SERVICE)} ready="Transactional email configured" missing="Transactional email not configured" />
-            </Stack>
-          </Paper>
-        </Grid>
-      </Grid>
+      <div className="grid gap-6 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <AdminPanel title="Database backups">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap gap-2">
+              <StatusChip ok={Boolean(backupProvider)} ready={`Provider: ${backupProvider}`} missing="Backup provider not configured" />
+              <StatusChip ok={backupFresh} ready="Latest backup is fresh" missing="Backup status is stale or unknown" />
+              <StatusChip ok={Boolean(backupRetentionDays)} ready={`${backupRetentionDays} day retention`} missing="Retention not configured" />
+            </div>
+            <p className="text-sm text-ink-secondary">Last successful backup: {reportedBackupAt ? `${reportedBackupAt.toLocaleString()} (${ageLabel(reportedBackupAt)})` : "not reported by the backup job"}.</p>
+            <p className="text-sm text-ink-secondary">Last restore drill: {lastRestoreDrill ? `${lastRestoreDrill.createdAt.toLocaleString()} (${ageLabel(lastRestoreDrill.createdAt)})` : "not recorded"}.</p>
+            <p className="text-caption text-ink-muted">Update backup posture in Instance settings; backup creation remains external to the application.</p>
+          </div>
+        </AdminPanel>
+        <AdminPanel title="Service prerequisites">
+          <div className="flex flex-col items-start gap-2">
+            <StatusChip ok={Boolean(env?.REDIS_URL)} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
+            <StatusChip ok={Boolean(process.env.CRON_SECRET)} ready="Outbox scheduler secret configured" missing="Outbox scheduler secret missing" />
+            <StatusChip ok={Boolean(process.env.HEALTHCHECK_SECRET)} ready="Readiness probe protected" missing="Readiness probe secret missing" />
+            <StatusChip ok={Boolean(instanceSettings?.smtpHost || instanceSettings?.smtpService || env?.SMTP_HOST || env?.SMTP_SERVICE)} ready="Transactional email configured" missing="Transactional email not configured" />
+          </div>
+        </AdminPanel>
+      </div>
 
-      <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
-        <Stack spacing={1.5}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Delivery and retention</Typography>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-            <Chip size="small" label={`${outbox.get(OutboxStatus.PENDING) ?? 0} queued`} />
-            <Chip size="small" color={(outbox.get(OutboxStatus.FAILED) ?? 0) > 0 ? "error" : "success"} variant="outlined" label={`${outbox.get(OutboxStatus.FAILED) ?? 0} failed`} />
-            <Chip size="small" variant="outlined" label={`${outbox.get(OutboxStatus.SENT) ?? 0} sent`} />
-            <Chip size="small" color={expiredTokens > 0 ? "warning" : "success"} variant="outlined" label={`${expiredTokens} expired verification token${expiredTokens === 1 ? "" : "s"}`} />
-          </Stack>
-          <Stack spacing={0.5}>
-            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-              <StatusChip ok={schedulerFresh} ready="Outbox scheduler healthy" missing="Outbox scheduler stale or unknown" />
-              {schedulerHeartbeat ? <Chip size="small" variant="outlined" label={`Last batch: ${schedulerHeartbeat.lastSent} sent, ${schedulerHeartbeat.lastFailed} failed`} /> : null}
-            </Stack>
-            <Typography variant="body2" color="text.secondary">
-              Last scheduler success: {schedulerHeartbeat?.lastSucceededAt ? `${schedulerHeartbeat.lastSucceededAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastSucceededAt)})` : "not recorded"}.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Last scheduler start: {schedulerHeartbeat?.lastStartedAt ? `${schedulerHeartbeat.lastStartedAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastStartedAt)})` : "not recorded"}.
-            </Typography>
-            {schedulerHeartbeat?.lastError ? <Typography variant="body2" color="error">Last scheduler error: {safeErrorSummary(schedulerHeartbeat.lastError)}</Typography> : null}
-          </Stack>
-          <Typography variant="body2" color="text.secondary">Oldest queued message: {oldestPending ? `${oldestPending.createdAt.toLocaleString()} (${ageLabel(oldestPending.createdAt)})` : "none"}.</Typography>
-          <Divider />
-          <InstanceOperationsControls />
-        </Stack>
-      </Paper>
+      <AdminPanel title="Delivery and retention">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-2">
+            <Chip>{`${outbox.get(OutboxStatus.PENDING) ?? 0} queued`}</Chip>
+            <Chip tone={failedCount > 0 ? "danger" : "success"}>{`${failedCount} failed`}</Chip>
+            <Chip tone="outline">{`${outbox.get(OutboxStatus.SENT) ?? 0} sent`}</Chip>
+            <Chip tone={expiredTokens > 0 ? "warning" : "success"}>{`${expiredTokens} expired verification token${expiredTokens === 1 ? "" : "s"}`}</Chip>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <StatusChip ok={schedulerFresh} ready="Outbox scheduler healthy" missing="Outbox scheduler stale or unknown" />
+            {schedulerHeartbeat ? <Chip tone="outline">{`Last batch: ${schedulerHeartbeat.lastSent} sent, ${schedulerHeartbeat.lastFailed} failed`}</Chip> : null}
+          </div>
+          <p className="text-sm text-ink-secondary">
+            Last scheduler success: {schedulerHeartbeat?.lastSucceededAt ? `${schedulerHeartbeat.lastSucceededAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastSucceededAt)})` : "not recorded"}.
+          </p>
+          <p className="text-sm text-ink-secondary">
+            Last scheduler start: {schedulerHeartbeat?.lastStartedAt ? `${schedulerHeartbeat.lastStartedAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastStartedAt)})` : "not recorded"}.
+          </p>
+          {schedulerHeartbeat?.lastError ? <p className="text-sm text-danger-fg">Last scheduler error: {safeErrorSummary(schedulerHeartbeat.lastError)}</p> : null}
+          <p className="text-sm text-ink-secondary">Oldest queued message: {oldestPending ? `${oldestPending.createdAt.toLocaleString()} (${ageLabel(oldestPending.createdAt)})` : "none"}.</p>
+          <div className="mt-1 border-t border-line pt-4">
+            <InstanceOperationsControls />
+          </div>
+        </div>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-        <Stack spacing={0.5} sx={{ p: 2.5, pb: 1.5 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>Failed email deliveries</Typography>
-          <Typography variant="body2" color="text.secondary">Recipient addresses, message payloads, and bearer links are never shown here.</Typography>
-        </Stack>
+      <AdminPanel title="Failed email deliveries" description="Recipient addresses, message payloads, and bearer links are never shown here.">
         {failedMessages.length === 0 ? (
-          <Typography color="text.secondary" sx={{ px: 2.5, pb: 2.5 }}>No failed email deliveries.</Typography>
+          <EmptyState mood="sleepy">No failed email deliveries.</EmptyState>
         ) : (
-          <Box component="table" sx={{ width: "100%", borderCollapse: "collapse", "& th, & td": { p: 1.5, borderTop: "1px solid", borderColor: "divider", textAlign: "left", verticalAlign: "top" } }}>
-            <Box component="thead"><Box component="tr"><Box component="th">Kind</Box><Box component="th">Attempts</Box><Box component="th">Failed</Box><Box component="th">Last error</Box></Box></Box>
-            <Box component="tbody">
+          <Table label="Failed email deliveries">
+            <THead>
+              <tr>
+                <TH>Kind</TH>
+                <TH>Attempts</TH>
+                <TH>Failed</TH>
+                <TH>Last error</TH>
+              </tr>
+            </THead>
+            <TBody>
               {failedMessages.map((message) => (
-                <Box component="tr" key={message.id}>
-                  <Box component="td" sx={{ fontFamily: "monospace" }}>{message.kind}</Box>
-                  <Box component="td">{message.attempts}</Box>
-                  <Box component="td">{message.createdAt.toLocaleString()}</Box>
-                  <Box component="td" sx={{ overflowWrap: "anywhere" }}>{safeErrorSummary(message.lastError)}</Box>
-                </Box>
+                <TR key={message.id}>
+                  <TD className="align-top font-mono text-sm">{message.kind}</TD>
+                  <TD className="align-top tabular-nums">{message.attempts}</TD>
+                  <TD className="align-top whitespace-nowrap text-ink-secondary">{message.createdAt.toLocaleString()}</TD>
+                  <TD className="align-top text-ink-secondary [overflow-wrap:anywhere]">{safeErrorSummary(message.lastError)}</TD>
+                </TR>
               ))}
-            </Box>
-          </Box>
+            </TBody>
+          </Table>
         )}
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, backgroundColor: "rgba(10,132,255,0.06)" }}>
-        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>Operational guardrail</Typography>
-        <Typography variant="body2" color="text.secondary">These controls do not create or delete provider backups. Backup creation, retention, encryption, and restore access must remain controlled by the managed database provider and deployment credentials. Use this page to verify posture and record evidence, not to expose infrastructure secrets in the application.</Typography>
-      </Paper>
-    </Stack>
+      <Callout tone="info" title="Operational guardrail" className="rounded-2xl">
+        These controls do not create or delete provider backups. Backup creation, retention, encryption, and restore access must remain controlled by the managed database provider and deployment credentials. Use this page to verify posture and record evidence, not to expose infrastructure secrets in the application.
+      </Callout>
+    </div>
   );
 }

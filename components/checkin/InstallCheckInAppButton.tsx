@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Button from "@mui/material/Button";
-import InstallMobileOutlinedIcon from "@mui/icons-material/InstallMobileOutlined";
+import { MonitorSmartphone } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -24,15 +24,15 @@ export function InstallCheckInAppButton() {
   if (!promptEvent) return null;
   return (
     <Button
-      size="small"
-      variant="outlined"
-      startIcon={<InstallMobileOutlinedIcon />}
+      size="sm"
+      variant="secondary"
       onClick={() => {
         const current = promptEvent;
         setPromptEvent(null);
         void current.prompt();
       }}
     >
+      <MonitorSmartphone aria-hidden className="size-4" />
       Install check-in app
     </Button>
   );

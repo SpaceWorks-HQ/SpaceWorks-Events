@@ -1,13 +1,12 @@
 "use client";
 import { useState, useTransition } from "react";
-import Button from "@mui/material/Button";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import { Plus } from "lucide-react";
 import { saveScheduleItem, setScheduleDelay } from "@/app/actions/schedule";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/display";
+import { Field, Input } from "@/components/ui/field";
 
 type ScheduleItem = { id: string; title: string; description: string; startDateTime: string; endDateTime: string; delayMinutes: number };
 
@@ -33,5 +32,80 @@ export function ScheduleManager({ organisationSlug, eventId, eventSeriesId, item
   const defaults = nextSessionTimes(items, defaultDate);
   const router = useRouter(); const { showToast } = useToast(); const [pending, startTransition] = useTransition(); const [title, setTitle] = useState(""); const [start, setStart] = useState(defaults.start); const [end, setEnd] = useState(defaults.end);
   const target = { organisationSlug, eventId, eventSeriesId };
-  return <Stack spacing={2}><Paper variant="outlined" sx={{ p: 2 }} component="form" onSubmit={(e) => { e.preventDefault(); startTransition(async () => { const res = await saveScheduleItem({ ...target, title, startDateTime: start, endDateTime: end }); if (!res.ok) return showToast(res.error, "error"); const nextStart = new Date(end); nextStart.setMinutes(nextStart.getMinutes() + 5); setTitle(""); setStart(datetimeLocalValue(nextStart)); setEnd(datetimeLocalValue(new Date(nextStart.getTime() + 60 * 60_000))); showToast("Schedule item added", "success"); router.refresh(); }); }}><Stack spacing={1.5}><Typography variant="h6">Schedule</Typography><Typography variant="body2" color="text.secondary">New sessions begin five minutes after the previous session’s effective end time.</Typography><TextField label="Session title" value={title} onChange={(e) => setTitle(e.target.value)} required /><TextField label="Starts" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} required slotProps={{ inputLabel: { shrink: true } }} /><TextField label="Ends" type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} required slotProps={{ inputLabel: { shrink: true } }} /><Button type="submit" disabled={pending} variant="contained">Add session</Button></Stack></Paper>{items.map((item) => <Paper key={item.id} variant="outlined" sx={{ p: 2 }}><Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ justifyContent: "space-between", alignItems: { sm: "center" } }}><Stack><Typography sx={{ fontWeight: 650 }}>{item.title}</Typography><Typography variant="body2" color="text.secondary">{new Date(item.startDateTime).toLocaleString()} – {new Date(item.endDateTime).toLocaleTimeString()}</Typography></Stack><TextField label="Cascade delay (min)" type="number" defaultValue={item.delayMinutes} size="small" disabled={pending} onBlur={(e) => { const delayMinutes = Number(e.target.value); if (!Number.isInteger(delayMinutes) || delayMinutes === item.delayMinutes) return; startTransition(async () => { const res = await setScheduleDelay({ ...target, itemId: item.id, delayMinutes }); if (!res.ok) showToast(res.error, "error"); else { showToast("Schedule delay updated", "success"); router.refresh(); } }); }} /></Stack></Paper>)}</Stack>;
+  return (
+    <section aria-labelledby="schedule-manager-title" className="flex flex-col gap-3">
+      <Card as="section">
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            startTransition(async () => {
+              const res = await saveScheduleItem({ ...target, title, startDateTime: start, endDateTime: end });
+              if (!res.ok) return showToast(res.error, "error");
+              const nextStart = new Date(end);
+              nextStart.setMinutes(nextStart.getMinutes() + 5);
+              setTitle("");
+              setStart(datetimeLocalValue(nextStart));
+              setEnd(datetimeLocalValue(new Date(nextStart.getTime() + 60 * 60_000)));
+              showToast("Schedule item added", "success");
+              router.refresh();
+            });
+          }}
+        >
+          <div>
+            <h2 id="schedule-manager-title" className="text-h4 text-ink">Schedule</h2>
+            <p className="mt-1 text-body-ui text-ink-muted">New sessions begin five minutes after the previous session’s effective end time.</p>
+          </div>
+          <Field label="Session title" required>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Starts" required>
+              <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
+            </Field>
+            <Field label="Ends" required>
+              <Input type="datetime-local" value={end} onChange={(e) => setEnd(e.target.value)} />
+            </Field>
+          </div>
+          <div>
+            <Button type="submit" disabled={pending} variant="primary" startIcon={<Plus />}>
+              Add session
+            </Button>
+          </div>
+        </form>
+      </Card>
+      {items.length > 0 ? (
+        <ol className="flex flex-col gap-2.5">
+          {items.map((item) => (
+            <li key={item.id} className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">{item.title}</p>
+                <p className="text-sm text-ink-muted">{new Date(item.startDateTime).toLocaleString()} – {new Date(item.endDateTime).toLocaleTimeString()}</p>
+              </div>
+              <Field label="Cascade delay (min)" className="sm:w-44">
+                <Input
+                  type="number"
+                  defaultValue={item.delayMinutes}
+                  disabled={pending}
+                  className="py-2"
+                  onBlur={(e) => {
+                    const delayMinutes = Number(e.target.value);
+                    if (!Number.isInteger(delayMinutes) || delayMinutes === item.delayMinutes) return;
+                    startTransition(async () => {
+                      const res = await setScheduleDelay({ ...target, itemId: item.id, delayMinutes });
+                      if (!res.ok) showToast(res.error, "error");
+                      else {
+                        showToast("Schedule delay updated", "success");
+                        router.refresh();
+                      }
+                    });
+                  }}
+                />
+              </Field>
+            </li>
+          ))}
+        </ol>
+      ) : null}
+    </section>
+  );
 }

@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { hashEventCollaboratorToken } from "@/lib/eventCollaboratorToken";
@@ -19,13 +17,22 @@ export default async function JoinEventCollaboratorPage({ params }: { params: Pr
     select: { email: true, usedAt: true, expiresAt: true, event: { select: { title: true } }, series: { select: { title: true } } },
   });
   if (!invite || invite.usedAt || invite.expiresAt <= new Date() || !session.user.email || session.user.email.trim().toLowerCase() !== invite.email.trim().toLowerCase()) {
-    return <Stack spacing={2}><Typography variant="h5" component="h1">Invite unavailable</Typography><Typography color="text.secondary">Sign in with the invited email, or ask an organiser for a new invite.</Typography></Stack>;
+    return (
+      <div className="mx-auto flex w-full max-w-[440px] flex-col gap-2 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">
+        <h1 className="text-h1 text-ink">Invite unavailable</h1>
+        <p className="text-body-ui text-ink-secondary">Sign in with the invited email, or ask an organiser for a new invite.</p>
+      </div>
+    );
   }
   return (
-    <Stack spacing={2} sx={{ py: 3, maxWidth: 560 }}>
-      <Typography variant="h5" component="h1">Co-organizer invitation</Typography>
-      <Typography color="text.secondary">Accept the invitation to help manage {invite.event?.title ?? invite.series?.title ?? "this event"}.</Typography>
-      <AcceptInviteButton kind="collaborator" token={token} />
-    </Stack>
+    <div className="mx-auto flex w-full max-w-[440px] flex-col gap-4 rounded-2xl border border-line bg-canvas p-6 shadow-raised sm:p-8">
+      <p className="text-sm text-ink-muted">Co-organizer invitation</p>
+      <h1 className="text-h1 break-words text-ink">{invite.event?.title ?? invite.series?.title ?? "this event"}</h1>
+      <p className="rounded-lg bg-muted px-4 py-3 text-body-ui text-ink-secondary">Accept the invitation to help manage <strong className="font-semibold text-ink">{invite.event?.title ?? invite.series?.title ?? "this event"}</strong>.</p>
+      <div className="w-full [&>div]:items-stretch [&_button]:w-full">
+        <AcceptInviteButton kind="collaborator" token={token} />
+      </div>
+      <p className="text-center text-caption text-ink-muted">Signed in as {session.user.email}</p>
+    </div>
   );
 }

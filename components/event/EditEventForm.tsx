@@ -1,38 +1,25 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
 import type { EventClientDto } from "@/lib/eventDto";
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import MenuItem from "@mui/material/MenuItem";
-import Switch from "@mui/material/Switch";
-import Alert from "@mui/material/Alert";
-import Stack from "@mui/material/Stack";
-import Paper from "@mui/material/Paper";
-import Box from "@mui/material/Box";
-import Divider from "@mui/material/Divider";
-import Grid from "@mui/material/Grid";
-import Chip from "@mui/material/Chip";
-import Typography from "@mui/material/Typography";
 import Link from "next/link";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
-import AccessTimeOutlinedIcon from "@mui/icons-material/AccessTimeOutlined";
-import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
-import PublicOutlinedIcon from "@mui/icons-material/PublicOutlined";
+import { ArrowUpRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SwitchRow } from "@/components/ui/choice";
+import { Callout, Chip } from "@/components/ui/display";
+import { Field, Input, Dropdown } from "@/components/ui/field";
 import { updateEvent, uploadEventCoverImage } from "@/app/actions/event";
 import { uploadEventPageLogo } from "@/app/actions/media";
 import { CoverImagePicker } from "@/components/event/CoverImagePicker";
+import { PublishingSection } from "@/components/event/PublishingSection";
 import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { ImageUploadPicker } from "@/components/forms/ImageUploadPicker";
 import { useToast } from "@/components/feedback/ToastProvider";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { useUnsavedChangesGuard } from "@/components/forms/useUnsavedChangesGuard";
 import { zonedDatetimeLocalValue, zonedInputToIso } from "@/lib/timeZone";
+import { UnsavedChangesBar } from "@/components/event-dashboard/event-page/UnsavedChangesBar";
 
 const timezones = [
   "UTC",
@@ -45,24 +32,24 @@ const timezones = [
   "Australia/Sydney",
 ];
 
-function toDatetimeLocalValue(d: Date) {
-  if (Number.isNaN(d.getTime())) return "";
-  const t = new Date(d);
-  const off = t.getTimezoneOffset() * 60000;
-  return new Date(t.getTime() - off).toISOString().slice(0, 16);
+/** The event's wall-clock time ("YYYY-MM-DDTHH:mm") in its own timezone, for a native datetime-local input. */
+function zonedInputValue(value: Date | string, timeZone: string) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : zonedDatetimeLocalValue(date, timeZone);
 }
 
-function zonedDateToPickerValue(date: Date, timeZone: string) {
-  if (Number.isNaN(date.getTime())) return null;
-  const match = zonedDatetimeLocalValue(date, timeZone).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
-  if (!match) return null;
-  const [, year, month, day, hour, minute] = match;
-  const pickerValue = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
-  return Number.isNaN(pickerValue.getTime()) ? null : pickerValue;
-}
-
-function isValidPickerDate(value: Date | null): value is Date {
-  return value instanceof Date && !Number.isNaN(value.getTime());
+/** One titled card of the details form. */
+function FormCard({ title, description, children }: { title: ReactNode; description: string; children: ReactNode }) {
+  const titleId = useId();
+  return (
+    <section aria-labelledby={titleId} className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+      <div>
+        <h2 id={titleId} className="flex flex-wrap items-center gap-2 text-h4 text-ink">{title}</h2>
+        <p className="mt-0.5 text-body-ui text-ink-muted">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
 }
 
 export function EditEventForm(props: {
@@ -99,33 +86,43 @@ export function EditEventForm(props: {
   const [showRegistrationCountPreview, setShowRegistrationCountPreview] =
     useState(event.showRegistrationCount ?? true);
   const [timezone, setTimezone] = useState(event.timezone);
-  const [start, setStart] = useState<Date | null>(
-    zonedDateToPickerValue(
-      event.startDateTime instanceof Date
-        ? event.startDateTime
-        : new Date(event.startDateTime),
-      event.timezone,
-    ),
-  );
-  const [end, setEnd] = useState<Date | null>(
-    zonedDateToPickerValue(
-      event.endDateTime instanceof Date
-        ? event.endDateTime
-        : new Date(event.endDateTime),
-      event.timezone,
-    ),
-  );
+  // Start and end are edited as wall-clock times in the selected event timezone.
+  const [start, setStart] = useState(() => zonedInputValue(event.startDateTime, event.timezone));
+  const [end, setEnd] = useState(() => zonedInputValue(event.endDateTime, event.timezone));
 
   const [status, setStatus] = useState<EventStatus>(event.status);
   const [privacyType, setPrivacyType] = useState<EventPrivacyType>(
     event.privacyType,
   );
+  const [listedPublicly, setListedPublicly] = useState(event.listedPublicly);
+  // Remounts the form (uncontrolled fields, pickers, rich text) when changes are discarded.
+  const [formKey, setFormKey] = useState(0);
+
+  function discard() {
+    setCoverPreviewUrl(event.coverImageUrl ?? "");
+    setCoverImageFile(null);
+    setPageLogoPreviewUrl(page?.logoUrl ?? "");
+    setPageLogoFile(null);
+    setIsOnlinePreview(event.isOnline);
+    setMapLinkPreviewUrl(event.mapLinkUrl ?? "");
+    setTagsPreview(Array.isArray(event.tags) ? (event.tags ?? []) : []);
+    setShowRegistrationCountPreview(event.showRegistrationCount ?? true);
+    setTimezone(event.timezone);
+    setStart(zonedInputValue(event.startDateTime, event.timezone));
+    setEnd(zonedInputValue(event.endDateTime, event.timezone));
+    setStatus(event.status);
+    setPrivacyType(event.privacyType);
+    setListedPublicly(event.listedPublicly);
+    setError(null);
+    setDirty(false);
+    setFormKey((key) => key + 1);
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    const startDateTime = start ? zonedInputToIso(toDatetimeLocalValue(start), timezone) : null;
-    const endDateTime = end ? zonedInputToIso(toDatetimeLocalValue(end), timezone) : null;
+    const startDateTime = start ? zonedInputToIso(start, timezone) : null;
+    const endDateTime = end ? zonedInputToIso(end, timezone) : null;
     if (!startDateTime) {
       setError("Choose a valid start time in the event timezone.");
       return;
@@ -206,6 +203,7 @@ export function EditEventForm(props: {
         ),
         status,
         privacyType,
+        listedPublicly,
         pageTagline: String(fd.get("pageTagline") ?? ""),
         pageLogoUrl,
         pageAboutHtml: String(fd.get("pageAboutHtml") ?? ""),
@@ -222,487 +220,162 @@ export function EditEventForm(props: {
   }
 
   return (
-    <>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: 2,
-          mb: 2,
-          display: "flex",
-          alignItems: { xs: "stretch", sm: "center" },
-          justifyContent: "space-between",
-          flexDirection: { xs: "column", sm: "row" },
-          gap: 1.5,
-        }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="caption" color="text.secondary">
-            Public URL
-          </Typography>
-          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-            <Link href={`/${organisationSlug}/${event.slug}`}>
-              /{organisationSlug}/{event.slug}
-            </Link>
-          </Typography>
-        </Box>
-        <Button
-          component={Link}
-          href={`/${organisationSlug}/${event.slug}`}
-          variant="outlined"
-          size="small"
-          endIcon={<OpenInNewIcon />}
-          sx={{ flexShrink: 0, alignSelf: { xs: "flex-start", sm: "center" } }}
-        >
-          Open event page
+    <div className="flex flex-col gap-5">
+      <section aria-label="Public URL" className="flex flex-col gap-3 rounded-2xl border border-line bg-subtle p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-caption text-ink-muted">Public URL</p>
+          <Link href={`/${organisationSlug}/${event.slug}`} className="block truncate text-[15px] font-semibold text-ink underline underline-offset-4">
+            /{organisationSlug}/{event.slug}
+          </Link>
+        </div>
+        <Button asChild variant="secondary" size="sm" className="shrink-0 self-start sm:self-center">
+          <Link href={`/${organisationSlug}/${event.slug}`}>
+            Open event page
+            <ArrowUpRight aria-hidden className="size-4" />
+          </Link>
         </Button>
-      </Paper>
-      <form onSubmit={onSubmit} onChangeCapture={() => setDirty(true)}>
-        <Stack spacing={2.5}>
-          {error ? <Alert severity="error">{error}</Alert> : null}
+      </section>
+      <form key={formKey} aria-label="Event details" onSubmit={onSubmit} onChangeCapture={() => setDirty(true)} onInputCapture={() => setDirty(true)} className="flex flex-col gap-5">
+        {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
 
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Stack
-                direction="row"
-                spacing={1}
-                sx={{ alignItems: "center", justifyContent: "space-between" }}
-              >
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Basics
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Update the public-facing title and introduction.
-                  </Typography>
-                </Box>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  color={
-                    event.status === EventStatus.DRAFT ? "default" : "success"
-                  }
-                  label={
-                    event.status === EventStatus.DRAFT ? "Draft" : "Published"
-                  }
-                />
-              </Stack>
-              <Divider />
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12 }}>
-                  <TextField
-                    name="title"
-                    label="Title"
-                    required
-                    fullWidth
-                    defaultValue={event.title}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <TextField
-                    name="pageTagline"
-                    label="Tagline"
-                    fullWidth
-                    defaultValue={page?.tagline ?? ""}
-                    helperText="A short line beneath the event title."
-                  />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <ImageUploadPicker
-                    initialUrl={page?.logoUrl}
-                    label="Event page logo"
-                    placeholder="Your event page logo will appear here."
-                    disabled={pending}
-                    onChange={(file, previewUrl) => {
-                      setPageLogoFile(file);
-                      setPageLogoPreviewUrl(previewUrl);
-                    }}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <RichTextEditor
-                    name="pageAboutHtml"
-                    label="About the event"
-                    defaultValue={page?.aboutHtml ?? ""}
-                    helperText="Required. Use the toolbar to format text—no HTML needed."
-                    minHeight={140}
-                  />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <TextField
-                    name="tags"
-                    label="Tags"
-                    fullWidth
-                    defaultValue={tagsPreview.join(", ")}
-                    onChange={(e) => {
-                      const parts = e.currentTarget.value
-                        .split(/[,\n]/g)
-                        .map((s) => s.trim().toLowerCase())
-                        .map((s) => s.replace(/\s+/g, " "))
-                        .filter(Boolean)
-                        .slice(0, 12);
-                      setTagsPreview(Array.from(new Set(parts)));
-                    }}
-                    helperText="Comma-separated (eg: workshop, meetup, ai). Used in global search."
-                  />
-                  {tagsPreview.length > 0 ? (
-                    <Stack
-                      direction="row"
-                      useFlexGap
-                      sx={{
-                        flexWrap: "wrap",
-                        columnGap: 0.75,
-                        rowGap: 0.75,
-                        pt: 1,
-                      }}
-                    >
-                      {tagsPreview.slice(0, 12).map((t) => (
-                        <Chip
-                          key={t}
-                          size="small"
-                          label={t}
-                          variant="outlined"
-                        />
-                      ))}
-                    </Stack>
-                  ) : null}
-                </Grid>
-              </Grid>
-            </Stack>
-          </Paper>
-
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <ImageOutlinedIcon sx={{ color: "text.secondary" }} />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Cover image
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Add a visual to make your event page stand out.
-                  </Typography>
-                </Box>
-              </Stack>
-              <Divider />
-              <CoverImagePicker
-                initialUrl={event.coverImageUrl}
-                disabled={pending}
-                onChange={(file, previewUrl) => {
-                  setCoverImageFile(file);
-                  setCoverPreviewUrl(previewUrl);
+        <FormCard
+          title={<>Basics<Chip size="sm" tone={event.status === EventStatus.DRAFT ? "neutral" : "success"}>{event.status === EventStatus.DRAFT ? "Draft" : "Published"}</Chip></>}
+          description="Update the public-facing title and introduction."
+        >
+          <Field label="Title" required>
+            <Input name="title" defaultValue={event.title} />
+          </Field>
+          <Field label="Tagline" helperText="A short line beneath the event title.">
+            <Input name="pageTagline" defaultValue={page?.tagline ?? ""} />
+          </Field>
+          <ImageUploadPicker
+            initialUrl={page?.logoUrl}
+            label="Event page logo"
+            placeholder="Your event page logo will appear here."
+            disabled={pending}
+            onChange={(file, previewUrl) => {
+              setPageLogoFile(file);
+              setPageLogoPreviewUrl(previewUrl);
+              setDirty(true);
+            }}
+          />
+          <RichTextEditor
+            name="pageAboutHtml"
+            label="About the event"
+            defaultValue={page?.aboutHtml ?? ""}
+            helperText="Required. Use the toolbar to format text—no HTML needed."
+            minHeight={140}
+          />
+          <div className="flex flex-col gap-2">
+            <Field label="Tags" helperText="Comma-separated (eg: workshop, meetup, ai). Used in global search.">
+              <Input
+                name="tags"
+                defaultValue={tagsPreview.join(", ")}
+                onChange={(e) => {
+                  const parts = e.currentTarget.value
+                    .split(/[,\n]/g)
+                    .map((s) => s.trim().toLowerCase())
+                    .map((s) => s.replace(/\s+/g, " "))
+                    .filter(Boolean)
+                    .slice(0, 12);
+                  setTagsPreview(Array.from(new Set(parts)));
                 }}
               />
-            </Stack>
-          </Paper>
+            </Field>
+            {tagsPreview.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {tagsPreview.slice(0, 12).map((t) => (
+                  <Chip key={t} size="sm" tone="outline">{t}</Chip>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </FormCard>
 
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <AccessTimeOutlinedIcon sx={{ color: "text.secondary" }} />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Schedule
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Set the date, time, and timezone for guests.
-                  </Typography>
-                </Box>
-              </Stack>
-              <Divider />
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <DateTimePicker
-                      label="Start"
-                      value={start}
-                      onChange={(v) => setStart(isValidPickerDate(v) ? v : null)}
-                      minDateTime={new Date()}
-                      slotProps={{
-                        textField: {
-                          required: true,
-                          fullWidth: true,
-                        },
-                      }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <DateTimePicker
-                      label="End"
-                      value={end}
-                      onChange={(v) => setEnd(isValidPickerDate(v) ? v : null)}
-                      minDateTime={start ?? undefined}
-                      slotProps={{
-                        textField: {
-                          required: true,
-                          fullWidth: true,
-                        },
-                      }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <TextField
-                      name="timezone"
-                      label="Timezone"
-                      select
-                      required
-                      fullWidth
-                      value={timezone}
-                      onChange={(event) => setTimezone(event.target.value)}
-                    >
-                      {timezones.map((tz) => (
-                        <MenuItem key={tz} value={tz}>
-                          {tz}
-                        </MenuItem>
-                      ))}
-                    </TextField>
-                  </Grid>
-                </Grid>
-              </LocalizationProvider>
-            </Stack>
-          </Paper>
+        <FormCard title="Cover image" description="Add a visual to make your event page stand out.">
+          <CoverImagePicker
+            initialUrl={event.coverImageUrl}
+            disabled={pending}
+            onChange={(file, previewUrl) => {
+              setCoverImageFile(file);
+              setCoverPreviewUrl(previewUrl);
+              setDirty(true);
+            }}
+          />
+        </FormCard>
 
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <PlaceOutlinedIcon sx={{ color: "text.secondary" }} />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Location
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Choose whether this is online and what guests should see.
-                  </Typography>
-                </Box>
-              </Stack>
-              <Divider />
-              <Grid container spacing={2} sx={{ alignItems: "center" }}>
-                <Grid size={{ xs: 12, md: 8 }}>
-                  <TextField
-                    name="location"
-                    label={isOnlinePreview ? "Online meeting link" : "Location"}
-                    fullWidth
-                    required
-                    type={isOnlinePreview ? "url" : "text"}
-                    defaultValue={event.location}
-                    helperText={
-                      isOnlinePreview
-                        ? "Enter a valid HTTP(S) meeting URL."
-                        : "Eg: Samagatha Foundation, Bengaluru"
-                    }
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 1,
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        Online event
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Guests will see “Online event”.
-                      </Typography>
-                    </Box>
-                    <Switch
-                      name="isOnline"
-                      checked={isOnlinePreview}
-                      onChange={(_, checked) => setIsOnlinePreview(checked)}
-                      slotProps={{ input: { name: "isOnline" } }}
-                    />
-                  </Paper>
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <TextField
-                    name="mapLinkUrl"
-                    label="Map link (optional)"
-                    fullWidth
-                    type="url"
-                    defaultValue={event.mapLinkUrl ?? ""}
-                    disabled={isOnlinePreview}
-                    onChange={(e) => setMapLinkPreviewUrl(e.target.value)}
-                    helperText={
-                      isOnlinePreview
-                        ? "Available only for physical events."
-                        : "Paste a Google Maps link so guests can open directions."
-                    }
-                  />
-                  {!isOnlinePreview && mapLinkPreviewUrl.trim() ? (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block", mt: 0.75 }}
-                    >
-                      Tip: Use a share link so it opens cleanly on mobile.
-                    </Typography>
-                  ) : null}
-                </Grid>
-              </Grid>
-            </Stack>
-          </Paper>
+        <FormCard title="Schedule" description="Set the date, time, and timezone for guests.">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Start" required>
+              <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
+            </Field>
+            <Field label="End" required>
+              <Input type="datetime-local" value={end} min={start || undefined} onChange={(e) => setEnd(e.target.value)} />
+            </Field>
+            <Field label="Timezone" required>
+              <Dropdown name="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                {timezones.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </Dropdown>
+            </Field>
+          </div>
+        </FormCard>
 
-          <Paper variant="outlined" sx={{ p: 2.5 }}>
-            <Stack spacing={2}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-                <PublicOutlinedIcon sx={{ color: "text.secondary" }} />
-                <Box>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    Publishing
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ mt: 0.5 }}
-                  >
-                    Control visibility, audience, and RSVP limits.
-                  </Typography>
-                </Box>
-              </Stack>
-              <Divider />
-              <Grid container spacing={2}>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    name="status"
-                    label="Status"
-                    select
-                    fullWidth
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as EventStatus)}
-                    helperText="Published events make the website public and open registration."
-                  >
-                    <MenuItem value={EventStatus.DRAFT}>Draft</MenuItem>
-                    <MenuItem value={EventStatus.PUBLISHED}>Published</MenuItem>
-                    <MenuItem value={EventStatus.HIDDEN}>Hidden</MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    name="privacyType"
-                    label="Audience"
-                    select
-                    fullWidth
-                    value={privacyType}
-                    onChange={(e) =>
-                      setPrivacyType(e.target.value as EventPrivacyType)
-                    }
-                    helperText="Applies when the event is published."
-                  >
-                    <MenuItem value={EventPrivacyType.PUBLIC}>
-                      Public (discoverable)
-                    </MenuItem>
-                    <MenuItem value={EventPrivacyType.HIDDEN_LINK}>
-                      Hidden link (not listed)
-                    </MenuItem>
-                    <MenuItem value={EventPrivacyType.APPROVAL_REQUIRED}>
-                      Approval required
-                    </MenuItem>
-                    <MenuItem value={EventPrivacyType.INVITE_ONLY}>
-                      Invite only
-                    </MenuItem>
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    name="capacity"
-                    label="Capacity (optional)"
-                    type="number"
-                    fullWidth
-                    slotProps={{ htmlInput: { min: 1 } }}
-                    defaultValue={event.capacity ?? ""}
-                    helperText="Leave empty for unlimited RSVPs."
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    name="registrationClosesAt"
-                    label="Registration closes at"
-                    type="datetime-local"
-                    fullWidth
-                    defaultValue={
-                      event.registrationClosesAt
-                        ? zonedDatetimeLocalValue(
-                            new Date(event.registrationClosesAt),
-                            event.timezone,
-                          )
-                        : ""
-                    }
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    helperText="Use this or a lead time, not both."
-                  />
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }}>
-                  <TextField
-                    name="registrationLeadMinutes"
-                    label="Close before start (minutes)"
-                    type="number"
-                    fullWidth
-                    slotProps={{ htmlInput: { min: 0 } }}
-                    defaultValue={event.registrationLeadMinutes ?? ""}
-                    helperText="Relative cutoff; updates when the start time changes."
-                  />
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <Paper
-                    variant="outlined"
-                    sx={{
-                      p: 1.5,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 1,
-                    }}
-                  >
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        Show registration count on public page
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Displays confirmed and total responses to guests.
-                      </Typography>
-                    </Box>
-                    <Switch
-                      name="showRegistrationCount"
-                      checked={showRegistrationCountPreview}
-                      onChange={(_, checked) =>
-                        setShowRegistrationCountPreview(checked)
-                      }
-                      slotProps={{ input: { name: "showRegistrationCount" } }}
-                    />
-                  </Paper>
-                </Grid>
-              </Grid>
-              <Stack sx={{ alignItems: "flex-start", pt: 0.5 }}>
-                <Button type="submit" variant="contained" disabled={pending}>
-                  Save changes
-                </Button>
-              </Stack>
-            </Stack>
-          </Paper>
-        </Stack>
+        <FormCard title="Location" description="Choose whether this is online and what guests should see.">
+          <SwitchRow
+            name="isOnline"
+            label="Online event"
+            description="Guests will see “Online event”."
+            checked={isOnlinePreview}
+            onCheckedChange={(checked) => {
+              setIsOnlinePreview(checked);
+              setDirty(true);
+            }}
+            className="rounded-xl border border-line p-3.5"
+          />
+          <Field
+            label={isOnlinePreview ? "Online meeting link" : "Location"}
+            required
+            helperText={isOnlinePreview ? "Enter a valid HTTP(S) meeting URL." : "Eg: Samagatha Foundation, Bengaluru"}
+          >
+            <Input name="location" type={isOnlinePreview ? "url" : "text"} defaultValue={event.location} />
+          </Field>
+          <div className="flex flex-col gap-1.5">
+            <Field
+              label="Map link"
+              optional
+              helperText={isOnlinePreview ? "Available only for physical events." : "Paste a Google Maps link so guests can open directions."}
+            >
+              <Input name="mapLinkUrl" type="url" defaultValue={event.mapLinkUrl ?? ""} disabled={isOnlinePreview} onChange={(e) => setMapLinkPreviewUrl(e.target.value)} />
+            </Field>
+            {!isOnlinePreview && mapLinkPreviewUrl.trim() ? <p className="text-caption text-ink-muted">Tip: Use a share link so it opens cleanly on mobile.</p> : null}
+          </div>
+        </FormCard>
+
+        <FormCard title="Publishing" description="Who can see this event, who can join, and how sign-ups work.">
+          <PublishingSection
+            status={status}
+            onStatusChange={setStatus}
+            privacyType={privacyType}
+            listedPublicly={listedPublicly}
+            onAudienceChange={(audience) => {
+              setPrivacyType(audience.privacyType);
+              setListedPublicly(audience.listedPublicly);
+            }}
+            initialCapacity={event.capacity ?? null}
+            initialClosesAt={event.registrationClosesAt ? zonedDatetimeLocalValue(new Date(event.registrationClosesAt), event.timezone) : ""}
+            initialLeadMinutes={event.registrationLeadMinutes ?? null}
+            showCount={showRegistrationCountPreview}
+            onShowCountChange={setShowRegistrationCountPreview}
+            start={start}
+            timeZone={timezone}
+            onDirty={() => setDirty(true)}
+          />
+        </FormCard>
+
+        <UnsavedChangesBar visible={dirty} pending={pending} onDiscard={discard} />
       </form>
-    </>
+    </div>
   );
 }

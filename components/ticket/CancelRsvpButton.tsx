@@ -2,13 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogTitle from "@mui/material/DialogTitle";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogActions from "@mui/material/DialogActions";
-import Alert from "@mui/material/Alert";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Callout } from "@/components/ui/display";
 import { cancelRsvp } from "@/app/actions/rsvp-cancel";
 
 export function CancelRsvpButton(props: {
@@ -59,56 +54,26 @@ export function CancelRsvpButton(props: {
 
   return (
     <>
-      <Button
-        variant="outlined"
-        color="error"
-        size="small"
+      <button
+        type="button"
         onClick={() => setOpen(true)}
-        sx={{ borderRadius: 999, alignSelf: "flex-start" }}
+        className="inline-flex min-h-10 items-center self-center text-sm font-semibold text-ink-secondary underline underline-offset-4 hover:text-danger-fg"
       >
-        Cancel registration
-      </Button>
+        Can&apos;t make it? Cancel registration
+      </button>
 
-      <Dialog
+      <ConfirmDialog
         open={open}
-        onClose={() => !pending && setOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: { sx: { borderRadius: 3 } },
-        }}
+        title="Cancel your registration?"
+        message="Your RSVP will be removed and your spot will be given to the next person on the waitlist (if any). This cannot be undone."
+        cancelLabel="Keep registration"
+        confirmLabel={pending ? "Cancelling…" : "Yes, cancel"}
+        loading={pending}
+        onConfirm={handleCancel}
+        onCancel={() => setOpen(false)}
       >
-        <DialogTitle sx={{ fontWeight: 700 }}>
-          Cancel your registration?
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Your RSVP will be removed and your spot will be given to the next
-            person on the waitlist (if any). This cannot be undone.
-          </DialogContentText>
-          {error ? (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              {error}
-            </Alert>
-          ) : null}
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setOpen(false)}
-            disabled={pending}
-          >
-            Keep registration
-          </Button>
-          <Button
-            variant="contained"
-            color="error"
-            onClick={handleCancel}
-            disabled={pending}
-          >
-            {pending ? "Cancelling…" : "Yes, cancel"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      </ConfirmDialog>
     </>
   );
 }

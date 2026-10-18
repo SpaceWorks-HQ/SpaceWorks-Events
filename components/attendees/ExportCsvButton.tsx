@@ -1,8 +1,8 @@
 "use client";
 
-import Button from "@mui/material/Button";
-import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
-import type { AttendeeRow } from "@/components/attendees/AttendeeTable";
+import { Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { AttendeeRow } from "@/components/attendees/types";
 import { buildCsv } from "@/lib/csv";
 
 export function ExportCsvButton(props: {
@@ -80,14 +80,7 @@ export function ExportCsvButton(props: {
   }
 
   return (
-    <Button
-      variant="outlined"
-      size="small"
-      startIcon={<FileDownloadOutlinedIcon />}
-      onClick={handleExport}
-      disabled={attendees.length === 0}
-      sx={{ borderRadius: 2 }}
-    >
+    <Button variant="secondary" size="sm" startIcon={<Download />} onClick={handleExport} disabled={attendees.length === 0}>
       Export CSV
     </Button>
   );

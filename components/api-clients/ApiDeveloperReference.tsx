@@ -1,18 +1,9 @@
 "use client";
 
-import Alert from "@mui/material/Alert";
-import Accordion from "@mui/material/Accordion";
-import AccordionDetails from "@mui/material/AccordionDetails";
-import AccordionSummary from "@mui/material/AccordionSummary";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import { Copy } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Callout, Chip } from "@/components/ui/display";
+import { Accordion, AccordionItem } from "@/components/ui/tabs";
 import { useToast } from "@/components/feedback/ToastProvider";
 
 type Endpoint = {
@@ -49,44 +40,32 @@ async function copyToClipboard(value: string) {
 function CodeBlock(props: { label: string; value: string }) {
   const { showToast } = useToast();
   return (
-    <Stack spacing={0.75}>
-      <Stack direction="row" spacing={1} sx={{ alignItems: "center", justifyContent: "space-between" }}>
-        <Typography variant="subtitle2">{props.label}</Typography>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-label text-ink">{props.label}</p>
         <Button
-          size="small"
-          startIcon={<ContentCopyOutlinedIcon />}
+          size="sm"
+          variant="quiet"
+          startIcon={<Copy />}
           onClick={() => void copyToClipboard(props.value).then(() => showToast(`${props.label} copied`, "success"))}
         >
           Copy
         </Button>
-      </Stack>
-      <Box
-        component="pre"
-        sx={{
-          m: 0,
-          p: 1.5,
-          overflowX: "auto",
-          borderRadius: 2,
-          bgcolor: "action.hover",
-          fontFamily: "monospace",
-          fontSize: 12,
-          lineHeight: 1.55,
-          whiteSpace: "pre",
-        }}
-      >
+      </div>
+      <pre className="m-0 overflow-x-auto whitespace-pre rounded-md bg-inverse px-4 py-3 font-mono text-xs leading-relaxed text-on-inverse">
         {props.value}
-      </Box>
-    </Stack>
+      </pre>
+    </div>
   );
 }
 
 function EndpointReference({ endpoint }: { endpoint: Endpoint }) {
   return (
-    <Stack spacing={1.5}>
-      <Typography variant="body2" color="text.secondary">{endpoint.description}</Typography>
+    <div className="flex flex-col gap-3">
+      <p className="text-body-ui text-ink-secondary">{endpoint.description}</p>
       <CodeBlock label="Request" value={endpoint.request} />
       <CodeBlock label="Success response" value={endpoint.response} />
-    </Stack>
+    </div>
   );
 }
 
@@ -189,78 +168,73 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
   ];
 
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: "16px", borderColor: "rgba(255,255,255,0.08)" }}>
-      <Stack spacing={2.5}>
-        <Box>
-          <Typography variant="h6" component="h2" sx={{ fontWeight: 700 }}>Developer reference</Typography>
-          <Typography variant="body2" color="text.secondary">Use this tenant-bound REST API from your backend service or automation.</Typography>
-        </Box>
-        <Alert severity="warning">Credentials are shown only when created. Keep them in a secret manager; never expose them in browser code, URLs, source control, or logs.</Alert>
-        <Accordion variant="outlined" defaultExpanded>
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", width: "100%", pr: 1 }}>
-              <Typography sx={{ fontWeight: 700 }}>Getting started</Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>{apiBaseUrl}</Typography>
-            </Stack>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2}>
+    <section aria-labelledby="api-reference-title" className="flex flex-col gap-4">
+      <div>
+        <h2 id="api-reference-title" className="text-title text-ink">Developer reference</h2>
+        <p className="mt-1 text-body-ui text-ink-muted">Use this tenant-bound REST API from your backend service or automation.</p>
+      </div>
+      <Callout tone="warning">Credentials are shown only when created. Keep them in a secret manager; never expose them in browser code, URLs, source control, or logs.</Callout>
+      <div className="rounded-lg border border-line bg-canvas px-5">
+        <Accordion type="multiple" defaultValue={["getting-started"]}>
+          <AccordionItem
+            value="getting-started"
+            title={
+              <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <span>Getting started</span>
+                <span className="break-all font-mono text-xs font-normal text-ink-muted">{apiBaseUrl}</span>
+              </span>
+            }
+          >
+            <div className="flex flex-col gap-3">
               <CodeBlock label="API base URL" value={apiBaseUrl} />
-              <Stack direction="row" useFlexGap spacing={1} sx={{ flexWrap: "wrap" }}>
-                <Chip label="Bearer authentication" size="small" />
-                <Chip label="JSON responses" size="small" />
-                <Chip label="No-store caching" size="small" />
-                <Chip label="Maximum page size: 100" size="small" />
-              </Stack>
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-        <Accordion variant="outlined">
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ fontWeight: 700 }}>Scopes ({scopes.length})</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={2} divider={<Divider flexItem />}>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip size="sm">Bearer authentication</Chip>
+                <Chip size="sm">JSON responses</Chip>
+                <Chip size="sm">No-store caching</Chip>
+                <Chip size="sm">Maximum page size: 100</Chip>
+              </div>
+            </div>
+          </AccordionItem>
+          <AccordionItem value="scopes" title={`Scopes (${scopes.length})`}>
+            <ul className="flex flex-col divide-y divide-line">
               {scopes.map((scope) => (
-                <Stack key={scope.scope} spacing={0.75}>
-                  <Chip label={scope.scope} size="small" color="primary" variant="outlined" sx={{ alignSelf: "flex-start" }} />
-                  <Typography variant="body2">{scope.capability}</Typography>
-                  <Typography variant="body2" color="text.secondary"><strong>Includes:</strong> {scope.includes}</Typography>
-                  <Typography variant="body2" color="text.secondary"><strong>Does not include:</strong> {scope.excludes}</Typography>
-                </Stack>
+                <li key={scope.scope} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
+                  <Chip size="sm" tone="outline" className="self-start font-mono">{scope.scope}</Chip>
+                  <p className="text-body-ui text-ink">{scope.capability}</p>
+                  <p className="text-body-ui text-ink-secondary"><strong className="text-ink">Includes:</strong> {scope.includes}</p>
+                  <p className="text-body-ui text-ink-secondary"><strong className="text-ink">Does not include:</strong> {scope.excludes}</p>
+                </li>
               ))}
-            </Stack>
-          </AccordionDetails>
-        </Accordion>
-        {endpoints.map((endpoint) => (
-          <Accordion key={endpoint.title} variant="outlined">
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between", width: "100%", pr: 1 }}>
-                <Typography sx={{ fontWeight: 700 }}>{endpoint.title}</Typography>
-                <Chip label={endpoint.scope} size="small" color="primary" variant="outlined" sx={{ alignSelf: { xs: "flex-start", sm: "center" } }} />
-              </Stack>
-            </AccordionSummary>
-            <AccordionDetails><EndpointReference endpoint={endpoint} /></AccordionDetails>
-          </Accordion>
-        ))}
-        <Accordion variant="outlined">
-          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography sx={{ fontWeight: 700 }}>Pagination and errors</Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <Stack spacing={1.25}>
-              <Typography variant="body2" color="text.secondary">Collection endpoints default to 50 items and accept `limit` from 1 through 100. When `pagination.nextCursor` is non-null, pass it back as the `cursor` query parameter. Do not inspect or construct cursors.</Typography>
+            </ul>
+          </AccordionItem>
+          {endpoints.map((endpoint) => (
+            <AccordionItem
+              key={endpoint.title}
+              value={endpoint.title}
+              title={
+                <span className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span>{endpoint.title}</span>
+                  <Chip size="sm" tone="outline" className="self-start font-mono sm:self-center">{endpoint.scope}</Chip>
+                </span>
+              }
+            >
+              <EndpointReference endpoint={endpoint} />
+            </AccordionItem>
+          ))}
+          <AccordionItem value="pagination" title="Pagination and errors" className="border-b-0">
+            <div className="flex flex-col gap-3">
+              <p className="text-body-ui text-ink-secondary">Collection endpoints default to 50 items and accept `limit` from 1 through 100. When `pagination.nextCursor` is non-null, pass it back as the `cursor` query parameter. Do not inspect or construct cursors.</p>
               <CodeBlock label="Error response" value={`{
   "error": {
     "code": "INSUFFICIENT_SCOPE",
     "message": "The credential does not have permission for this resource."
   }
 }`} />
-              <Typography variant="body2" color="text.secondary">Error codes: `INVALID_REQUEST`, `INVALID_CREDENTIAL`, `INSUFFICIENT_SCOPE`, `RESOURCE_NOT_FOUND`, `RATE_LIMITED`, and `INTERNAL_ERROR`. A rate-limited response includes `Retry-After`.</Typography>
-            </Stack>
-          </AccordionDetails>
+              <p className="text-body-ui text-ink-secondary">Error codes: `INVALID_REQUEST`, `INVALID_CREDENTIAL`, `INSUFFICIENT_SCOPE`, `RESOURCE_NOT_FOUND`, `RATE_LIMITED`, and `INTERNAL_ERROR`. A rate-limited response includes `Retry-After`.</p>
+            </div>
+          </AccordionItem>
         </Accordion>
-      </Stack>
-    </Paper>
+      </div>
+    </section>
   );
 }

@@ -8,18 +8,26 @@ import { prisma } from "@/lib/db";
 import { requireOrgRole } from "@/lib/permissions";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+import { fieldSettingsSchema, fieldTypeMeta, generateFieldKey, settingsForType } from "@/lib/registrationFields";
+
+/** A user-facing problem with a question's "show only if" rule. */
+class ConditionError extends Error {}
 
 const upsertFieldSchema = z.object({
   organisationSlug: z.string().trim().min(1),
   eventId: z.string().trim().min(1),
   fieldId: z.string().trim().min(1).optional(),
+  /** Optional: generated from the question text when a question is created, then kept fixed. */
   key: z
     .string()
     .trim()
-    .min(1, "Key is required")
     .max(64)
-    .regex(/^[a-zA-Z0-9_]+$/, "Use letters, numbers, and underscores only"),
-  label: z.string().trim().min(1, "Label is required").max(200),
+    .regex(/^[a-zA-Z0-9_]*$/, "Use letters, numbers, and underscores only")
+    .optional(),
+  label: z.string().trim().min(1, "Write the question").max(200),
+  helpText: z.string().trim().max(300, "Keep the help text under 300 characters").optional().default(""),
+  placeholder: z.string().trim().max(120, "Keep the example under 120 characters").optional().default(""),
+  settings: fieldSettingsSchema.optional().default({}),
   type: z.nativeEnum(RegistrationFieldType),
   required: z.preprocess(
     (v) => v === true || v === "true" || v === "on",
@@ -49,9 +57,10 @@ export async function upsertEventRegistrationField(
     };
   }
 
-  const { organisationSlug, eventId, fieldId, key, label, type, required } =
+  const { organisationSlug, eventId, fieldId, label, type, required, helpText, placeholder } =
     parsed.data;
   const options = parsed.data.options ?? [];
+  const settings = settingsForType(type, parsed.data.settings);
 
   const { organisation, userId } = await requireOrgRole(organisationSlug, "ADMIN");
   if (await isActionRateLimited("rsvp", userId)) return { ok: false, error: "Too many form updates. Try again shortly." };
@@ -66,8 +75,9 @@ export async function upsertEventRegistrationField(
     type === RegistrationFieldType.MULTI_SELECT ||
     type === RegistrationFieldType.RADIO;
   if (needsOptions && options.length === 0) {
-    return { ok: false, error: "Options are required for this field type." };
+    return { ok: false, error: "Add at least one choice." };
   }
+  const usesPlaceholder = fieldTypeMeta(type).isText;
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -78,16 +88,41 @@ export async function upsertEventRegistrationField(
         select: { id: true },
       });
 
+      const siblings = await tx.eventRegistrationField.findMany({
+        where: { formId: form.id },
+        select: { id: true, key: true, type: true, options: true, sortOrder: true },
+      });
+      const self = fieldId ? siblings.find((field) => field.id === fieldId) : undefined;
+      if (fieldId && !self) throw new Error("Field does not belong to this event.");
+
+      // "Show only if" must point at an earlier choice or yes/no question on this form.
+      if (settings.showIf) {
+        const trigger = siblings.find((field) => field.key === settings.showIf!.fieldKey);
+        const ownOrder = self?.sortOrder ?? Number.POSITIVE_INFINITY;
+        if (!trigger || trigger.id === fieldId || trigger.sortOrder >= ownOrder || !fieldTypeMeta(trigger.type).canTrigger) {
+          throw new ConditionError("Choose an earlier multiple-choice, dropdown, checkbox or yes/no question.");
+        }
+        const allowed = trigger.type === "CHECKBOX" ? ["Yes", "No"] : Array.isArray(trigger.options) ? trigger.options.filter((value): value is string => typeof value === "string") : [];
+        const values = settings.showIf.values.filter((value) => allowed.includes(value));
+        if (values.length === 0) throw new ConditionError("Pick at least one answer that shows this question.");
+        settings.showIf = { fieldKey: trigger.key, values };
+      }
+
+      const data = {
+        label,
+        type,
+        required,
+        options: needsOptions ? options : [],
+        helpText,
+        placeholder: usesPlaceholder ? placeholder : "",
+        settings,
+      };
+
       if (fieldId) {
+        // The key stays fixed so existing answers and links keep working.
         const updated = await tx.eventRegistrationField.updateMany({
           where: { id: fieldId, formId: form.id },
-          data: {
-            key,
-            label,
-            type,
-            required,
-            options: needsOptions ? options : [],
-          },
+          data,
         });
         if (updated.count !== 1) throw new Error("Field does not belong to this event.");
         return { id: fieldId, formId: form.id };
@@ -99,15 +134,16 @@ export async function upsertEventRegistrationField(
       });
       const sortOrder = (max._max.sortOrder ?? 0) + 1;
 
+      const requested = parsed.data.key?.trim();
+      const taken = siblings.map((field) => field.key);
+      const key = requested && !taken.includes(requested) ? requested : generateFieldKey(label, taken);
+
       return await tx.eventRegistrationField.create({
         data: {
           formId: form.id,
           key,
-          label,
-          type,
-          required,
           sortOrder,
-          options: needsOptions ? options : [],
+          ...data,
         },
         select: { id: true, formId: true },
       });
@@ -124,13 +160,14 @@ export async function upsertEventRegistrationField(
 
     return { ok: true, data: { fieldId: result.id } };
   } catch (e: unknown) {
+    if (e instanceof ConditionError) return { ok: false, error: e.message };
     if (
       typeof e === "object" &&
       e !== null &&
       "code" in e &&
       (e as { code: string }).code === "P2002"
     ) {
-      return { ok: false, error: "That field key is already in use." };
+      return { ok: false, error: "That question already exists. Try again." };
     }
     console.error("[registration form] update failed");
     return { ok: false, error: "Could not save field." };

@@ -10,7 +10,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { getFeedbackTemplate } from "@/lib/feedbackTemplates";
 
-import { certificateTemplateSchema } from "@/lib/certificateTemplate";
+import { certificateTemplateInputSchema } from "@/lib/certificateTemplate";
+import { certificateImagesAreOwned } from "@/lib/certificateAssets";
 
 const base = z.object({ organisationSlug: z.string().trim().min(1).max(120), eventId: z.string().trim().min(1).max(128) });
 
@@ -97,13 +98,12 @@ export async function applyFeedbackTemplate(input: unknown): Promise<ActionResul
 }
 
 export async function saveFeedbackSettings(input: unknown): Promise<ActionResult<{ formId: string }>> {
-  const parsed = base.extend({ isOpen: z.boolean(), title: z.string().trim().min(1).max(120), thankYouMessage: z.string().trim().min(1).max(500), certificateEnabled: z.boolean(), certificateTemplate: certificateTemplateSchema.nullable().optional() }).strict().safeParse(input);
+  const parsed = base.extend({ isOpen: z.boolean(), title: z.string().trim().min(1).max(120), thankYouMessage: z.string().trim().min(1).max(500), certificateEnabled: z.boolean(), certificateTemplate: certificateTemplateInputSchema.nullable().optional() }).strict().safeParse(input);
   if (!parsed.success) return { ok: false, error: "Check the feedback settings." };
   const context = await access(parsed.data);
   if (!context || "error" in context) return { ok: false, error: context?.error ?? "Event not found." };
-  if (parsed.data.certificateTemplate) {
-    const key = parsed.data.certificateTemplate.backgroundKey;
-    if (!key.startsWith(`organisations/${context.organisation.id}/certificate-backgrounds/`) || !await prisma.asset.findFirst({ where: { key, organisationId: context.organisation.id, contentType: "image/webp" }, select: { id: true } })) return { ok: false, error: "Choose a certificate image uploaded by this organisation." };
+  if (parsed.data.certificateTemplate && !await certificateImagesAreOwned(parsed.data.certificateTemplate, context.organisation.id)) {
+    return { ok: false, error: "Choose certificate images uploaded by this organisation." };
   }
   const certificateData = parsed.data.certificateTemplate === undefined ? {} : { certificateTemplate: parsed.data.certificateTemplate ?? Prisma.DbNull };
   const result = await prisma.$transaction(async (tx) => {

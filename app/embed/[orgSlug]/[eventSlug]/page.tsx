@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import EventPage from "@/app/[orgSlug]/[eventSlug]/page";
+import { EmbedCredit } from "@/components/chrome/SiteFooter";
 
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string }> };
 
@@ -14,5 +15,10 @@ export const metadata: Metadata = {
  * remain unavailable here as well.
  */
 export default async function EmbeddedEventPage({ params }: Props) {
-  return <EventPage params={params} />;
+  return (
+    <>
+      <EventPage params={params} />
+      <EmbedCredit />
+    </>
+  );
 }

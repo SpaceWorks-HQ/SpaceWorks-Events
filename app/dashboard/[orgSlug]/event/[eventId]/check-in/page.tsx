@@ -1,6 +1,4 @@
 import { notFound } from "next/navigation";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
 import { prisma } from "@/lib/db";
 import { EventPermission } from "@prisma/client";
 import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
@@ -8,6 +6,7 @@ import { canAccessEvent } from "@/lib/eventAccess";
 import { EventCheckInClient } from "@/components/checkin/EventCheckInClient";
 import { CheckInStationSettings } from "@/components/checkin/CheckInStationSettings";
 import { getRequestOrigin } from "@/lib/publicUrl";
+import { EventManageHeader } from "@/components/dashboard/EventManageHeader";
 
 type Props = {
   params: Promise<{ orgSlug: string; eventId: string }>;
@@ -33,6 +32,7 @@ export default async function EventCheckInPage({ params }: Props) {
   const [event, organisationBrand] = await Promise.all([
     prisma.event.findFirst({
       where: { id: eventId, organisationId: organisation.id },
+      include: { page: { select: { accentColor: true } } },
     }),
     prisma.organisation.findUnique({
       where: { id: organisation.id },
@@ -77,10 +77,11 @@ export default async function EventCheckInPage({ params }: Props) {
   const origin = await getRequestOrigin();
   const stationUrl = `${origin}/${organisation.slug}/${event.slug}/check-in`;
   return (
-    <Stack spacing={2}>
-      <Typography variant="h5" component="h1" sx={{ fontWeight: 600 }}>
-        Check-in · {event.title}
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <EventManageHeader
+        back={{ href: `/dashboard/${organisation.slug}/event/${event.id}`, label: "Back to event" }}
+        event={{ title: event.title, status: event.status, privacyType: event.privacyType, startDateTime: event.startDateTime, timezone: event.timezone, accentColor: event.page?.accentColor }}
+      />
       <EventCheckInClient
         organisationSlug={organisation.slug}
         organisationName={organisation.name}
@@ -92,6 +93,6 @@ export default async function EventCheckInPage({ params }: Props) {
         recent={recent}
       />
       {isAdmin ? <CheckInStationSettings organisationSlug={organisation.slug} eventId={event.id} stationUrl={stationUrl} enabled={Boolean(event.checkInStationPinHash)} /> : null}
-    </Stack>
+    </div>
   );
 }

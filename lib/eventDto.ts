@@ -24,8 +24,10 @@ export function toEventClientDto(event: Event): EventClientDto {
     capacity: event.capacity,
     status: event.status,
     privacyType: event.privacyType,
+    listedPublicly: event.listedPublicly,
     registrationClosesAt: event.registrationClosesAt,
     registrationLeadMinutes: event.registrationLeadMinutes,
+    shortCode: event.shortCode,
     createdAt: event.createdAt,
   };
 }

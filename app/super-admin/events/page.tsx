@@ -1,21 +1,17 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Link from "next/link";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { AdminPager, AdminSearchForm, LinkRow, NameCell, StatusValue } from "@/components/super-admin/AdminPanel";
+import { Chip, PageHeader } from "@/components/ui/display";
+import { Input } from "@/components/ui/field";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
   searchParams: Promise<{ q?: string; org?: string; page?: string }>;
 };
 
 export default async function SuperAdminEventsPage({ searchParams }: Props) {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const org = (sp.org ?? "").trim();
@@ -54,135 +50,58 @@ export default async function SuperAdminEventsPage({ searchParams }: Props) {
     },
   });
 
+  const checkedIn = events.length === 0
+    ? new Map<string, number>()
+    : await prisma.rSVP
+        .groupBy({ by: ["eventId"], where: { eventId: { in: events.map((e) => e.id) }, checkedInAt: { not: null } }, _count: { _all: true } })
+        .then((rows) => new Map(rows.map((row) => [row.eventId ?? "", row._count._all])));
+
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Events
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Events" description="Events across every organisation, newest first." />
+      <AdminSearchForm action="/super-admin/events" label="Search by title, slug, org" defaultValue={q} submitLabel="Apply">
+        <label className="flex flex-col gap-1.5 sm:w-60">
+          <span className="text-label text-ink">Filter by orgId</span>
+          <Input name="org" defaultValue={org} />
+        </label>
+      </AdminSearchForm>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Stack
-          component="form"
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          action="/super-admin/events"
-          method="GET"
-        >
-          <TextField
-            name="q"
-            label="Search by title, slug, org"
-            defaultValue={q}
-            size="small"
-            fullWidth
-          />
-          <TextField
-            name="org"
-            label="Filter by orgId"
-            defaultValue={org}
-            size="small"
-            sx={{ minWidth: 240 }}
-          />
-          <input type="hidden" name="page" value="0" />
-          <Button type="submit" variant="contained">
-            Apply
-          </Button>
-        </Stack>
-      </Paper>
+      <Table label="Events">
+        <THead>
+          <tr>
+            <TH>Event</TH>
+            <TH>Org</TH>
+            <TH>Status</TH>
+            <TH>Privacy</TH>
+            <TH>Start</TH>
+            <TH className="text-right">RSVPs</TH>
+            <TH className="text-right">Checked in</TH>
+            <TH>Links</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {events.length === 0 ? (
+            <tr><TD colSpan={8} className="py-8 text-center text-ink-muted">No events.</TD></tr>
+          ) : (
+            events.map((e) => (
+              <TR key={e.id}>
+                <TD><NameCell name={e.title} sub={e.id} /></TD>
+                <TD><NameCell name={e.organisation.name} sub={`/${e.organisation.slug}`} /></TD>
+                <TD><StatusValue status={e.status} /></TD>
+                <TD><Chip size="sm" tone="outline">{e.privacyType}</Chip></TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{e.startDateTime.toLocaleString()}</TD>
+                <TD className="text-right tabular-nums">{e._count.rsvps}</TD>
+                <TD className="text-right tabular-nums">{checkedIn.get(e.id) ?? 0}</TD>
+                <TD>
+                  <LinkRow links={[{ href: `/${e.organisation.slug}/${e.slug}`, label: "Public" }, { href: `/dashboard/${e.organisation.slug}/event/${e.id}`, label: "Manage" }, { href: `/super-admin/orgs/${e.organisation.id}`, label: "Org" }]} />
+                </TD>
+              </TR>
+            ))
+          )}
+        </TBody>
+      </Table>
 
-      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Event</TableCell>
-              <TableCell>Org</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Privacy</TableCell>
-              <TableCell>Start</TableCell>
-              <TableCell align="right">RSVPs</TableCell>
-              <TableCell>Links</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {events.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography color="text.secondary">No events.</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              events.map((e) => (
-                <TableRow key={e.id} hover>
-                  <TableCell sx={{ fontWeight: 650 }}>
-                    {e.title}
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block" }}
-                    >
-                      {e.id}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Typography sx={{ fontWeight: 650 }}>{e.organisation.name}</Typography>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block" }}
-                    >
-                      /{e.organisation.slug}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{e.status}</TableCell>
-                  <TableCell>{e.privacyType}</TableCell>
-                  <TableCell>{e.startDateTime.toLocaleString()}</TableCell>
-                  <TableCell align="right">{e._count.rsvps}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/${e.organisation.slug}/${e.slug}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Public
-                    </Link>
-                    {" · "}
-                    <Link
-                      href={`/dashboard/${e.organisation.slug}/event/${e.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Manage
-                    </Link>
-                    {" · "}
-                    <Link
-                      href={`/super-admin/orgs/${e.organisation.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Org
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Paper>
-
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Link
-          href={`/super-admin/events?q=${encodeURIComponent(q)}&org=${encodeURIComponent(org)}&page=${Math.max(0, page - 1)}`}
-          style={{ textDecoration: "none" }}
-        >
-          Prev
-        </Link>
-        <Typography color="text.secondary">·</Typography>
-        <Typography color="text.secondary">Page {page + 1}</Typography>
-        <Typography color="text.secondary">·</Typography>
-        <Link
-          href={`/super-admin/events?q=${encodeURIComponent(q)}&org=${encodeURIComponent(org)}&page=${page + 1}`}
-          style={{ textDecoration: "none" }}
-        >
-          Next
-        </Link>
-      </Stack>
-    </Stack>
+      <AdminPager basePath="/super-admin/events" query={q} page={page} extra={`&org=${encodeURIComponent(org)}`} />
+    </div>
   );
 }
-

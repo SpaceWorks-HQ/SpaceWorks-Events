@@ -1,27 +1,42 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import IconButton from "@mui/material/IconButton";
-import Paper from "@mui/material/Paper";
-import Slider from "@mui/material/Slider";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
-import RotateRightOutlinedIcon from "@mui/icons-material/RotateRightOutlined";
-import CropOutlinedIcon from "@mui/icons-material/CropOutlined";
-import RestartAltOutlinedIcon from "@mui/icons-material/RestartAltOutlined";
-import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
-import CheckOutlinedIcon from "@mui/icons-material/CheckOutlined";
+import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { Crop, ImagePlus, Trash2, Upload } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Spinner } from "@/components/ui/spinner";
+import { PhotoEditor, type PhotoEditorResult, type PhotoEditorSettings } from "@/components/media/PhotoEditor";
+import { canReadPixels, loadImage } from "@/components/media/photoCanvas";
+import { ACCEPTED_IMAGE_TYPES, validateImageFile } from "@/components/media/photoMath";
 
-const MAX_COVER_IMAGE_BYTES = 5 * 1024 * 1024;
-const OUTPUT_SIZE = 1200;
+type Session = {
+  key: number;
+  image: HTMLImageElement;
+  /** Object URL for the source image, when this picker created it. */
+  sourceUrl: string | null;
+  initialSettings?: Partial<PhotoEditorSettings>;
+};
 
+type Committed = { image: HTMLImageElement; sourceUrl: string | null; settings: PhotoEditorSettings };
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.closest("input, textarea, select, [contenteditable=''], [contenteditable='true']") !== null;
+}
+
+function imageFromClipboard(data: DataTransfer | null) {
+  if (!data) return null;
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind === "file" && item.type.startsWith("image/")) return item.getAsFile();
+  }
+  return Array.from(data.files ?? []).find((file) => file.type.startsWith("image/")) ?? null;
+}
+
+/**
+ * Event cover picker. Choose, drop, or paste a photo, then crop it in the
+ * photo editor (16:7 event page banner by default). The server still
+ * validates and re-encodes every upload.
+ */
 export function CoverImagePicker(props: {
   initialUrl?: string | null;
   disabled?: boolean;
@@ -29,233 +44,267 @@ export function CoverImagePicker(props: {
 }) {
   const { initialUrl = "", disabled = false, onChange } = props;
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [previewUrl, setPreviewUrl] = useState(initialUrl ?? "");
-  const [sourceUrl, setSourceUrl] = useState("");
+  const [error, setError] = useState<{ message: string; offerReplace?: boolean } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [dragDepth, setDragDepth] = useState(0);
+  const [session, setSession] = useState<Session | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [error, setError] = useState<string | null>(null);
-  const dragRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
+  const sessionCounter = useRef(0);
+  const ownedPreviewUrl = useRef<string | null>(null);
+  const committed = useRef<Committed | null>(null);
+  const pendingSourceUrl = useRef<string | null>(null);
 
-  useEffect(() => {
-    const image = imageRef.current;
-    const canvas = canvasRef.current;
-    if (!image || !canvas || !imageLoaded) return;
+  // Revoke every object URL this picker created when it goes away.
+  useEffect(
+    () => () => {
+      if (ownedPreviewUrl.current) URL.revokeObjectURL(ownedPreviewUrl.current);
+      if (committed.current?.sourceUrl) URL.revokeObjectURL(committed.current.sourceUrl);
+      if (pendingSourceUrl.current) URL.revokeObjectURL(pendingSourceUrl.current);
+    },
+    [],
+  );
 
-    canvas.width = OUTPUT_SIZE;
-    canvas.height = OUTPUT_SIZE;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.fillStyle = "#111";
-    context.fillRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-    const radians = (rotation * Math.PI) / 180;
-    const baseScale = Math.max(OUTPUT_SIZE / image.naturalWidth, OUTPUT_SIZE / image.naturalHeight);
-    const scale = baseScale * zoom;
-    context.save();
-    context.translate(OUTPUT_SIZE / 2 + offset.x, OUTPUT_SIZE / 2 + offset.y);
-    context.rotate(radians);
-    context.drawImage(
-      image,
-      (-image.naturalWidth * scale) / 2,
-      (-image.naturalHeight * scale) / 2,
-      image.naturalWidth * scale,
-      image.naturalHeight * scale,
-    );
-    context.restore();
-  }, [imageLoaded, offset, rotation, zoom]);
-
-  function selectImage(file: File | undefined) {
-    if (!file) return;
-    setError(null);
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setError("Choose a JPEG, PNG, or WebP image.");
-      return;
-    }
-    if (file.size > MAX_COVER_IMAGE_BYTES) {
-      setError("Choose an image that is 5 MB or smaller.");
-      return;
-    }
-    setSourceUrl(URL.createObjectURL(file));
-    setImageLoaded(false);
-    setZoom(1);
-    setRotation(0);
-    setOffset({ x: 0, y: 0 });
+  const openSession = useCallback((image: HTMLImageElement, sourceUrl: string | null, initialSettings?: Partial<PhotoEditorSettings>) => {
+    sessionCounter.current += 1;
+    setSession({ key: sessionCounter.current, image, sourceUrl, initialSettings });
     setEditorOpen(true);
+  }, []);
+
+  const openFile = useCallback(
+    async (file: File | null | undefined) => {
+      if (!file || disabled) return;
+      setError(null);
+      const problem = validateImageFile(file);
+      if (problem) {
+        setError({ message: problem });
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      setLoading(true);
+      try {
+        const image = await loadImage(url);
+        if (pendingSourceUrl.current) URL.revokeObjectURL(pendingSourceUrl.current);
+        pendingSourceUrl.current = url;
+        openSession(image, url);
+      } catch {
+        URL.revokeObjectURL(url);
+        setError({ message: "That image couldn't be opened. It may be damaged — try a different file." });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [disabled, openSession],
+  );
+
+  async function editCurrent() {
+    if (disabled) return;
+    setError(null);
+    const previous = committed.current;
+    if (previous) {
+      // Re-edit from the original photo, not the already-cropped result.
+      openSession(previous.image, previous.sourceUrl, previous.settings);
+      return;
+    }
+    if (!previewUrl) return;
+    setLoading(true);
+    try {
+      const image = await loadImage(previewUrl, { crossOrigin: true });
+      if (!canReadPixels(image)) throw new Error("blocked");
+      openSession(image, null);
+    } catch {
+      setError({
+        message: "Your browser couldn't open the current cover for editing. Upload the original photo again to crop or adjust it.",
+        offerReplace: true,
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
-  function startDrag(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.setPointerCapture(event.pointerId);
-    dragRef.current = { x: event.clientX, y: event.clientY, offsetX: offset.x, offsetY: offset.y };
+  function closeEditor() {
+    setEditorOpen(false);
+    const pending = pendingSourceUrl.current;
+    if (pending && pending !== committed.current?.sourceUrl) URL.revokeObjectURL(pending);
+    pendingSourceUrl.current = null;
   }
 
-  function moveDrag(event: ReactPointerEvent<HTMLCanvasElement>) {
-    const drag = dragRef.current;
-    const canvas = canvasRef.current;
-    if (!drag || !canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    setOffset({
-      x: drag.offsetX + ((event.clientX - drag.x) * OUTPUT_SIZE) / rect.width,
-      y: drag.offsetY + ((event.clientY - drag.y) * OUTPUT_SIZE) / rect.height,
-    });
+  function applyEdit(result: PhotoEditorResult) {
+    if (!session) return;
+    const nextPreview = URL.createObjectURL(result.file);
+    if (ownedPreviewUrl.current) URL.revokeObjectURL(ownedPreviewUrl.current);
+    ownedPreviewUrl.current = nextPreview;
+    const previous = committed.current;
+    if (previous?.sourceUrl && previous.sourceUrl !== session.sourceUrl) URL.revokeObjectURL(previous.sourceUrl);
+    committed.current = { image: session.image, sourceUrl: session.sourceUrl, settings: result.settings };
+    if (pendingSourceUrl.current === session.sourceUrl) pendingSourceUrl.current = null;
+    setPreviewUrl(nextPreview);
+    setError(null);
+    setEditorOpen(false);
+    onChange(result.file, nextPreview);
   }
 
-  function endDrag(event: ReactPointerEvent<HTMLCanvasElement>) {
-    dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+  function remove() {
+    if (ownedPreviewUrl.current) URL.revokeObjectURL(ownedPreviewUrl.current);
+    ownedPreviewUrl.current = null;
+    if (committed.current?.sourceUrl) URL.revokeObjectURL(committed.current.sourceUrl);
+    committed.current = null;
+    setPreviewUrl("");
+    setError(null);
+    onChange(null, "");
   }
 
-  function applyEdit() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          setError("Could not process that image.");
-          return;
-        }
-        if (blob.size > MAX_COVER_IMAGE_BYTES) {
-          setError("The processed image is too large. Try a smaller source image.");
-          return;
-        }
-        const file = new File([blob], "event-cover.webp", { type: "image/webp" });
-        const nextPreviewUrl = URL.createObjectURL(file);
-        setPreviewUrl(nextPreviewUrl);
-        onChange(file, nextPreviewUrl);
-        setEditorOpen(false);
-      },
-      "image/webp",
-      0.88,
-    );
-  }
+  // Paste an image anywhere on the page (outside text fields) while the editor is closed.
+  useEffect(() => {
+    if (disabled || editorOpen) return;
+    const onPaste = (event: ClipboardEvent) => {
+      if (isEditableTarget(event.target)) return;
+      const file = imageFromClipboard(event.clipboardData);
+      if (!file) return;
+      event.preventDefault();
+      void openFile(file);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [disabled, editorOpen, openFile]);
+
+  const hasFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes("Files");
+  const dragging = dragDepth > 0 && !disabled;
+
+  const dropHandlers = {
+    onDragEnter: (event: DragEvent<HTMLDivElement>) => {
+      if (disabled || !hasFiles(event)) return;
+      event.preventDefault();
+      setDragDepth((depth) => depth + 1);
+    },
+    onDragOver: (event: DragEvent<HTMLDivElement>) => {
+      if (disabled || !hasFiles(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    },
+    onDragLeave: (event: DragEvent<HTMLDivElement>) => {
+      if (disabled || !hasFiles(event)) return;
+      setDragDepth((depth) => Math.max(0, depth - 1));
+    },
+    onDrop: (event: DragEvent<HTMLDivElement>) => {
+      if (disabled) return;
+      event.preventDefault();
+      setDragDepth(0);
+      const file = Array.from(event.dataTransfer.files)[0];
+      if (file) void openFile(file);
+    },
+  };
 
   return (
-    <Stack spacing={1.25} sx={{ maxWidth: 260 }}>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <Box
-        sx={{
-          position: "relative",
-          overflow: "hidden",
-          width: 220,
-          maxWidth: "100%",
-          aspectRatio: "1 / 1",
-          borderRadius: "14px",
-          border: "1px dashed rgba(255,255,255,0.18)",
-          backgroundColor: "rgba(255,255,255,0.025)",
-          display: "grid",
-          placeItems: "center",
-        }}
-      >
+    <div className="flex w-full max-w-[640px] flex-col gap-3">
+      <div {...dropHandlers} className="relative">
         {previewUrl ? (
-          <Box component="img" src={previewUrl} alt="Cover image preview" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          <button
+            type="button"
+            disabled={disabled || loading}
+            onClick={editCurrent}
+            aria-label="Edit cover photo"
+            className="group relative block aspect-[16/7] w-full overflow-hidden rounded-xl border border-line bg-muted disabled:cursor-not-allowed"
+          >
+            {/* Local object URLs and managed uploads are previewed directly. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewUrl} alt="Current cover image" className="size-full object-cover" />
+            <span
+              aria-hidden
+              className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-caption font-semibold text-white opacity-0 transition-opacity duration-[180ms] ease-yy group-hover:opacity-100 group-focus-visible:opacity-100 [&_svg]:size-3.5"
+            >
+              <Crop /> Edit photo
+            </span>
+          </button>
         ) : (
-          <Stack spacing={0.75} sx={{ alignItems: "center", px: 2, textAlign: "center" }}>
-            <ImageOutlinedIcon sx={{ color: "text.secondary", fontSize: 30 }} />
-            <Typography variant="body2" color="text.secondary">Your event cover will appear here.</Typography>
-          </Stack>
+          <button
+            type="button"
+            disabled={disabled || loading}
+            onClick={() => inputRef.current?.click()}
+            className="flex aspect-[16/7] w-full flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-line-strong bg-subtle px-4 text-center transition-colors duration-[180ms] ease-yy hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span aria-hidden className="inline-flex size-10 items-center justify-center rounded-full bg-canvas text-ink-secondary shadow-raised [&_svg]:size-5">
+              <ImagePlus />
+            </span>
+            <span className="text-label text-ink">Drop an image, paste one, or choose a file</span>
+            <span className="text-caption text-ink-muted">Shown as a wide 16:7 banner</span>
+          </button>
         )}
-      </Box>
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Button variant="outlined" size="small" disabled={disabled} onClick={() => inputRef.current?.click()} sx={{ textTransform: "none" }}>
-          {previewUrl ? "Replace image" : "Choose image"}
+
+        {dragging ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-primary bg-canvas/90 text-ink"
+          >
+            <Upload className="size-6" />
+            <span className="text-label">{previewUrl ? "Drop to replace the cover" : "Drop to use this image"}</span>
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div role="status" className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-canvas/80 text-label text-ink">
+            <Spinner className="size-4" />
+            Opening photo…
+          </div>
+        ) : null}
+      </div>
+
+      {error ? (
+        <Callout
+          tone="danger"
+          role="alert"
+          action={
+            error.offerReplace ? (
+              <Button variant="secondary" size="sm" disabled={disabled} onClick={() => inputRef.current?.click()}>
+                Upload photo
+              </Button>
+            ) : undefined
+          }
+        >
+          {error.message}
+        </Callout>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" startIcon={<Upload />} disabled={disabled || loading} onClick={() => inputRef.current?.click()}>
+          {previewUrl ? "Replace" : "Choose image"}
         </Button>
         {previewUrl ? (
-          <Button size="small" color="inherit" disabled={disabled} onClick={() => { setPreviewUrl(""); onChange(null, ""); }} sx={{ textTransform: "none" }}>
-            Remove
-          </Button>
+          <>
+            <Button variant="secondary" size="sm" startIcon={<Crop />} disabled={disabled || loading} onClick={editCurrent}>
+              Edit
+            </Button>
+            <Button variant="dangerQuiet" size="sm" startIcon={<Trash2 />} disabled={disabled || loading} onClick={remove}>
+              Remove
+            </Button>
+          </>
         ) : null}
-      </Stack>
-      <Typography variant="caption" color="text.secondary">
-        JPEG, PNG, or WebP · up to 5 MB · cropped to a square cover.
-      </Typography>
-      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={(event) => selectImage(event.target.files?.[0])} />
+      </div>
+      <p className="text-caption text-ink-muted">JPEG, PNG or WebP · up to 5 MB · shown as a wide banner on your event page</p>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_IMAGE_TYPES.join(",")}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Allow choosing the same file again later.
+          event.target.value = "";
+          void openFile(file);
+        }}
+      />
 
-      <Dialog
+      <PhotoEditor
         open={editorOpen}
-        onClose={() => setEditorOpen(false)}
-        fullWidth
-        maxWidth="xs"
-        slotProps={{ paper: { sx: { m: 1.5, overflow: "hidden", borderRadius: 2 } } }}
-      >
-        <DialogTitle sx={{ p: 0, backgroundColor: "#5574F2", color: "#fff" }}>
-          <Stack direction="row" sx={{ minHeight: 54, alignItems: "center", justifyContent: "space-between", px: 0.5 }}>
-            <IconButton aria-label="Cancel photo edit" onClick={() => setEditorOpen(false)} sx={{ color: "inherit" }}>
-              <CloseOutlinedIcon />
-            </IconButton>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>Edit photo</Typography>
-            <IconButton aria-label="Use cropped image" onClick={applyEdit} disabled={!imageLoaded} sx={{ color: "inherit" }}>
-              <CheckOutlinedIcon />
-            </IconButton>
-          </Stack>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0, backgroundColor: "#0B0B0D" }}>
-          <Stack spacing={0}>
-            <Box sx={{ p: 1.5, pb: 1, backgroundColor: "#111" }}>
-              <Box sx={{ position: "relative", overflow: "hidden", backgroundColor: "#111", aspectRatio: "1 / 1", maxWidth: 360, mx: "auto" }}>
-              <canvas
-                ref={canvasRef}
-                onPointerDown={startDrag}
-                onPointerMove={moveDrag}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
-                style={{ display: "block", width: "100%", height: "100%", cursor: "grab", touchAction: "none" }}
-              />
-              <Box
-                sx={{
-                  pointerEvents: "none",
-                  position: "absolute",
-                  inset: 0,
-                  border: "2px solid rgba(255,255,255,0.8)",
-                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.35)",
-                  backgroundImage: "linear-gradient(to right, transparent 33.2%, rgba(255,255,255,0.3) 33.2%, rgba(255,255,255,0.3) 33.6%, transparent 33.6%, transparent 66.4%, rgba(255,255,255,0.3) 66.4%, rgba(255,255,255,0.3) 66.8%, transparent 66.8%), linear-gradient(to bottom, transparent 33.2%, rgba(255,255,255,0.3) 33.2%, rgba(255,255,255,0.3) 33.6%, transparent 33.6%, transparent 66.4%, rgba(255,255,255,0.3) 66.4%, rgba(255,255,255,0.3) 66.8%, transparent 66.8%)",
-                }}
-              />
-              </Box>
-            </Box>
-            {/* A native image element is required as the canvas source for client-side cropping. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img ref={imageRef} src={sourceUrl} alt="" hidden onLoad={() => setImageLoaded(true)} />
-            <Paper square elevation={0} sx={{ p: 2, color: "#1D1D1F", backgroundColor: "#fff" }}>
-              <Typography variant="subtitle2" sx={{ textAlign: "center", fontWeight: 700, mb: 0.75 }}>
-                {Math.round(zoom * 100)}%
-              </Typography>
-              <Slider
-                value={zoom}
-                min={1}
-                max={3}
-                step={0.05}
-                onChange={(_, value) => setZoom(value as number)}
-                sx={{ color: "#5574F2", mb: 1.5 }}
-              />
-              <Stack direction="row" sx={{ justifyContent: "space-around", alignItems: "center" }}>
-                <Stack spacing={0.25} sx={{ alignItems: "center" }}>
-                  <IconButton aria-label="Reset crop" onClick={() => { setZoom(1); setRotation(0); setOffset({ x: 0, y: 0 }); }} sx={{ color: "#5574F2" }}>
-                    <CropOutlinedIcon />
-                  </IconButton>
-                  <Typography variant="caption">Crop</Typography>
-                </Stack>
-                <Stack spacing={0.25} sx={{ alignItems: "center" }}>
-                  <IconButton aria-label="Rotate image" onClick={() => setRotation((current) => current + 90)} sx={{ color: "#1D1D1F" }}>
-                    <RotateRightOutlinedIcon />
-                  </IconButton>
-                  <Typography variant="caption">Rotate</Typography>
-                </Stack>
-                <Stack spacing={0.25} sx={{ alignItems: "center" }}>
-                  <IconButton aria-label="Reset image edits" onClick={() => { setZoom(1); setRotation(0); setOffset({ x: 0, y: 0 }); }} sx={{ color: "#1D1D1F" }}>
-                    <RestartAltOutlinedIcon />
-                  </IconButton>
-                  <Typography variant="caption">Reset</Typography>
-                </Stack>
-              </Stack>
-            </Paper>
-          </Stack>
-        </DialogContent>
-      </Dialog>
-    </Stack>
+        image={session?.image ?? null}
+        sessionKey={session?.key ?? 0}
+        initialSettings={session?.initialSettings}
+        title="Edit cover photo"
+        description="Position your photo for the event page banner, cards and social shares."
+        fileBaseName="event-cover"
+        onCancel={closeEditor}
+        onApply={applyEdit}
+      />
+    </div>
   );
 }

@@ -1,32 +1,14 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import Grid from "@mui/material/Grid";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
 import { isNewUserRegistrationEnabled } from "@/lib/instanceSettings";
 import { AccountCreationControl } from "@/components/super-admin/AccountCreationControl";
-
-function StatCard(props: { label: string; value: number }) {
-  return (
-    <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-      <Stack spacing={0.5}>
-        <Typography variant="body2" color="text.secondary">
-          {props.label}
-        </Typography>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>
-          {props.value.toLocaleString()}
-        </Typography>
-      </Stack>
-    </Paper>
-  );
-}
+import { AdminPanel } from "@/components/super-admin/AdminPanel";
+import { PageHeader, StatTile } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminAuthPage() {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const [accountsCount, sessionsCount, tokensCount, accountCreationEnabled] = await Promise.all([
     prisma.account.count(),
     prisma.session.count(),
@@ -63,105 +45,79 @@ export default async function SuperAdminAuthPage() {
   ]);
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Auth
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Auth" description="Account creation, sign-in accounts, sessions, and verification tokens." />
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard label="Accounts" value={accountsCount} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard label="Sessions" value={sessionsCount} />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
-          <StatCard label="Verification tokens" value={tokensCount} />
-        </Grid>
-      </Grid>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile className="rounded-2xl" label="Accounts" value={accountsCount.toLocaleString()} />
+        <StatTile className="rounded-2xl" label="Sessions" value={sessionsCount.toLocaleString()} />
+        <StatTile className="rounded-2xl" label="Verification tokens" value={tokensCount.toLocaleString()} />
+      </div>
 
       <AccountCreationControl initialEnabled={accountCreationEnabled} />
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Recent accounts
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Provider</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Provider account</TableCell>
-              <TableCell>User</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Recent accounts">
+        <Table label="Recent accounts">
+          <THead>
+            <tr>
+              <TH>Provider</TH>
+              <TH>Type</TH>
+              <TH>Provider account</TH>
+              <TH>User</TH>
+            </tr>
+          </THead>
+          <TBody>
             {accounts.map((a) => (
-              <TableRow key={a.id}>
-                <TableCell>{a.provider}</TableCell>
-                <TableCell>{a.type}</TableCell>
-                <TableCell sx={{ fontFamily: "monospace" }}>
-                  {a.providerAccountId}
-                </TableCell>
-                <TableCell sx={{ fontFamily: "monospace" }}>
-                  {a.user.email ?? a.user.id}
-                </TableCell>
-              </TableRow>
+              <TR key={a.id}>
+                <TD>{a.provider}</TD>
+                <TD>{a.type}</TD>
+                <TD className="font-mono text-sm [overflow-wrap:anywhere]">{a.providerAccountId}</TD>
+                <TD className="font-mono text-sm">{a.user.email ?? a.user.id}</TD>
+              </TR>
             ))}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Recent sessions
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>User</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Session id</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Recent sessions">
+        <Table label="Recent sessions">
+          <THead>
+            <tr>
+              <TH>User</TH>
+              <TH>Expires</TH>
+              <TH>Session id</TH>
+            </tr>
+          </THead>
+          <TBody>
             {sessions.map((s) => (
-              <TableRow key={s.id}>
-                <TableCell sx={{ fontFamily: "monospace" }}>
-                  {s.user.email ?? s.user.id}
-                </TableCell>
-                <TableCell>{s.expires.toLocaleString()}</TableCell>
-                <TableCell sx={{ fontFamily: "monospace" }}>{s.id}</TableCell>
-              </TableRow>
+              <TR key={s.id}>
+                <TD className="font-mono text-sm">{s.user.email ?? s.user.id}</TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{s.expires.toLocaleString()}</TD>
+                <TD className="font-mono text-sm [overflow-wrap:anywhere]">{s.id}</TD>
+              </TR>
             ))}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Recent verification tokens
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Only token type and expiry are shown. Identifiers and token values are never exposed.
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Type</TableCell>
-              <TableCell>Expires</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Recent verification tokens" description="Only token type and expiry are shown. Identifiers and token values are never exposed.">
+        <Table label="Recent verification tokens">
+          <THead>
+            <tr>
+              <TH>Type</TH>
+              <TH>Expires</TH>
+            </tr>
+          </THead>
+          <TBody>
             {tokens.map((t) => (
-              <TableRow key={`${t.identifier}:${t.expires.toISOString()}`}>
-                <TableCell>{t.identifier.startsWith("mfa:") ? "MFA enrollment" : t.identifier.startsWith("reset:") ? "Password reset" : "Other verification"}</TableCell>
-                <TableCell>{t.expires.toLocaleString()}</TableCell>
-              </TableRow>
+              <TR key={`${t.identifier}:${t.expires.toISOString()}`}>
+                <TD>{t.identifier.startsWith("mfa:") ? "MFA enrollment" : t.identifier.startsWith("reset:") ? "Password reset" : "Other verification"}</TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{t.expires.toLocaleString()}</TD>
+              </TR>
             ))}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
-    </Stack>
+      </AdminPanel>
+    </div>
   );
 }

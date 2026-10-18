@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { AboutYuyu } from "@/components/landing/AboutYuyu";
+import { auth } from "@/lib/auth";
+import { AboutPage } from "@/components/landing/about/AboutPage";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Meet Abhiram N J and the story behind Yuyu, an AI-assisted, self-hosted platform for free events.",
+  description: "Most event tools are built to sell tickets. Yuyu is built for free events run by communities: the meetup, the campus club, the NGO workshop.",
 };
 
-export default function AboutPage() {
-  return <AboutYuyu />;
+export default async function Page() {
+  const session = await auth();
+  return <AboutPage getStartedHref={session?.user ? "/dashboard" : "/login"} />;
 }

@@ -284,6 +284,8 @@ model Event {
   capacity              Int?
   status                EventStatus      @default(DRAFT)
   privacyType           EventPrivacyType @default(PUBLIC)
+  /// APPROVAL_REQUIRED only: also list it on the organisation page, Discover and search.
+  listedPublicly        Boolean          @default(false)
   registrationClosesAt  DateTime?
   registrationLeadMinutes Int?
   /// bcrypt hash for the public venue check-in station PIN. Incrementing the
@@ -292,6 +294,9 @@ model Event {
   /// Encrypted solely so organisation admins can retrieve the current venue PIN.
   checkInStationPinEncrypted String?
   checkInStationSecretVersion Int @default(0)
+  /// Optional 7-character share code served at /{shortCode}. Always contains
+  /// an uppercase letter so it can never equal a (lowercase) organisation slug.
+  shortCode             String?          @unique
   createdAt             DateTime         @default(now())
 
   organisation     Organisation           @relation(fields: [organisationId], references: [id], onDelete: Cascade)
@@ -331,6 +336,8 @@ model EventBroadcast {
   subject         String
   /// Sanitised HTML template with {{placeholders}}; rendered per recipient.
   body            String
+  /// Visual design id from lib/email/broadcastDesigns.ts; content is the same for every design.
+  design          String                    @default("classic")
   recipientCount  Int                       @default(0)
   createdAt       DateTime                  @default(now())
 
@@ -678,6 +685,8 @@ model RSVP {
   checkInEvents     CheckInEvent[]
 
   @@index([eventId])
+  /// "Your registrations" and the personal data export look RSVPs up by user.
+  @@index([userId, createdAt])
   @@index([eventId, status, checkedInAt, createdAt, id], map: "RSVP_eventId_status_checkedInAt_createdAt_id_idx")
   @@index([eventInstanceId])
   @@index([eventId, attendeeKey])
@@ -724,6 +733,13 @@ model EventRegistrationField {
   sortOrder Int                   @default(0)
   /// For SELECT / MULTI_SELECT / RADIO (array of strings)
   options   Json?
+  /// Short guidance shown under the question.
+  helpText    String @default("")
+  /// Example shown inside empty text inputs.
+  placeholder String @default("")
+  /// Validation and logic, shape in lib/registrationFields.ts (FieldSettings):
+  /// length/range/date limits, max selections, "Other" option, show-only-if.
+  settings    Json?
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
 

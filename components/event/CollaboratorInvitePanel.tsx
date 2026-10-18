@@ -1,90 +1,104 @@
 "use client";
 
-import { EventPermission } from "@prisma/client";
+import type { EventPermission } from "@prisma/client";
 import { useState, useTransition } from "react";
-import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
-import Collapse from "@mui/material/Collapse";
-import Divider from "@mui/material/Divider";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import { Check, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { FilterChip } from "@/components/ui/choice";
+import { Avatar, Chip } from "@/components/ui/display";
+import { Field, Input } from "@/components/ui/field";
 import {
   createEventCollaboratorInvite,
+  cancelEventCollaboratorInvite,
   revokeEventCollaborator,
   updateEventCollaboratorPermissions,
 } from "@/app/actions/event-collaborators";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
+import {
+  PERMISSION_OPTIONS,
+  inviteExpiryLabel,
+  permissionChipLabels,
+  togglePermission,
+} from "@/components/event-dashboard/settings/helpers";
 
-const options: Array<[EventPermission, string]> = [
-  ["EDIT_DETAILS", "Edit event details"],
-  ["MANAGE_REGISTRATIONS", "Manage registrations"],
-  ["MANAGE_INVITATIONS", "Manage attendee invites"],
-  ["CHECK_IN", "Operate check-in"],
-  ["PUBLISH_AND_SCHEDULE", "Publish and manage schedule"],
-];
 type Collaborator = {
   id: string;
   name: string | null;
   email: string | null;
   permissions: EventPermission[];
 };
-type PendingInvite = { id: string; email: string; expiresAt: string };
+type PendingInvite = { id: string; email: string; expiresAt: string; permissions?: EventPermission[] };
 
-function PermissionCheckboxes({
+/** Toggle chips (aria-pressed) for choosing what a co-organiser can do. */
+function PermissionToggles({
   selected,
   onChange,
+  label,
+  disabled,
 }: {
   selected: EventPermission[];
   onChange: (permissions: EventPermission[]) => void;
+  label: string;
+  disabled?: boolean;
 }) {
   return (
-    <Stack>
-      {options.map(([permission, label]) => (
-        <FormControlLabel
-          key={permission}
-          label={label}
-          control={
-            <Checkbox
-              checked={selected.includes(permission)}
-              onChange={(_, checked) =>
-                onChange(
-                  checked
-                    ? [...selected, permission]
-                    : selected.filter((value) => value !== permission),
-                )
-              }
-            />
-          }
-        />
+    <div role="group" aria-label={label} className="flex flex-wrap gap-1.5">
+      {PERMISSION_OPTIONS.map((option) => {
+        const on = selected.includes(option.value);
+        return (
+          <FilterChip
+            key={option.value}
+            selected={on}
+            title={option.description}
+            disabled={disabled}
+            onClick={() => onChange(togglePermission(selected, option.value))}
+          >
+            {on ? <Check aria-hidden /> : <Plus aria-hidden />}
+            {option.label}
+          </FilterChip>
+        );
+      })}
+    </div>
+  );
+}
+
+function PermissionChips({ permissions }: { permissions: readonly string[] }) {
+  const labels = permissionChipLabels(permissions);
+  if (labels.length === 0) return null;
+  return (
+    <ul aria-label="Permissions" className="flex flex-wrap gap-1.5">
+      {labels.map((label) => (
+        <li key={label}><Chip size="sm">{label}</Chip></li>
       ))}
-    </Stack>
+    </ul>
   );
 }
 
 export function CollaboratorInvitePanel({
   organisationSlug,
+  organisationName,
   eventId,
   collaborators,
   pendingInvites,
+  now,
 }: {
   organisationSlug: string;
+  organisationName?: string;
   eventId: string;
   collaborators: Collaborator[];
   pendingInvites: PendingInvite[];
+  /** Server time (ISO) so invite expiry text matches between server and browser. */
+  now?: string;
 }) {
   const [email, setEmail] = useState("");
   const [selected, setSelected] = useState<EventPermission[]>(["EDIT_DETAILS"]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editedPermissions, setEditedPermissions] = useState<EventPermission[]>(
-    [],
-  );
+  const [editedPermissions, setEditedPermissions] = useState<EventPermission[]>([]);
   const [pending, startTransition] = useTransition();
   const [revokeTarget, setRevokeTarget] = useState<Collaborator | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<PendingInvite | null>(null);
   const { showToast } = useToast();
   const router = useRouter();
   const refreshAfter = (message: string) => {
@@ -101,7 +115,7 @@ export function CollaboratorInvitePanel({
       });
       if (!result.ok) return showToast(result.error, "error");
       setEmail("");
-      refreshAfter("Co-organizer invite email queued");
+      refreshAfter("Co-organiser invite email queued");
     });
   const revoke = (collaboratorId: string) =>
     startTransition(async () => {
@@ -112,7 +126,14 @@ export function CollaboratorInvitePanel({
       });
       if (!result.ok) return showToast(result.error, "error");
       setRevokeTarget(null);
-      refreshAfter("Co-organizer access removed");
+      refreshAfter("Co-organiser access removed");
+    });
+  const cancelInvite = (inviteId: string) =>
+    startTransition(async () => {
+      const result = await cancelEventCollaboratorInvite({ organisationSlug, eventId, inviteId });
+      if (!result.ok) return showToast(result.error, "error");
+      setCancelTarget(null);
+      refreshAfter("Invite cancelled");
     });
   const savePermissions = (collaboratorId: string) =>
     startTransition(async () => {
@@ -124,160 +145,122 @@ export function CollaboratorInvitePanel({
       });
       if (!result.ok) return showToast(result.error, "error");
       setEditingId(null);
-      refreshAfter("Co-organizer permissions updated");
+      refreshAfter("Co-organiser permissions updated");
     });
   const startEditing = (collaborator: Collaborator) => {
     setEditingId(collaborator.id);
     setEditedPermissions(collaborator.permissions);
   };
+  const empty = collaborators.length === 0 && pendingInvites.length === 0;
+
   return (
-    <Paper variant="outlined" sx={{ p: 2 }}>
-      <Stack spacing={2}>
-        <Stack spacing={0.5}>
-          <Typography variant="h6">Co-organizers</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Invite someone to manage only this event. They do not become an
-            organisation member.
-          </Typography>
-        </Stack>
-        <Stack spacing={1}>
-          <Typography variant="subtitle2">
-            Active co-organizers ({collaborators.length})
-          </Typography>
-          {collaborators.length ? (
-            collaborators.map((collaborator) => (
-              <Stack key={collaborator.id} spacing={1} sx={{ py: 0.5 }}>
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  spacing={1}
-                  sx={{
-                    justifyContent: "space-between",
-                    alignItems: { sm: "center" },
-                  }}
-                >
-                  <Stack spacing={0.25}>
-                    <Typography>
-                      {collaborator.name ||
-                        collaborator.email ||
-                        "Co-organizer"}
-                    </Typography>
-                    {collaborator.name && collaborator.email ? (
-                      <Typography variant="caption" color="text.secondary">
-                        {collaborator.email}
-                      </Typography>
-                    ) : null}
-                    <Typography variant="caption" color="text.secondary">
-                      {collaborator.permissions
-                        .map(
-                          (permission) =>
-                            options.find(
-                              ([value]) => value === permission,
-                            )?.[1] ?? permission,
-                        )
-                        .join(" · ")}
-                    </Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={0.5}>
-                    <Button
-                      size="small"
-                      onClick={() => startEditing(collaborator)}
-                      disabled={pending}
-                    >
-                      Edit permissions
+    <section aria-labelledby="co-organisers-title" className="flex flex-col gap-4 rounded-2xl border border-line bg-canvas p-5 sm:p-6">
+      <div>
+        <h2 id="co-organisers-title" className="text-h4 text-ink">Co-organisers</h2>
+        <p className="mt-0.5 text-body-ui text-ink-muted">
+          People who help with just this event. They don&apos;t join {organisationName ?? "your organisation"}.
+        </p>
+      </div>
+
+      {empty ? (
+        <p className="text-body-ui text-ink-muted">No co-organisers yet. Invite someone below.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {collaborators.map((collaborator) => {
+            const display = collaborator.name || collaborator.email || "Co-organiser";
+            const editing = editingId === collaborator.id;
+            return (
+              <li key={collaborator.id} className="rounded-xl border border-line px-3.5 py-3">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <Avatar name={display} size="md" />
+                  <div className="min-w-0 flex-[1_1_160px]">
+                    <p className="truncate font-bold text-ink">{display}</p>
+                    {collaborator.name && collaborator.email ? <p className="truncate text-[13px] text-ink-muted">{collaborator.email}</p> : null}
+                  </div>
+                  <PermissionChips permissions={collaborator.permissions} />
+                  <Chip size="sm" tone="success">Active</Chip>
+                  <div className="flex shrink-0 gap-1">
+                    <Button size="sm" variant="quiet" aria-expanded={editing} aria-label={`Edit permissions for ${display}`} onClick={() => (editing ? setEditingId(null) : startEditing(collaborator))} disabled={pending}>
+                      Edit
                     </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() => setRevokeTarget(collaborator)}
-                      disabled={pending}
-                    >
+                    <Button size="sm" variant="dangerQuiet" aria-label={`Remove ${display}`} onClick={() => setRevokeTarget(collaborator)} disabled={pending}>
                       Remove
                     </Button>
-                  </Stack>
-                </Stack>
-                <Collapse in={editingId === collaborator.id}>
-                  <Stack spacing={1} sx={{ pt: 1 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Permissions
-                    </Typography>
-                    <PermissionCheckboxes
-                      selected={editedPermissions}
-                      onChange={setEditedPermissions}
-                    />
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={() => savePermissions(collaborator.id)}
-                        disabled={pending || editedPermissions.length === 0}
-                      >
+                  </div>
+                </div>
+                {editing ? (
+                  <div className="mt-3 flex flex-col gap-3 rounded-xl bg-subtle p-3.5">
+                    <PermissionToggles label={`What ${display} can do`} selected={editedPermissions} onChange={setEditedPermissions} disabled={pending} />
+                    {editedPermissions.length === 0 ? <p className="text-caption text-ink-muted">Choose at least one permission.</p> : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="primary" onClick={() => savePermissions(collaborator.id)} disabled={pending || editedPermissions.length === 0}>
                         Save permissions
                       </Button>
-                      <Button
-                        size="small"
-                        onClick={() => setEditingId(null)}
-                        disabled={pending}
-                      >
+                      <Button size="sm" variant="quiet" onClick={() => setEditingId(null)} disabled={pending}>
                         Cancel
                       </Button>
-                    </Stack>
-                  </Stack>
-                </Collapse>
-              </Stack>
-            ))
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No active co-organizers yet.
-            </Typography>
-          )}
-        </Stack>
-        <Stack spacing={1}>
-          <Typography variant="subtitle2">
-            Pending invitations ({pendingInvites.length})
-          </Typography>
-          {pendingInvites.length ? (
-            pendingInvites.map((invite) => (
-              <Stack key={invite.id} spacing={0.25}>
-                <Typography variant="body2">{invite.email}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Expires {new Date(invite.expiresAt).toLocaleDateString()}
-                </Typography>
-              </Stack>
-            ))
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              No pending invitations.
-            </Typography>
-          )}
-        </Stack>
-        <Divider />
-        <Stack spacing={1}>
-          <Typography variant="subtitle2">Invite a co-organizer</Typography>
-          <TextField
-            label="Email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <PermissionCheckboxes selected={selected} onChange={setSelected} />
-          <Button
-            disabled={pending || !email || selected.length === 0}
-            variant="outlined"
-            onClick={invite}
-          >
-            Invite co-organizer
+                    </div>
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+          {pendingInvites.map((pendingInvite) => (
+            <li key={pendingInvite.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line px-3.5 py-3">
+              <Avatar name={pendingInvite.email} size="md" />
+              <div className="min-w-0 flex-[1_1_160px]">
+                <p className="truncate font-bold text-ink">{pendingInvite.email}</p>
+                <p className="text-[13px] text-ink-muted">{inviteExpiryLabel(pendingInvite.expiresAt, now)}</p>
+              </div>
+              {pendingInvite.permissions ? <PermissionChips permissions={pendingInvite.permissions} /> : null}
+              <Chip size="sm" tone="warning">Invited</Chip>
+              <Button size="sm" variant="dangerQuiet" aria-label={`Cancel the invite for ${pendingInvite.email}`} onClick={() => setCancelTarget(pendingInvite)} disabled={pending}>
+                Cancel invite
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form
+        className="flex flex-col gap-3 rounded-xl bg-subtle p-4"
+        aria-labelledby="co-organiser-invite-title"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!pending && email && selected.length > 0) invite();
+        }}
+      >
+        <h3 id="co-organiser-invite-title" className="text-label text-ink">Invite someone</h3>
+        <div className="flex flex-wrap items-start gap-2">
+          <Field label="Email" hideLabel className="min-w-0 flex-[1_1_240px]">
+            <Input type="email" placeholder="name@example.org" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </Field>
+          <Button type="submit" variant="primary" disabled={pending || !email || selected.length === 0}>
+            Send invite
           </Button>
-        </Stack>
-      </Stack>
+        </div>
+        <PermissionToggles label="What they can do" selected={selected} onChange={setSelected} disabled={pending} />
+        {selected.length === 0 ? <p className="text-caption text-ink-muted">Choose at least one permission.</p> : null}
+      </form>
+
       <ConfirmationDialog
         open={Boolean(revokeTarget)}
-        title="Remove co-organizer?"
-        message={`${revokeTarget?.name || revokeTarget?.email || "This co-organizer"} will immediately lose access to this event.`}
+        title="Remove co-organiser?"
+        message={`${revokeTarget?.name || revokeTarget?.email || "This co-organiser"} will immediately lose access to this event.`}
         confirmLabel="Remove access"
         loading={pending}
         onCancel={() => setRevokeTarget(null)}
         onConfirm={() => revokeTarget && revoke(revokeTarget.id)}
       />
-    </Paper>
+      <ConfirmationDialog
+        open={Boolean(cancelTarget)}
+        title="Cancel invite?"
+        message={`The invite link sent to ${cancelTarget?.email ?? "this person"} will stop working.`}
+        confirmLabel="Cancel invite"
+        loading={pending}
+        onCancel={() => setCancelTarget(null)}
+        onConfirm={() => cancelTarget && cancelInvite(cancelTarget.id)}
+      />
+    </section>
   );
 }

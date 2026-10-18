@@ -3,23 +3,25 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { MembershipRole } from "@prisma/client";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import MenuItem from "@mui/material/MenuItem";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import { updateMemberRole, removeMember } from "@/app/actions/membership";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
+import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/display";
+import { Dropdown } from "@/components/ui/field";
+import { ROLE_LABELS } from "@/components/members/memberSummary";
+
+const ROLE_TONES = { OWNER: "ink", ADMIN: "warning", MEMBER: "neutral" } as const satisfies Record<MembershipRole, string>;
 
 export function MemberRoleActions(props: {
   organisationSlug: string;
   targetUserId: string;
   role: MembershipRole;
   actorRole: MembershipRole;
+  /** Used to label the role select and removal dialog for this row. */
+  memberName?: string;
 }) {
-  const { organisationSlug, targetUserId, role, actorRole } = props;
+  const { organisationSlug, targetUserId, role, actorRole, memberName } = props;
   const router = useRouter();
   const { showToast } = useToast();
   const [pending, startTransition] = useTransition();
@@ -31,36 +33,17 @@ export function MemberRoleActions(props: {
     (actorRole === "ADMIN" && role === "MEMBER");
 
   if (!canEditRoles && !canRemove) {
-    return (
-      <Chip
-        label={
-          role === "OWNER" ? "Owner" : role === "ADMIN" ? "Admin" : "Member"
-        }
-        size="small"
-        variant="outlined"
-        sx={{
-          borderColor: "rgba(10,132,255,0.4)",
-          color: "#72B7FF",
-          fontWeight: 650,
-        }}
-      />
-    );
+    return <Chip size="sm" tone={ROLE_TONES[role]}>{ROLE_LABELS[role]}</Chip>;
   }
 
   return (
-    <Stack
-      direction="row"
-      spacing={1}
-      useFlexGap
-      sx={{ flexWrap: "wrap", alignItems: "center" }}
-    >
+    <div className="flex flex-wrap items-center gap-2">
       {canEditRoles ? (
-        <TextField
-          select
-          size="small"
-          label="Role"
+        <Dropdown
+          aria-label={memberName ? `Role for ${memberName}` : "Role"}
           value={role}
           disabled={pending}
+          className="w-auto min-w-[120px] py-2 text-sm"
           onChange={(e) => {
             const next = e.target.value as "ADMIN" | "MEMBER";
             startTransition(async () => {
@@ -77,36 +60,22 @@ export function MemberRoleActions(props: {
               router.refresh();
             });
           }}
-          sx={{
-            minWidth: 120,
-            "& .MuiOutlinedInput-root": { borderRadius: 2 },
-          }}
         >
-          <MenuItem value="ADMIN">ADMIN</MenuItem>
-          <MenuItem value="MEMBER">MEMBER</MenuItem>
-        </TextField>
+          <option value="ADMIN">Admin</option>
+          <option value="MEMBER">Member</option>
+        </Dropdown>
       ) : (
-        <Typography variant="body2" color="text.secondary">
-          {role}
-        </Typography>
+        <Chip size="sm" tone={ROLE_TONES[role]}>{ROLE_LABELS[role]}</Chip>
       )}
-      <Button
-        size="small"
-        color="error"
-        variant="outlined"
-        disabled={pending}
-        sx={{
-          display: canRemove ? "inline-flex" : "none",
-          textTransform: "none",
-          borderRadius: 2,
-        }}
-        onClick={() => setConfirmRemove(true)}
-      >
-        Remove
-      </Button>
+      {canRemove ? (
+        <Button size="sm" variant="dangerQuiet" disabled={pending} onClick={() => setConfirmRemove(true)}>
+          Remove
+          {memberName ? <span className="sr-only"> {memberName}</span> : null}
+        </Button>
+      ) : null}
       <ConfirmationDialog
         open={confirmRemove}
-        title="Remove organisation member?"
+        title={memberName ? `Remove ${memberName}?` : "Remove organisation member?"}
         message="This person will immediately lose access to the organisation and its events."
         confirmLabel="Remove member"
         loading={pending}
@@ -127,6 +96,6 @@ export function MemberRoleActions(props: {
           });
         }}
       />
-    </Stack>
+    </div>
   );
 }

@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
 import { prisma } from "@/lib/db";
 import { requireOrgRole } from "@/lib/permissions";
 import { ApiClientManagement } from "@/components/api-clients/ApiClientManagement";
 import { ApiDeveloperReference } from "@/components/api-clients/ApiDeveloperReference";
 import { isApiScope } from "@/lib/api/v1/scopes";
 import { getRequestOrigin } from "@/lib/publicUrl";
+import { PageHeader } from "@/components/ui/display";
 
 export const metadata: Metadata = { title: "API access", description: "Manage machine-to-machine access." };
 
@@ -29,11 +28,8 @@ export default async function ApiAccessPage({ params }: { params: Promise<{ orgS
     },
   });
   return (
-    <Stack spacing={3.5} sx={{ pb: 3 }}>
-      <Stack spacing={0.5}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 700 }}>API access</Typography>
-        <Typography variant="body2" color="text.secondary">Create tenant-bound machine identities and rotate their credentials.</Typography>
-      </Stack>
+    <div className="flex flex-col gap-8 pb-6">
+      <PageHeader title="API access" description="Create tenant-bound machine identities and rotate their credentials." />
       <ApiClientManagement
         organisationSlug={organisation.slug}
         referenceTime={new Date().toISOString()}
@@ -50,6 +46,6 @@ export default async function ApiAccessPage({ params }: { params: Promise<{ orgS
         }))}
       />
       <ApiDeveloperReference apiBaseUrl={apiBaseUrl} />
-    </Stack>
+    </div>
   );
 }

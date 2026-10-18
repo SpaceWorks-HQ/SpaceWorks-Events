@@ -1,23 +1,15 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { EventClientDto } from "@/lib/eventDto";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
-import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
-import FileCopyOutlinedIcon from "@mui/icons-material/FileCopyOutlined";
-import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import { Copy, CopyPlus, Link2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Field, PrefixInput } from "@/components/ui/field";
 import { cloneEvent, deleteEvent, updateEventSlug } from "@/app/actions/event";
 import { useToast } from "@/components/feedback/ToastProvider";
+import { cn } from "@/lib/cn";
 
 function originFromWindow() {
   if (typeof window === "undefined") return "";
@@ -51,6 +43,8 @@ async function copyToClipboard(text: string) {
   document.body.removeChild(el);
 }
 
+const card = "flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-5 sm:p-6";
+
 export function EventManageMore(props: {
   organisationSlug: string;
   event: EventClientDto;
@@ -61,7 +55,9 @@ export function EventManageMore(props: {
   const [pending, startTransition] = useTransition();
 
   const [slug, setSlug] = useState(event.slug);
-  const [confirmText, setConfirmText] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  // A fresh key per opening remounts the dialog so the typed slug always starts empty.
+  const [deleteKey, setDeleteKey] = useState(0);
 
   const publicUrl = useMemo(() => {
     const o = originFromWindow();
@@ -114,221 +110,168 @@ export function EventManageMore(props: {
         showToast(res.error, "error");
         return;
       }
+      setDeleteOpen(false);
       showToast("Event cancelled", "success");
       router.push(`/dashboard/${organisationSlug}`);
       router.refresh();
     });
   };
 
+  const copySnippet = (value: string) => {
+    void copyToClipboard(value).then(() => showToast("Copied embed snippet", "success"));
+  };
+
   return (
-    <Stack spacing={2.5}>
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Stack spacing={1.25}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <FileCopyOutlinedIcon color="primary" />
-            <Typography variant="h6" component="h2">
-              Clone event
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            Create a new event with the same information as this one. RSVP guest
-            list and invites won’t be copied.
-          </Typography>
-          <Box>
-            <Button variant="contained" onClick={doClone} disabled={pending}>
-              Clone event
-            </Button>
-          </Box>
-        </Stack>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Stack spacing={1.25}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <LinkOutlinedIcon color="primary" />
-            <Typography variant="h6" component="h2">
-              Event page
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            Change your public URL. If you’ve already shared the old link, it may
-            stop working.
-          </Typography>
-
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap>
-            <TextField
-              label="Public URL slug"
+    <div className="flex flex-col gap-5">
+      <div className="grid gap-5 md:grid-cols-2">
+        <section aria-labelledby="event-address-title" className={card}>
+          <h2 id="event-address-title" className="text-h4 text-ink">Event address</h2>
+          <Field label="Event address" hideLabel helperText="Lowercase letters, numbers and hyphens.">
+            <PrefixInput
+              prefix={`/${organisationSlug}/`}
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
-              size="small"
-              fullWidth
-              helperText="lowercase letters, numbers, hyphens"
               disabled={pending}
+              autoComplete="off"
+              spellCheck={false}
+              className="font-mono text-sm"
             />
-            <Button
-              variant="outlined"
-              onClick={doUpdateSlug}
-              disabled={pending || slug.trim() === event.slug}
-              sx={{ flexShrink: 0 }}
-            >
+          </Field>
+          <p className="text-caption text-warning-fg">Changing it breaks links you&apos;ve already shared.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={doUpdateSlug} disabled={pending || slug.trim() === event.slug}>
               Update
             </Button>
             <Button
-              variant="outlined"
-              startIcon={<ContentCopyOutlinedIcon />}
+              variant="secondary"
+              size="sm"
+              startIcon={<Link2 />}
               onClick={() => {
                 void copyToClipboard(publicUrl).then(() => {
                   showToast("Copied URL", "success");
                 });
               }}
               disabled={pending}
-              sx={{ flexShrink: 0 }}
             >
-              Copy
+              Copy link
             </Button>
-          </Stack>
+          </div>
+        </section>
 
-          <Stack
-            direction="row"
-            spacing={1}
-            useFlexGap
-            sx={{ flexWrap: "wrap", pt: 0.5 }}
-          >
-            <Chip size="small" label="Public URL" variant="outlined" />
-            <Typography
-              variant="body2"
-              sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-            >
-              {publicUrl}
-            </Typography>
-          </Stack>
-        </Stack>
-      </Paper>
+        <section aria-labelledby="event-clone-title" className={card}>
+          <h2 id="event-clone-title" className="text-h4 text-ink">Run it again</h2>
+          <p className="text-body-ui text-ink-secondary">
+            Make a new event with the same information as this one. Guests and invites aren&apos;t copied.
+          </p>
+          <Button variant="secondary" size="sm" className="self-start" startIcon={<CopyPlus />} onClick={doClone} disabled={pending}>
+            Clone event
+          </Button>
+        </section>
+      </div>
 
-      <Paper variant="outlined" sx={{ p: 3 }}>
-        <Stack spacing={1.25}>
-          <Typography variant="h6" component="h2">
-            Embed event
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Add a button or an embedded page to your website.
-          </Typography>
+      <section aria-labelledby="event-embed-title" className={cn(card, "gap-4")}>
+        <div>
+          <h2 id="event-embed-title" className="text-h4 text-ink">Put it on your website</h2>
+          <p className="mt-0.5 text-body-ui text-ink-muted">Pick one, copy the code, paste it into your site.</p>
+        </div>
+        <div className="grid gap-3.5 sm:grid-cols-2">
+          <EmbedOption
+            title="A register button"
+            description={`Shows “Register for ${event.title}” and opens the event page in a new tab.`}
+            snippet={embedButtonSnippet}
+            copyLabel="Copy button code"
+            onCopy={() => copySnippet(embedButtonSnippet)}
+            preview={(
+              <div className="flex min-h-22.5 items-center justify-center rounded-xl bg-subtle p-3">
+                <span className="max-w-full truncate rounded-full border border-line bg-canvas px-4 py-2.5 text-sm font-semibold text-ink">
+                  Register for {event.title}
+                </span>
+              </div>
+            )}
+          />
+          <EmbedOption
+            title="The whole event page"
+            description="Embeds the event page, including registration, in a frame."
+            snippet={embedPageSnippet}
+            copyLabel="Copy embed code"
+            onCopy={() => copySnippet(embedPageSnippet)}
+            preview={(
+              <div className="flex min-h-22.5 flex-col gap-1.5 rounded-xl bg-subtle p-2.5">
+                <span
+                  className="h-7 rounded-lg bg-accent"
+                  style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.22) 1.5px, transparent 2px)", backgroundSize: "10px 10px" }}
+                />
+                <span className="h-2 w-3/5 rounded bg-emphasis" />
+                <span className="h-2 w-2/5 rounded bg-emphasis" />
+              </div>
+            )}
+          />
+        </div>
+      </section>
 
-          <Stack spacing={1}>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
-            >
-              <Box>
-                <Typography variant="subtitle2">Add a registration button</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Shows “Register for {event.title}” and opens the event page in a new tab.
-                </Typography>
-              </Box>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<ContentCopyOutlinedIcon />}
-                onClick={() => {
-                  void copyToClipboard(embedButtonSnippet).then(() =>
-                    showToast("Copied embed snippet", "success"),
-                  );
-                }}
-              >
-                Copy registration button
-              </Button>
-            </Stack>
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 2,
-                bgcolor: "action.hover",
-                fontFamily: "monospace",
-                fontSize: 12,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {embedButtonSnippet}
-            </Paper>
-          </Stack>
+      <section aria-labelledby="event-delete-title" className="flex flex-col gap-4 rounded-2xl border-[1.5px] border-danger-border bg-canvas p-5 sm:p-6 md:flex-row md:items-center">
+        <div className="min-w-0 flex-1">
+          <h2 id="event-delete-title" className="text-h4 text-danger-fg">Delete event</h2>
+          <p className="mt-0.5 text-body-ui text-ink-secondary">
+            Permanently deletes this event and its registrations. This can&apos;t be undone. You&apos;ll type the event address to confirm.
+          </p>
+        </div>
+        <Button
+          variant="danger"
+          className="self-start md:self-auto"
+          disabled={pending}
+          onClick={() => {
+            setDeleteKey((key) => key + 1);
+            setDeleteOpen(true);
+          }}
+        >
+          Delete event…
+        </Button>
+      </section>
+      <ConfirmDialog
+        key={deleteKey}
+        open={deleteOpen}
+        title={`Delete ${event.title}?`}
+        message="The event and all of its registrations will be permanently removed. This can't be undone."
+        confirmLabel="Delete event"
+        confirmText={event.slug}
+        loading={pending}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={doDelete}
+      />
+    </div>
+  );
+}
 
-          <Divider />
-
-          <Stack spacing={1}>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
-            >
-              <Typography variant="subtitle2">Embed Event Page</Typography>
-              <Button
-                size="small"
-                variant="outlined"
-                startIcon={<ContentCopyOutlinedIcon />}
-                onClick={() => {
-                  void copyToClipboard(embedPageSnippet).then(() =>
-                    showToast("Copied embed snippet", "success"),
-                  );
-                }}
-              >
-                Copy snippet
-              </Button>
-            </Stack>
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 2,
-                bgcolor: "action.hover",
-                fontFamily: "monospace",
-                fontSize: 12,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {embedPageSnippet}
-            </Paper>
-          </Stack>
-        </Stack>
-      </Paper>
-
-      <Paper variant="outlined" sx={{ p: 3, borderColor: "error.main" }}>
-        <Stack spacing={1.25}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <DeleteOutlineOutlinedIcon color="error" />
-            <Typography variant="h6" component="h2">
-              Delete event
-            </Typography>
-          </Stack>
-          <Typography variant="body2" color="text.secondary">
-            Permanently deletes this event and its registrations. This can’t be
-            undone.
-          </Typography>
-          <Alert severity="warning" variant="outlined">
-            Type <strong>{event.slug}</strong> to confirm.
-          </Alert>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap>
-            <TextField
-              label="Confirm"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              size="small"
-              fullWidth
-              disabled={pending}
-            />
-            <Button
-              variant="contained"
-              color="error"
-              onClick={doDelete}
-              disabled={pending || confirmText.trim() !== event.slug}
-              sx={{ flexShrink: 0 }}
-            >
-              Delete event
-            </Button>
-          </Stack>
-        </Stack>
-      </Paper>
-    </Stack>
+function EmbedOption({
+  title,
+  description,
+  snippet,
+  copyLabel,
+  onCopy,
+  preview,
+}: {
+  title: string;
+  description: string;
+  snippet: string;
+  copyLabel: string;
+  onCopy: () => void;
+  preview: ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-line p-4">
+      <h3 className="font-bold text-ink">{title}</h3>
+      <div aria-hidden>{preview}</div>
+      <p className="text-caption text-ink-muted">{description}</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Button variant="secondary" size="sm" startIcon={<Copy />} onClick={onCopy}>
+          {copyLabel}
+        </Button>
+        <details className="min-w-0 basis-full">
+          <summary className="cursor-pointer text-sm font-semibold text-ink-secondary hover:text-ink">Show code</summary>
+          <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg border border-line bg-subtle p-3 font-mono text-xs text-ink-secondary">{snippet}</pre>
+        </details>
+      </div>
+    </div>
   );
 }

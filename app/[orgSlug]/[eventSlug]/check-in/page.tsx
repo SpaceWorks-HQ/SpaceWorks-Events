@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
-import Stack from "@mui/material/Stack";
 import { prisma } from "@/lib/db";
 import { CHECK_IN_STATION_COOKIE, hasValidCheckInStationProof } from "@/lib/checkInStation";
 import { EventCheckInClient } from "@/components/checkin/EventCheckInClient";
@@ -25,5 +24,5 @@ export default async function VenueCheckInStationPage({ params }: Props) {
     prisma.rSVP.findMany({ where: { eventId: event.id, checkedInAt: { not: null } }, orderBy: { checkedInAt: "desc" }, take: 200, include: { user: { select: { name: true, email: true } } } }),
     prisma.eventRegistrationForm.findUnique({ where: { eventId: event.id }, select: { fields: { select: { key: true, label: true }, orderBy: { sortOrder: "asc" } } } }),
   ]);
-  return <Stack spacing={2}><EventCheckInClient stationMode eventSlug={event.slug} organisationSlug={event.organisation.slug} organisationName={event.organisation.name} organisationLogoUrl={event.organisation.logoUrl} eventId={event.id} eventTitle={event.title} registrationFields={form?.fields ?? []} stats={{ confirmed, checkedIn }} recent={recentRsvps.map((r) => ({ rsvpId: r.id, displayName: label(r), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() }))} /></Stack>;
+  return <EventCheckInClient stationMode eventSlug={event.slug} organisationSlug={event.organisation.slug} organisationName={event.organisation.name} organisationLogoUrl={event.organisation.logoUrl} eventId={event.id} eventTitle={event.title} registrationFields={form?.fields ?? []} stats={{ confirmed, checkedIn }} recent={recentRsvps.map((r) => ({ rsvpId: r.id, displayName: label(r), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() }))} />;
 }

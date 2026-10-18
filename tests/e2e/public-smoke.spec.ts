@@ -97,11 +97,14 @@ test("mobile navigation uses a compact touch-friendly menu", async ({ page }) =>
   expect(bounds?.height).toBeGreaterThanOrEqual(44);
 
   await menuButton.click();
-  const menu = page.getByRole("menu");
+  // The mobile menu is a top sheet (dialog) of plain links.
+  const menu = page.getByRole("dialog", { name: "Navigation" });
   await expect(menu).toBeVisible();
   const menuBounds = await menu.boundingBox();
-  expect(menuBounds?.height).toBeLessThan(280);
-  await page.getByRole("menuitem", { name: "Discover" }).click();
+  expect(menuBounds?.height).toBeLessThan(480);
+  const discover = menu.getByRole("link", { name: "Discover" });
+  expect((await discover.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await discover.click();
   await expect(page).toHaveURL(/\/discover$/);
   await expect(page.getByRole("button", { name: "Open navigation menu" })).toHaveAttribute("aria-expanded", "false");
 });
@@ -118,9 +121,9 @@ test("login and crawler controls render", async ({ page }) => {
     window.dispatchEvent(new Event("yuyu:color-mode-change"));
   });
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", "light");
-  await expect(page.getByRole("heading", { name: "Get started now" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Get started now" })).toHaveCSS("color", "rgb(28, 28, 30)");
-  await expect(page.getByRole("tab", { name: "Sign in" })).toHaveCSS("color", "rgb(28, 28, 30)");
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Welcome back." })).toHaveCSS("color", "rgb(24, 24, 27)");
+  await expect(page.getByRole("tab", { name: "Sign in" })).toHaveCSS("color", "rgb(24, 24, 27)");
 
   const robots = await page.request.get("/robots.txt");
   await expect(robots).toBeOK();
@@ -153,7 +156,7 @@ test("a confirmed attendee can download a QR ticket", async ({ page }) => {
   expect([...pixels.subarray(0, 3)].every((channel) => channel >= 250)).toBe(true);
 
   const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Download ticket" }).click();
+  await page.getByRole("link", { name: "Save ticket" }).click();
   expect((await download).suggestedFilename()).toBe("downloadable-ticket-test-ticket.jpg");
   expect(browserErrors, browserErrors.join("\n")).toEqual([]);
 });
@@ -162,7 +165,7 @@ test("a waitlisted attendee cannot obtain a scannable ticket", async ({ page, re
   await page.goto(`/ticket/${waitlistedToken}`);
   const main = page.locator("#main-content");
   await expect(main.getByText("available after this registration is confirmed")).toBeVisible();
-  await expect(main.getByRole("link", { name: "Download ticket" })).toHaveCount(0);
+  await expect(main.getByRole("link", { name: "Save ticket" })).toHaveCount(0);
   expect((await request.get(`/api/ticket/${waitlistedToken}/download`)).status()).toBe(404);
 });
 
@@ -170,9 +173,9 @@ test("a confirmed attendee can submit feedback and download a white JPEG certifi
   await page.goto(`/e2e-test-${suffix}/download-ticket-${suffix}/feedback`);
   const main = page.locator("#main-content");
   await expect(main.getByRole("heading", { name: "Tell us what you thought" })).toBeVisible();
-  await main.getByLabel("Registered email").fill(feedbackEmail);
+  await main.getByLabel("Email you registered with").fill(feedbackEmail);
   await main.getByLabel("Your feedback").fill("Very useful event.");
-  await main.getByRole("button", { name: "Submit feedback & get certificate" }).click();
+  await main.getByRole("button", { name: "Send feedback & get certificate" }).click();
   const certificate = main.getByRole("link", { name: "Download certificate (JPG)" });
   await expect(certificate).toBeVisible();
   const href = await certificate.getAttribute("href");

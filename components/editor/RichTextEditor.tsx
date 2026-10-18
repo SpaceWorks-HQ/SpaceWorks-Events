@@ -1,34 +1,21 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import FormatBoldIcon from "@mui/icons-material/FormatBold";
-import FormatClearIcon from "@mui/icons-material/FormatClear";
-import FormatItalicIcon from "@mui/icons-material/FormatItalic";
-import FormatListBulletedIcon from "@mui/icons-material/FormatListBulleted";
-import FormatListNumberedIcon from "@mui/icons-material/FormatListNumbered";
-import FormatQuoteIcon from "@mui/icons-material/FormatQuote";
-import InsertLinkIcon from "@mui/icons-material/InsertLink";
-import LinkOffIcon from "@mui/icons-material/LinkOff";
-import RedoIcon from "@mui/icons-material/Redo";
-import TitleIcon from "@mui/icons-material/Title";
-import UndoIcon from "@mui/icons-material/Undo";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { Bold, Heading, Italic, Link2, Link2Off, List, ListOrdered, Quote, Redo2, RemoveFormatting, Undo2 } from "lucide-react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { Field, Input } from "@/components/ui/field";
+import { cn } from "@/lib/cn";
 
 type Props = { name: string; label: string; defaultValue?: string; helperText?: string; minHeight?: number };
 
 export function RichTextEditor({ name, label, defaultValue = "", helperText, minHeight = 120 }: Props) {
+  const labelId = useId();
+  const helperId = useId();
   const [html, setHtml] = useState(defaultValue);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
@@ -41,10 +28,33 @@ export function RichTextEditor({ name, label, defaultValue = "", helperText, min
     ],
     content: defaultValue,
     immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "yy-prose px-3.5 py-3 text-ink focus:outline-none",
+        role: "textbox",
+        "aria-multiline": "true",
+        "aria-labelledby": labelId,
+        ...(helperText ? { "aria-describedby": helperId } : {}),
+      },
+    },
     onUpdate: ({ editor: currentEditor }) => setHtml(currentEditor.getHTML()),
   });
   useEffect(() => { if (editor && editor.getHTML() !== defaultValue) editor.commands.setContent(defaultValue); }, [defaultValue, editor]);
-  const button = (label: string, active: boolean, action: () => void, icon: ReactNode) => <Button aria-label={label} aria-pressed={active} size="small" variant={active ? "contained" : "text"} onClick={action} sx={{ minWidth: 36, px: 0.75 }}>{icon}</Button>;
+  const button = (buttonLabel: string, active: boolean, action: () => void, icon: ReactNode) => (
+    <button
+      type="button"
+      aria-label={buttonLabel}
+      title={buttonLabel}
+      aria-pressed={active}
+      onClick={action}
+      className={cn(
+        "inline-flex size-9 items-center justify-center rounded-md text-ink-secondary transition-colors duration-[180ms] ease-yy hover:bg-muted hover:text-ink [&_svg]:size-[18px]",
+        active && "bg-primary text-on-primary hover:bg-primary hover:text-on-primary",
+      )}
+    >
+      {icon}
+    </button>
+  );
   const openLinkDialog = () => {
     if (!editor) return;
     const { from, to } = editor.state.selection;
@@ -78,15 +88,49 @@ export function RichTextEditor({ name, label, defaultValue = "", helperText, min
     }
     setLinkDialogOpen(false);
   };
-  return <Stack spacing={0.75}><Typography component="label" variant="body2" sx={{ fontWeight: 600 }}>{label}</Typography><input type="hidden" name={name} value={html} readOnly />
-    <Box sx={{ border: 1, borderColor: "divider", borderRadius: 1, overflow: "hidden", "& .ProseMirror": { minHeight, p: 1.5, outline: "none", "& p": { my: 0.5 }, "& ul, & ol": { pl: 3 }, "& blockquote": { borderLeft: 3, borderColor: "divider", pl: 1.5, ml: 0 }, "& a": { color: "primary.main", textDecoration: "underline", textUnderlineOffset: "2px", cursor: "pointer", "&:hover": { color: "primary.dark" } } } }}>
-      <Stack direction="row" spacing={0.25} sx={{ p: 0.5, borderBottom: 1, borderColor: "divider", flexWrap: "wrap" }}>{button("Heading", editor?.isActive("heading") ?? false, () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <TitleIcon fontSize="small" />)}{button("Bold", editor?.isActive("bold") ?? false, () => editor?.chain().focus().toggleBold().run(), <FormatBoldIcon fontSize="small" />)}{button("Italic", editor?.isActive("italic") ?? false, () => editor?.chain().focus().toggleItalic().run(), <FormatItalicIcon fontSize="small" />)}{button("Bulleted list", editor?.isActive("bulletList") ?? false, () => editor?.chain().focus().toggleBulletList().run(), <FormatListBulletedIcon fontSize="small" />)}{button("Numbered list", editor?.isActive("orderedList") ?? false, () => editor?.chain().focus().toggleOrderedList().run(), <FormatListNumberedIcon fontSize="small" />)}{button("Quote", editor?.isActive("blockquote") ?? false, () => editor?.chain().focus().toggleBlockquote().run(), <FormatQuoteIcon fontSize="small" />)}{button("Add or edit link", editor?.isActive("link") ?? false, openLinkDialog, <InsertLinkIcon fontSize="small" />)}{button("Remove link", false, () => editor?.chain().focus().unsetLink().run(), <LinkOffIcon fontSize="small" />)}{button("Undo", false, () => editor?.chain().focus().undo().run(), <UndoIcon fontSize="small" />)}{button("Redo", false, () => editor?.chain().focus().redo().run(), <RedoIcon fontSize="small" />)}{button("Clear formatting", false, () => editor?.chain().focus().clearNodes().unsetAllMarks().run(), <FormatClearIcon fontSize="small" />)}</Stack>
-      <EditorContent editor={editor} />
-    </Box>{helperText ? <Typography variant="caption" color="text.secondary">{helperText}</Typography> : null}
-    <Dialog open={linkDialogOpen} onClose={() => setLinkDialogOpen(false)} fullWidth maxWidth="xs">
-      <DialogTitle>Add link</DialogTitle>
-      <DialogContent><Stack spacing={2} sx={{ pt: 1 }}>{linkError ? <Alert severity="error">{linkError}</Alert> : null}{editor?.state.selection.empty ? <TextField label="Link text" value={linkText} onChange={(event) => setLinkText(event.target.value)} fullWidth autoFocus /> : null}<TextField label="URL" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://example.com" helperText="HTTP(S) and mailto: links are supported." fullWidth autoFocus={!editor?.state.selection.empty} /></Stack></DialogContent>
-      <DialogActions><Button onClick={() => setLinkDialogOpen(false)}>Cancel</Button><Button onClick={applyLink} variant="contained">Add link</Button></DialogActions>
-    </Dialog>
-  </Stack>;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id={labelId} className="text-label text-ink">{label}</span>
+      <input type="hidden" name={name} value={html} readOnly />
+      <div className="overflow-hidden rounded-md border border-line-strong bg-canvas transition-colors focus-within:border-[var(--yy-focus)]">
+        <div role="toolbar" aria-label={`${label} formatting`} className="flex flex-wrap gap-0.5 border-b border-line bg-subtle p-1">
+          {button("Heading", editor?.isActive("heading") ?? false, () => editor?.chain().focus().toggleHeading({ level: 2 }).run(), <Heading />)}
+          {button("Bold", editor?.isActive("bold") ?? false, () => editor?.chain().focus().toggleBold().run(), <Bold />)}
+          {button("Italic", editor?.isActive("italic") ?? false, () => editor?.chain().focus().toggleItalic().run(), <Italic />)}
+          {button("Bulleted list", editor?.isActive("bulletList") ?? false, () => editor?.chain().focus().toggleBulletList().run(), <List />)}
+          {button("Numbered list", editor?.isActive("orderedList") ?? false, () => editor?.chain().focus().toggleOrderedList().run(), <ListOrdered />)}
+          {button("Quote", editor?.isActive("blockquote") ?? false, () => editor?.chain().focus().toggleBlockquote().run(), <Quote />)}
+          {button("Add or edit link", editor?.isActive("link") ?? false, openLinkDialog, <Link2 />)}
+          {button("Remove link", false, () => editor?.chain().focus().unsetLink().run(), <Link2Off />)}
+          {button("Undo", false, () => editor?.chain().focus().undo().run(), <Undo2 />)}
+          {button("Redo", false, () => editor?.chain().focus().redo().run(), <Redo2 />)}
+          {button("Clear formatting", false, () => editor?.chain().focus().clearNodes().unsetAllMarks().run(), <RemoveFormatting />)}
+        </div>
+        <div style={{ ["--rte-min-height" as string]: `${minHeight}px` }} className="[&_.ProseMirror]:min-h-[var(--rte-min-height)] [&_.ProseMirror_a]:cursor-pointer">
+          <EditorContent editor={editor} />
+        </div>
+      </div>
+      {helperText ? <p id={helperId} className="text-caption text-ink-muted">{helperText}</p> : null}
+      <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+        <DialogContent size="sm">
+          <DialogHeader title="Add link" />
+          <DialogBody className="flex flex-col gap-4">
+            {linkError ? <Callout tone="danger" role="alert">{linkError}</Callout> : null}
+            {editor?.state.selection.empty ? (
+              <Field label="Link text">
+                <Input value={linkText} onChange={(event) => setLinkText(event.target.value)} autoFocus />
+              </Field>
+            ) : null}
+            <Field label="URL" helperText="HTTP(S) and mailto: links are supported.">
+              <Input value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://example.com" autoFocus={!editor?.state.selection.empty} />
+            </Field>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={applyLink}>Add link</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }

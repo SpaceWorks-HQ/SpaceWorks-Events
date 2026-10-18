@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Node.js 20 or newer
+- Node.js 20 or newer (22.18 or newer to run `npm run brand:generate`, which executes a TypeScript script directly)
 - npm
 - Docker and Docker Compose for local PostgreSQL
 
@@ -55,7 +55,9 @@ Next.js 16 behavior may differ from older versions. Before changing framework AP
 ## Local service behavior
 
 - PostgreSQL stores all application data.
-- Without Redis, local rate limiting uses a process-local in-memory fallback.
+- Without Redis, local rate limiting uses a process-local in-memory fallback, and live ticket check-in notifications use an in-process emitter (shared through `globalThis`), so the ticket tear works on a single dev server.
+- Without `NEXT_PUBLIC_BASE_URL`, broadcast previews still show the event cover, but sent emails leave out site-relative images and links.
+- Each `app/super-admin/**/page.tsx` must call `await requireSuperAdminMfa()` itself; a unit test enforces it. Do not add a root `app/loading.tsx`: it makes public pages stream a 200 before `notFound()`/`redirect()` run (see [Architecture](ARCHITECTURE.md)).
 - Without S3 configuration, local assets can remain as database blobs.
 - Email requires an SMTP service or host. Use a local mail catcher if you need to inspect messages.
 - Google login appears when Google SSO has both a client ID and secret, either from the super-admin instance settings or the legacy environment fallback. To use instance settings locally, first create the configured super-admin account and enroll TOTP from `/account/security`.

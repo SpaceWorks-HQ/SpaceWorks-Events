@@ -1,4 +1,4 @@
-const CACHE_NAME = "yuyu-checkin-static-v5";
+const CACHE_NAME = "yuyu-checkin-static-v6";
 const MAX_STATIC_ENTRIES = 128;
 
 self.addEventListener("install", () => {

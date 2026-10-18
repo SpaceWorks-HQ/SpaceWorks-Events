@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   passwordReset: vi.fn(),
   verification: vi.fn(),
   rsvpFind: vi.fn(),
+  rsvpFindFirst: vi.fn(),
   broadcast: vi.fn(),
   broadcastFind: vi.fn(),
   eventFind: vi.fn(),
@@ -21,7 +22,7 @@ vi.mock("@/lib/db", () => ({ prisma: { outboxMessage: {
   updateMany: mocks.updateMany,
   findMany: mocks.findMany,
   deleteMany: mocks.deleteMany,
-}, rSVP: { findUnique: mocks.rsvpFind }, eventBroadcast: { findUnique: mocks.broadcastFind }, event: { findUnique: mocks.eventFind } } }));
+}, rSVP: { findUnique: mocks.rsvpFind, findFirst: mocks.rsvpFindFirst }, eventBroadcast: { findUnique: mocks.broadcastFind }, event: { findUnique: mocks.eventFind } } }));
 vi.mock("@/lib/email", () => ({
   sendRSVPConfirmation: mocks.rsvp,
   sendApprovalNotification: mocks.approval,
@@ -257,5 +258,17 @@ describe("event broadcast delivery", () => {
     const sent = mocks.broadcast.mock.calls[0]?.[0];
     expect(sent.subject).toBe("[Test] Hello Admin");
     expect(sent.bodyText).toBe("Mixer / http://localhost:3000/org/mixer");
+  });
+
+  it("links a test send's ticket button to the organiser's own ticket when they are confirmed", async () => {
+    mocks.eventFind.mockResolvedValue(broadcastEvent);
+    mocks.rsvpFindFirst.mockResolvedValue({ checkInToken: "own-ticket-token" });
+    mocks.findMany.mockResolvedValue([message({ kind: "event-broadcast-test", payload: { to: "admin@example.test", eventId: "event_1", subject: "Hi", body: "{{ticketLink}}" } })]);
+
+    await expect(deliverOutboxBatch()).resolves.toEqual({ sent: 1, failed: 0 });
+    expect(mocks.broadcast.mock.calls.at(-1)?.[0].bodyText).toBe("http://localhost:3000/ticket/own-ticket-token");
+    expect(mocks.rsvpFindFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ eventId: "event_1", status: RsvpStatus.CONFIRMED }),
+    }));
   });
 });

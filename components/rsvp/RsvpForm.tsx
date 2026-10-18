@@ -1,143 +1,16 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import TextField from "@mui/material/TextField";
-import Alert from "@mui/material/Alert";
-import Typography from "@mui/material/Typography";
-import MenuItem from "@mui/material/MenuItem";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Checkbox from "@mui/material/Checkbox";
-import Radio from "@mui/material/Radio";
-import RadioGroup from "@mui/material/RadioGroup";
-import FormLabel from "@mui/material/FormLabel";
-import FormControl from "@mui/material/FormControl";
-import Stack from "@mui/material/Stack";
-import Autocomplete from "@mui/material/Autocomplete";
 import Link from "next/link";
 import type { RsvpStatus } from "@prisma/client";
+import { CheckCircle2, Download } from "lucide-react";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
-
-// MUI's outlined input labels intentionally truncate to a single line. In an
-// RSVP form, custom labels are attendee-facing questions, so hiding part of a
-// question is worse than allowing the field to take an extra line.
-const rsvpFormSx = {
-  "& .MuiInputLabel-root": {
-    position: "static",
-    transform: "none !important",
-    maxWidth: "none",
-    overflow: "visible",
-    textOverflow: "clip",
-    whiteSpace: "normal",
-    lineHeight: 1.3,
-    marginBottom: 0.5,
-  },
-} as const;
-
-const phoneCountries = [
-  ["AF", "Afghanistan", "+93"], ["AL", "Albania", "+355"], ["AR", "Argentina", "+54"], ["AU", "Australia", "+61"], ["AT", "Austria", "+43"], ["BD", "Bangladesh", "+880"], ["BE", "Belgium", "+32"], ["BR", "Brazil", "+55"], ["CA", "Canada", "+1"], ["CL", "Chile", "+56"], ["CN", "China", "+86"], ["CO", "Colombia", "+57"], ["DK", "Denmark", "+45"], ["EG", "Egypt", "+20"], ["FI", "Finland", "+358"], ["FR", "France", "+33"], ["DE", "Germany", "+49"], ["GR", "Greece", "+30"], ["HK", "Hong Kong", "+852"], ["HU", "Hungary", "+36"], ["IN", "India", "+91"], ["ID", "Indonesia", "+62"], ["IE", "Ireland", "+353"], ["IL", "Israel", "+972"], ["IT", "Italy", "+39"], ["JP", "Japan", "+81"], ["KE", "Kenya", "+254"], ["MY", "Malaysia", "+60"], ["MX", "Mexico", "+52"], ["NL", "Netherlands", "+31"], ["NZ", "New Zealand", "+64"], ["NG", "Nigeria", "+234"], ["NO", "Norway", "+47"], ["PK", "Pakistan", "+92"], ["PH", "Philippines", "+63"], ["PL", "Poland", "+48"], ["PT", "Portugal", "+351"], ["QA", "Qatar", "+974"], ["RO", "Romania", "+40"], ["RU", "Russia", "+7"], ["SA", "Saudi Arabia", "+966"], ["SG", "Singapore", "+65"], ["ZA", "South Africa", "+27"], ["KR", "South Korea", "+82"], ["ES", "Spain", "+34"], ["SE", "Sweden", "+46"], ["CH", "Switzerland", "+41"], ["TW", "Taiwan", "+886"], ["TH", "Thailand", "+66"], ["TR", "Turkey", "+90"], ["AE", "United Arab Emirates", "+971"], ["GB", "United Kingdom", "+44"], ["US", "United States", "+1"], ["VN", "Vietnam", "+84"],
-] .map(([id, label, dial]) => ({ id, label, dial }));
-
-type PhoneCountry = (typeof phoneCountries)[number];
-
-function getPhoneParts(raw: unknown) {
-  const s = normalizePhoneInput(typeof raw === "string" ? raw : "");
-  const knownDial = [...phoneCountries]
-    .sort((a, b) => b.dial.length - a.dial.length)
-    .find((c) => s.startsWith(c.dial))?.dial;
-  // Calling codes are at most three digits. Retaining an unlisted prefix lets
-  // attendees use every E.164 country code, not only the convenience list.
-  const dial = knownDial ?? s.match(/^\+\d{1,3}/)?.[0] ?? "+91";
-  const number = s.startsWith(dial) ? s.slice(dial.length) : s;
-  return { dial, number: number.replace(/[^\d]/g, "") };
-}
-
-function normalizePhoneInput(value: string) {
-  const trimmed = value.trim();
-  const withInternationalPrefix = trimmed.startsWith("00") ? `+${trimmed.slice(2)}` : trimmed;
-  const digits = withInternationalPrefix.replace(/[^\d]/g, "");
-  return withInternationalPrefix.startsWith("+") ? `+${digits.slice(0, 15)}` : digits.slice(0, 15);
-}
-
-function normalizeDial(value: string) {
-  const digits = value.replace(/[^\d]/g, "").slice(0, 3);
-  return digits ? `+${digits}` : "+";
-}
-
-function setPhoneValue(
-  current: unknown,
-  next: { dial?: string; number?: string },
-): string {
-  const parts = getPhoneParts(current);
-  const dial = next.dial ? normalizeDial(next.dial) : parts.dial;
-  const number = (next.number ?? parts.number).replace(/[^\d]/g, "").slice(0, Math.max(0, 15 - (dial.length - 1)));
-  return number ? `${dial}${number}` : "";
-}
-
-function PhoneField(props: {
-  field: RegistrationFieldDefinition;
-  value: unknown;
-  onChange: (value: string) => void;
-}) {
-  const { field, value, onChange } = props;
-  const parts = getPhoneParts(value);
-  const selectedCountry = phoneCountries.find((country) => country.dial === parts.dial) ?? null;
-  const maxLength = parts.dial === "+91" ? 10 : Math.max(1, 15 - (parts.dial.length - 1));
-
-  return (
-    <Stack key={field.key} direction={{ xs: "column", sm: "row" }} spacing={1}>
-      <Autocomplete<PhoneCountry, false, false, true>
-        freeSolo
-        autoHighlight
-        options={phoneCountries}
-        value={selectedCountry ?? parts.dial}
-        getOptionLabel={(option) => typeof option === "string" ? option : option.dial}
-        isOptionEqualToValue={(option, selected) => typeof selected !== "string" && option.id === selected.id}
-        filterOptions={(options, state) => {
-          const query = state.inputValue.trim().toLowerCase();
-          if (!query) return options;
-          return options.filter((option) =>
-            [option.id, option.label, option.dial].some((value) => value.toLowerCase().includes(query)),
-          );
-        }}
-        onChange={(_, option) => onChange(setPhoneValue(value, { dial: typeof option === "string" ? option : option?.dial ?? "" }))}
-        renderOption={({ key, ...optionProps }, option) => (
-          <li key={option.id || key} {...optionProps}>
-            {option.label} ({option.dial})
-          </li>
-        )}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Country code"
-            required={field.required}
-            inputMode="tel"
-            helperText="Search a country or enter a + calling code."
-          />
-        )}
-        sx={{ width: { xs: "100%", sm: 120 }, flexShrink: 0 }}
-      />
-      <TextField
-        label={field.label}
-        required={field.required}
-        fullWidth
-        value={parts.number}
-        onChange={(event) => {
-          const next = event.target.value;
-          onChange(next.trimStart().startsWith("+") || next.trimStart().startsWith("00")
-            ? normalizePhoneInput(next)
-            : setPhoneValue(value, { number: next }));
-        }}
-        inputMode="tel"
-        placeholder="Phone number"
-        slotProps={{ htmlInput: { inputMode: "tel", pattern: "[0-9]*", maxLength } }}
-        helperText={parts.dial === "+91" ? "Indian mobile numbers must be 10 digits and start with 6–9." : "You can also paste a complete international number here."}
-      />
-    </Stack>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Callout } from "@/components/ui/display";
+import { Field, Input } from "@/components/ui/field";
+import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
+import { identityErrors } from "@/components/rsvp/registrationAnswers";
 
 async function postRsvp(body: unknown) {
   const res = await fetch("/api/rsvp", {
@@ -214,7 +87,6 @@ export function RsvpForm(props: {
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
   const [guestEmail, setGuestEmail] = useState("");
   const [name, setName] = useState("");
-  const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<RsvpStatus | null>(null);
@@ -231,11 +103,39 @@ export function RsvpForm(props: {
   }, [lsKey]);
   const [pending, startTransition] = useTransition();
 
-  const fields = registrationFields ?? [];
+  const fields = useMemo(() => registrationFields ?? [], [registrationFields]);
+  const questionsState = useRegistrationAnswers(fields);
+  const [identity, setIdentity] = useState<{ name?: string; email?: string }>({});
+  const formRef = useRef<HTMLDivElement & HTMLFormElement>(null);
   const requireName = !session?.user?.name?.trim();
+  const isGuest = !session?.user;
+  const problemCount = Object.keys(questionsState.errors).length + Object.values(identity).filter(Boolean).length;
 
-  function setAnswer(key: string, value: unknown) {
-    setAnswers((prev) => ({ ...prev, [key]: value }));
+  /** Client-side checks first, so each question shows its own message; the server still decides. */
+  function checkBeforeSubmit() {
+    const who = identityErrors({ name, email: guestEmail, requireName: isGuest || requireName, requireEmail: isGuest });
+    const questionErrors = questionsState.validate();
+    setIdentity(who);
+    const firstQuestion = fields.find((field) => questionErrors[field.key])?.key;
+    const first = who.name ? "__name" : who.email ? "__email" : firstQuestion;
+    if (first) focusQuestion(formRef.current, first);
+    return !first;
+  }
+
+  function submit() {
+    setError(null);
+    if (!checkBeforeSubmit()) return;
+    startTransition(async () => {
+      const res = await postRsvp({
+        orgSlug,
+        ...(eventInstanceId ? { eventInstanceId } : { eventSlug: eventSlug! }),
+        ...(isGuest ? { guestEmail } : {}),
+        name,
+        answers: questionsState.payload(),
+      });
+      if (!res.ok) setError(res.error);
+      else saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status });
+    });
   }
 
   function saveSuccessfulRsvp(rsvp: { ticketToken: string; status: RsvpStatus | null }) {
@@ -261,458 +161,123 @@ export function RsvpForm(props: {
   }
 
   if (status === "loading") {
-    return <Typography color="text.secondary">Loading…</Typography>;
+    return <p className="text-body-ui text-ink-muted">Loading…</p>;
   }
 
   if (done) {
     const href = ticketToken ? `/ticket/${ticketToken}` : null;
-    const ticketDownloadUrl = ticketToken
-      ? `/api/ticket/${ticketToken}/download`
-      : null;
+    const ticketDownloadUrl = ticketToken ? `/api/ticket/${ticketToken}/download` : null;
     const isConfirmed = rsvpStatus === "CONFIRMED";
     return (
-      <Alert severity="success">
-        <Stack spacing={1} sx={{ alignItems: "flex-start" }}>
-          <Typography variant="body2">
-            {isConfirmed
-              ? "Registration confirmed. Download and save your ticket now — you’ll need it for check-in."
-              : "Registration received. We’ll let you know when its status changes."}
-          </Typography>
+      <div role="status" className="flex flex-col items-start gap-3 rounded-lg bg-success-bg p-5 text-success-fg">
+        <CheckCircle2 aria-hidden className="yy-success-in size-8" />
+        <p className="text-body font-semibold">
+          {isConfirmed
+            ? "Registration confirmed. Download and save your ticket now — you’ll need it for check-in."
+            : "Registration received. We’ll let you know when its status changes."}
+        </p>
+        <div className="flex flex-wrap gap-2">
           {isConfirmed && ticketDownloadUrl ? (
-            <Button
-              component="a"
-              href={ticketDownloadUrl}
-              download
-              variant="contained"
-              size="small"
-              sx={{ borderRadius: 999 }}
-            >
-              Download and save ticket
+            <Button asChild variant="primary" size="sm">
+              <a href={ticketDownloadUrl} download>
+                <Download aria-hidden className="size-4" />
+                Download and save ticket
+              </a>
             </Button>
           ) : null}
           {isConfirmed && href ? (
-            <Button component={Link} href={href} variant="outlined" size="small" sx={{ borderRadius: 999 }}>
-              View ticket
+            <Button asChild variant="secondary" size="sm">
+              <Link href={href}>View ticket</Link>
             </Button>
           ) : null}
-        </Stack>
-      </Alert>
+        </div>
+      </div>
     );
   }
 
+  const questions = <RegistrationQuestions controller={questionsState} />;
+  const problems = problemCount > 0 ? (
+    <Callout tone="danger" role="alert">
+      {problemCount === 1 ? "One answer needs a quick fix before you can register." : `${problemCount} answers need a quick fix before you can register.`}
+    </Callout>
+  ) : null;
+
   if (session?.user) {
     return (
-      <Box sx={rsvpFormSx}>
-        {error ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        ) : null}
-        <Stack spacing={2} sx={{ mb: 2 }}>
-          <TextField
-            name="name"
-            label="Name"
-            required={requireName}
-            fullWidth
-            value={name}
-            placeholder={session.user.name ?? ""}
-            onChange={(e) => setName(e.target.value)}
-            slotProps={{ htmlInput: { maxLength: 200 } }}
-          />
-          {fields.map((f) => {
-            switch (f.type) {
-              case "TEXT":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 200 } }}
-                  />
-                );
-              case "EMAIL":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="email"
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    helperText="We’ll validate basic email format."
-                  />
-                );
-              case "PHONE":
-                return <PhoneField key={f.key} field={f} value={answers[f.key]} onChange={(value) => setAnswer(f.key, value)} />;
-              case "TEXTAREA":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 5000 } }}
-                  />
-                );
-              case "NUMBER":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="number"
-                    value={(answers[f.key] as string | number | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  />
-                );
-              case "DATE":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="date"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  />
-                );
-              case "CHECKBOX":
-                return (
-                  <FormControlLabel
-                    key={f.key}
-                    control={
-                      <Checkbox
-                        checked={Boolean(answers[f.key])}
-                        onChange={(_, checked) => setAnswer(f.key, checked)}
-                      />
-                    }
-                    label={f.label}
-                  />
-                );
-              case "SELECT":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    select
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  >
-                    <MenuItem value="">—</MenuItem>
-                    {f.options.map((opt) => (
-                      <MenuItem key={opt} value={opt}>
-                        {opt}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                );
-              case "MULTI_SELECT": {
-                const value = Array.isArray(answers[f.key])
-                  ? (answers[f.key] as string[])
-                  : [];
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    select
-                    slotProps={{ select: { multiple: true } }}
-                    value={value}
-                    onChange={(e) =>
-                      setAnswer(
-                        f.key,
-                        typeof e.target.value === "string"
-                          ? e.target.value.split(",")
-                          : e.target.value,
-                      )
-                    }
-                  >
-                    {f.options.map((opt) => (
-                      <MenuItem key={opt} value={opt}>
-                        {opt}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                );
-              }
-              case "RADIO":
-                return (
-                  <FormControl key={f.key} required={f.required}>
-                    <FormLabel>{f.label}</FormLabel>
-                    <RadioGroup
-                      value={(answers[f.key] as string | undefined) ?? ""}
-                      onChange={(e) => setAnswer(f.key, e.target.value)}
-                    >
-                      {f.options.map((opt) => (
-                        <FormControlLabel
-                          key={opt}
-                          value={opt}
-                          control={<Radio />}
-                          label={opt}
-                        />
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                );
-              default:
-                return null;
-            }
-          })}
-        </Stack>
-        <Button
-          variant="contained"
-          size="large"
-          disabled={pending}
-          onClick={() => {
-            setError(null);
-            startTransition(async () => {
-              const res = await postRsvp({
-                orgSlug,
-                ...(eventInstanceId
-                  ? { eventInstanceId }
-                  : { eventSlug: eventSlug! }),
-                name,
-                answers,
-              });
-              if (!res.ok) setError(res.error);
-              else {
-                saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status });
-              }
-            });
-          }}
-        >
+      <div ref={formRef} className="flex flex-col gap-3.5">
+        {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+        {problems}
+        <div data-question-key="__name">
+          <Field label="Name" optional={!requireName} required={requireName} error={identity.name} helperText={!requireName ? `Leave blank to use ${session.user.name}.` : undefined}>
+            <Input
+              name="name"
+              autoComplete="name"
+              value={name}
+              placeholder={session.user.name ?? ""}
+              onChange={(event) => {
+                setName(event.target.value);
+                if (identity.name && event.target.value.trim()) setIdentity((current) => ({ ...current, name: undefined }));
+              }}
+              maxLength={200}
+            />
+          </Field>
+        </div>
+        {questions}
+        <Button variant="accent" size="lg" fullWidth loading={pending} loadingLabel="Registering…" onClick={submit}>
           Register
         </Button>
-      </Box>
+      </div>
     );
   }
 
   return (
-    <Box
-      component="form"
-      sx={rsvpFormSx}
-      onSubmit={(e) => {
-        e.preventDefault();
-        setError(null);
-        startTransition(async () => {
-          const res = await postRsvp({
-            orgSlug,
-            ...(eventInstanceId
-              ? { eventInstanceId }
-              : { eventSlug: eventSlug! }),
-            guestEmail,
-            name,
-            answers,
-          });
-          if (!res.ok) setError(res.error);
-          else {
-            saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status });
-          }
-        });
+    <form
+      ref={formRef}
+      noValidate
+      className="flex flex-col gap-3.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
       }}
     >
-      {error ? (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
-        </Alert>
-      ) : null}
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Register with your email
-      </Typography>
-      <TextField
-        name="name"
-        label="Name"
-        required
-        fullWidth
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        slotProps={{ htmlInput: { maxLength: 200 } }}
-        sx={{ mb: 2 }}
-      />
-      <TextField
-        name="guestEmail"
-        label="Email"
-        type="email"
-        required
-        fullWidth
-        value={guestEmail}
-        onChange={(e) => setGuestEmail(e.target.value)}
-        sx={{ mb: 2 }}
-      />
-      {fields.length > 0 ? (
-        <Stack spacing={2} sx={{ mb: 2 }}>
-          {fields.map((f) => {
-            switch (f.type) {
-              case "TEXT":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 200 } }}
-                  />
-                );
-              case "EMAIL":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="email"
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    helperText="We’ll validate basic email format."
-                  />
-                );
-              case "PHONE":
-                return <PhoneField key={f.key} field={f} value={answers[f.key]} onChange={(value) => setAnswer(f.key, value)} />;
-              case "TEXTAREA":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 5000 } }}
-                  />
-                );
-              case "NUMBER":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="number"
-                    value={(answers[f.key] as string | number | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  />
-                );
-              case "DATE":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    type="date"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  />
-                );
-              case "CHECKBOX":
-                return (
-                  <FormControlLabel
-                    key={f.key}
-                    control={
-                      <Checkbox
-                        checked={Boolean(answers[f.key])}
-                        onChange={(_, checked) => setAnswer(f.key, checked)}
-                      />
-                    }
-                    label={f.label}
-                  />
-                );
-              case "SELECT":
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    select
-                    value={(answers[f.key] as string | undefined) ?? ""}
-                    onChange={(e) => setAnswer(f.key, e.target.value)}
-                  >
-                    <MenuItem value="">—</MenuItem>
-                    {f.options.map((opt) => (
-                      <MenuItem key={opt} value={opt}>
-                        {opt}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                );
-              case "MULTI_SELECT": {
-                const value = Array.isArray(answers[f.key])
-                  ? (answers[f.key] as string[])
-                  : [];
-                return (
-                  <TextField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    fullWidth
-                    select
-                    slotProps={{ select: { multiple: true } }}
-                    value={value}
-                    onChange={(e) =>
-                      setAnswer(
-                        f.key,
-                        typeof e.target.value === "string"
-                          ? e.target.value.split(",")
-                          : e.target.value,
-                      )
-                    }
-                  >
-                    {f.options.map((opt) => (
-                      <MenuItem key={opt} value={opt}>
-                        {opt}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-                );
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      {problems}
+      <p className="text-body-ui text-ink-muted">Register with your email</p>
+      <div data-question-key="__name">
+        <Field label="Name" required error={identity.name}>
+          <Input
+            name="name"
+            autoComplete="name"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (identity.name && event.target.value.trim()) setIdentity((current) => ({ ...current, name: undefined }));
+            }}
+            maxLength={200}
+          />
+        </Field>
+      </div>
+      <div data-question-key="__email">
+        <Field label="Email" required error={identity.email} helperText="We’ll send your ticket here.">
+          <Input
+            name="guestEmail"
+            type="email"
+            autoComplete="email"
+            value={guestEmail}
+            onChange={(event) => {
+              setGuestEmail(event.target.value);
+              if (identity.email) {
+                const recheck = identityErrors({ name, email: event.target.value, requireName: false, requireEmail: true }).email;
+                setIdentity((current) => ({ ...current, email: recheck }));
               }
-              case "RADIO":
-                return (
-                  <FormControl key={f.key} required={f.required}>
-                    <FormLabel>{f.label}</FormLabel>
-                    <RadioGroup
-                      value={(answers[f.key] as string | undefined) ?? ""}
-                      onChange={(e) => setAnswer(f.key, e.target.value)}
-                    >
-                      {f.options.map((opt) => (
-                        <FormControlLabel
-                          key={opt}
-                          value={opt}
-                          control={<Radio />}
-                          label={opt}
-                        />
-                      ))}
-                    </RadioGroup>
-                  </FormControl>
-                );
-              default:
-                return null;
-            }
-          })}
-        </Stack>
-      ) : null}
-      <Button variant="contained" size="large" disabled={pending} type="submit">
+            }}
+          />
+        </Field>
+      </div>
+      {questions}
+      <Button variant="accent" size="lg" fullWidth type="submit" loading={pending} loadingLabel="Registering…">
         Register
       </Button>
-    </Box>
+    </form>
   );
 }

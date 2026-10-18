@@ -1,8 +1,6 @@
 "use client";
 
-import Chip from "@mui/material/Chip";
-import Tooltip from "@mui/material/Tooltip";
-import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import { Copy } from "lucide-react";
 import { useToast } from "@/components/feedback/ToastProvider";
 
 async function copyToClipboard(value: string) {
@@ -27,23 +25,22 @@ export function CopyOrganisationUrl(props: { slug: string }) {
   const { showToast } = useToast();
 
   return (
-    <Tooltip title="Copy organisation URL">
-      <Chip
-        clickable
-        icon={<ContentCopyOutlinedIcon fontSize="small" />}
-        label={`/${slug}`}
-        variant="outlined"
-        aria-label={`Copy the public URL for ${slug}`}
-        onClick={async () => {
-          try {
-            await copyToClipboard(`${window.location.origin}/${slug}`);
-            showToast("Organisation URL copied", "success", null, 2500);
-          } catch {
-            showToast("Could not copy organisation URL", "error");
-          }
-        }}
-        sx={{ bgcolor: "background.paper" }}
-      />
-    </Tooltip>
+    <button
+      type="button"
+      aria-label={`Copy the public URL for ${slug}`}
+      title="Copy organisation URL"
+      onClick={async () => {
+        try {
+          await copyToClipboard(`${window.location.origin}/${slug}`);
+          showToast("Organisation URL copied", "success", null, 2500);
+        } catch {
+          showToast("Could not copy organisation URL", "error");
+        }
+      }}
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-canvas px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-subtle"
+    >
+      <Copy aria-hidden className="size-4" />
+      Copy link
+    </button>
   );
 }

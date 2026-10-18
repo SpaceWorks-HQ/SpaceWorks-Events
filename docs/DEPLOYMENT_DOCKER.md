@@ -25,6 +25,13 @@ load balancer. Supply these production services separately:
 - a CDN/WAF or reverse proxy that overwrites the configured trusted client-IP
   header.
 
+The live ticket page holds a Server-Sent Events stream at
+`/api/ticket/:token/events`. Configure the reverse proxy not to buffer
+`text/event-stream` responses (nginx: `proxy_buffering off` for
+`/api/ticket/`; the route also sends `X-Accel-Buffering: no`) and to allow idle
+reads of at least 30 seconds. Redis pub/sub carries check-in notifications
+between application replicas.
+
 The application image contains only the application. It does not run
 PostgreSQL, Redis, object storage, TLS termination, or SMTP. Keep the container
 port private and expose it only through the trusted proxy.

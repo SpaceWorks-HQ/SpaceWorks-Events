@@ -2,36 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { RsvpStatus } from "@prisma/client";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
-import Divider from "@mui/material/Divider";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogTitle from "@mui/material/DialogTitle";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import IconButton from "@mui/material/IconButton";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import Tooltip from "@mui/material/Tooltip";
-import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
-import CloudDoneOutlinedIcon from "@mui/icons-material/CloudDoneOutlined";
-import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
-import SyncOutlinedIcon from "@mui/icons-material/SyncOutlined";
-import PrintOutlinedIcon from "@mui/icons-material/PrintOutlined";
-import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import { Check, CloudCheck, CloudOff, Download, Info, Printer, RefreshCw, Search, X } from "lucide-react";
+import { Button, IconButton } from "@/components/ui/button";
+import { Switch } from "@/components/ui/choice";
+import { Callout, Chip, ProgressBar, type ChipTone } from "@/components/ui/display";
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
+import { Input, Textarea } from "@/components/ui/field";
+import { Tooltip } from "@/components/ui/menu";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { cn } from "@/lib/cn";
+import { DotFace } from "@/components/brand/DotFace";
 import {
   checkInByRsvpId,
   downloadOfflineCheckInRoster,
@@ -72,28 +53,39 @@ type StationResponse =
   | { ok: true; data: CheckInPreviewData & CheckInResultData & { rows: LookupRow[] } }
   | { ok: false; error: string; needsForce?: boolean };
 
-function CheckInDetailsList({ details }: { details: CheckInResultData["checkInDetails"] }) {
-  if (details.length === 0) return null;
+function DetailRows({ rows }: { rows: Array<{ key: string; label: string; value: string }> }) {
+  if (rows.length === 0) return null;
   return (
-    <Stack component="dl" spacing={0.25} sx={{ m: 0, pt: 0.5 }}>
-      {details.map((detail) => (
-        <Stack component="div" direction="row" spacing={0.75} key={detail.label} sx={{ alignItems: "baseline" }}>
-          <Typography component="dt" variant="body2" color="text.secondary">{detail.label}:</Typography>
-          <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 600 }}>{detail.value}</Typography>
-        </Stack>
+    <dl className="m-0 flex flex-col gap-0.5 pt-1">
+      {rows.map((detail) => (
+        <div key={detail.key} className="flex flex-wrap items-baseline gap-1.5 text-sm">
+          <dt className="opacity-75">{detail.label}:</dt>
+          <dd className="m-0 font-semibold">{detail.value}</dd>
+        </div>
       ))}
-    </Stack>
+    </dl>
   );
 }
 
+function CheckInDetailsList({ details }: { details: CheckInResultData["checkInDetails"] }) {
+  return <DetailRows rows={details.map((detail) => ({ key: detail.label, label: detail.label, value: detail.value }))} />;
+}
+
 function RegistrationDetailsList({ details }: { details: CheckInResultData["registrationDetails"] }) {
-  if (details.length === 0) return null;
-  return <Stack component="dl" spacing={0.25} sx={{ m: 0 }}>
-    {details.map((detail) => <Stack component="div" direction="row" spacing={0.75} key={detail.key} sx={{ alignItems: "baseline" }}>
-      <Typography component="dt" variant="body2" color="text.secondary">{detail.label}:</Typography>
-      <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 600 }}>{detail.value}</Typography>
-    </Stack>)}
-  </Stack>;
+  return <DetailRows rows={details.map((detail) => ({ key: detail.key, label: detail.label, value: detail.value }))} />;
+}
+
+const statusChips: Record<string, { label: string; tone: ChipTone }> = {
+  CONFIRMED: { label: "Confirmed", tone: "success" },
+  WAITLISTED: { label: "Waitlisted", tone: "warning" },
+  PENDING_APPROVAL: { label: "Pending approval", tone: "warning" },
+  REJECTED: { label: "Rejected", tone: "danger" },
+  CANCELLED: { label: "Cancelled", tone: "neutral" },
+};
+
+function StatusChip({ status }: { status: string }) {
+  const chip = statusChips[status] ?? { label: status, tone: "neutral" as ChipTone };
+  return <Chip size="sm" tone={chip.tone}>{chip.label}</Chip>;
 }
 
 /** Render a stable server/client value first, then adapt to the device locale. */
@@ -610,248 +602,240 @@ export function EventCheckInClient(props: {
       ? Math.round((stats.checkedIn / stats.confirmed) * 1000) / 10
       : 0;
 
-  return (
-    <Stack spacing={3}>
-      <Stack
-        direction={{ xs: "column", md: "row" }}
-        spacing={2}
-        useFlexGap
-        sx={{ alignItems: "stretch" }}
-      >
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Progress
-          </Typography>
-          <Typography variant="h4" sx={{ fontWeight: 600 }}>
-            {stats.checkedIn}{" "}
-            <Typography component="span" variant="body1" color="text.secondary">
-              / {stats.confirmed} confirmed
-            </Typography>
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {stats.confirmed > 0 ? `${rate}% checked in` : "No confirmed RSVPs yet"}
-          </Typography>
-        </Paper>
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Event
-          </Typography>
-          <Typography variant="body1" sx={{ fontWeight: 600 }}>
-            {eventTitle}
-          </Typography>
-          {!stationMode ? <Button
-            component={Link}
-            href={`/dashboard/${organisationSlug}/event/${eventId}`}
-            size="small"
-            sx={{ mt: 1 }}
-          >
-            Back to event
-          </Button> : null}
-        </Paper>
-      </Stack>
+  const closeScan = () => {
+    setScanOpen(false);
+    setScanPreview(null);
+  };
 
-      {!stationMode ? <Paper
-        variant="outlined"
-        sx={{
-          p: 2,
-          borderRadius: "16px",
-          borderColor: offlineRoster ? "rgba(10,132,255,0.28)" : "rgba(255,255,255,0.08)",
-          backgroundColor: offlineRoster ? "rgba(10,132,255,0.05)" : "rgba(255,255,255,0.02)",
-        }}
-      >
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
-          <Stack direction="row" spacing={1.25} sx={{ alignItems: "center" }}>
-            {offlineRoster ? <CloudDoneOutlinedIcon color="primary" /> : <CloudOffOutlinedIcon color="disabled" />}
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {offlineRoster ? "Offline check-in ready" : "Offline check-in is not ready"}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
+  return (
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          {stationMode ? (
+            <>
+              <p className="text-sm font-semibold text-ink-muted">Venue check-in</p>
+              <h1 className="break-words font-display text-[26px] font-extrabold leading-tight tracking-[-0.02em] text-ink">{eventTitle}</h1>
+            </>
+          ) : (
+            <h2 className="text-h4 text-ink">Check-in desk</h2>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="min-w-[132px]">
+            <p className="font-display text-ink">
+              <span className="text-[28px] font-extrabold">{stats.checkedIn}</span>
+              <span className="text-base font-semibold text-ink-muted"> / {stats.confirmed} confirmed</span>
+            </p>
+            <p className="text-caption text-ink-muted">{stats.confirmed > 0 ? `${rate}% checked in` : "No confirmed RSVPs yet"}</p>
+            {stats.confirmed > 0 ? <ProgressBar value={stats.checkedIn} max={stats.confirmed} tone="success" label="Checked in" className="mt-1.5" /> : null}
+          </div>
+          {!stationMode ? <Chip tone={isOnline ? "success" : "warning"} icon={<span className="size-2 rounded-full bg-current" />}>{isOnline ? "Online" : "Offline"}</Chip> : null}
+        </div>
+      </header>
+
+      {!stationMode ? (
+        <section className={cn("flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between", offlineRoster ? "border-transparent bg-success-bg" : "border-line bg-subtle")}>
+          <div className="flex items-start gap-3">
+            <span aria-hidden className={cn("mt-0.5 [&_svg]:size-5", offlineRoster ? "text-success-fg" : "text-ink-muted")}>{offlineRoster ? <CloudCheck /> : <CloudOff />}</span>
+            <div>
+              <p className="text-label text-ink">{offlineRoster ? "Offline check-in ready" : "Offline check-in is not ready"}</p>
+              <p className="text-sm text-ink-secondary">
                 {offlineRoster
                   ? `${offlineRoster.rows.length} attendees saved on this device${queuedCount ? ` · ${queuedCount} waiting to sync` : ""}.`
                   : "Download the attendee roster while online to scan and search without a connection."}
-              </Typography>
-            </Box>
-          </Stack>
-          <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
             <InstallCheckInAppButton />
-            <Button size="small" variant="outlined" startIcon={<DownloadOutlinedIcon />} onClick={downloadOfflineRoster} disabled={pending || !isOnline} sx={{ textTransform: "none" }}>
+            <Button size="sm" variant="secondary" startIcon={<Download />} onClick={downloadOfflineRoster} disabled={pending || !isOnline}>
               {offlineRoster ? "Refresh roster" : "Make available offline"}
             </Button>
             {offlineRoster ? (
-              <Button size="small" color="error" onClick={clearOfflineRoster} disabled={pending || queuedCount > 0} sx={{ textTransform: "none" }}>
+              <Button size="sm" variant="dangerQuiet" onClick={clearOfflineRoster} disabled={pending || queuedCount > 0}>
                 Remove offline data
               </Button>
             ) : null}
             {queuedCount > 0 ? (
-              <Button size="small" variant="contained" startIcon={<SyncOutlinedIcon />} onClick={syncOfflineQueue} disabled={pending || !isOnline} sx={{ textTransform: "none" }}>
+              <Button size="sm" variant="primary" startIcon={<RefreshCw />} onClick={syncOfflineQueue} disabled={pending || !isOnline}>
                 Sync {queuedCount}
               </Button>
             ) : null}
-          </Stack>
-        </Stack>
-      </Paper> : null}
+          </div>
+        </section>
+      ) : null}
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: "center", alignSelf: "flex-start" }}>
-        <Switch id="check-in-override" checked={override} onChange={(_, v) => setOverride(v)} color="warning" />
-        <Typography component="label" htmlFor="check-in-override" variant="body2">Override waitlist</Typography>
-        <Tooltip title="Allows check-in for waitlisted attendees only. Pending approval and rejected registrations remain blocked." enterTouchDelay={0}>
-          <IconButton size="small" aria-label="About override check-in"><InfoOutlinedIcon fontSize="small" /></IconButton>
-        </Tooltip>
-      </Stack>
+      <div className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2.5">
+          <Switch id="check-in-override" checked={override} onCheckedChange={setOverride} />
+          <label htmlFor="check-in-override" className="text-label text-ink">Override waitlist</label>
+          <Tooltip content="Allows check-in for waitlisted attendees only. Pending approval and rejected registrations remain blocked.">
+            <IconButton label="About override check-in" size="sm"><Info /></IconButton>
+          </Tooltip>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-2.5">
+            <Switch id="check-in-id-cards" checked={idCardPrintingEnabled} onCheckedChange={(enabled) => { setIdCardPrintingEnabled(enabled); if (!enabled) setIdCardOpen(false); }} aria-describedby="check-in-id-cards-help" />
+            <label htmlFor="check-in-id-cards" className="text-label text-ink">ID card printing</label>
+          </div>
+          {idCardPrintingEnabled ? <Button size="sm" variant="secondary" startIcon={<Printer />} onClick={() => { setIdCardAttendee(null); setIdCardOpen(true); }}>Set up cards</Button> : null}
+        </div>
+        <p id="check-in-id-cards-help" className="sr-only">Off by default. Enable it when this desk should offer cards after check-in.</p>
+      </div>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}>
-          <Box>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>ID card printing</Typography>
-            <Typography variant="body2" color="text.secondary">Off by default. Enable it when this desk should offer cards after check-in.</Typography>
-          </Box>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={0.5} sx={{ alignItems: { xs: "stretch", sm: "center" } }}>
-            <FormControlLabel control={<Switch checked={idCardPrintingEnabled} onChange={(_, enabled) => { setIdCardPrintingEnabled(enabled); if (!enabled) setIdCardOpen(false); }} />} label="Enable" />
-            {idCardPrintingEnabled ? <Button variant="outlined" startIcon={<PrintOutlinedIcon />} onClick={() => { setIdCardAttendee(null); setIdCardOpen(true); }}>Set up cards</Button> : null}
-          </Stack>
-        </Stack>
-      </Paper>
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="flex flex-col gap-5">
+          <section aria-labelledby="scan-title" className="flex flex-col gap-3">
+            <div>
+              <h2 id="scan-title" className="text-h4 text-ink">Scan QR</h2>
+              <p className="text-sm text-ink-muted">Point the camera at an attendee ticket QR. Codes contain only a secret ticket link — no personal data in the barcode.</p>
+            </div>
+            <CheckInQrScanner onScan={onScan} disabled={pending} />
+          </section>
 
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={3} useFlexGap>
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            Scan QR
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Point the camera at an attendee ticket QR. Codes contain only a
-            secret ticket link — no personal data in the barcode.
-          </Typography>
-          <CheckInQrScanner onScan={onScan} disabled={pending} />
-        </Paper>
-
-        <Paper variant="outlined" sx={{ p: 2, flex: 1 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            Manual code
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Paste a ticket URL or the opaque code from the attendee&apos;s phone.
-          </Typography>
-          <Box component="form" onSubmit={onManualSubmit}>
-            <Stack spacing={2}>
-              <TextField
-                label="URL or code"
-                value={manual}
-                onChange={(e) => setManual(e.target.value)}
-                fullWidth
-                multiline
-                minRows={2}
-                size="small"
-                disabled={pending}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={pending || !manual.trim()}
-              >
+          <section aria-labelledby="manual-title" className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4">
+            <div>
+              <h2 id="manual-title" className="text-title text-ink">Manual code</h2>
+              <p className="text-sm text-ink-muted">Paste a ticket URL or the opaque code from the attendee&apos;s phone.</p>
+            </div>
+            <form onSubmit={onManualSubmit} className="flex flex-col gap-2.5">
+              <label htmlFor="check-in-manual" className="sr-only">URL or code</label>
+              <Textarea id="check-in-manual" rows={2} placeholder="URL or code" value={manual} onChange={(e) => setManual(e.target.value)} disabled={pending} />
+              <Button type="submit" variant="primary" disabled={pending || !manual.trim()} className="self-start">
                 Preview
               </Button>
-            </Stack>
-          </Box>
-        </Paper>
-      </Stack>
+            </form>
+          </section>
+        </div>
 
-      <Dialog
-        open={scanOpen}
-        onClose={() => {
-          setScanOpen(false);
-          setScanPreview(null);
-        }}
-        maxWidth="xs"
-        fullWidth
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            if (scanPreview?.gate.ok) confirmScan();
-          }
-        }}
-      >
-        <DialogTitle>Confirm check-in</DialogTitle>
-        <DialogContent>
-          {scanPreview ? (
-            <Stack spacing={1}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                {scanPreview.displayName}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {scanPreview.email ?? "—"}
-              </Typography>
-              <Stack
-                direction="row"
-                useFlexGap
-                sx={{ flexWrap: "wrap", columnGap: 1, rowGap: 1, pt: 0.5 }}
-              >
-                <Chip label={scanPreview.status} size="small" />
-                {scanPreview.alreadyCheckedIn ? (
-                  <Chip label="Already checked in" size="small" color="info" />
+        <div className="flex flex-col gap-5">
+          {lastResult ? (
+            <section
+              role="status"
+              className={cn("flex flex-col gap-3 rounded-xl p-6", lastResult.kind === "already" ? "bg-emphasis text-ink" : "bg-success-solid text-white")}
+            >
+              {lastResult.kind === "already" ? (
+                <span aria-hidden className="flex size-14 items-center justify-center rounded-full bg-canvas">
+                  <Info className="size-6" />
+                </span>
+              ) : (
+                <span className="self-start rounded-[20px] bg-white p-3">
+                  <DotFace mood="wink" size={72} colors={{ O: "#18181B" }} />
+                </span>
+              )}
+              <div>
+                <p className="text-[15px] font-semibold">{lastResult.kind === "already" ? "Already checked in" : "Checked in"}</p>
+                <p className="break-words font-display text-[34px] font-extrabold leading-none tracking-[-0.03em]">{lastResult.displayName}</p>
+                <p className="mt-2 text-sm opacity-90">
+                  {lastResult.email ?? ""}
+                  {lastResult.email && lastResult.checkedInAt ? " · " : ""}
+                  {lastResult.checkedInAt ? <CheckInTimestamp value={lastResult.checkedInAt} /> : null}
+                </p>
+                <CheckInDetailsList details={lastResult.checkInDetails} />
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" variant={lastResult.kind === "already" ? "secondary" : "inverse"} startIcon={<X />} onClick={() => setLastResult(null)}>
+                  Next guest
+                </Button>
+                {idCardPrintingEnabled ? (
+                  <Button size="sm" variant="secondary" startIcon={<Printer />} onClick={() => showIdCard(lastResult)}>
+                    Print ID card
+                  </Button>
                 ) : null}
-              </Stack>
-              {!scanPreview.gate.ok ? (
-                <Alert severity={scanPreview.gate.blocked ? "error" : "warning"}>
-                  {scanPreview.gate.reason}
-                </Alert>
-              ) : null}
-              <Typography variant="caption" color="text.secondary">
-                Press Enter to confirm.
-              </Typography>
-              <CheckInDetailsList details={scanPreview.checkInDetails} />
-            </Stack>
+              </div>
+            </section>
           ) : null}
-        </DialogContent>
-        <DialogActions>
-          {!stationMode ? <Button
-            onClick={() => {
-              setScanOpen(false);
-              setScanPreview(null);
-            }}
-            color="inherit"
-          >
-            Cancel
-          </Button> : null}
-          <Button
-            ref={(el) => {
-              confirmRef.current = el;
-            }}
-            variant="contained"
-            onClick={confirmScan}
-            disabled={!scanPreview?.gate.ok || pending}
-            autoFocus
-          >
-            Confirm
-          </Button>
-        </DialogActions>
-      </Dialog>
 
-      {lastResult ? (
-        <Alert
-          severity={lastResult.kind === "already" ? "info" : "success"}
-          onClose={() => setLastResult(null)}
+          <section aria-labelledby="search-title" className="flex flex-col gap-3 rounded-lg border border-line bg-canvas p-4">
+            <h2 id="search-title" className="text-title text-ink">Search attendees</h2>
+            <div className="flex gap-2">
+              <label htmlFor="check-in-search" className="sr-only">Name or email</label>
+              <Input
+                id="check-in-search"
+                placeholder="Name or email"
+                value={lookupQuery}
+                onChange={(e) => setLookupQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    runLookup();
+                  }
+                }}
+              />
+              <Button variant="primary" startIcon={<Search />} onClick={runLookup} disabled={pending}>
+                Search
+              </Button>
+            </div>
+            {lookupRows.length > 0 ? (
+              <ul className="flex flex-col divide-y divide-line">
+                {lookupRows.map((row) => (
+                  <li key={row.rsvpId} className="flex items-center gap-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <button type="button" onClick={() => viewAttendee(row)} disabled={pending} className="block max-w-full truncate text-left text-[15px] font-semibold text-ink underline-offset-4 hover:underline">
+                        {row.displayName}
+                      </button>
+                      {row.email ? <p className="truncate text-sm text-ink-muted">{row.email}</p> : null}
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        <StatusChip status={row.status} />
+                        {row.checkedInAt ? <Chip size="sm" tone="success" icon={<Check />}>Checked in</Chip> : null}
+                      </div>
+                    </div>
+                    {row.checkedInAt ? (
+                      <Button size="sm" variant="quiet" onClick={() => onUndo(row.rsvpId)} disabled={pending || !isOnline}>Undo</Button>
+                    ) : (
+                      <Button size="sm" variant="primary" onClick={() => checkInRow(row, override)} disabled={pending}>Check in</Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        </div>
+      </div>
+
+      <Dialog open={scanOpen} onOpenChange={(next) => { if (!next) closeScan(); }}>
+        <DialogContent
+          size="sm"
+          hideClose={stationMode}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (scanPreview?.gate.ok) confirmScan();
+            }
+          }}
         >
-          <Typography variant="subtitle2">
-            {lastResult.kind === "already"
-              ? "Already checked in"
-              : "Checked in"}
-          </Typography>
-          <Typography variant="body2">
-            {lastResult.displayName}
-            {lastResult.email ? ` · ${lastResult.email}` : ""}
-          </Typography>
-          <CheckInDetailsList details={lastResult.checkInDetails} />
-          {lastResult.checkedInAt ? (
-            <Typography variant="caption" color="text.secondary">
-              <CheckInTimestamp value={lastResult.checkedInAt} />
-            </Typography>
-          ) : null}
-          {idCardPrintingEnabled ? <Button size="small" startIcon={<PrintOutlinedIcon />} onClick={() => showIdCard(lastResult)} sx={{ mt: 0.75 }}>
-            Print ID card
-          </Button> : null}
-        </Alert>
-      ) : null}
+          <DialogHeader title="Confirm check-in" />
+          <DialogBody className="flex flex-col gap-2">
+            {scanPreview ? (
+              <>
+                <p className="font-display text-[24px] font-extrabold leading-tight text-ink">{scanPreview.displayName}</p>
+                <p className="text-sm text-ink-muted">{scanPreview.email ?? "—"}</p>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  <StatusChip status={scanPreview.status} />
+                  {scanPreview.alreadyCheckedIn ? <Chip size="sm" tone="neutral">Already checked in</Chip> : null}
+                </div>
+                {!scanPreview.gate.ok ? <Callout tone={scanPreview.gate.blocked ? "danger" : "warning"}>{scanPreview.gate.reason}</Callout> : null}
+                <div className="text-ink"><CheckInDetailsList details={scanPreview.checkInDetails} /></div>
+                <p className="text-caption text-ink-muted">Press Enter to confirm.</p>
+              </>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
+            {!stationMode ? <Button variant="secondary" onClick={closeScan}>Cancel</Button> : null}
+            <Button
+              ref={(el) => {
+                confirmRef.current = el;
+              }}
+              variant="primary"
+              onClick={confirmScan}
+              disabled={!scanPreview?.gate.ok || pending}
+              autoFocus
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <IdCardPrintDialog
         key={eventId}
@@ -871,207 +855,90 @@ export function EventCheckInClient(props: {
         registrationFields={registrationFields}
       />
 
-      <Divider />
-
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-          Search attendees
-        </Typography>
-        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} useFlexGap>
-          <TextField
-            label="Name or email"
-            value={lookupQuery}
-            onChange={(e) => setLookupQuery(e.target.value)}
-            size="small"
-            fullWidth
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                runLookup();
-              }
-            }}
-          />
-          <Button variant="outlined" onClick={runLookup} disabled={pending}>
-            Search
-          </Button>
-        </Stack>
-        {lookupRows.length > 0 ? (
-          <>
-          <Stack spacing={1} sx={{ display: { xs: "flex", sm: "none" }, mt: 2 }}>
-            {lookupRows.map((row) => <Paper key={row.rsvpId} variant="outlined" sx={{ p: 1.25 }}>
-              <Stack spacing={0.75}>
-                <Button variant="text" color="inherit" onClick={() => viewAttendee(row)} disabled={pending} sx={{ justifyContent: "flex-start", minWidth: 0, p: 0, textTransform: "none" }}>
-                  <Typography variant="subtitle2" noWrap>{row.displayName}</Typography>
-                </Button>
-                <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
-                  <Chip label={row.status} size="small" />
-                  {row.checkedInAt ? <Chip label="Checked in" size="small" color="success" variant="outlined" /> : null}
-                </Stack>
-                {row.email ? <Typography variant="body2" color="text.secondary" noWrap>{row.email}</Typography> : null}
-                {row.checkedInAt ? <Button size="small" color="warning" onClick={() => onUndo(row.rsvpId)} disabled={pending || !isOnline} sx={{ alignSelf: "flex-start" }}>Undo check-in</Button> : <Button size="small" variant="contained" onClick={() => checkInRow(row, override)} disabled={pending} sx={{ alignSelf: "flex-start", whiteSpace: "nowrap" }}>Check in</Button>}
-              </Stack>
-            </Paper>)}
-          </Stack>
-          <Table size="small" sx={{ display: { xs: "none", sm: "table" }, mt: 2, width: "100%", tableLayout: { xs: "fixed", sm: "auto" } }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Email</TableCell>
-                <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>Status</TableCell>
-                <TableCell align="right" sx={{ width: { xs: 112, sm: "auto" } }}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {lookupRows.map((row) => (
-                <TableRow key={row.rsvpId}>
-                  <TableCell sx={{ overflow: "hidden" }}>
-                    <Button variant="text" color="inherit" onClick={() => viewAttendee(row)} disabled={pending} sx={{ display: "block", minWidth: 0, maxWidth: "100%", p: 0, textAlign: "left", textTransform: "none" }}>
-                      <Typography variant="body2" noWrap>{row.displayName}</Typography>
-                    </Button>
-                    <Chip label={row.status} size="small" sx={{ display: { xs: "inline-flex", sm: "none" }, mt: 0.5, maxWidth: "100%" }} />
-                  </TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>{row.email ?? "—"}</TableCell>
-                  <TableCell sx={{ display: { xs: "none", sm: "table-cell" } }}>
-                    <Chip label={row.status} size="small" />
-                  </TableCell>
-                  <TableCell align="right" sx={{ px: { xs: 0.5, sm: 2 }, whiteSpace: "nowrap" }}>
-                    <Stack
-                      direction="row"
-                      spacing={0.5}
-                      useFlexGap
-                      sx={{ justifyContent: "flex-end", flexWrap: "wrap" }}
-                    >
-                      {row.checkedInAt ? (
-                        <Button
-                          size="small"
-                          color="warning"
-                          onClick={() => onUndo(row.rsvpId)}
-                          disabled={pending || !isOnline}
-                          sx={{ minWidth: 96, whiteSpace: "nowrap" }}
-                        >
-                          Undo
-                        </Button>
-                      ) : (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          onClick={() => checkInRow(row, override)}
-                          disabled={pending}
-                          sx={{ minWidth: 96, whiteSpace: "nowrap" }}
-                        >
-                          Check in
-                        </Button>
-                      )}
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </>
-        ) : null}
-      </Paper>
-
-      <Dialog open={Boolean(detailsAttendee)} onClose={() => setDetailsAttendee(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Attendee details</DialogTitle>
-        <DialogContent>
-          {detailsAttendee ? <Stack spacing={1.25}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{detailsAttendee.displayName}</Typography>
-            <Typography variant="body2" color="text.secondary">{detailsAttendee.email ?? "No email address"}</Typography>
-            <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: "wrap" }}>
-              <Chip label={detailsAttendee.status} size="small" />
-              {detailsAttendee.alreadyCheckedIn ? <Chip label="Already checked in" size="small" color="success" /> : null}
-            </Stack>
-            {detailsAttendee.checkedInAt ? <Typography variant="body2">Checked in: <CheckInTimestamp value={detailsAttendee.checkedInAt} /></Typography> : null}
-            {detailsAttendee.checkInDetails.length > 0 ? <><Typography variant="subtitle2">Check-in details</Typography><CheckInDetailsList details={detailsAttendee.checkInDetails} /></> : null}
-            {detailsAttendee.registrationDetails.length > 0 ? <><Typography variant="subtitle2">Registration details</Typography><RegistrationDetailsList details={detailsAttendee.registrationDetails} /></> : null}
-          </Stack> : null}
+      <Dialog open={Boolean(detailsAttendee)} onOpenChange={(next) => { if (!next) setDetailsAttendee(null); }}>
+        <DialogContent size="sm">
+          <DialogHeader title="Attendee details" />
+          <DialogBody className="flex flex-col gap-2.5 text-ink">
+            {detailsAttendee ? (
+              <>
+                <p className="text-[19px] font-bold">{detailsAttendee.displayName}</p>
+                <p className="text-sm text-ink-muted">{detailsAttendee.email ?? "No email address"}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <StatusChip status={detailsAttendee.status} />
+                  {detailsAttendee.alreadyCheckedIn ? <Chip size="sm" tone="success">Already checked in</Chip> : null}
+                </div>
+                {detailsAttendee.checkedInAt ? <p className="text-sm">Checked in: <CheckInTimestamp value={detailsAttendee.checkedInAt} /></p> : null}
+                {detailsAttendee.checkInDetails.length > 0 ? <div><p className="text-label">Check-in details</p><CheckInDetailsList details={detailsAttendee.checkInDetails} /></div> : null}
+                {detailsAttendee.registrationDetails.length > 0 ? <div><p className="text-label">Registration details</p><RegistrationDetailsList details={detailsAttendee.registrationDetails} /></div> : null}
+              </>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDetailsAttendee(null)}>Close</Button>
+          </DialogFooter>
         </DialogContent>
-        <DialogActions><Button onClick={() => setDetailsAttendee(null)}>Close</Button></DialogActions>
       </Dialog>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{ alignItems: { sm: "center" }, justifyContent: "space-between" }}
-        >
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Recent check-ins
-          </Typography>
-          <Button
-            startIcon={<DownloadOutlinedIcon />}
-            variant="outlined"
-            size="small"
-            onClick={downloadCsv}
-            disabled={recent.length === 0}
-          >
+      <section aria-labelledby="recent-title" className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 id="recent-title" className="text-h4 text-ink">Recent check-ins</h2>
+            {!stationMode ? <p className="text-caption text-ink-muted">Export includes the list on this page (up to 200). This page refreshes automatically while it is open.</p> : null}
+          </div>
+          <Button size="sm" variant="secondary" startIcon={<Download />} onClick={downloadCsv} disabled={recent.length === 0}>
             Export CSV (shown below)
           </Button>
-        </Stack>
-        {!stationMode ? <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-          Export includes the list on this page (up to 200). This page refreshes
-          automatically while it is open.
-        </Typography> : null}
+        </div>
         {recent.length === 0 ? (
-          <Typography color="text.secondary" sx={{ mt: 2 }}>
-            No check-ins yet.
-          </Typography>
+          <p className="text-body-ui text-ink-muted">No check-ins yet.</p>
         ) : (
           <>
-          <Stack spacing={1} sx={{ display: { xs: "flex", sm: "none" }, mt: 2 }}>
-            {recent.map((r) => <Paper key={r.rsvpId} variant="outlined" sx={{ p: 1.25 }}>
-              <Stack spacing={0.5}>
-                <Typography variant="subtitle2" noWrap>{r.displayName}</Typography>
-                {r.email ? <Typography variant="body2" color="text.secondary" noWrap>{r.email}</Typography> : null}
-                <Typography variant="body2" color="text.secondary"><CheckInTimestamp value={r.checkedInAt} /></Typography>
-                <Button size="small" color="warning" onClick={() => onUndo(r.rsvpId)} disabled={pending || !isOnline} sx={{ alignSelf: "flex-start" }}>Undo check-in</Button>
-              </Stack>
-            </Paper>)}
-          </Stack>
-          <Table size="small" sx={{ display: { xs: "none", sm: "table" }, mt: 2 }}>
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Checked in</TableCell>
-                <TableCell align="right">Undo</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
+            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-canvas px-4 sm:hidden">
               {recent.map((r) => (
-                <TableRow key={r.rsvpId}>
-                  <TableCell>{r.displayName}</TableCell>
-                  <TableCell>{r.email ?? "—"}</TableCell>
-                  <TableCell>
-                    <CheckInTimestamp value={r.checkedInAt} />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Button
-                      size="small"
-                      color="warning"
-                      onClick={() => onUndo(r.rsvpId)}
-                      disabled={pending || !isOnline}
-                    >
-                      Undo
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                <li key={r.rsvpId} className="flex items-center gap-3 py-3">
+                  <Check aria-hidden className="size-4 shrink-0 text-success-fg" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[15px] font-semibold text-ink">{r.displayName}</p>
+                    {r.email ? <p className="truncate text-sm text-ink-muted">{r.email}</p> : null}
+                    <p className="text-caption text-ink-muted"><CheckInTimestamp value={r.checkedInAt} /></p>
+                  </div>
+                  <Button size="sm" variant="quiet" onClick={() => onUndo(r.rsvpId)} disabled={pending || !isOnline}>Undo check-in</Button>
+                </li>
               ))}
-            </TableBody>
-          </Table>
+            </ul>
+            <div className="hidden sm:block">
+              <Table label="Recent check-ins">
+                <THead>
+                  <tr>
+                    <TH>Name</TH>
+                    <TH>Email</TH>
+                    <TH>Checked in</TH>
+                    <TH className="text-right">Undo</TH>
+                  </tr>
+                </THead>
+                <TBody>
+                  {recent.map((r) => (
+                    <TR key={r.rsvpId}>
+                      <TD className="font-semibold">{r.displayName}</TD>
+                      <TD className="text-ink-secondary">{r.email ?? "—"}</TD>
+                      <TD className="text-ink-secondary"><CheckInTimestamp value={r.checkedInAt} /></TD>
+                      <TD className="text-right">
+                        <Button size="sm" variant="quiet" onClick={() => onUndo(r.rsvpId)} disabled={pending || !isOnline}>Undo</Button>
+                      </TD>
+                    </TR>
+                  ))}
+                </TBody>
+              </Table>
+            </div>
           </>
         )}
-      </Paper>
+      </section>
 
-      {!stationMode ? <Typography variant="body2" color="text.secondary">
-        Each attendee has a unique ticket URL under{" "}
-        <Box component="span" sx={{ fontFamily: "monospace", fontSize: "0.85em" }}>
-          /ticket/&lt;code&gt;
-        </Box>
-        . Use <strong>Copy ticket</strong> in the attendee list to share it, or
-        open the check-in page from the event dashboard on a tablet at the door.
-      </Typography> : null}
-    </Stack>
+      {!stationMode ? (
+        <p className="text-sm text-ink-muted">
+          Each attendee has a unique ticket URL under <code className="font-mono text-[0.85em]">/ticket/&lt;code&gt;</code>. Use <strong>Copy ticket</strong> in the attendee list to share it, or open the check-in page from the event dashboard on a tablet at the door.
+        </p>
+      ) : null}
+    </div>
   );
 }

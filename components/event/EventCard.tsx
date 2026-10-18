@@ -1,32 +1,19 @@
-import Card from "@mui/material/Card";
-import CardActionArea from "@mui/material/CardActionArea";
-import CardContent from "@mui/material/CardContent";
-import CardMedia from "@mui/material/CardMedia";
-import Typography from "@mui/material/Typography";
-import Chip from "@mui/material/Chip";
-import Stack from "@mui/material/Stack";
 import Link from "next/link";
 import type { Event } from "@prisma/client";
 import { EventCountdownBadge } from "@/components/event/EventCountdownBadge";
+import { Chip, DateBlock } from "@/components/ui/display";
+import { formatDate, formatDateBlock, formatDayShort, formatTimeRange } from "@/lib/format/datetime";
+import { cn } from "@/lib/cn";
 
 function formatEventRange(start: Date, end: Date, timeZone: string) {
-  const opts: Intl.DateTimeFormatOptions = {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone,
-  };
-  return `${start.toLocaleString("en-US", opts)} – ${end.toLocaleString("en-US", { timeStyle: "short", timeZone })}`;
+  const range = formatTimeRange(start, end, timeZone, { withZone: true });
+  // Multi-day ranges already include both dates.
+  return formatDate(start, timeZone) === formatDate(end, timeZone) ? `${formatDayShort(start, timeZone)}, ${range}` : range;
 }
 
 function statusChip(status: Event["status"]) {
-  if (status === "DRAFT") {
-    return (
-      <Chip label="Draft" size="small" color="warning" variant="outlined" />
-    );
-  }
-  if (status === "HIDDEN") {
-    return <Chip label="Hidden" size="small" color="default" variant="outlined" />;
-  }
+  if (status === "DRAFT") return <Chip size="sm" tone="warning">Draft</Chip>;
+  if (status === "HIDDEN") return <Chip size="sm" tone="outline">Hidden</Chip>;
   return null;
 }
 
@@ -59,89 +46,54 @@ export function EventCard(props: {
       ? `${event.description.slice(0, 117)}…`
       : event.description;
   const tags = Array.isArray(event.tags) ? event.tags : [];
+  const date = formatDateBlock(event.startDateTime, event.timezone);
+  const draft = event.status === "DRAFT";
 
-  return (
-    <Card
-      variant="outlined"
-      sx={{
-        height: "100%",
-        overflow: "hidden",
-        borderRadius: "18px",
-        borderColor: "divider",
-        backgroundColor: "background.paper",
-        boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-        transition: "transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease",
-        "&:hover": {
-          transform: "translateY(-3px)",
-          borderColor: "primary.main",
-          boxShadow: "0 18px 32px rgba(0,0,0,0.2)",
-        },
-      }}
-    >
+  const chips = (
+    <div className="flex flex-wrap gap-1.5">
+      {statusChip(event.status)}
+      <Chip size="sm" tone={event.isOnline ? "neutral" : "outline"}>{event.isOnline ? "Online" : "In person"}</Chip>
+      <EventCountdownBadge startAt={event.startDateTime.toISOString()} endAt={event.endDateTime.toISOString()} />
+      {tags.slice(0, 3).map((t) => (
+        <Chip key={t} size="sm" tone="outline">{t}</Chip>
+      ))}
+    </div>
+  );
+
+  if (compact) {
+    return (
       <Link
         href={href}
-        style={{ textDecoration: "none", color: "inherit", display: "block" }}
+        className={cn(
+          "flex items-center gap-4 rounded-lg border border-line p-4 transition-colors hover:bg-subtle",
+          draft ? "bg-subtle" : "bg-canvas",
+        )}
       >
-        <CardActionArea
-          component="div"
-          sx={compact ? { height: "100%", display: "flex", alignItems: "stretch", textAlign: "left" } : { height: "100%" }}
-        >
-          {event.coverImageUrl ? (
-            <CardMedia
-              component="img"
-              height={compact ? "96" : "140"}
-              image={event.coverImageUrl}
-              alt=""
-              sx={compact ? { width: 96, minWidth: 96, height: 96, objectFit: "cover", display: "block", alignSelf: "flex-start" } : { objectFit: "cover", display: "block" }}
-            />
-          ) : null}
-          <CardContent sx={{ flex: compact ? 1 : undefined, minWidth: 0, p: compact ? 1.25 : 2.5, "&:last-child": { pb: compact ? 1.25 : 2.5 } }}>
-            <Stack direction="row" spacing={0.5} sx={{ mb: compact ? 0.65 : 1.5, flexWrap: "wrap" }}>
-              {statusChip(event.status)}
-              <Chip
-                label={event.isOnline ? "Online" : "In person"}
-                size="small"
-                variant="outlined"
-                color={event.isOnline ? "primary" : "success"}
-              />
-              <EventCountdownBadge
-                startAt={event.startDateTime.toISOString()}
-                endAt={event.endDateTime.toISOString()}
-              />
-              {tags.slice(0, 3).map((t) => (
-                <Chip key={t} label={t} size="small" variant="outlined" />
-              ))}
-            </Stack>
-            <Typography
-              variant={compact ? "subtitle1" : "h6"}
-              component="h3"
-              sx={{
-                color: "text.primary",
-                fontWeight: 700,
-                letterSpacing: "-0.25px",
-                mb: 0.35,
-                lineHeight: 1.2,
-                overflowWrap: "anywhere",
-                wordBreak: "break-word",
-              }}
-            >
-              {event.title}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: compact ? 0.75 : 1.25 }}>
-              {formatEventRange(
-                event.startDateTime,
-                event.endDateTime,
-                event.timezone,
-              )}
-            </Typography>
-            {desc && !compact ? (
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: compact ? 2 : undefined, WebkitBoxOrient: "vertical", overflow: compact ? "hidden" : undefined }}>
-                {desc}
-              </Typography>
-            ) : null}
-          </CardContent>
-        </CardActionArea>
+        <DateBlock month={date.month} day={date.day} tone={draft ? "draft" : "accent"} />
+        <div className="min-w-0 flex-1">
+          <h3 className="break-words text-[17px] font-bold leading-snug text-ink">{event.title}</h3>
+          <p className="mt-0.5 text-sm text-ink-muted">
+            {formatEventRange(event.startDateTime, event.endDateTime, event.timezone)}
+            {event.location ? ` · ${event.location}` : ""}
+          </p>
+          <div className="mt-2">{chips}</div>
+        </div>
       </Link>
-    </Card>
+    );
+  }
+
+  return (
+    <Link href={href} className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-canvas transition-colors hover:bg-subtle">
+      {event.coverImageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- event covers are served by the app's own upload route
+        <img src={event.coverImageUrl} alt="" className="h-[140px] w-full object-cover" />
+      ) : null}
+      <div className="flex flex-1 flex-col gap-2 p-5">
+        {chips}
+        <h3 className="break-words text-title text-ink">{event.title}</h3>
+        <p className="text-sm text-ink-muted">{formatEventRange(event.startDateTime, event.endDateTime, event.timezone)}</p>
+        {desc ? <p className="text-sm text-ink-secondary">{desc}</p> : null}
+      </div>
+    </Link>
   );
 }

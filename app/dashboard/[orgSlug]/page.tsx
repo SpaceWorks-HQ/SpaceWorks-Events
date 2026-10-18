@@ -1,52 +1,22 @@
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
-import Box from "@mui/material/Box";
-import { prisma } from "@/lib/db";
-import {
-  canManageEvents,
-  isOrgAdmin,
-  requireOrgDashboardAccess,
-} from "@/lib/permissions";
 import Link from "next/link";
-import Button from "@mui/material/Button";
-import { EventCard } from "@/components/event/EventCard";
+import { ChevronRight } from "lucide-react";
+import { prisma } from "@/lib/db";
+import { canManageEvents, canManageMembers, isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
+import { getOrgDashboard, roleLabel, type OrgEventView } from "@/lib/orgDashboard";
 import { CreateEventDialog } from "@/components/event/CreateEventDialog";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
-import NavigateBeforeIcon from "@mui/icons-material/NavigateBefore";
-import NavigateNextIcon from "@mui/icons-material/NavigateNext";
-import Chip from "@mui/material/Chip";
-import EventIcon from "@mui/icons-material/Event";
-import AddIcon from "@mui/icons-material/Add";
-import RepeatIcon from "@mui/icons-material/Repeat";
-import { EventStatus, type Prisma } from "@prisma/client";
-import { paginationWindow } from "@/lib/pagination";
+import { PageHeader } from "@/components/ui/display";
+import { LiveEventPanel, NextUpCard, StatRow } from "@/components/dashboard/home/HomeSections";
+import { OrgBanner, OrgEventList, OrgMiniCalendar, OrgSeriesPanel, OrgSettingsLink, OrgSetup, OrgTeamPanel, orgHref, type OrgQuery } from "@/components/dashboard/org/OrgSections";
 
 import type { Metadata } from "next";
 
 type Props = {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ page?: string; seriesPage?: string; view?: string }>;
+  searchParams: Promise<{ view?: string; q?: string; show?: string; month?: string }>;
 };
 
-const EVENT_PAGE_SIZE = 6;
-const SERIES_PAGE_SIZE = 6;
-type EventView = "upcoming" | "past" | "draft" | "all";
-
-function dashboardQuery(params: {
-  view: EventView;
-  page?: number;
-  seriesPage?: number;
-}) {
-  const query = new URLSearchParams();
-  if (params.view !== "all") query.set("view", params.view);
-  if (params.page && params.page > 1) query.set("page", String(params.page));
-  if (params.seriesPage && params.seriesPage > 1)
-    query.set("seriesPage", String(params.seriesPage));
-  const value = query.toString();
-  return value ? `?${value}` : "";
-}
+const VIEWS: OrgEventView[] = ["upcoming", "draft", "past"];
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { orgSlug } = await params;
@@ -65,13 +35,12 @@ export default async function OrgDashboardPage({
 }: Props) {
   const { orgSlug } = await params;
   const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
-  const seriesPage = Math.max(1, parseInt(sp.seriesPage ?? "1", 10) || 1);
-  const view: EventView = ["upcoming", "past", "draft", "all"].includes(
-    sp.view ?? "",
-  )
-    ? (sp.view as EventView)
-    : "all";
+  const query: OrgQuery = {
+    view: VIEWS.includes(sp.view as OrgEventView) ? (sp.view as OrgEventView) : "upcoming",
+    q: typeof sp.q === "string" ? sp.q.trim().slice(0, 100) : "",
+    pages: Math.min(20, Math.max(1, parseInt(sp.show ?? "1", 10) || 1)),
+    month: typeof sp.month === "string" && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : undefined,
+  };
 
   const access = await requireOrgDashboardAccess(orgSlug);
   const { organisation, membership } = access;
@@ -87,512 +56,146 @@ export default async function OrgDashboardPage({
       include: { event: true, series: true },
     });
     return (
-      <Stack spacing={2}>
-        <Typography variant="h4">{organisation.name}</Typography>
-        <Typography color="text.secondary">Your assigned events</Typography>
-        {grants.map((grant) =>
-          grant.event ? (
-            <Link
-              key={grant.id}
-              href={`/dashboard/${organisation.slug}/event/${grant.event.id}`}
-            >
-              <Button variant="outlined">{grant.event.title}</Button>
-            </Link>
-          ) : grant.series ? (
-            <Link
-              key={grant.id}
-              href={`/dashboard/${organisation.slug}/series/${grant.series.id}`}
-            >
-              <Button variant="outlined">{grant.series.title}</Button>
-            </Link>
-          ) : null,
-        )}
-      </Stack>
+      <div className="flex flex-col gap-6">
+        <PageHeader title={organisation.name} description="Your assigned events" />
+        <ul className="flex flex-col gap-2.5">
+          {grants.map((grant) =>
+            grant.event ? (
+              <li key={grant.id}>
+                <Link
+                  href={`/dashboard/${organisation.slug}/event/${grant.event.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-canvas p-4 font-semibold text-ink transition-colors hover:bg-subtle"
+                >
+                  {grant.event.title}
+                  <ChevronRight aria-hidden className="size-4 text-ink-muted" />
+                </Link>
+              </li>
+            ) : grant.series ? (
+              <li key={grant.id}>
+                <Link
+                  href={`/dashboard/${organisation.slug}/series/${grant.series.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-line bg-canvas p-4 font-semibold text-ink transition-colors hover:bg-subtle"
+                >
+                  {grant.series.title}
+                  <ChevronRight aria-hidden className="size-4 text-ink-muted" />
+                </Link>
+              </li>
+            ) : null,
+          )}
+        </ul>
+      </div>
     );
   }
   const manage = canManageEvents(membership);
   const admin = isOrgAdmin(membership.role);
-
+  const base = `/dashboard/${organisation.slug}`;
   const now = new Date();
-  const eventWhere: Prisma.EventWhereInput = {
-    organisationId: organisation.id,
-    ...(view === "upcoming"
-      ? { status: EventStatus.PUBLISHED, endDateTime: { gte: now } }
-      : {}),
-    ...(view === "past"
-      ? { status: EventStatus.PUBLISHED, endDateTime: { lt: now } }
-      : {}),
-    ...(view === "draft" ? { status: EventStatus.DRAFT } : {}),
-  };
-  const [activeEvents, totalEvents, totalSeries] = await Promise.all([
-    prisma.event.count({
-      where: {
-        organisationId: organisation.id,
-        status: EventStatus.PUBLISHED,
-        endDateTime: { gte: now },
-      },
-    }),
-    prisma.event.count({ where: eventWhere }),
-    prisma.eventSeries.count({ where: { organisationId: organisation.id } }),
-  ]);
-  const totalPages = Math.ceil(totalEvents / EVENT_PAGE_SIZE) || 1;
-  const safePage = Math.min(page, totalPages);
-  const totalSeriesPages = Math.ceil(totalSeries / SERIES_PAGE_SIZE) || 1;
-  const safeSeriesPage = Math.min(seriesPage, totalSeriesPages);
 
-  const [events, seriesList] = await Promise.all([
-    prisma.event.findMany({
-      where: eventWhere,
-      orderBy:
-        view === "past"
-          ? { startDateTime: "desc" }
-          : view === "all" || view === "draft"
-            ? { createdAt: "desc" }
-            : { startDateTime: "asc" },
-      skip: (safePage - 1) * EVENT_PAGE_SIZE,
-      take: EVENT_PAGE_SIZE,
-    }),
-    prisma.eventSeries.findMany({
-      where: { organisationId: organisation.id },
-      orderBy: { createdAt: "desc" },
-      skip: (safeSeriesPage - 1) * SERIES_PAGE_SIZE,
-      take: SERIES_PAGE_SIZE,
-    }),
-  ]);
+  const profile = await prisma.organisation.findUniqueOrThrow({ where: { id: organisation.id }, select: { description: true, logoUrl: true } });
+  const data = await getOrgDashboard({
+    organisation: { id: organisation.id, slug: organisation.slug, logoUrl: profile.logoUrl, description: profile.description },
+    canManage: manage,
+    view: query.view,
+    query: query.q,
+    pages: query.pages,
+    month: query.month,
+    now,
+  });
+  const effectiveQuery: OrgQuery = { ...query, view: data.events.view };
+  const calendar = (
+    <OrgMiniCalendar
+      calendar={data.calendar}
+      prevHref={orgHref(base, effectiveQuery, { month: data.calendar.prevKey })}
+      nextHref={orgHref(base, effectiveQuery, { month: data.calendar.nextKey })}
+    />
+  );
 
-  return (
+  const actions = (
     <>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 2.5, sm: 3.5 },
-          borderRadius: "22px",
-          borderColor: "divider",
-          backgroundColor: "background.paper",
-          backgroundImage:
-            "linear-gradient(120deg, rgba(10,132,255,0.13), transparent 58%, rgba(48,209,88,0.08))",
-          boxShadow: "0 18px 45px rgba(0,0,0,0.14)",
-        }}
-      >
-        <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={2}
-          sx={{
-            justifyContent: "space-between",
-            alignItems: { xs: "stretch", sm: "flex-end" },
-          }}
-        >
-          <Stack spacing={0.5}>
-            <Typography
-              variant="overline"
-              sx={{
-                color: "#0A84FF",
-                fontWeight: 700,
-                letterSpacing: "1.5px",
-                lineHeight: 1.3,
-              }}
-            >
-              Organisation workspace
-            </Typography>
-            <Typography
-              variant="h4"
-              component="h1"
-              sx={{ fontWeight: 700, letterSpacing: "-1px" }}
-            >
-              {organisation.name}
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ maxWidth: 560 }}
-            >
-              Plan events, manage your members, and keep your organisation
-              moving.
-            </Typography>
-          </Stack>
-          <Stack
-            direction="row"
-            spacing={2}
-            useFlexGap
-            sx={{ flexWrap: "wrap", alignItems: "center" }}
-          >
-            <Stack spacing={0} sx={{ minWidth: 92, pr: { sm: 1 } }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{
-                  textTransform: "uppercase",
-                  letterSpacing: "0.8px",
-                  fontWeight: 700,
-                }}
-              >
-                Active events
-              </Typography>
-              <Typography
-                variant="h4"
-                sx={{ fontWeight: 720, letterSpacing: "-1px" }}
-              >
-                {activeEvents}
-              </Typography>
-            </Stack>
-            <Stack
-              direction="row"
-              spacing={1}
-              useFlexGap
-              sx={{ flexWrap: "wrap", alignItems: "center" }}
-            >
-              {admin ? (
-                <Link
-                  href={`/dashboard/${organisation.slug}/settings`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{ textTransform: "none", borderRadius: 2 }}
-                  >
-                    Settings
-                  </Button>
-                </Link>
-              ) : null}
-            </Stack>
-          </Stack>
-        </Stack>
-      </Paper>
-
+      {admin ? <OrgSettingsLink href={`${base}/settings`} /> : null}
       {manage ? (
-        <Paper
-          variant="outlined"
-          sx={{
-            mt: 3,
-            px: { xs: 2, sm: 2.5 },
-            py: 1.5,
-            borderRadius: "16px",
-            borderColor: "divider",
-            backgroundColor: "background.paper",
-          }}
-        >
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1.5}
-            sx={{
-              justifyContent: "space-between",
-              alignItems: { xs: "flex-start", sm: "center" },
-            }}
-          >
-            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-              <Box
-                sx={{
-                  display: "grid",
-                  placeItems: "center",
-                  width: 30,
-                  height: 30,
-                  borderRadius: 2,
-                  color: "#0A84FF",
-                  backgroundColor: "rgba(10,132,255,0.14)",
-                }}
-              >
-                <AddIcon fontSize="small" />
-              </Box>
-              <Typography variant="body2" sx={{ fontWeight: 650 }}>
-                Create something new
-              </Typography>
-            </Stack>
-            <Stack direction="row" spacing={1.25} sx={{ flexWrap: "wrap" }}>
-              <CreateEventDialog
-                organisationSlug={organisation.slug}
-                variant="button"
-              />
-              <CreateSeriesDialog
-                organisationSlug={organisation.slug}
-                canPublish={manage}
-              />
-            </Stack>
-          </Stack>
-        </Paper>
-      ) : null}
-
-      <Stack
-        direction="row"
-        spacing={1}
-        sx={{ mt: 4, mb: 1.5, alignItems: "center" }}
-      >
-        <RepeatIcon sx={{ color: "#8E8E93", fontSize: 20 }} />
-        <Typography
-          variant="h6"
-          component="h2"
-          sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}
-        >
-          Event series
-        </Typography>
-      </Stack>
-      {seriesList.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{
-            p: { xs: 2, sm: 2.5 },
-            mb: 3,
-            borderRadius: "16px",
-            borderColor: "rgba(255,255,255,0.08)",
-            backgroundColor: "rgba(255,255,255,0.025)",
-          }}
-        >
-          <Typography color="text.secondary" variant="body2">
-            No recurring series yet. Create one to keep a regular event rhythm.
-          </Typography>
-        </Paper>
-      ) : (
-        <Stack spacing={1} sx={{ mb: 3 }}>
-          {seriesList.map((s) => (
-            <Paper
-              key={s.id}
-              variant="outlined"
-              sx={{
-                px: 1,
-                py: 0.5,
-                borderRadius: "14px",
-                borderColor: "rgba(255,255,255,0.08)",
-              }}
-            >
-              <Link
-                href={`/dashboard/${organisation.slug}/series/${s.id}`}
-                style={{ textDecoration: "none" }}
-              >
-                <Button
-                  sx={{ justifyContent: "flex-start", textTransform: "none" }}
-                  fullWidth
-                >
-                  {s.title}
-                </Button>
-              </Link>
-            </Paper>
-          ))}
-          {totalSeriesPages > 1 ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ alignItems: "center", justifyContent: "flex-end" }}
-            >
-              <Button
-                href={`/dashboard/${organisation.slug}${dashboardQuery({ view, page: safePage, seriesPage: safeSeriesPage - 1 })}`}
-                size="small"
-                disabled={safeSeriesPage <= 1}
-              >
-                Previous series
-              </Button>
-              <Chip
-                label={`Series page ${safeSeriesPage} of ${totalSeriesPages}`}
-                size="small"
-                variant="outlined"
-              />
-              <Button
-                href={`/dashboard/${organisation.slug}${dashboardQuery({ view, page: safePage, seriesPage: safeSeriesPage + 1 })}`}
-                size="small"
-                disabled={safeSeriesPage >= totalSeriesPages}
-              >
-                Next series
-              </Button>
-            </Stack>
-          ) : null}
-        </Stack>
-      )}
-
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={1.5}
-        sx={{
-          mt: 4,
-          mb: 1.5,
-          alignItems: { xs: "stretch", sm: "center" },
-          justifyContent: "space-between",
-        }}
-      >
-        <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-          <EventIcon color="disabled" sx={{ fontSize: 20 }} />
-          <Typography
-            variant="h6"
-            component="h2"
-            sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}
-          >
-            Events
-          </Typography>
-        </Stack>
-        <Stack
-          component="nav"
-          direction="row"
-          spacing={0.5}
-          useFlexGap
-          sx={{ flexWrap: "wrap" }}
-          aria-label="Filter events"
-        >
-          {(["upcoming", "past", "draft", "all"] as const).map((option) => (
-            <Button
-              key={option}
-              href={`/dashboard/${organisation.slug}${dashboardQuery({ view: option, seriesPage: safeSeriesPage })}`}
-              size="small"
-              variant={view === option ? "contained" : "text"}
-              aria-current={view === option ? "page" : undefined}
-            >
-              {option[0].toUpperCase() + option.slice(1)}
-            </Button>
-          ))}
-        </Stack>
-      </Stack>
-
-      {events.length === 0 ? (
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 5,
-            textAlign: "center",
-            borderRadius: "16px",
-            borderColor: "divider",
-            backgroundColor: "background.paper",
-          }}
-        >
-          <Typography color="text.secondary">
-            {view === "upcoming"
-              ? "No upcoming published events."
-              : `No ${view} events found.`}
-            {manage && view === "all" ? " Create one using New event." : ""}
-          </Typography>
-        </Paper>
-      ) : (
-        <Stack spacing={2.5}>
-          <Grid container spacing={2.5}>
-            {events.map((event) => (
-              <Grid size={{ xs: 12, sm: 6 }} key={event.id}>
-                <EventCard
-                  orgSlug={organisation.slug}
-                  compact
-                  href={
-                    manage
-                      ? `/dashboard/${organisation.slug}/event/${event.id}`
-                      : undefined
-                  }
-                  event={event}
-                />
-              </Grid>
-            ))}
-          </Grid>
-
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1}
-            sx={{ alignItems: "center", justifyContent: "space-between" }}
-          >
-            <Typography variant="body2" color="text.secondary">
-              Showing {(safePage - 1) * EVENT_PAGE_SIZE + 1}–
-              {Math.min(safePage * EVENT_PAGE_SIZE, totalEvents)} of{" "}
-              {totalEvents} event{totalEvents === 1 ? "" : "s"}
-            </Typography>
-            {totalPages > 1 ? (
-              <Chip
-                label={`Page ${safePage} of ${totalPages}`}
-                size="small"
-                variant="outlined"
-              />
-            ) : null}
-          </Stack>
-
-          {totalPages > 1 ? (
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ justifyContent: "center", pt: 1 }}
-            >
-              {safePage <= 1 ? (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled
-                  startIcon={<NavigateBeforeIcon />}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Previous
-                </Button>
-              ) : (
-                <Link
-                  href={`/dashboard/${organisation.slug}${dashboardQuery({ view, page: safePage - 1, seriesPage: safeSeriesPage })}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button
-                    component="span"
-                    variant="outlined"
-                    size="small"
-                    startIcon={<NavigateBeforeIcon />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Previous
-                  </Button>
-                </Link>
-              )}
-              {paginationWindow(safePage, totalPages).map((p) => (
-                <Link
-                  key={p}
-                  href={`/dashboard/${organisation.slug}${dashboardQuery({ view, page: p, seriesPage: safeSeriesPage })}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button
-                    component="span"
-                    variant={p === safePage ? "contained" : "text"}
-                    size="small"
-                    sx={{
-                      minWidth: 40,
-                      borderRadius: 2,
-                      ...(p === safePage
-                        ? {
-                            background:
-                              "linear-gradient(135deg, #7CF5B6 0%, #B9AEFF 100%)",
-                            color: "#061814",
-                            fontWeight: 750,
-                          }
-                        : {}),
-                    }}
-                  >
-                    {p}
-                  </Button>
-                </Link>
-              ))}
-              {safePage >= totalPages ? (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled
-                  endIcon={<NavigateNextIcon />}
-                  sx={{ borderRadius: 2 }}
-                >
-                  Next
-                </Button>
-              ) : (
-                <Link
-                  href={`/dashboard/${organisation.slug}${dashboardQuery({ view, page: safePage + 1, seriesPage: safeSeriesPage })}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button
-                    component="span"
-                    variant="outlined"
-                    size="small"
-                    endIcon={<NavigateNextIcon />}
-                    sx={{ borderRadius: 2 }}
-                  >
-                    Next
-                  </Button>
-                </Link>
-              )}
-            </Stack>
-          ) : null}
-        </Stack>
-      )}
-
-      {manage ? (
-        <Box sx={{ position: "fixed", right: 24, bottom: 24, zIndex: 10 }}>
-          <CreateEventDialog
-            organisationSlug={organisation.slug}
-            variant="fab"
-          />
-        </Box>
+        <>
+          <CreateSeriesDialog organisationSlug={organisation.slug} canPublish={manage} />
+          <CreateEventDialog organisationSlug={organisation.slug} variant="button" />
+        </>
       ) : null}
     </>
+  );
+
+  const banner = (
+    <OrgBanner
+      organisation={{ name: organisation.name, slug: organisation.slug, description: profile.description, logoUrl: profile.logoUrl }}
+      role={roleLabel(membership.role)}
+      memberCount={data.members.total}
+      actions={actions}
+    />
+  );
+
+  // A brand-new organisation: the setup checklist leads.
+  if (data.setup && !data.setup.hasEvent && data.series.total === 0) {
+    return (
+      <div className="flex flex-col gap-7">
+        {banner}
+        <OrgSetup
+          setup={data.setup}
+          name={organisation.name}
+          links={{ settings: `${base}/settings`, members: `${base}/members`, publicPage: `/${organisation.slug}` }}
+          createEvent={<CreateEventDialog organisationSlug={organisation.slug} variant="button" />}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-7">
+      {banner}
+
+      {data.needsYou ? (
+        <div role="status" className="flex flex-col gap-3 rounded-lg bg-warning-bg px-4 py-3.5 text-warning-fg sm:flex-row sm:items-center">
+          <p className="min-w-0 flex-1 text-body-ui">
+            {data.needsYou.pendingApprovals > 0 ? (
+              <strong>{data.needsYou.pendingApprovals === 1 ? "1 person is" : `${data.needsYou.pendingApprovals} people are`} waiting for approval.</strong>
+            ) : null}
+            {data.needsYou.pendingApprovals > 0 && data.needsYou.drafts > 0 ? " " : null}
+            {data.needsYou.drafts > 0 ? <span>{data.needsYou.drafts === 1 ? "1 event is" : `${data.needsYou.drafts} events are`} still a draft.</span> : null}
+          </p>
+          <span className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-sm font-bold">
+            {data.needsYou.approvalsHref ? <Link href={data.needsYou.approvalsHref} className="underline underline-offset-4">Review approvals</Link> : null}
+            {data.needsYou.draftHref ? <Link href={data.needsYou.draftHref} className="underline underline-offset-4">Finish draft</Link> : null}
+          </span>
+        </div>
+      ) : null}
+
+      {data.live ? <LiveEventPanel live={data.live} now={now} /> : null}
+
+      {data.next ? (
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <NextUpCard next={data.next} now={now} />
+          {calendar}
+        </div>
+      ) : null}
+
+      <StatRow stats={data.stats} />
+
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+        <OrgEventList base={base} query={effectiveQuery} events={data.events} showDrafts={manage} now={now} />
+        <aside className="flex flex-col gap-5">
+          {data.next ? null : calendar}
+          <OrgSeriesPanel
+            base={base}
+            series={data.series}
+            now={now}
+            action={null}
+          />
+          <OrgTeamPanel members={data.members} membersHref={`${base}/members`} canInvite={canManageMembers(membership)} />
+        </aside>
+      </div>
+
+      {manage ? (
+        <div className="fixed bottom-6 right-6 z-10 md:hidden">
+          <CreateEventDialog organisationSlug={organisation.slug} variant="fab" />
+        </div>
+      ) : null}
+    </div>
   );
 }

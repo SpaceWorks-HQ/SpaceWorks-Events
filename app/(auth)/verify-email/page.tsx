@@ -1,8 +1,6 @@
-import Box from "@mui/material/Box";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
+import { Mail } from "lucide-react";
 import { VerifyEmailForm } from "@/components/account/VerifyEmailForm";
+import { Callout } from "@/components/ui/display";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Verify email", robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -15,17 +13,16 @@ export default async function VerifyEmailPage({
   const { token } = await searchParams;
   const safeToken = typeof token === "string" ? token : "";
   return (
-    <Box sx={{ maxWidth: 520, mx: "auto", py: { xs: 4, sm: 8 } }}>
-      <Paper variant="outlined" sx={{ p: { xs: 3, sm: 4 }, borderRadius: 3 }}>
-        <Stack spacing={2}>
-          <Typography variant="h4" component="h1">Verify your email</Typography>
-          {safeToken ? (
-            <VerifyEmailForm token={safeToken} />
-          ) : (
-            <Typography color="error">This verification link is invalid or has expired.</Typography>
-          )}
-        </Stack>
-      </Paper>
-    </Box>
+    <div className="flex w-full max-w-[440px] flex-col items-center gap-5 rounded-2xl border border-line bg-canvas p-6 text-center shadow-raised sm:p-8">
+      <span aria-hidden className="flex size-14 items-center justify-center rounded-xl bg-tint-peach text-ink [&_svg]:size-6">
+        <Mail />
+      </span>
+      <h1 className="text-h1 text-ink">Confirm your email</h1>
+      {safeToken ? (
+        <VerifyEmailForm token={safeToken} />
+      ) : (
+        <Callout tone="danger" role="alert" className="w-full text-left">This verification link is invalid or has expired.</Callout>
+      )}
+    </div>
   );
 }

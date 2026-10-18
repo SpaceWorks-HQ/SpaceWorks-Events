@@ -1,15 +1,12 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Link from "next/link";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { AdminPanel, NameCell } from "@/components/super-admin/AdminPanel";
+import { PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminInvitesPage() {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const [orgInvites, eventInvites, seriesInvites] = await Promise.all([
     prisma.organisationInvite.findMany({
       orderBy: { createdAt: "desc" },
@@ -63,153 +60,95 @@ export default async function SuperAdminInvitesPage() {
   ]);
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Invites
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Invites" description="Organisation invite links and event and series invites across the instance." />
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Organisation invite links
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Org</TableCell>
-              <TableCell>Role</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Expires</TableCell>
-              <TableCell>Used</TableCell>
-              <TableCell>Created by</TableCell>
-              <TableCell>Used by</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Organisation invite links">
+        <Table label="Organisation invite links">
+          <THead>
+            <tr>
+              <TH>Org</TH>
+              <TH>Role</TH>
+              <TH>Created</TH>
+              <TH>Expires</TH>
+              <TH>Used</TH>
+              <TH>Created by</TH>
+              <TH>Used by</TH>
+            </tr>
+          </THead>
+          <TBody>
             {orgInvites.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography color="text.secondary">No org invites.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={7} className="py-8 text-center text-ink-muted">No org invites.</TD></tr>
             ) : (
               orgInvites.map((i) => (
-                <TableRow key={i.id} hover>
-                  <TableCell>
-                    <Link
-                      href={`/super-admin/orgs/${i.organisation.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      {i.organisation.name}
-                    </Link>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: "block" }}
-                    >
-                      /{i.organisation.slug}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{i.role}</TableCell>
-                  <TableCell>{i.createdAt.toLocaleString()}</TableCell>
-                  <TableCell>
-                    {i.expiresAt ? i.expiresAt.toLocaleString() : "—"}
-                  </TableCell>
-                  <TableCell>{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>
-                    {i.createdBy.email ?? "—"}
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>
-                    {i.usedBy?.email ?? "—"}
-                  </TableCell>
-                </TableRow>
+                <TR key={i.id}>
+                  <TD><NameCell href={`/super-admin/orgs/${i.organisation.id}`} name={i.organisation.name} sub={`/${i.organisation.slug}`} /></TD>
+                  <TD>{i.role}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.expiresAt ? i.expiresAt.toLocaleString() : "—"}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.usedAt ? i.usedAt.toLocaleString() : "—"}</TD>
+                  <TD className="font-mono text-sm">{i.createdBy.email ?? "—"}</TD>
+                  <TD className="font-mono text-sm">{i.usedBy?.email ?? "—"}</TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Event invites
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Event</TableCell>
-              <TableCell>Org</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Created</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Event invites">
+        <Table label="Event invites">
+          <THead>
+            <tr>
+              <TH>Event</TH>
+              <TH>Org</TH>
+              <TH>Email</TH>
+              <TH>Created</TH>
+            </tr>
+          </THead>
+          <TBody>
             {eventInvites.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <Typography color="text.secondary">No event invites.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={4} className="py-8 text-center text-ink-muted">No event invites.</TD></tr>
             ) : (
               eventInvites.map((i) => (
-                <TableRow key={i.id} hover>
-                  <TableCell>{i.event.title}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/super-admin/orgs/${i.event.organisation.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      {i.event.organisation.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>{i.email}</TableCell>
-                  <TableCell>{i.createdAt.toLocaleString()}</TableCell>
-                </TableRow>
+                <TR key={i.id}>
+                  <TD className="font-semibold">{i.event.title}</TD>
+                  <TD><NameCell href={`/super-admin/orgs/${i.event.organisation.id}`} name={i.event.organisation.name} /></TD>
+                  <TD className="font-mono text-sm">{i.email}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
+      </AdminPanel>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-          Series invites
-        </Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Series</TableCell>
-              <TableCell>Org</TableCell>
-              <TableCell>Email</TableCell>
-              <TableCell>Created</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <AdminPanel title="Series invites">
+        <Table label="Series invites">
+          <THead>
+            <tr>
+              <TH>Series</TH>
+              <TH>Org</TH>
+              <TH>Email</TH>
+              <TH>Created</TH>
+            </tr>
+          </THead>
+          <TBody>
             {seriesInvites.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <Typography color="text.secondary">No series invites.</Typography>
-                </TableCell>
-              </TableRow>
+              <tr><TD colSpan={4} className="py-8 text-center text-ink-muted">No series invites.</TD></tr>
             ) : (
               seriesInvites.map((i) => (
-                <TableRow key={i.id} hover>
-                  <TableCell>{i.series.title}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/super-admin/orgs/${i.series.organisation.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      {i.series.organisation.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>{i.email}</TableCell>
-                  <TableCell>{i.createdAt.toLocaleString()}</TableCell>
-                </TableRow>
+                <TR key={i.id}>
+                  <TD className="font-semibold">{i.series.title}</TD>
+                  <TD><NameCell href={`/super-admin/orgs/${i.series.organisation.id}`} name={i.series.organisation.name} /></TD>
+                  <TD className="font-mono text-sm">{i.email}</TD>
+                  <TD className="whitespace-nowrap text-ink-secondary">{i.createdAt.toLocaleString()}</TD>
+                </TR>
               ))
             )}
-          </TableBody>
+          </TBody>
         </Table>
-      </Paper>
-    </Stack>
+      </AdminPanel>
+    </div>
   );
 }
-

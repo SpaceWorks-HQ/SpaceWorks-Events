@@ -1,98 +1,62 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Box from "@mui/material/Box";
-import Stack from "@mui/material/Stack";
-import Grid from "@mui/material/Grid";
-import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import ButtonGroup from "@mui/material/ButtonGroup";
-import Paper from "@mui/material/Paper";
-import Tabs from "@mui/material/Tabs";
-import Tab from "@mui/material/Tab";
-import IconButton from "@mui/material/IconButton";
-import ButtonBase from "@mui/material/ButtonBase";
-import { useTheme } from "@mui/material/styles";
-import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
-import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import GridViewIcon from "@mui/icons-material/GridView";
-import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import Link from "next/link";
-import { DiscoverEventCard } from "@/components/event/DiscoverEventCard";
-import { InstanceCard } from "@/components/event/InstanceCard";
+import { CalendarDays, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { INK_ACCENT } from "@/lib/theme/accent";
+import { describeRecurrence, recurrenceChip } from "@/lib/format/recurrence";
 import type { PublicOrgEvent, PublicOrgInstance } from "@/lib/publicOrgEventDto";
+import { PublicEventRow, type PublicEventSummary } from "@/components/events/PublicEventCard";
+import { EmptyState } from "@/components/ui/display";
+import { IconButton } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/choice";
 
 type MergedItem =
-  | {
-      kind: "event";
-      id: string;
-      createdAt: Date;
-      startDateTime: Date;
-      endDateTime: Date;
-      title: string;
-      description: string | null;
-      event: PublicOrgEvent;
-    }
-  | {
-      kind: "instance";
-      id: string;
-      createdAt: Date;
-      startDateTime: Date;
-      endDateTime: Date;
-      title: string;
-      description: string | null;
-      instance: PublicOrgInstance;
-    };
+  | { kind: "event"; id: string; createdAt: Date; startDateTime: Date; endDateTime: Date; title: string; description: string | null; event: PublicOrgEvent }
+  | { kind: "instance"; id: string; createdAt: Date; startDateTime: Date; endDateTime: Date; title: string; description: string | null; instance: PublicOrgInstance };
 
 type OrgEventsContainerProps = {
   orgSlug: string;
   organisationName: string;
   initialNow: string;
   items: MergedItem[];
+  /** Confirmed counts keyed by event id, present only where the organiser shows counts. */
+  goingCounts?: Record<string, number>;
 };
 
-export function OrgEventsContainer({ orgSlug, organisationName, initialNow, items }: OrgEventsContainerProps) {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === "dark";
-  const calendarColors = isDark
-    ? {
-        surface: "rgba(255,255,255,0.01)",
-        border: "rgba(255,255,255,0.08)",
-        gridBorder: "rgba(255,255,255,0.06)",
-        gridBackground: "rgba(0,0,0,0.15)",
-        headerBackground: "rgba(255,255,255,0.02)",
-        headerText: "rgba(255,255,255,0.62)",
-        quietText: "rgba(255,255,255,0.6)",
-        selectedBackground: "rgba(124, 245, 182, 0.05)",
-        eventDayBackground: "rgba(255,255,255,0.02)",
-        eventText: "#7CF5B6",
-        eventBackground: "rgba(124, 245, 182, 0.08)",
-        eventBorder: "rgba(124, 245, 182, 0.15)",
-        instanceText: "#B9AEFF",
-        instanceBackground: "rgba(185, 174, 255, 0.08)",
-        instanceBorder: "rgba(185, 174, 255, 0.15)",
-        todayBackground: "rgba(124, 245, 182, 0.15)",
-      }
-    : {
-        surface: "#ffffff",
-        border: "rgba(21, 45, 32, 0.18)",
-        gridBorder: "rgba(21, 45, 32, 0.14)",
-        gridBackground: "#f8faf8",
-        headerBackground: "#f1f5f2",
-        headerText: "#4b5a51",
-        quietText: "#526258",
-        selectedBackground: "rgba(15, 118, 82, 0.09)",
-        eventDayBackground: "rgba(15, 118, 82, 0.045)",
-        eventText: "#087a55",
-        eventBackground: "rgba(15, 118, 82, 0.09)",
-        eventBorder: "rgba(15, 118, 82, 0.28)",
-        instanceText: "#5b4fa3",
-        instanceBackground: "rgba(91, 79, 163, 0.09)",
-        instanceBorder: "rgba(91, 79, 163, 0.28)",
-        todayBackground: "rgba(15, 118, 82, 0.14)",
-      };
+function toSummary(item: MergedItem, orgSlug: string, goingCounts: Record<string, number>): PublicEventSummary {
+  if (item.kind === "event") {
+    return {
+      href: `/${orgSlug}/${item.event.slug}`,
+      title: item.event.title,
+      startDateTime: new Date(item.event.startDateTime),
+      timezone: item.event.timezone,
+      location: item.event.location,
+      isOnline: item.event.isOnline,
+      coverImageUrl: item.event.coverImageUrl,
+      accentColor: item.event.page?.accentColor,
+      tagline: item.event.page?.tagline || null,
+      goingCount: item.event.showRegistrationCount ? goingCounts[item.event.id] ?? 0 : null,
+    };
+  }
+  return {
+    href: `/${orgSlug}/i/${item.instance.id}`,
+    title: item.instance.series.title,
+    startDateTime: new Date(item.instance.startDateTime),
+    timezone: item.instance.series.timezone,
+    fallbackAccent: INK_ACCENT,
+    tagline: item.instance.series.description || null,
+    recurrenceChip: recurrenceChip(item.instance.series.recurrenceRule),
+    recurrenceText: describeRecurrence(item.instance.series.recurrenceRule),
+  };
+}
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function OrgEventsContainer({ orgSlug, initialNow, items, goingCounts = {} }: OrgEventsContainerProps) {
   const [activeTab, setActiveTab] = useState<"upcoming" | "past">("upcoming");
-  const [viewMode, setViewMode] = useState<"grid" | "calendar">("grid");
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
 
   // Use the server snapshot for the initial render so event grouping hydrates
   // consistently, then adopt the browser's clock after hydration.
@@ -112,416 +76,177 @@ export function OrgEventsContainer({ orgSlug, organisationName, initialNow, item
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Filter items by time status
-  const filteredItems = items.filter((item) => {
-    const start = new Date(item.startDateTime);
-    const isUpcoming = start >= now;
-    return activeTab === "upcoming" ? isUpcoming : !isUpcoming;
-  });
+  const upcoming = items.filter((item) => new Date(item.startDateTime) >= now).sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+  const past = items.filter((item) => new Date(item.startDateTime) < now).sort((a, b) => new Date(b.startDateTime).getTime() - new Date(a.startDateTime).getTime());
+  const filteredItems = activeTab === "upcoming" ? upcoming : past;
 
-  // Calendar Helpers
   const startOfMonth = new Date(currentYear, currentMonth, 1);
-  const endOfMonth = new Date(currentYear, currentMonth + 1, 0);
-  const daysInMonth = endOfMonth.getDate();
-  const startDayOfWeek = startOfMonth.getDay(); // 0: Sunday, 6: Saturday
+  const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const startDayOfWeek = startOfMonth.getDay();
+  const monthName = startOfMonth.toLocaleString("en-GB", { month: "long" });
 
   const prevMonth = () => {
     if (currentMonth === 0) {
       setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
+      setCurrentYear((year) => year - 1);
     } else {
-      setCurrentMonth((m) => m - 1);
+      setCurrentMonth((month) => month - 1);
     }
     setSelectedDay(null);
   };
-
   const nextMonth = () => {
     if (currentMonth === 11) {
       setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
+      setCurrentYear((year) => year + 1);
     } else {
-      setCurrentMonth((m) => m + 1);
+      setCurrentMonth((month) => month + 1);
     }
     setSelectedDay(null);
   };
 
-  const monthName = startOfMonth.toLocaleString("default", { month: "long" });
-
-  // Get events starting on a specific day in the currently displayed month
-  const getEventsForDay = (dayNum: number) => {
-    return filteredItems.filter((item) => {
-      const d = new Date(item.startDateTime);
-      return (
-        d.getFullYear() === currentYear &&
-        d.getMonth() === currentMonth &&
-        d.getDate() === dayNum
-      );
+  const getEventsForDay = (dayNum: number) =>
+    filteredItems.filter((item) => {
+      const date = new Date(item.startDateTime);
+      return date.getFullYear() === currentYear && date.getMonth() === currentMonth && date.getDate() === dayNum;
     });
-  };
-
-  // Generate calendar grid slots
-  const gridSlots = [];
-  // Prefix empty slots
-  for (let i = 0; i < startDayOfWeek; i++) {
-    gridSlots.push({ type: "empty", key: `empty-${i}` });
-  }
-  // Days of the month
-  for (let i = 1; i <= daysInMonth; i++) {
-    gridSlots.push({ type: "day", dayNum: i, key: `day-${i}` });
-  }
-
   const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
 
+  const tabs = [
+    { key: "upcoming" as const, label: "Upcoming", count: upcoming.length },
+    { key: "past" as const, label: "Past", count: past.length },
+  ];
+
   return (
-    <Stack spacing={3}>
-      {/* Header controls (Tabs on left, ViewMode Toggle on right) */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{
-          justifyContent: "space-between",
-          alignItems: { xs: "stretch", sm: "center" },
-          borderBottom: `1px solid ${calendarColors.border}`,
-          pb: 1,
-        }}
-      >
-        <Tabs
-          value={activeTab}
-          onChange={(_, val) => {
-            setActiveTab(val);
-            setViewMode("grid"); // Default back to grid on tab switch to avoid confusion
-          }}
-          textColor="primary"
-          indicatorColor="primary"
-          sx={{ minHeight: 40 }}
-        >
-          <Tab label="Upcoming Events" value="upcoming" sx={{ fontWeight: 600, py: 1 }} />
-          <Tab label="Past Events" value="past" sx={{ fontWeight: 600, py: 1 }} />
-        </Tabs>
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col-reverse gap-3 border-b border-line sm:flex-row sm:items-end sm:justify-between">
+        <div role="tablist" aria-label="Event timeframe" className="flex gap-1">
+          {tabs.map((tab) => {
+            const selected = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  "relative inline-flex min-h-11 items-center px-3.5 text-[15px] font-semibold transition-colors after:absolute after:inset-x-3.5 after:-bottom-px after:h-0.5 after:rounded-full",
+                  selected ? "text-ink after:bg-primary" : "text-ink-muted hover:text-ink after:bg-transparent",
+                )}
+              >
+                {tab.label} · {tab.count}
+              </button>
+            );
+          })}
+        </div>
+        <SegmentedControl
+          ariaLabel="View mode"
+          value={viewMode}
+          onValueChange={setViewMode}
+          size="sm"
+          className="mb-2 self-end"
+          options={[
+            { value: "list", label: "List", icon: <List aria-hidden /> },
+            { value: "calendar", label: "Calendar", icon: <CalendarDays aria-hidden /> },
+          ]}
+        />
+      </div>
 
-        <ButtonGroup size="small" aria-label="view mode toggle" sx={{ alignSelf: "flex-end" }}>
-          <Button
-            aria-pressed={viewMode === "grid"}
-            variant={viewMode === "grid" ? "contained" : "outlined"}
-            onClick={() => setViewMode("grid")}
-            startIcon={<GridViewIcon />}
-            sx={{ fontWeight: 600 }}
-          >
-            Grid
-          </Button>
-          <Button
-            aria-pressed={viewMode === "calendar"}
-            variant={viewMode === "calendar" ? "contained" : "outlined"}
-            onClick={() => setViewMode("calendar")}
-            startIcon={<CalendarMonthIcon />}
-            sx={{ fontWeight: 600 }}
-          >
-            Calendar
-          </Button>
-        </ButtonGroup>
-      </Stack>
-
-      {/* Grid View */}
-      {viewMode === "grid" && (
-        <>
-          {filteredItems.length === 0 ? (
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 5,
-                borderRadius: 4,
-                textAlign: "center",
-                backgroundColor: calendarColors.surface,
-                borderColor: calendarColors.border,
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
-                No events found
-              </Typography>
-              <Typography color="text.secondary">
-                There are no {activeTab} events listed at the moment.
-              </Typography>
-            </Paper>
-          ) : (
-            <Grid container spacing={3}>
-              {filteredItems.map((item) =>
-                item.kind === "event" ? (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
-                    <DiscoverEventCard
-                      orgSlug={orgSlug}
-                      organisationName={organisationName}
-                      event={item.event}
-                    />
-                  </Grid>
-                ) : (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
-                    <InstanceCard
-                      orgSlug={orgSlug}
-                      instanceId={item.instance.id}
-                      title={item.instance.series.title}
-                      description={item.instance.series.description}
-                      startDateTime={item.instance.startDateTime}
-                      endDateTime={item.instance.endDateTime}
-                      timezone={item.instance.series.timezone}
-                    />
-                  </Grid>
-                )
-              )}
-            </Grid>
-          )}
-        </>
-      )}
-
-      {/* Calendar View */}
-      {viewMode === "calendar" && (
-        <Stack spacing={3}>
-          {/* Calendar Card Container */}
-          <Paper
-            variant="outlined"
-            sx={{
-              p: 3,
-              borderRadius: 4,
-              backgroundColor: calendarColors.surface,
-              borderColor: calendarColors.border,
-            }}
-          >
-            {/* Month & Navigation Header */}
-            <Stack
-              direction="row"
-              spacing={2}
-              sx={{ justifyContent: "space-between", alignItems: "center", mb: 3 }}
-            >
-              <Typography variant="h5" sx={{ fontWeight: 800 }}>
-                {monthName} {currentYear}
-              </Typography>
-              <Stack direction="row" spacing={1}>
-                <IconButton aria-label="Previous month" onClick={prevMonth} size="small" sx={{ border: `1px solid ${calendarColors.border}` }}>
-                  <ChevronLeftIcon />
-                </IconButton>
-                <IconButton aria-label="Next month" onClick={nextMonth} size="small" sx={{ border: `1px solid ${calendarColors.border}` }}>
-                  <ChevronRightIcon />
-                </IconButton>
-              </Stack>
-            </Stack>
-
-            {/* Calendar Grid */}
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: "repeat(7, 1fr)",
-                gap: 1,
-                border: `1px solid ${calendarColors.gridBorder}`,
-                borderRadius: 2,
-                overflow: "hidden",
-                backgroundColor: calendarColors.gridBackground,
-              }}
-            >
-              {/* Day header cells */}
-              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
-                <Box
-                  key={dayName}
-                  sx={{
-                    textAlign: "center",
-                    fontWeight: 700,
-                    fontSize: "0.75rem",
-                    color: calendarColors.headerText,
-                    py: 1,
-                    backgroundColor: calendarColors.headerBackground,
-                    borderBottom: `1px solid ${calendarColors.gridBorder}`,
-                  }}
-                >
-                  {dayName}
-                </Box>
+      {viewMode === "list" ? (
+        filteredItems.length === 0 ? (
+          <EmptyState title="No events found">There are no {activeTab} events listed at the moment.</EmptyState>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {filteredItems.map((item) => (
+              <li key={item.id}>
+                <PublicEventRow event={toSummary(item, orgSlug, goingCounts)} />
+              </li>
+            ))}
+          </ul>
+        )
+      ) : (
+        <div className="flex flex-col gap-5">
+          <section aria-label="Calendar" className="rounded-lg border border-line bg-canvas p-4 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-h4 text-ink">{monthName} {currentYear}</h2>
+              <div className="flex gap-1.5">
+                <IconButton label="Previous month" variant="secondary" size="sm" onClick={prevMonth}><ChevronLeft /></IconButton>
+                <IconButton label="Next month" variant="secondary" size="sm" onClick={nextMonth}><ChevronRight /></IconButton>
+              </div>
+            </div>
+            <div className="grid grid-cols-7 overflow-hidden rounded-md border border-line">
+              {WEEKDAYS.map((day) => (
+                <div key={day} className="border-b border-line bg-subtle py-2 text-center text-xs font-bold text-ink-muted">{day}</div>
               ))}
-
-              {gridSlots.map((slot) => {
-                if (slot.type === "empty") {
-                  return (
-                    <Box
-                      key={slot.key}
-                      sx={{
-                        minHeight: { xs: "50px", md: "110px" },
-                        backgroundColor: "transparent",
-                      }}
-                    />
-                  );
-                }
-
-                const dayNum = slot.dayNum!;
+              {Array.from({ length: startDayOfWeek }, (_, index) => (
+                <div key={`empty-${index}`} className="min-h-[52px] border-b border-r border-line md:min-h-[110px]" />
+              ))}
+              {Array.from({ length: daysInMonth }, (_, index) => {
+                const dayNum = index + 1;
                 const dayEvents = getEventsForDay(dayNum);
                 const hasEvents = dayEvents.length > 0;
                 const isSelected = selectedDay === dayNum;
-                const isToday =
-                  now.getDate() === dayNum &&
-                  now.getMonth() === currentMonth &&
-                  now.getFullYear() === currentYear;
-
+                const isToday = now.getDate() === dayNum && now.getMonth() === currentMonth && now.getFullYear() === currentYear;
                 return (
-                  <Box
-                    key={slot.key}
-                    sx={{
-                      minHeight: { xs: "50px", md: "110px" },
-                      p: 1,
-                      border: isSelected
-                        ? `1px solid ${calendarColors.eventText}`
-                        : `1px solid ${calendarColors.gridBorder}`,
-                      backgroundColor: isSelected
-                        ? calendarColors.selectedBackground
-                        : hasEvents
-                        ? calendarColors.eventDayBackground
-                        : "transparent",
-                      transition: "all 0.15s ease",
-                      position: "relative",
-                    }}
+                  <div
+                    key={dayNum}
+                    className={cn(
+                      "relative min-h-[52px] border-b border-r border-line p-1.5 md:min-h-[110px]",
+                      isSelected ? "bg-emphasis" : hasEvents ? "bg-subtle" : "bg-canvas",
+                    )}
                   >
-                    {/* Day number label */}
-                    <ButtonBase
-                      aria-label={`Show events on ${monthName} ${dayNum}, ${currentYear}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ", no events"}`}
+                    <button
+                      type="button"
+                      aria-label={`Show events on ${dayNum} ${monthName} ${currentYear}${hasEvents ? `, ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ", no events"}`}
                       aria-pressed={isSelected}
                       onClick={() => setSelectedDay(dayNum)}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: 24,
-                        height: 24,
-                        borderRadius: "50%",
-                        fontSize: "0.8rem",
-                        fontWeight: isToday || hasEvents ? 700 : 500,
-                        color: isToday
-                          ? calendarColors.eventText
-                          : hasEvents
-                          ? theme.palette.text.primary
-                          : calendarColors.quietText,
-                        backgroundColor: isToday ? calendarColors.todayBackground : "transparent",
-                        mb: 1,
-                        "&:focus-visible": { outline: "2px solid #7CF5B6", outlineOffset: 2 },
-                      }}
+                      className={cn(
+                        "mb-1 inline-flex size-7 items-center justify-center rounded-full text-[13px]",
+                        isToday ? "bg-primary font-bold text-on-primary" : hasEvents ? "font-bold text-ink" : "text-ink-muted",
+                      )}
                     >
                       {dayNum}
-                    </ButtonBase>
-
-                    {/* Desktop events list */}
-                    <Box sx={{ display: { xs: "none", md: "block" } }}>
+                    </button>
+                    <div className="hidden flex-col gap-1 md:flex">
                       {dayEvents.map((item) => (
-                        <Box
-                          component={Link}
-                          href={
-                            item.kind === "event"
-                              ? `/${orgSlug}/${item.event.slug}`
-                              : `/${orgSlug}/i/${item.instance.id}`
-                          }
+                        <Link
                           key={item.id}
-                          sx={{
-                            display: "block",
-                            fontSize: "10px",
-                            lineHeight: 1.2,
-                            p: 0.5,
-                            borderRadius: 1,
-                          backgroundColor: item.kind === "event" ? calendarColors.eventBackground : calendarColors.instanceBackground,
-                            color: item.kind === "event" ? calendarColors.eventText : calendarColors.instanceText,
-                            border: `1px solid ${
-                              item.kind === "event"
-                                ? calendarColors.eventBorder
-                                : calendarColors.instanceBorder
-                            }`,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            textDecoration: "none",
-                            mb: 0.5,
-                            "&:hover": {
-                              backgroundColor:
-                                item.kind === "event"
-                                  ? calendarColors.eventDayBackground
-                                  : calendarColors.instanceBackground,
-                            },
-                          }}
+                          href={item.kind === "event" ? `/${orgSlug}/${item.event.slug}` : `/${orgSlug}/i/${item.instance.id}`}
+                          className="truncate rounded-[6px] bg-muted px-1.5 py-1 text-[11px] font-semibold text-ink hover:bg-emphasis"
                         >
                           {item.title}
-                        </Box>
+                        </Link>
                       ))}
-                    </Box>
-
-                      {/* Mobile events dot indicators */}
-                      <Box
-                        sx={{
-                          display: { xs: "flex", md: "none" },
-                          gap: 0.5,
-                          justifyContent: "center",
-                          position: "absolute",
-                          bottom: 4,
-                          left: 0,
-                          right: 0,
-                        }}
-                      >
-                        {dayEvents.slice(0, 3).map((item) => (
-                          <Box
-                            key={item.id}
-                            sx={{
-                              width: 5,
-                              height: 5,
-                              borderRadius: "50%",
-                              backgroundColor: item.kind === "event" ? calendarColors.eventText : calendarColors.instanceText,
-                            }}
-                          />
-                        ))}
-                      </Box>
-                  </Box>
+                    </div>
+                    {hasEvents ? (
+                      <div aria-hidden className="absolute inset-x-0 bottom-1.5 flex justify-center gap-1 md:hidden">
+                        {dayEvents.slice(0, 3).map((item) => <span key={item.id} className="size-1.5 rounded-full bg-primary" />)}
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
-            </Box>
-          </Paper>
+            </div>
+          </section>
 
-          {/* Selected Date events drawer list (especially critical for Mobile view) */}
-          {selectedDay && (
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 3,
-                borderRadius: 4,
-                backgroundColor: calendarColors.surface,
-                borderColor: calendarColors.border,
-              }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
-                Events on {monthName} {selectedDay}, {currentYear}
-              </Typography>
+          {selectedDay ? (
+            <section aria-live="polite" className="flex flex-col gap-3">
+              <h3 className="text-h4 text-ink">Events on {selectedDay} {monthName} {currentYear}</h3>
               {selectedDayEvents.length === 0 ? (
-                <Typography color="text.secondary">
-                  No events scheduled for this date.
-                </Typography>
+                <p className="text-body-ui text-ink-muted">No events scheduled for this date.</p>
               ) : (
-                <Grid container spacing={2}>
-                  {selectedDayEvents.map((item) =>
-                    item.kind === "event" ? (
-                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
-                        <DiscoverEventCard
-                          orgSlug={orgSlug}
-                          organisationName={organisationName}
-                          event={item.event}
-                        />
-                      </Grid>
-                    ) : (
-                      <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
-                        <InstanceCard
-                          orgSlug={orgSlug}
-                          instanceId={item.instance.id}
-                          title={item.instance.series.title}
-                          description={item.instance.series.description}
-                          startDateTime={item.instance.startDateTime}
-                          endDateTime={item.instance.endDateTime}
-                          timezone={item.instance.series.timezone}
-                        />
-                      </Grid>
-                    )
-                  )}
-                </Grid>
+                <ul className="flex flex-col gap-3">
+                  {selectedDayEvents.map((item) => (
+                    <li key={item.id}>
+                      <PublicEventRow event={toSummary(item, orgSlug, goingCounts)} />
+                    </li>
+                  ))}
+                </ul>
               )}
-            </Paper>
-          )}
-        </Stack>
+            </section>
+          ) : null}
+        </div>
       )}
-    </Stack>
+    </div>
   );
 }

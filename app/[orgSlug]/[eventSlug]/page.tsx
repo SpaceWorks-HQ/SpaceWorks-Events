@@ -12,6 +12,7 @@ import { EventWebsiteShell } from "@/components/event/EventWebsiteShell";
 import { effectiveEventProgram } from "@/lib/eventProgram";
 import { plainTextToSafeHtml, sanitizeRichText } from "@/lib/richText";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
+import { toFieldDefinition } from "@/lib/registrationFields";
 
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string }> };
 
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: event.title,
     description,
     alternates: { canonical: `/${org!.slug}/${event.slug}` },
-    robots: shouldIndexPublicEvent(event.status, event.privacyType)
+    robots: shouldIndexPublicEvent(event.status, event.privacyType, event.listedPublicly)
       ? undefined
       : { index: false, follow: false },
     openGraph: {
@@ -178,6 +179,7 @@ export default async function EventPage({ params }: Props) {
         slug: session.slug,
         title: session.title,
         start: session.effectiveStartDateTime.toISOString(),
+        end: session.effectiveEndDateTime.toISOString(),
         type: session.type,
         trackId: session.trackId,
         trackName: session.track.name,
@@ -204,23 +206,15 @@ export default async function EventPage({ params }: Props) {
         description: resource.description,
         href: resource.externalUrl!,
       }))}
-      registrationFields={(form?.fields ?? []).map((field) => ({
-        key: field.key,
-        label: field.label,
-        type: field.type,
-        required: field.required,
-        options: Array.isArray(field.options)
-          ? field.options.filter(
-              (value): value is string => typeof value === "string",
-            )
-          : [],
-      }))}
+      registrationFields={(form?.fields ?? []).map(toFieldDefinition)}
       confirmedCount={event.showRegistrationCount ? confirmed : null}
       registrationOpen={
         event.status === "PUBLISHED" &&
         event.endDateTime > new Date() &&
         !isRegistrationClosed(event)
       }
+      registrationFull={event.capacity != null && confirmed >= event.capacity}
+      approvalRequired={event.privacyType === EventPrivacyType.APPROVAL_REQUIRED}
     />
   );
 }

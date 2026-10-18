@@ -19,7 +19,11 @@ export type Bucket =
   | "checkinStationPin"
   | "search"
   | "apiRead"
-  | "apiWrite";
+  | "apiWrite"
+  | "dataExport"
+  | "ticketStatus"
+  | "ticketEvents"
+  | "shortLink";
 
 const limits: Record<Bucket, { max: number; windowMs: number }> = {
   global: { max: 300, windowMs: 60_000 },
@@ -41,6 +45,13 @@ const limits: Record<Bucket, { max: number; windowMs: number }> = {
   search: { max: 60, windowMs: 60_000 },
   apiRead: { max: 600, windowMs: 60_000 },
   apiWrite: { max: 60, windowMs: 60_000 },
+  dataExport: { max: 5, windowMs: 60 * 60_000 },
+  // Public ticket check-in state. Attendees at one venue often share a NAT
+  // address, so these stay generous while still bounding polling/reconnects.
+  ticketStatus: { max: 120, windowMs: 60_000 },
+  ticketEvents: { max: 60, windowMs: 60_000 },
+  // Public short-link lookups. Kept tight so the code space cannot be scanned.
+  shortLink: { max: 30, windowMs: 60_000 },
 };
 
 // Local fallback store

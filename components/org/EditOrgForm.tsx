@@ -1,47 +1,71 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Divider from "@mui/material/Divider";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Alert from "@mui/material/Alert";
-import Grid from "@mui/material/Grid";
-import Box from "@mui/material/Box";
-import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import { updateOrganisation } from "@/app/actions/org";
 import { uploadOrganisationLogo } from "@/app/actions/media";
 import { ImageUploadPicker } from "@/components/forms/ImageUploadPicker";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { useUnsavedChangesGuard } from "@/components/forms/useUnsavedChangesGuard";
+import { Button } from "@/components/ui/button";
+import { Callout, OrgLogo } from "@/components/ui/display";
+import { Field, Input, Textarea } from "@/components/ui/field";
 
+type OrgProfile = { name: string; description: string; logoUrl: string | null };
+
+/**
+ * Organisation profile card: logo, name and description with a live preview
+ * of the public organisation header. Nothing is persisted until "Save changes".
+ */
 export function EditOrgForm(props: {
   organisationSlug: string;
-  initial: { name: string; description: string; logoUrl: string | null };
+  initial: OrgProfile;
+  /** Element id for the card, used by the settings section nav. */
+  id?: string;
 }) {
-  const { organisationSlug, initial } = props;
+  const { organisationSlug, initial, id } = props;
   const router = useRouter();
   const { showToast } = useToast();
+  const titleId = useId();
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [pending, startTransition] = useTransition();
+  const [saved, setSaved] = useState<OrgProfile>(initial);
+  const [name, setName] = useState(initial.name);
+  const [description, setDescription] = useState(initial.description);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreviewUrl, setLogoPreviewUrl] = useState(initial.logoUrl ?? "");
-  const [dirty, setDirty] = useState(false);
+  // Remounts the picker so Discard also resets its internal preview.
+  const [pickerKey, setPickerKey] = useState(0);
+
+  const dirty =
+    name !== saved.name ||
+    description !== saved.description ||
+    logoFile !== null ||
+    logoPreviewUrl !== (saved.logoUrl ?? "");
   useUnsavedChangesGuard(dirty && !pending);
 
+  const previewName = name.trim() || "Your organisation";
+
+  function discard() {
+    setName(saved.name);
+    setDescription(saved.description);
+    setLogoFile(null);
+    setLogoPreviewUrl(saved.logoUrl ?? "");
+    setPickerKey((key) => key + 1);
+    setError(null);
+    setFieldErrors({});
+  }
+
   return (
-    <Stack
-      component="form"
-      spacing={2.5}
-      onChangeCapture={() => setDirty(true)}
+    <form
+      id={id}
+      aria-labelledby={titleId}
+      className="scroll-mt-20 overflow-hidden rounded-2xl border border-line bg-canvas lg:scroll-mt-8"
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
-        const fd = new FormData(e.currentTarget);
+        setFieldErrors({});
         startTransition(async () => {
           let logoUrl = logoFile ? "" : logoPreviewUrl;
           if (logoFile) {
@@ -63,124 +87,86 @@ export function EditOrgForm(props: {
           }
           const res = await updateOrganisation({
             organisationSlug,
-            name: String(fd.get("name") ?? ""),
-            description: String(fd.get("description") ?? ""),
+            name,
+            description,
             logoUrl,
           });
           if (!res.ok) {
             setError(res.error);
+            setFieldErrors(res.fieldErrors ?? {});
             showToast(res.error, "error");
             return;
           }
           showToast("Organisation saved", "success");
-          setDirty(false);
+          setSaved({ name, description, logoUrl: logoUrl || null });
+          setLogoFile(null);
+          setLogoPreviewUrl(logoUrl);
           router.refresh();
         });
       }}
     >
-      {error ? <Alert severity="error">{error}</Alert> : null}
+      <div className="px-5 pt-5 sm:px-6 sm:pt-6">
+        <h2 id={titleId} className="text-h4 text-ink">Profile</h2>
+        <p className="mt-0.5 text-body-ui text-ink-muted">Shown on your public page and at the top of every event page.</p>
+      </div>
 
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 2, sm: 2.5 },
-          borderRadius: "16px",
-          borderColor: "rgba(255,255,255,0.08)",
-          backgroundColor: "rgba(255,255,255,0.025)",
-        }}
-      >
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <SettingsOutlinedIcon color="primary" />
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                Organisation settings
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
-                Update how your organisation appears on public pages.
-              </Typography>
-            </Box>
-          </Stack>
-          <Divider />
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                name="name"
-                label="Organisation name"
-                required
-                fullWidth
-                defaultValue={initial.name}
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                name="description"
-                label="Description"
-                fullWidth
-                multiline
-                minRows={4}
-                defaultValue={initial.description}
-                helperText="Shown on your organisation page."
-              />
-            </Grid>
-          </Grid>
-        </Stack>
-      </Paper>
+      <div className="grid gap-6 px-5 pb-6 pt-5 sm:px-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+        <div className="flex min-w-0 flex-col gap-5">
+          {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
 
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 2, sm: 2.5 },
-          borderRadius: "16px",
-          borderColor: "rgba(255,255,255,0.08)",
-          backgroundColor: "rgba(255,255,255,0.025)",
-        }}
-      >
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
-            <ImageOutlinedIcon sx={{ color: "text.secondary" }} />
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                Logo
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
-                Add a logo for a more recognizable presence.
-              </Typography>
-            </Box>
-          </Stack>
-          <Divider />
-          <ImageUploadPicker
-            initialUrl={initial.logoUrl}
-            label="Logo"
-            placeholder="Your logo will appear here."
-            disabled={pending}
-            onChange={(file, previewUrl) => {
-              setLogoFile(file);
-              setLogoPreviewUrl(previewUrl);
-              setDirty(true);
-            }}
-          />
-        </Stack>
-      </Paper>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-label text-ink">Logo</span>
+            <ImageUploadPicker
+              key={pickerKey}
+              initialUrl={saved.logoUrl}
+              label="Logo"
+              placeholder="Your logo will appear here."
+              objectFit="cover"
+              disabled={pending}
+              onChange={(file, previewUrl) => {
+                setLogoFile(file);
+                setLogoPreviewUrl(previewUrl);
+              }}
+            />
+          </div>
 
-      <Stack direction="row" spacing={2} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Button
-          type="submit"
-          variant="contained"
-          disabled={pending}
-          sx={{ textTransform: "none", borderRadius: 2, px: 2.5 }}
-        >
+          <Field label="Name" required error={fieldErrors.name?.[0]}>
+            <Input name="name" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} autoComplete="organization" />
+          </Field>
+          <Field label="Description" helperText="Shown under your name on the public page." error={fieldErrors.description?.[0]}>
+            <Textarea name="description" rows={4} maxLength={2000} value={description} onChange={(e) => setDescription(e.target.value)} />
+          </Field>
+        </div>
+
+        <aside aria-label="Public page preview" className="flex min-w-0 flex-col gap-2">
+          <span className="text-overline text-ink-muted">Preview · public page</span>
+          <div className="overflow-hidden rounded-xl border border-line bg-canvas shadow-raised">
+            <div aria-hidden className="yy-dot-strip h-14" />
+            <div className="flex flex-col gap-2 px-4 pb-4 sm:px-5 sm:pb-5">
+              <OrgLogo name={previewName} src={logoPreviewUrl || null} size="lg" className="-mt-7 border-[3px] border-canvas" />
+              <span className="wrap-break-word font-display text-[22px] font-extrabold leading-tight text-ink">{previewName}</span>
+              {description.trim() ? (
+                <p className="line-clamp-4 whitespace-pre-line wrap-break-word text-sm text-ink-secondary">{description}</p>
+              ) : (
+                <p className="text-sm italic text-ink-muted">A sentence or two about your community.</p>
+              )}
+            </div>
+          </div>
+          <span className="text-caption text-ink-muted">Updates as you type. Nothing changes until you save.</span>
+        </aside>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2.5 border-t border-line bg-subtle px-5 py-3.5 sm:px-6">
+        <span role="status" className="min-w-0 flex-1 text-sm text-warning-fg">
+          {dirty ? "You have unsaved changes" : null}
+        </span>
+        <Button type="button" variant="quiet" onClick={discard} disabled={!dirty || pending}>
+          Discard
+        </Button>
+        <Button type="submit" variant="primary" disabled={pending} loading={pending}>
           Save changes
         </Button>
-      </Stack>
-    </Stack>
+      </div>
+    </form>
   );
 }

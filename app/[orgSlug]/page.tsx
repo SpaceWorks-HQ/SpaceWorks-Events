@@ -1,13 +1,4 @@
-import { notFound } from "next/navigation";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Paper from "@mui/material/Paper";
-import Chip from "@mui/material/Chip";
-import Avatar from "@mui/material/Avatar";
-import Divider from "@mui/material/Divider";
-import Alert from "@mui/material/Alert";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -16,8 +7,12 @@ import { OrgEventsContainer } from "@/components/org/OrgEventsContainer";
 import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
 import { publicOrgEventSelect, publicOrgInstanceSelect } from "@/lib/publicOrgEventDto";
+import { Button } from "@/components/ui/button";
+import { Callout, Chip, EmptyState, OrgLogo } from "@/components/ui/display";
 
 import type { Metadata } from "next";
+import { listedEventAudienceWhere } from "@/lib/eventVisibility";
+import { resolveShortLinkSegment } from "@/lib/shortLinkResolve";
 
 type Props = { params: Promise<{ orgSlug: string }> };
 const PUBLIC_COLLECTION_LIMIT = 250;
@@ -53,21 +48,28 @@ export default async function OrganisationPage({ params }: Props) {
       _count: { select: { memberships: true } },
     },
   });
-  if (!org) notFound();
+  if (!org) {
+    // Layout and page render in parallel; share the layout's memoised
+    // short-link decision so this page can never 404 ahead of its redirect.
+    const destination = await resolveShortLinkSegment(orgSlug);
+    if (destination) redirect(destination);
+    notFound();
+  }
 
   const session = await auth();
   const now = new Date();
   const windowStart = new Date(now.getTime() - PUBLIC_HISTORY_MS);
   const windowEnd = new Date(now.getTime() + PUBLIC_FUTURE_MS);
 
-  // Only fully public, published events belong on an organisation's public
-  // listing. Hidden-link, approval-required, and invite-only events remain
-  // reachable only through their intended access paths.
+  // Only published events with a listed audience belong on an organisation's
+  // public listing: fully public, or approval-required with listing turned on.
+  // Hidden-link, unlisted approval and invite-only events stay reachable only
+  // through their intended access paths.
   const eventQuery = prisma.event.findMany({
     where: {
       organisationId: org.id,
       status: EventStatus.PUBLISHED,
-      privacyType: EventPrivacyType.PUBLIC,
+      AND: listedEventAudienceWhere,
       page: { is: { isPublished: true } },
       endDateTime: { gte: windowStart },
       startDateTime: { lte: windowEnd },
@@ -132,168 +134,56 @@ export default async function OrganisationPage({ params }: Props) {
   // Count upcoming occurrences
   const upcomingCount = merged.filter((item) => item.startDateTime >= now).length;
 
+  // Confirmed counts only for events whose organiser shows registration counts publicly.
+  const countedEventIds = visibleEvents.filter((event) => event.showRegistrationCount).map((event) => event.id);
+  const goingRows = countedEventIds.length > 0
+    ? await prisma.rSVP.groupBy({ by: ["eventId"], where: { eventId: { in: countedEventIds }, status: "CONFIRMED" }, _count: { _all: true } })
+    : [];
+  const goingCounts = Object.fromEntries(goingRows.flatMap((row) => (row.eventId ? [[row.eventId, row._count._all]] : [])));
+
   return (
-    <Stack spacing={3} sx={{ py: 2 }}>
-      {/* Organisation Profile Header Card */}
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 3, sm: 4 },
-          borderRadius: 3.5,
-          overflow: "hidden",
-          position: "relative",
-          background: "#1C1C1E",
-          borderColor: "rgba(255, 255, 255, 0.08)",
-        }}
-      >
-        <Stack
-          spacing={2.25}
-          sx={{ position: "relative", alignItems: "stretch" }}
-        >
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={{ xs: 2, sm: 3 }}
-            sx={{ justifyContent: "space-between", alignItems: { sm: "flex-start" } }}
-          >
-            <Stack direction="row" spacing={1.75} sx={{ alignItems: "center", minWidth: 0 }}>
-              <Avatar
-                variant="rounded"
-                src={org.logoUrl ?? undefined}
-                alt={org.name}
-                sx={{
-                  width: { xs: 52, sm: 60 },
-                  height: { xs: 52, sm: 60 },
-                  borderRadius: 2.5,
-                  bgcolor: "rgba(255,255,255,0.06)",
-                  color: "text.primary",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
-                }}
-              >
-                {org.name.trim().slice(0, 1).toUpperCase()}
-              </Avatar>
+    <div className="flex flex-col gap-10">
+      <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-7">
+        <OrgLogo name={org.name} src={org.logoUrl} size="xl" className="size-20 rounded-[22px] text-2xl sm:size-28 sm:rounded-[28px] sm:text-4xl" />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-display-m min-w-0 break-words text-ink">{org.name}</h1>
+            {membership ? (
+              <Button asChild variant="secondary" size="sm">
+                <Link href={`/dashboard/${org.slug}`}>Dashboard</Link>
+              </Button>
+            ) : null}
+          </div>
+          <p className="max-w-[640px] text-body-l text-ink-secondary">
+            {org.description || "Community, events, and updates—check back soon for what’s next."}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {upcomingCount > 0 ? <Chip className="bg-tint-peach text-warning-fg">{upcomingCount} upcoming</Chip> : null}
+            {merged.length > 0 ? <Chip>{merged.length} {merged.length === 1 ? "event" : "events"} hosted</Chip> : null}
+            <CopyOrganisationUrl slug={org.slug} />
+          </div>
+        </div>
+      </header>
 
-              <Box sx={{ minWidth: 0 }}>
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  useFlexGap
-                  sx={{ alignItems: "center", flexWrap: "wrap" }}
-                >
-                  <Typography
-                    variant="h4"
-                    component="h1"
-                    sx={{ fontWeight: 700, letterSpacing: "-1px" }}
-                  >
-                    {org.name}
-                  </Typography>
-                  <CopyOrganisationUrl slug={org.slug} />
-                </Stack>
-
-                <Typography
-                  variant="body1"
-                  color="text.secondary"
-                  sx={{ mt: 1, maxWidth: 600, lineHeight: 1.5 }}
-                >
-                  {org.description || "Community, events, and updates—check back soon for what’s next."}
-                </Typography>
-              </Box>
-            </Stack>
-
-            <Stack
-              direction={{ xs: "row", sm: "column" }}
-              spacing={1}
-              sx={{
-                alignItems: { xs: "flex-start", sm: "flex-end" },
-                justifyContent: "flex-start",
-              }}
-            >
-              {membership ? (
-                <Link
-                  href={`/dashboard/${org.slug}`}
-                  style={{ textDecoration: "none" }}
-                >
-                  <Button variant="outlined" component="span" sx={{ width: "100%" }}>
-                    Dashboard
-                  </Button>
-                </Link>
-              ) : null}
-            </Stack>
-          </Stack>
-
-          <Divider sx={{ borderColor: "rgba(255,255,255,0.06)" }} />
-
-          <Stack
-            direction="row"
-            useFlexGap
-            sx={{ flexWrap: "wrap", columnGap: 1, rowGap: 1 }}
-          >
-            {merged.length > 0 && (
-              <Chip
-                label={`${merged.length} total event${merged.length === 1 ? "" : "s"}`}
-                variant="outlined"
-                sx={{ bgcolor: "background.paper" }}
-              />
-            )}
-            {upcomingCount > 0 && (
-              <Chip
-                label={`${upcomingCount} upcoming`}
-                variant="outlined"
-                color="primary"
-                sx={{
-                  bgcolor: "rgba(10, 132, 255, 0.08)",
-                  color: "#0A84FF",
-                  borderColor: "rgba(10, 132, 255, 0.2)",
-                }}
-              />
-            )}
-          </Stack>
-        </Stack>
-      </Paper>
-
-      {/* Main Events Area */}
-      <Box id="events-list">
-        {collectionTruncated ? <Alert severity="info" sx={{ mb: 2 }}>Showing the first {PUBLIC_COLLECTION_LIMIT} standalone events and recurring dates in the public three-year window. Use event links or the organiser dashboard for older records.</Alert> : null}
+      <section id="events-list" aria-label="Events" className="flex flex-col gap-4">
+        {collectionTruncated ? <Callout tone="info">Showing the first {PUBLIC_COLLECTION_LIMIT} standalone events and recurring dates in the public three-year window. Use event links or the organiser dashboard for older records.</Callout> : null}
         {merged.length === 0 ? (
-          <Paper
-            variant="outlined"
-            sx={{
-              p: { xs: 4, sm: 6 },
-              borderRadius: 4,
-              textAlign: "center",
-              bgcolor: "rgba(255,255,255,0.01)",
-              borderColor: "rgba(255,255,255,0.06)",
-            }}
+          <EmptyState
+            title="No events scheduled yet"
+            action={membership ? <Button asChild variant="primary"><Link href={`/dashboard/${org.slug}`}>Create your first event</Link></Button> : undefined}
           >
-            <Stack spacing={2} sx={{ alignItems: "center" }}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                No events scheduled yet
-              </Typography>
-              <Typography color="text.secondary" sx={{ maxWidth: 400 }}>
-                This community hasn&apos;t published any events or recurring series yet. Check back soon!
-              </Typography>
-              {membership ? (
-                <Box sx={{ pt: 1 }}>
-                  <Link
-                    href={`/dashboard/${org.slug}`}
-                    style={{ textDecoration: "none" }}
-                  >
-                    <Button variant="contained" component="span">
-                      Create your first event
-                    </Button>
-                  </Link>
-                </Box>
-              ) : null}
-            </Stack>
-          </Paper>
+            This community hasn&apos;t published any events or recurring series yet. Check back soon!
+          </EmptyState>
         ) : (
           <OrgEventsContainer
             orgSlug={org.slug}
             organisationName={org.name}
             initialNow={now.toISOString()}
             items={merged}
+            goingCounts={goingCounts}
           />
         )}
-      </Box>
-    </Stack>
+      </section>
+    </div>
   );
 }

@@ -6,6 +6,7 @@ import {
   RsvpStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { DEFAULT_MAX_LENGTH, OTHER_MAX_LENGTH, parseFieldSettings, visibleFieldKeys } from "@/lib/registrationFields";
 import {
   isValidAttendeeName,
   manualRsvpSchema,
@@ -187,6 +188,8 @@ export function validateAndNormalizeAnswers(params: {
     type: RegistrationFieldType;
     required: boolean;
     options: unknown;
+    /** FieldSettings JSON (lib/registrationFields.ts); invalid values are ignored. */
+    settings?: unknown;
   }>;
   answers: Record<string, unknown>;
 }): { rows: Array<{
@@ -206,23 +209,29 @@ export function validateAndNormalizeAnswers(params: {
     valueDate?: Date | null;
   }> = [];
 
+  const settingsByKey = new Map(fields.map((f) => [f.key, parseFieldSettings(f.settings)]));
+  // Questions hidden by "show only if" are skipped entirely: never required, answers dropped.
+  const visible = visibleFieldKeys(
+    fields.map((f) => ({ key: f.key, type: f.type, settings: settingsByKey.get(f.key) })),
+    answers,
+  );
+
   for (const f of fields) {
+    if (!visible.has(f.key)) continue;
+    const settings = settingsByKey.get(f.key) ?? {};
     const raw = answers[f.key];
-    const hasValue = raw !== undefined && raw !== null;
+    const hasValue = raw !== undefined && raw !== null && raw !== "";
 
     switch (f.type) {
-      case RegistrationFieldType.TEXT: {
-        const s = typeof raw === "string" ? raw.trim() : "";
-        if (f.required && !s) return { error: `${f.label} is required.` };
-        if (s.length > 200) return { error: `${f.label} must be at most 200 characters.` };
-        if (s) rows.push({ fieldId: f.id, valueText: s });
-        break;
-      }
+      case RegistrationFieldType.TEXT:
       case RegistrationFieldType.TEXTAREA: {
         const s = typeof raw === "string" ? raw.trim() : "";
         if (f.required && !s) return { error: `${f.label} is required.` };
-        if (s.length > 5_000) return { error: `${f.label} must be at most 5,000 characters.` };
-        if (s) rows.push({ fieldId: f.id, valueText: s });
+        if (!s) break;
+        const max = Math.min(settings.maxLength ?? DEFAULT_MAX_LENGTH[f.type]!, 5_000);
+        if (s.length > max) return { error: `${f.label} must be at most ${max.toLocaleString("en-GB")} characters.` };
+        if (settings.minLength != null && s.length < settings.minLength) return { error: `${f.label} must be at least ${settings.minLength} characters.` };
+        rows.push({ fieldId: f.id, valueText: s });
         break;
       }
       case RegistrationFieldType.EMAIL: {
@@ -250,7 +259,8 @@ export function validateAndNormalizeAnswers(params: {
         if (f.required && !s) return { error: `${f.label} is required.` };
         if (!s) break;
         if (opts.length > 0 && !opts.includes(s)) {
-          return { error: `${f.label} must be one of the available options.` };
+          if (!settings.allowOther) return { error: `${f.label} must be one of the available options.` };
+          if (s.length > OTHER_MAX_LENGTH) return { error: `${f.label}: keep "Other" under ${OTHER_MAX_LENGTH} characters.` };
         }
         rows.push({ fieldId: f.id, valueText: s });
         break;
@@ -263,10 +273,16 @@ export function validateAndNormalizeAnswers(params: {
         if (f.required && picked.length === 0) {
           return { error: `${f.label} is required.` };
         }
-        for (const s of picked) {
-          if (opts.length > 0 && !opts.includes(s)) {
-            return { error: `${f.label} contains an invalid option.` };
-          }
+        const unique = [...new Set(picked)];
+        if (settings.maxSelections != null && unique.length > settings.maxSelections) {
+          return { error: `${f.label}: choose up to ${settings.maxSelections}.` };
+        }
+        const others = unique.filter((s) => opts.length > 0 && !opts.includes(s));
+        if (others.length > 0 && (!settings.allowOther || others.length > 1)) {
+          return { error: `${f.label} contains an invalid option.` };
+        }
+        if (others.some((s) => s.length > OTHER_MAX_LENGTH)) return { error: `${f.label}: keep "Other" under ${OTHER_MAX_LENGTH} characters.` };
+        for (const s of unique) {
           rows.push({ fieldId: f.id, valueText: s });
         }
         break;
@@ -284,6 +300,8 @@ export function validateAndNormalizeAnswers(params: {
         }
         const n = coerceFiniteNumber(raw);
         if (n === null) return { error: `${f.label} must be a number.` };
+        if (settings.min != null && n < settings.min) return { error: `${f.label} must be ${settings.min} or more.` };
+        if (settings.max != null && n > settings.max) return { error: `${f.label} must be ${settings.max} or less.` };
         rows.push({ fieldId: f.id, valueNumber: n });
         break;
       }
@@ -294,6 +312,9 @@ export function validateAndNormalizeAnswers(params: {
         }
         const d = coerceDate(raw);
         if (!d) return { error: `${f.label} must be a valid date.` };
+        const day = d.toISOString().slice(0, 10);
+        if (settings.minDate && day < settings.minDate) return { error: `${f.label} can't be before ${settings.minDate}.` };
+        if (settings.maxDate && day > settings.maxDate) return { error: `${f.label} can't be after ${settings.maxDate}.` };
         rows.push({ fieldId: f.id, valueDate: d });
         break;
       }
@@ -407,6 +428,7 @@ export async function submitRsvpCore(
           type: f.type,
           required: f.required,
           options: f.options,
+          settings: f.settings,
         })),
         answers: answers as Record<string, unknown>,
       });
@@ -535,6 +557,7 @@ export async function submitRsvpCore(
         type: f.type,
         required: f.required,
         options: f.options,
+        settings: f.settings,
       })),
       answers: parsed.data.answers as Record<string, unknown>,
     });
@@ -627,6 +650,7 @@ export async function submitManualGuestRsvpCore(
       type: field.type,
       required: field.required,
       options: field.options,
+      settings: field.settings,
     })),
     answers: parsed.data.answers as Record<string, unknown>,
   });

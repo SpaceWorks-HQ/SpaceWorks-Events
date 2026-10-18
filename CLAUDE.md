@@ -10,10 +10,14 @@ deployment constraints.
 Yuyu is a production-oriented, self-hosted multi-tenant event platform. The
 most sensitive current scenarios are organisation isolation and role checks;
 event privacy and RSVP capacity; opaque ticket, certificate, invitation, and
-password-reset links; MFA and the separate super-admin step-up; write-only,
+password-reset links; event short links that never reveal hidden events; the
+realtime ticket check-in endpoints (`/api/ticket/:token/{status,events}`,
+check-in state only, channels keyed by RSVP id); the personal data export and
+leave-organisation actions (own data and membership only); MFA and the
+separate super-admin step-up, checked in every super-admin page; write-only,
 encrypted instance SMTP/Google settings; tenant-bound machine API credentials;
-image safety; outbox email delivery; and Docker/Helm deployment with
-PostgreSQL, Redis, S3, and SMTP.
+image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`;
+and Docker/Helm deployment with PostgreSQL, Redis, S3, and SMTP.
 
 Before changing framework behaviour, consult the relevant Next.js 16 guide in
 `node_modules/next/dist/docs/`. Before changing an unfamiliar domain, consult
@@ -29,4 +33,12 @@ an explicit scope, and return a deliberately minimal DTO.
 At minimum, validate targeted changes with lint, TypeScript, and the relevant
 test suite. For authorization, mutation, public-route, operational, API, or
 deployment changes, follow the stronger checks listed in `AGENTS.md` and
-`docs/TESTING.md`.
+`docs/TESTING.md`. Other sessions may edit the tree in parallel: commit with
+explicit paths only, and commit the user manual only when asked.
+
+Every new feature goes on its own branch (`feat/<short-name>`, or
+`fix/<short-name>` for a bug fix) created from the integration branch
+(currently `v1-design-overhaul`), and is merged back with `git merge --no-ff`
+once checks pass. Never commit a feature directly to the integration branch;
+don't touch `main` or `staging`, push, or delete branches unless asked. See
+"Branching" in `AGENTS.md`.

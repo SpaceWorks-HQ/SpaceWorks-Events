@@ -9,7 +9,7 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-import { broadcastEventUrl, resolveBroadcastRecipients, sanitizeBroadcastHtml } from "@/lib/eventBroadcast";
+import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, resolveBroadcastRecipients, sanitizeBroadcastHtml } from "@/lib/eventBroadcast";
 import { broadcastHtmlToText, renderBroadcastHtml, renderBroadcastTemplate, sampleBroadcastVariables } from "@/lib/broadcastTemplate";
 import { buildBroadcastEmail } from "@/lib/email";
 import { enqueueEventBroadcastRecipients, enqueueEventBroadcastTest } from "@/lib/outbox";
@@ -69,7 +69,7 @@ export async function previewEventBroadcast(input: unknown): Promise<ActionResul
   if (!context.ok) return { ok: false, error: context.error };
   const event = await prisma.event.findFirst({
     where: { id: context.event.id },
-    select: { title: true, slug: true, startDateTime: true, timezone: true, location: true, isOnline: true, organisation: { select: { name: true, slug: true } } },
+    select: { title: true, slug: true, startDateTime: true, timezone: true, location: true, isOnline: true, ...broadcastBrandSelect, organisation: { select: { name: true, slug: true, logoUrl: true } } },
   });
   if (!event) return { ok: false, error: "Event not found." };
 
@@ -91,6 +91,10 @@ export async function previewEventBroadcast(input: unknown): Promise<ActionResul
     bodyText: broadcastHtmlToText(bodyHtml),
     eventTitle: event.title,
     organisationName: event.organisation.name,
+    design: parsed.data.design,
+    brand: broadcastBrandFor(event),
+    // The preview renders inside this site, so uploaded images load from the page origin.
+    imageBaseUrl: "",
   });
   return { ok: true, data: email };
 }
@@ -128,6 +132,7 @@ export async function sendEventBroadcast(input: unknown): Promise<ActionResult<{
           attendance: audience.attendance,
           subject: parsed.data.subject,
           body: body.body,
+          design: parsed.data.design,
           recipientCount: recipients.length,
         },
         select: { id: true },
@@ -187,6 +192,7 @@ export async function sendEventBroadcastTest(input: unknown): Promise<ActionResu
       eventId: context.event.id,
       subject: parsed.data.subject,
       body: body.body,
+      design: parsed.data.design,
       recipientName: user.name?.trim() || undefined,
     });
     startOutboxWorker();

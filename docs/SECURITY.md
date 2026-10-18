@@ -23,7 +23,8 @@ This page documents implemented controls and security boundaries. It is not a su
 - Organisation membership is the tenant boundary.
 - Owner/admin/member permissions are checked inside Server Actions and server-rendered pages.
 - Hiding a control in the UI is never treated as authorization.
-- Super-admin access is checked server-side against `SUPER_ADMIN_EMAIL` and fails as not found.
+- Super-admin access is checked server-side against `SUPER_ADMIN_EMAIL` and fails as not found. Each super-admin page calls `requireSuperAdminMfa()` itself, because a layout check does not re-run on client navigation; a unit test fails if any page omits it.
+- Leaving an organisation from `/account/organisations` removes only the caller's own membership. It locks the organisation row and refuses to remove the last owner, and is audited as `ORGANISATION_MEMBER_LEFT`.
 - Database foreign keys and uniqueness constraints provide a second integrity layer.
 - Machine clients resolve their organisation from the authenticated credential and require an explicit endpoint scope. Caller-supplied organisation identifiers never select the tenant.
 
@@ -31,7 +32,7 @@ This page documents implemented controls and security boundaries. It is not a su
 
 - Zod validates public/API and action inputs.
 - Registration and feedback answers are validated against current server-owned field definitions.
-- Uploads are size/signature/pixel checked; images are decoded, rotated, resized, metadata-stripped, and re-encoded.
+- Uploads are size/signature/pixel checked; images are decoded, rotated, resized, metadata-stripped, and re-encoded. WebP dimension checks read lossy (VP8, little-endian), lossless (VP8L), and extended (VP8X) headers before decoding.
 - A per-request nonce protects scripts with a strict Content Security Policy. Normal application pages deny framing; the public `/embed/:orgSlug/:eventSlug` route is framable only by exact HTTPS origins in `ALLOWED_EMBED_ORIGINS`. It reuses the canonical public-event access checks and must not be used for ticket, account, dashboard, or administrative content.
 - Production responses include HSTS, frame denial, MIME sniffing protection, a permissions policy, and a strict referrer policy.
 - Server Actions default to same-origin requests, with an explicit trusted-origin allowlist when required.
@@ -39,6 +40,8 @@ This page documents implemented controls and security boundaries. It is not a su
 ## Tokens and sensitive links
 
 - Check-in and certificate tokens are high-entropy random values.
+- The public ticket status and live-event routes validate the token shape, return only `{ checkedIn, checkedInAt }` with `no-store` and `no-referrer`, and answer unknown tokens with an empty 404. Realtime check-in channels are keyed by RSVP id, so ticket tokens never pass through Redis.
+- Event short codes are random seven-character values containing at least one uppercase letter, so they cannot collide with a lowercase organisation slug. Only owners and admins can create or regenerate them (audited as `EVENT_SHORT_LINK_CREATED`/`EVENT_SHORT_LINK_REGENERATED`). Resolution redirects only published events with a released page, so a code never reveals a draft or hidden event's slug; unknown, unreleased, and rate-limited lookups return the same not-found response as an unknown organisation, and the destination page still applies its own privacy rules.
 - Venue check-in stations require an event-scoped, bcrypt-protected rotating PIN. PIN management/recovery requires a fresh administrator sign-in and recoverable PIN ciphertext uses a domain-separated authenticated-encryption key. A station can open only from 24 hours before the event through one hour after it ends. Successful entry creates a signed, HttpOnly proof bound to that event, expiry, and PIN version; rotation and disablement invalidate existing proofs immediately. Station PINs, proofs, attendee exports, and offline rosters are never exposed through the public station.
 - Ticket, certificate, invitation, password-reset, and MFA enrollment values are secrets or bearer capabilities.
 - They must not appear in logs, audit metadata, monitoring tags, or analytics.
@@ -47,7 +50,7 @@ This page documents implemented controls and security boundaries. It is not a su
 ## Abuse protection
 
 - Password login applies account and IP limits inside the credential verifier, in addition to proxy limits. Missing and OAuth-only identities perform dummy bcrypt work; signup returns the same response for existing and newly created accounts. Auth.js errors are logged without exception payloads.
-- Redis-backed limits cover APIs, authentication mutations, RSVP, feedback, search/discovery, uploads, Server Actions, object creation, and invitations.
+- Redis-backed limits cover APIs, authentication mutations, RSVP, feedback, search/discovery, uploads, Server Actions, object creation, invitations, broadcasts, check-in, personal data exports (per user), public ticket status and event streams (per IP), and short-link lookups (per IP). Bucket sizes live in `lib/rateLimit.ts`.
 - Machine API traffic has an additional per-client limit so credential rotation cannot multiply request capacity.
 - Security-sensitive production traffic fails closed when Redis is unavailable.
 - Process-local fallback exists for development and an explicit CI-only production-build test mode.
@@ -59,6 +62,9 @@ This page documents implemented controls and security boundaries. It is not a su
 - Certificate-enabled feedback requires an email matching a confirmed RSVP, links the response for certificate generation, and allows repeat submissions.
 - Feedback mode, eligibility, typed answers, and response creation are one locked transaction. PostgreSQL forbids partial identity/certificate linkage, while immutable question snapshots keep historical answers meaningful after form maintenance.
 - Registration counts are omitted from public payloads when the organiser disables count display.
+- The personal data export (`GET /api/exports/account`) resolves the user only from the session, returns allow-listed fields of the user's own profile, memberships, registrations, feedback, and co-organiser roles, excludes passwords, hashes, MFA material, and every bearer token, is sent `private, no-store`, and is audited as `ACCOUNT_DATA_EXPORTED`.
+- Super-admin insight pages never load tokens, credential hashes, registration answers, or message bodies; lists are capped and queries are parameterised.
+- Broadcast designs escape organiser values and accept only absolute http(s) image and link URLs. The ticket venue link is shown only for an `http(s)` map URL (`lib/safeHttpUrl.ts` rejects `javascript:`, `data:`, and other schemes).
 - Audit metadata is designed to exclude email addresses, answers, passwords, and bearer tokens.
 - Public and dashboard browser event DTOs use explicit selects that exclude
   check-in station secrets and unused relations. Production exception logging

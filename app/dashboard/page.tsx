@@ -1,109 +1,60 @@
-import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
-import Stack from "@mui/material/Stack";
-import Card from "@mui/material/Card";
-import CardActionArea from "@mui/material/CardActionArea";
-import CardContent from "@mui/material/CardContent";
-import Grid from "@mui/material/Grid";
-import Paper from "@mui/material/Paper";
-import Box from "@mui/material/Box";
-import Avatar from "@mui/material/Avatar";
-import Divider from "@mui/material/Divider";
 import Link from "next/link";
+import { Clock3, Plus } from "lucide-react";
+import type { Metadata } from "next";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import BusinessIcon from "@mui/icons-material/Business";
-import AddIcon from "@mui/icons-material/Add";
-import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
-import EventIcon from "@mui/icons-material/Event";
-
-import type { Metadata } from "next";
+import { getDashboardHome, type HomeEventRow } from "@/lib/dashboardHome";
+import { formatDateBlock, formatDayShort, formatTime } from "@/lib/format/datetime";
+import { DotFace } from "@/components/brand/DotFace";
+import { CreateEventDialog } from "@/components/event/CreateEventDialog";
+import { Button } from "@/components/ui/button";
+import { HomeGreeting } from "@/components/dashboard/home/HomeGreeting";
+import { HomeEventsPanel, type HomeEventRowView } from "@/components/dashboard/home/HomeEventsPanel";
+import { ActivityFeed, FirstRunSetup, LiveEventPanel, NextUpCard, OrganisationCards, StatRow } from "@/components/dashboard/home/HomeSections";
 
 export const metadata: Metadata = {
   title: "Dashboard",
   description: "Manage your organisations, events, and RSVPs.",
 };
 
-const DASHBOARD_BLUE = "#0A84FF";
-
-function getTimeAgo(date: Date): string {
-  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function toView(row: HomeEventRow, now: Date, showOrganisation: boolean): HomeEventRowView {
+  const { month, day } = formatDateBlock(row.dateBlock.start, row.dateBlock.timezone);
+  const when = `${formatDayShort(row.dateBlock.start, row.dateBlock.timezone, now)} · ${formatTime(row.dateBlock.start, row.dateBlock.timezone)}`;
+  return {
+    key: row.key,
+    href: row.href,
+    title: row.title,
+    month,
+    day,
+    meta: row.isDraft ? `Draft · ${when}` : `${when} · ${row.meta}`,
+    organisationName: showOrganisation ? row.organisationName : null,
+    accent: row.accent,
+    isSeries: row.isSeries,
+    isDraft: row.isDraft,
+    status: row.status,
+    fill: row.fill,
+  };
 }
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) return null;
+  const userId = session.user.id;
+  const now = new Date();
 
-  // 1. Fetch Organisations the user belongs to
-  const orgs = await prisma.organisation.findMany({
-    where: {
-      memberships: { some: { userId: session.user.id } },
-    },
-    orderBy: { name: "asc" },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      description: true,
-      logoUrl: true,
-    },
-  });
-
-  // 2. Fetch Metrics across all user's organisations
-  const totalEventsCount = await prisma.event.count({
-    where: {
-      organisation: { memberships: { some: { userId: session.user.id } } },
-      status: "PUBLISHED",
-    },
-  });
-
-  // 3. Fetch 5 most recent RSVPs for activity stream
-  const recentRsvps = await prisma.rSVP.findMany({
-    where: {
-      OR: [
-        { event: { organisation: { memberships: { some: { userId: session.user.id } } } } },
-        { eventInstance: { series: { organisation: { memberships: { some: { userId: session.user.id } } } } } },
-      ],
-    },
-    include: {
-      event: {
-        select: {
-          title: true,
-          organisation: { select: { name: true, slug: true } },
-        },
+  const [home, collaboratorGrants] = await Promise.all([
+    getDashboardHome(userId, now),
+    prisma.eventCollaborator.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        event: { select: { id: true, title: true, organisation: { select: { id: true, name: true, slug: true } } } },
+        series: { select: { id: true, title: true, organisation: { select: { id: true, name: true, slug: true } } } },
       },
-      eventInstance: {
-        select: {
-          series: {
-            select: {
-              title: true,
-              organisation: { select: { name: true, slug: true } },
-            },
-          },
-        },
-      },
-      user: { select: { name: true, email: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 5,
-  });
+    }),
+  ]);
 
-  const collaboratorGrants = await prisma.eventCollaborator.findMany({
-    where: { userId: session.user.id },
-    orderBy: { createdAt: "desc" },
-    include: {
-      event: { select: { id: true, title: true, organisation: { select: { id: true, name: true, slug: true } } } },
-      series: { select: { id: true, title: true, organisation: { select: { id: true, name: true, slug: true } } } },
-    },
-  });
-  const membershipOrganisationIds = new Set(orgs.map((org) => org.id));
+  const membershipOrganisationIds = new Set(home.organisations.map((organisation) => organisation.id));
   const coOrganizedEvents = collaboratorGrants.flatMap((grant) => {
     const item = grant.event
       ? { id: grant.event.id, title: grant.event.title, organisation: grant.event.organisation, href: `/dashboard/${grant.event.organisation.slug}/event/${grant.event.id}`, label: "Event" }
@@ -113,430 +64,110 @@ export default async function DashboardPage() {
     return item && !membershipOrganisationIds.has(item.organisation.id) ? [{ ...item, permissions: grant.permissions }] : [];
   });
 
-  const userName = session.user.name || "User";
+  const fullName = session.user.name?.trim() || "there";
+  const firstName = fullName.split(/\s+/)[0];
+  const hasOrganisations = home.organisations.length > 0;
+  const showOrganisationOnRows = home.organisations.length > 1;
+  const singleAdminOrg = home.adminOrganisations.length === 1 ? home.adminOrganisations[0] : null;
+  const firstRunOnly = home.setup !== null && !home.setup.hasEvent;
+
+  const coOrganized = coOrganizedEvents.length ? (
+    <section aria-labelledby="co-organized-title" className="flex flex-col gap-3">
+      <div>
+        <h2 id="co-organized-title" className="text-h4 text-ink">Co-organized events</h2>
+        <p className="mt-1 text-body-ui text-ink-muted">Events you can manage without organisation membership</p>
+      </div>
+      <ul className="grid gap-3 md:grid-cols-2">
+        {coOrganizedEvents.map((item) => (
+          <li key={`${item.label}-${item.id}`}>
+            <Link href={item.href} className="flex h-full flex-col gap-1 rounded-lg border border-line bg-canvas p-5 transition-colors hover:bg-subtle">
+              <span className="text-caption text-ink-muted">{item.label} · {item.organisation.name}</span>
+              <span className="text-[17px] font-bold text-ink">{item.title}</span>
+              <span className="text-caption text-ink-muted">{item.permissions.map((permission) => permission.replaceAll("_", " ").toLowerCase()).join(" · ")}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ) : null;
+
+  // Brand-new organiser: the setup checklist is the whole page.
+  if (firstRunOnly && home.setup) {
+    return (
+      <div className="flex flex-col gap-10">
+        <FirstRunSetup setup={home.setup} name={firstName} />
+        {coOrganized}
+        {hasOrganisations ? <OrganisationCards organisations={home.organisations} /> : null}
+      </div>
+    );
+  }
 
   return (
-    <Stack spacing={4} sx={{ py: { xs: 3, sm: 5 }, px: { xs: 1, sm: 2 } }}>
-      {/* ── HEADER (APPLE HIG MINIMALIST STYLE) ── */}
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        spacing={2}
-        sx={{
-          justifyContent: "space-between",
-          alignItems: { xs: "stretch", sm: "flex-end" },
-          gap: 2,
-          p: { xs: 2.5, sm: 3.5 },
-          border: 1,
-          borderColor: "divider",
-          borderRadius: "24px",
-          backgroundColor: "background.paper",
-          backgroundImage: "linear-gradient(120deg, rgba(10,132,255,0.14), transparent 55%, rgba(48,209,88,0.08))",
-          boxShadow: "0 18px 45px rgba(28,28,30,0.1)",
-        }}
-      >
-        <Stack spacing={0.5}>
-          <Typography
-            variant="overline"
-            sx={{ color: "primary.main", fontWeight: 700, letterSpacing: "1.6px", lineHeight: 1.3 }}
-          >
-            Workspace overview
-          </Typography>
-          <Typography
-            variant="h4"
-            component="h1"
-            sx={{
-              fontWeight: 700,
-              letterSpacing: "-1px",
-              color: "text.primary",
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-            }}
-          >
-            Dashboard
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{ color: "text.secondary", fontWeight: 400 }}
-          >
-            Welcome back, {userName}. Everything you need to run your events, in one place.
-          </Typography>
-        </Stack>
+    <div className="flex flex-col gap-8">
+      <header className="flex flex-col gap-5 md:flex-row md:items-center">
+        <DotFace mood={home.mood} size={64} className="shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <HomeGreeting name={firstName} />
+          <p className="text-body-ui text-ink-secondary">{home.summary}</p>
+        </div>
+        <div className="flex flex-wrap gap-2.5">
+          {singleAdminOrg ? (
+            <>
+              <Button asChild variant="secondary">
+                <Link href="/dashboard/org/new">New organisation</Link>
+              </Button>
+              <CreateEventDialog organisationSlug={singleAdminOrg.slug} />
+            </>
+          ) : (
+            <Button asChild variant="primary">
+              <Link href="/dashboard/org/new">
+                <Plus aria-hidden className="size-[18px]" />
+                New organisation
+              </Link>
+            </Button>
+          )}
+        </div>
+      </header>
 
-        <Link href="/dashboard/org/new" style={{ textDecoration: "none" }}>
-          <Button
-            variant="contained"
-            component="span"
-            startIcon={<AddIcon />}
-            sx={{
-              alignSelf: { xs: "flex-start", sm: "center" },
-              backgroundColor: DASHBOARD_BLUE,
-              color: "#FFFFFF",
-              fontWeight: 600,
-              textTransform: "none",
-              borderRadius: "10px",
-              px: 3,
-              py: 1,
-              fontSize: "0.9rem",
-              boxShadow: "none",
-              transition: "opacity 0.15s ease",
-              "&:hover": {
-                backgroundColor: DASHBOARD_BLUE,
-                opacity: 0.9,
-                boxShadow: "none",
-              },
-            }}
-          >
-            New Organisation
-          </Button>
-        </Link>
-      </Stack>
-
-      {coOrganizedEvents.length ? (
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "text.primary", letterSpacing: "-0.3px" }}>
-              Co-organized events
-            </Typography>
-            <Typography variant="body2" sx={{ color: "text.secondary" }}>
-              Events you can manage without organisation membership
-            </Typography>
-          </Stack>
-          <Grid container spacing={2}>
-            {coOrganizedEvents.map((item) => (
-              <Grid key={`${item.label}-${item.id}`} size={{ xs: 12, md: 6 }}>
-                <Card variant="outlined" sx={{ borderRadius: "16px", backgroundColor: "background.paper", borderColor: "divider" }}>
-                  <Link href={item.href} style={{ color: "inherit", display: "block", textDecoration: "none" }}>
-                  <CardActionArea component="div">
-                    <CardContent sx={{ p: 2.5 }}>
-                      <Stack spacing={0.75}>
-                        <Typography variant="caption" color="text.secondary">{item.label} · {item.organisation.name}</Typography>
-                        <Typography sx={{ fontWeight: 700 }}>{item.title}</Typography>
-                        <Typography variant="caption" color="text.secondary">{item.permissions.map((permission) => permission.replaceAll("_", " ").toLowerCase()).join(" · ")}</Typography>
-                      </Stack>
-                    </CardContent>
-                  </CardActionArea>
-                  </Link>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </Stack>
+      {home.needsYou ? (
+        <div role="status" className="flex flex-col gap-3 rounded-lg bg-warning-bg px-4 py-3.5 text-warning-fg sm:flex-row sm:items-center">
+          <Clock3 aria-hidden className="hidden size-5 shrink-0 sm:block" />
+          <p className="min-w-0 flex-1 text-body-ui">
+            {home.needsYou.pendingApprovals > 0 ? (
+              <strong>{home.needsYou.pendingApprovals === 1 ? "1 person is" : `${home.needsYou.pendingApprovals} people are`} waiting for approval.</strong>
+            ) : null}
+            {home.needsYou.pendingApprovals > 0 && home.needsYou.drafts > 0 ? " " : null}
+            {home.needsYou.drafts > 0 ? <span>{home.needsYou.drafts === 1 ? "1 event is" : `${home.needsYou.drafts} events are`} still a draft.</span> : null}
+          </p>
+          <span className="flex shrink-0 flex-wrap gap-x-4 gap-y-1 text-sm font-bold">
+            {home.needsYou.approvalsHref ? <Link href={home.needsYou.approvalsHref} className="underline underline-offset-4">Review approvals</Link> : null}
+            {home.needsYou.draftHref ? <Link href={home.needsYou.draftHref} className="underline underline-offset-4">Finish draft</Link> : null}
+          </span>
+        </div>
       ) : null}
 
-      {/* ── TWO COLUMN LISTS (HIG GROUPED LAYOUT) ── */}
-      <Grid container spacing={4}>
-        {/* Left Column: Organisations */}
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <Stack spacing={2}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "baseline" }}>
-                  <Typography
-                    variant="h6"
-                    sx={{
-                      fontWeight: 700,
-                      color: "text.primary",
-                      letterSpacing: "-0.3px",
-                    }}
-                  >
-                    Organisations
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
-                    Your workspaces
-                  </Typography>
-                </Stack>
+      {home.setup ? <FirstRunSetup setup={home.setup} name={firstName} compact /> : null}
 
-            {orgs.length === 0 ? (
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 6,
-                  borderRadius: "16px",
-                  textAlign: "center",
-                  backgroundColor: "background.paper",
-                  borderColor: "divider",
-                }}
-              >
-                <Stack spacing={2} sx={{ alignItems: "center" }}>
-                  <Avatar
-                    sx={{
-                      bgcolor: "action.hover",
-                      color: "text.secondary",
-                      width: 56,
-                      height: 56,
-                    }}
-                  >
-                    <BusinessIcon sx={{ fontSize: 30 }} />
-                  </Avatar>
-                  <Typography variant="body1" sx={{ fontWeight: 600, color: "text.primary" }}>
-                    No organisations yet
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: "text.secondary", maxWidth: 360, lineHeight: 1.5 }}
-                  >
-                    Create your first organisation workspace to manage events and check-ins.
-                  </Typography>
-                  <Box sx={{ pt: 1 }}>
-                    <Link href="/dashboard/org/new" style={{ textDecoration: "none" }}>
-                      <Button
-                        variant="contained"
-                        component="span"
-                        startIcon={<AddIcon />}
-                        sx={{
-                          backgroundColor: DASHBOARD_BLUE,
-                          color: "#FFFFFF",
-                          fontWeight: 600,
-                          textTransform: "none",
-                          borderRadius: "10px",
-                          px: 3,
-                          "&:hover": {
-                            backgroundColor: DASHBOARD_BLUE,
-                            opacity: 0.9,
-                          },
-                        }}
-                      >
-                        Create Organisation
-                      </Button>
-                    </Link>
-                  </Box>
-                </Stack>
-              </Paper>
-            ) : (
-              <Stack spacing={2}>
-                {orgs.map((org) => (
-                  <Card
-                    key={org.id}
-                    variant="outlined"
-                    sx={{
-                      borderRadius: "16px",
-                      backgroundColor: "background.paper",
-                      borderColor: "divider",
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-                      "&:hover": {
-                        backgroundColor: "action.hover",
-                        transform: "translateY(-2px)",
-                        borderColor: "rgba(10,132,255,0.35)",
-                      },
-                      transition: "background-color 0.15s ease, transform 0.15s ease, border-color 0.15s ease",
-                    }}
-                  >
-                    <Link
-                      href={`/dashboard/${org.slug}`}
-                      style={{
-                        textDecoration: "none",
-                        color: "inherit",
-                        display: "block",
-                      }}
-                    >
-                      <CardActionArea component="div">
-                        <CardContent sx={{ p: 3 }}>
-                          <Stack
-                            direction={{ xs: "column", sm: "row" }}
-                            spacing={3}
-                            sx={{
-                              alignItems: { xs: "flex-start", sm: "center" },
-                              justifyContent: "space-between",
-                            }}
-                          >
-                            {/* Org Profile Header */}
-                            <Stack direction="row" spacing={2} sx={{ alignItems: "center", minWidth: 0, flex: 1 }}>
-                              <Avatar
-                                variant="rounded"
-                                src={org.logoUrl ?? undefined}
-                                alt={org.name}
-                                sx={{
-                                  background: "action.hover",
-                                  color: "text.primary",
-                                  width: 52,
-                                  height: 52,
-                                  borderRadius: "12px",
-                                  fontWeight: 600,
-                                  fontSize: "1.2rem",
-                                  border: 1,
-                                  borderColor: "divider",
-                                }}
-                              >
-                                {org.name.trim().slice(0, 1).toUpperCase()}
-                              </Avatar>
-                              <Box sx={{ minWidth: 0 }}>
-                                <Typography
-                                  variant="body1"
-                                  sx={{ fontWeight: 600, color: "text.primary" }}
-                                  noWrap
-                                >
-                                  {org.name}
-                                </Typography>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ color: "text.secondary", mt: 0.25 }}
-                                  noWrap
-                                >
-                                  /{org.slug}
-                                </Typography>
-                                {org.description ? (
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ color: "text.secondary", display: "block", mt: 0.75 }}
-                                    noWrap
-                                  >
-                                    {org.description}
-                                  </Typography>
-                                ) : null}
-                              </Box>
-                            </Stack>
+      {home.live ? <LiveEventPanel live={home.live} now={now} /> : home.next ? <NextUpCard next={home.next} now={now} /> : null}
 
-                            {/* Info & Navigation */}
-                            <Stack
-                              direction="row"
-                              spacing={3}
-                              sx={{
-                                alignItems: "center",
-                                width: { xs: "100%", sm: "auto" },
-                                justifyContent: { xs: "space-between", sm: "flex-end" },
-                                pt: { xs: 2, sm: 0 },
-                                borderTop: { xs: 1, sm: "none" },
-                                borderColor: { xs: "divider", sm: "transparent" },
-                              }}
-                            >
-                              <Typography variant="body2" sx={{ color: "text.secondary", fontWeight: 600 }}>
-                                Open workspace
-                              </Typography>
-                              <ArrowForwardIcon sx={{ color: "text.secondary", fontSize: 18 }} />
-                            </Stack>
-                          </Stack>
-                        </CardContent>
-                      </CardActionArea>
-                    </Link>
-                  </Card>
-                ))}
-              </Stack>
-            )}
-          </Stack>
-        </Grid>
+      {hasOrganisations ? <StatRow stats={home.stats} /> : null}
 
-        {/* Right Column: Activity Feed (Grouped List Style) */}
-        <Grid size={{ xs: 12, lg: 4 }}>
-          <Stack spacing={2}>
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 3,
-                borderRadius: "16px",
-                backgroundColor: "background.paper",
-                borderColor: "divider",
-                backgroundImage: "linear-gradient(145deg, rgba(10,132,255,0.18), transparent 68%)",
-                boxShadow: "0 14px 30px rgba(10,132,255,0.1)",
-              }}
-            >
-              <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "flex-start" }}>
-                <Stack spacing={1}>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "text.secondary",
-                      fontWeight: 600,
-                      fontSize: "0.8rem",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                    }}
-                  >
-                    Active Events
-                  </Typography>
-                  <Typography
-                    variant="h3"
-                    sx={{ fontWeight: 700, color: "text.primary", letterSpacing: "-1px" }}
-                  >
-                    {totalEventsCount}
-                  </Typography>
-                </Stack>
-                <Box
-                  sx={{
-                    display: "grid",
-                    placeItems: "center",
-                    width: 44,
-                    height: 44,
-                    borderRadius: "14px",
-                    color: "#fff",
-                    backgroundColor: "rgba(10,132,255,0.78)",
-                  }}
-                >
-                  <EventIcon sx={{ fontSize: 24 }} />
-                </Box>
-              </Stack>
-              <Typography variant="caption" sx={{ display: "block", mt: 2, color: "text.secondary" }}>
-                Published across your workspaces
-              </Typography>
-            </Paper>
+      {hasOrganisations ? (
+        <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <HomeEventsPanel
+            upcoming={home.upcoming.map((row) => toView(row, now, showOrganisationOnRows))}
+            drafts={home.drafts.map((row) => toView(row, now, showOrganisationOnRows))}
+            past={home.past.map((row) => toView(row, now, showOrganisationOnRows))}
+            counts={home.counts}
+            showDrafts={home.adminOrganisations.length > 0}
+          />
+          <ActivityFeed activity={home.activity} now={now} />
+        </div>
+      ) : null}
 
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 700,
-                color: "text.primary",
-                letterSpacing: "-0.3px",
-              }}
-            >
-              Activity
-            </Typography>
+      {coOrganized}
 
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 3,
-                borderRadius: "16px",
-                backgroundColor: "background.paper",
-                borderColor: "divider",
-                boxShadow: "0 8px 24px rgba(0,0,0,0.1)",
-              }}
-            >
-              {recentRsvps.length === 0 ? (
-                <Typography
-                  variant="body2"
-                  sx={{ color: "text.secondary", textAlign: "center", py: 4 }}
-                >
-                  No recent registrations.
-                </Typography>
-              ) : (
-                <Stack spacing={2}>
-                  {recentRsvps.map((rsvp, idx) => {
-                    const eventTitle = rsvp.event?.title ?? rsvp.eventInstance?.series?.title ?? "Event";
-                    const orgName = rsvp.event?.organisation?.name ?? rsvp.eventInstance?.series?.organisation?.name ?? "";
-                    const attendeeName = rsvp.user?.name ?? rsvp.guestName ?? "Guest";
-                    const isConfirmed = rsvp.status === "CONFIRMED";
-
-                    return (
-                      <Stack key={rsvp.id} spacing={1.5}>
-                        {idx > 0 && <Divider />}
-                        <Stack spacing={0.5}>
-                          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "baseline" }}>
-                            <Typography
-                              variant="body2"
-                              sx={{ fontWeight: 600, color: "text.primary" }}
-                            >
-                              {attendeeName}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "text.secondary", fontSize: "0.7rem" }}
-                            >
-                              {getTimeAgo(rsvp.createdAt)}
-                            </Typography>
-                          </Stack>
-                          <Typography
-                            variant="caption"
-                            sx={{ color: "text.secondary", lineHeight: 1.4 }}
-                          >
-                            {isConfirmed ? "Registered for" : "Waitlisted for"}{" "}
-                            <Box component="span" sx={{ color: "text.primary" }}>{eventTitle}</Box> ({orgName})
-                          </Typography>
-                        </Stack>
-                      </Stack>
-                    );
-                  })}
-                </Stack>
-              )}
-            </Paper>
-          </Stack>
-        </Grid>
-      </Grid>
-    </Stack>
+      {hasOrganisations ? <OrganisationCards organisations={home.organisations} /> : null}
+    </div>
   );
 }

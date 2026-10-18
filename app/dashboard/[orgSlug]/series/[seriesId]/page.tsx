@@ -1,13 +1,4 @@
 import { notFound } from "next/navigation";
-import Typography from "@mui/material/Typography";
-import Stack from "@mui/material/Stack";
-import Paper from "@mui/material/Paper";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import TableContainer from "@mui/material/TableContainer";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { EventPermission } from "@prisma/client";
@@ -16,9 +7,13 @@ import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
 import { canViewEventDashboard } from "@/lib/eventAccess";
 import { EditSeriesForm } from "@/components/series/EditSeriesForm";
 import { SeriesInvitePanel } from "@/components/invites/SeriesInvitePanel";
-import { AttendeeTable } from "@/components/attendees/AttendeeTable";
+import { GuestsPeople } from "@/components/event-dashboard/panels/GuestsPeople";
 import { ScheduleManager } from "@/components/schedule/ScheduleManager";
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
+import { ArrowUpRight } from "lucide-react";
+import { Card, PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { formatDayTime } from "@/lib/format/datetime";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "Manage event series", robots: { index: false, follow: false } };
@@ -90,20 +85,11 @@ export default async function SeriesManagePage({ params }: Props) {
   }));
 
   return (
-    <Stack spacing={3.5} sx={{ py: { xs: 1, sm: 2 } }}>
-      <Stack spacing={0.5}>
-        <Typography variant="h5" component="h1" sx={{ fontWeight: 700, letterSpacing: "-0.5px" }}>
-          {series.title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Manage this recurring event and its upcoming occurrences.
-        </Typography>
-      </Stack>
+    <div className="flex flex-col gap-8">
+      <PageHeader title={series.title} description="Manage this recurring event and its upcoming occurrences." />
 
-      <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: "18px", borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.025)" }}>
-        <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 700 }}>
-          Series details
-        </Typography>
+      <Card as="section" padding="lg" aria-labelledby="series-details-title">
+        <h2 id="series-details-title" className="mb-4 text-h4 text-ink">Series details</h2>
         <EditSeriesForm organisationSlug={organisation.slug} series={{
           id: series.id,
           title: series.title,
@@ -114,93 +100,81 @@ export default async function SeriesManagePage({ params }: Props) {
           status: series.status,
           privacyType: series.privacyType,
         }} />
-      </Paper>
+      </Card>
 
-      <Typography variant="h6" component="h2" sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}>
-        Invites
-      </Typography>
-      <SeriesInvitePanel
-        organisationSlug={organisation.slug}
-        eventSeriesId={series.id}
-        invites={invites.map((i) => ({
-          ...i,
-          createdAt: i.createdAt.toISOString(),
-        }))}
-      />
+      <section aria-labelledby="series-invites-title" className="flex flex-col gap-3">
+        <h2 id="series-invites-title" className="text-h4 text-ink">Invites</h2>
+        <SeriesInvitePanel
+          organisationSlug={organisation.slug}
+          eventSeriesId={series.id}
+          invites={invites.map((i) => ({
+            ...i,
+            createdAt: i.createdAt.toISOString(),
+          }))}
+        />
+      </section>
 
       <ScheduleManager organisationSlug={organisation.slug} eventSeriesId={series.id} items={series.scheduleItems.map((item) => ({ ...item, startDateTime: item.startDateTime.toISOString(), endDateTime: item.endDateTime.toISOString() }))} defaultDate={series.instances[0] ? eventDateInput(series.instances[0].startDateTime, series.timezone) : ""} />
 
-      <Typography variant="h6" component="h2" sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}>
-        Upcoming instances
-      </Typography>
-      <TableContainer component={Paper} variant="outlined" sx={{ overflow: "hidden", borderRadius: "16px", borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(28,28,30,0.82)" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ backgroundColor: "rgba(255,255,255,0.025)" }}>
-              <TableCell sx={{ py: 1.25, color: "rgba(255,255,255,0.48)", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>Start</TableCell>
-              <TableCell align="right" sx={{ py: 1.25, color: "rgba(255,255,255,0.48)", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.7px", textTransform: "uppercase" }}>Event page</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
+      <section aria-labelledby="series-instances-title" className="flex flex-col gap-3">
+        <h2 id="series-instances-title" className="text-h4 text-ink">Upcoming instances</h2>
+        <Table label="Upcoming instances">
+          <THead>
+            <tr>
+              <TH>Start</TH>
+              <TH className="text-right">Event page</TH>
+            </tr>
+          </THead>
+          <TBody>
             {series.instances.map((inst) => (
-              <TableRow key={inst.id} hover sx={{ "&:last-child td": { borderBottom: 0 }, "&:hover": { backgroundColor: "rgba(255,255,255,0.035)" } }}>
-                <TableCell sx={{ py: 1.5, fontWeight: 600 }}>
-                  {inst.startDateTime.toLocaleString(undefined, {
-                    timeZone: series.timezone,
-                  })}
-                </TableCell>
-                <TableCell align="right" sx={{ py: 1.5 }}>
-                  <Link href={`/${organisation.slug}/i/${inst.id}`} style={{ color: "#0A84FF", fontSize: "0.875rem", fontWeight: 650 }}>
+              <TR key={inst.id}>
+                <TD className="font-semibold">{formatDayTime(inst.startDateTime, series.timezone)}</TD>
+                <TD className="text-right">
+                  <Link href={`/${organisation.slug}/i/${inst.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-ink underline underline-offset-4">
                     View event
+                    <ArrowUpRight aria-hidden className="size-3.5" />
                   </Link>
-                </TableCell>
-              </TableRow>
+                </TD>
+              </TR>
             ))}
-          </TableBody>
+          </TBody>
         </Table>
-      </TableContainer>
+      </section>
 
       {canDownloadReports ? (
-        <>
-          <Typography variant="h6" component="h2" sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}>
-            Reports
-          </Typography>
-          <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 }, borderRadius: "18px", borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.025)" }}>
+        <section aria-labelledby="series-reports-title" className="flex flex-col gap-3">
+          <h2 id="series-reports-title" className="text-h4 text-ink">Reports</h2>
+          <Card>
             {finishedInstances.length ? (
-              <Stack spacing={1.25}>
+              <ul className="flex flex-col divide-y divide-line">
                 {finishedInstances.map((instance) => (
-                  <Stack key={instance.id} direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { xs: "flex-start", sm: "center" }, justifyContent: "space-between" }}>
-                    <Typography variant="body2">
-                      {instance.startDateTime.toLocaleString(undefined, { timeZone: series.timezone })}
-                    </Typography>
+                  <li key={instance.id} className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-body-ui text-ink">{formatDayTime(instance.startDateTime, series.timezone)}</span>
                     <EventReportDownloadButton href={`/api/reports/instance/${instance.id}`} />
-                  </Stack>
+                  </li>
                 ))}
-              </Stack>
+              </ul>
             ) : (
-              <Typography variant="body2" color="text.secondary">
-                Reports become available after an occurrence has finished.
-              </Typography>
+              <p className="text-body-ui text-ink-muted">Reports become available after an occurrence has finished.</p>
             )}
-          </Paper>
-        </>
+          </Card>
+        </section>
       ) : null}
 
       {firstInstanceId && canManageRegistrations ? (
-        <>
-          <Typography variant="h6" component="h2" sx={{ fontWeight: 700, letterSpacing: "-0.3px" }}>
-            Attendees (first upcoming occurrence)
-          </Typography>
-          <AttendeeTable
+        <section aria-label="Attendees (first upcoming occurrence)" className="min-w-0">
+          <GuestsPeople
             organisationSlug={organisation.slug}
-            eventInstanceId={firstInstanceId}
+            target={{ kind: "instance", instanceId: firstInstanceId, seriesId: series.id }}
+            title="Attendees (first upcoming occurrence)"
+            timeZone={series.timezone}
+            now={now.toISOString()}
             attendees={attendees}
-            canManage
+            truncated={attendeesTruncated}
             registrationFields={[]}
-            collectionTruncated={attendeesTruncated}
           />
-        </>
+        </section>
       ) : null}
-    </Stack>
+    </div>
   );
 }

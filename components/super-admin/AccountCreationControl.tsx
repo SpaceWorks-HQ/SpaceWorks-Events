@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Alert from "@mui/material/Alert";
-import FormControlLabel from "@mui/material/FormControlLabel";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import Switch from "@mui/material/Switch";
-import Typography from "@mui/material/Typography";
+import { SwitchRow } from "@/components/ui/choice";
+import { Callout, Card, CardHeader } from "@/components/ui/display";
 import { setNewUserRegistrationEnabled } from "@/app/actions/instance-settings";
 
 export function AccountCreationControl({ initialEnabled }: { initialEnabled: boolean }) {
@@ -15,35 +11,28 @@ export function AccountCreationControl({ initialEnabled }: { initialEnabled: boo
   const [pending, startTransition] = useTransition();
 
   return (
-    <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-      <Stack spacing={1}>
-        <Typography variant="h6" sx={{ fontWeight: 700 }}>New account creation</Typography>
-        <Typography variant="body2" color="text.secondary">
-          When disabled, password and Google sign-in remain available only for existing users.
-        </Typography>
-        {error ? <Alert severity="error">{error}</Alert> : null}
-        <FormControlLabel
+    <Card as="section" className="rounded-2xl">
+      <CardHeader title="New account creation" description="When disabled, password and Google sign-in remain available only for existing users." />
+      <div className="flex flex-col gap-3">
+        {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+        <SwitchRow
           label={enabled ? "New users can create accounts" : "New account creation is disabled"}
-          control={
-            <Switch
-              checked={enabled}
-              disabled={pending}
-              onChange={(_, checked) => {
-                const previous = enabled;
-                setEnabled(checked);
-                setError(null);
-                startTransition(async () => {
-                  const result = await setNewUserRegistrationEnabled({ allowNewUserSignups: checked });
-                  if (!result.ok) {
-                    setEnabled(previous);
-                    setError(result.error);
-                  }
-                });
-              }}
-            />
-          }
+          checked={enabled}
+          disabled={pending}
+          onCheckedChange={(checked) => {
+            const previous = enabled;
+            setEnabled(checked);
+            setError(null);
+            startTransition(async () => {
+              const result = await setNewUserRegistrationEnabled({ allowNewUserSignups: checked });
+              if (!result.ok) {
+                setEnabled(previous);
+                setError(result.error);
+              }
+            });
+          }}
         />
-      </Stack>
-    </Paper>
+      </div>
+    </Card>
   );
 }

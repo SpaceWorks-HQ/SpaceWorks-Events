@@ -1,13 +1,6 @@
-"use client";
-
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
+import { cn } from "@/lib/cn";
 
 export type SparkPoint = { xLabel: string; y: number };
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
 
 function buildPath(values: number[], w: number, h: number, pad: number) {
   if (values.length === 0) return "";
@@ -32,6 +25,8 @@ export function SparklineCard(props: {
   title: string;
   subtitle?: string;
   points: SparkPoint[];
+  /** Show this window total instead of the latest day and its day-on-day change. */
+  total?: number;
 }) {
   const w = 240;
   const h = 56;
@@ -40,67 +35,25 @@ export function SparklineCard(props: {
   const path = buildPath(values, w, h, pad);
   const latest = values.at(-1) ?? 0;
   const prev = values.length >= 2 ? values.at(-2) ?? 0 : null;
-  const delta = prev == null ? null : latest - prev;
+  const delta = props.total != null || prev == null ? null : latest - prev;
+  const headline = props.total ?? latest;
 
   return (
-    <Box
-      sx={{
-        p: 2.25,
-        borderRadius: 3,
-        border: "1px solid",
-        borderColor: "divider",
-        overflow: "hidden",
-      }}
-    >
-      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-        <Typography variant="body2" color="text.secondary">
-          {props.title}
-        </Typography>
-        <Typography variant="h6" sx={{ fontWeight: 800 }}>
-          {latest.toLocaleString()}
-        </Typography>
+    <div className="overflow-hidden rounded-2xl border border-line bg-canvas p-4">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span className="text-sm text-ink-muted">{props.title}</span>
+        <span className="font-display text-[22px] font-extrabold leading-tight text-ink">{headline.toLocaleString()}</span>
         {delta != null ? (
-          <Typography
-            variant="caption"
-            sx={{
-              color:
-                delta === 0
-                  ? "text.secondary"
-                  : delta > 0
-                    ? "success.main"
-                    : "warning.main",
-              fontWeight: 650,
-            }}
-          >
+          <span className={cn("text-caption font-semibold", delta === 0 ? "text-ink-muted" : delta > 0 ? "text-success-fg" : "text-warning-fg")}>
             {delta > 0 ? "+" : ""}
             {delta.toLocaleString()}
-          </Typography>
+          </span>
         ) : null}
-      </Box>
-
-      {props.subtitle ? (
-        <Typography variant="caption" color="text.secondary">
-          {props.subtitle}
-        </Typography>
-      ) : null}
-
-      <Box sx={{ mt: 1 }}>
-        <svg width="100%" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={props.title}>
-          <path
-            d={path}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.25"
-            opacity={0.9}
-          />
-          <circle
-            cx={clamp(w - pad, pad, w - pad)}
-            cy={clamp(h / 2, pad, h - pad)}
-            r="0"
-          />
-        </svg>
-      </Box>
-    </Box>
+      </div>
+      {props.subtitle ? <p className="text-caption text-ink-muted">{props.subtitle}</p> : null}
+      <svg className="mt-2 block w-full text-ink" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={props.title}>
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+      </svg>
+    </div>
   );
 }
-

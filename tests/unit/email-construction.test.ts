@@ -88,7 +88,7 @@ describe("event broadcast email", () => {
     });
     const message = mocks.sendMail.mock.calls[0]?.[0];
     expect(message.subject).not.toMatch(/[\r\n]/);
-    expect(message.html).toContain('<a href="https://events.test/ticket/abc?x=1&amp;y=2" style="display: inline-block; background-color: #6750A4;');
+    expect(message.html).toContain('<a href="https://events.test/ticket/abc?x=1&amp;y=2" style="display: inline-block; background-color: #18181B;');
     expect(message.html).toContain('<p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6; color: #1c1b1f;"><br></p>');
     expect(message.html).toContain('<li style="');
     expect(message.html).toContain("Org &amp; Co");

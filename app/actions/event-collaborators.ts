@@ -100,3 +100,27 @@ export async function updateEventCollaboratorPermissions(input: unknown): Promis
   revalidatePath("/dashboard");
   return { ok: true };
 }
+
+/** Cancels a pending (unused) co-organiser invite so its emailed link stops working. Organisation admins only. */
+export async function cancelEventCollaboratorInvite(input: unknown): Promise<ActionResult> {
+  const session = await auth();
+  const parsed = target.extend({ inviteId: z.string().min(1) }).safeParse(input);
+  if (!session?.user?.id || !parsed.success) return { ok: false, error: "Invalid request." };
+  if (await isActionRateLimited("invite", session.user.id)) return { ok: false, error: "Too many invite requests. Please try again later." };
+  const org = await requireAdmin(parsed.data.organisationSlug, session.user.id);
+  if (!org) return { ok: false, error: "You do not have permission." };
+  const deleted = await prisma.eventCollaboratorInvite.deleteMany({
+    where: {
+      id: parsed.data.inviteId,
+      usedAt: null,
+      ...(parsed.data.eventId
+        ? { eventId: parsed.data.eventId, event: { organisationId: org.id } }
+        : { eventSeriesId: parsed.data.eventSeriesId, series: { organisationId: org.id } }),
+    },
+  });
+  if (!deleted.count) return { ok: false, error: "Invite not found or already accepted." };
+  await recordAuditEvent({ action: "EVENT_COLLABORATOR_INVITE_CANCELLED", actorUserId: session.user.id, organisationId: org.id, targetType: "EventCollaboratorInvite", targetId: parsed.data.inviteId });
+  if (parsed.data.eventId) revalidatePath(`/dashboard/${org.slug}/event/${parsed.data.eventId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}

@@ -1,21 +1,16 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import TextField from "@mui/material/TextField";
-import Button from "@mui/material/Button";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Link from "next/link";
+import { requireSuperAdminMfa } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { AdminPager, AdminSearchForm, LinkRow } from "@/components/super-admin/AdminPanel";
+import { PageHeader } from "@/components/ui/display";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
   searchParams: Promise<{ q?: string; page?: string }>;
 };
 
 export default async function SuperAdminOrgsPage({ searchParams }: Props) {
+  // Layout checks don't re-run on client navigation, so every page checks too.
+  await requireSuperAdminMfa();
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
@@ -46,106 +41,44 @@ export default async function SuperAdminOrgsPage({ searchParams }: Props) {
   });
 
   return (
-    <Stack spacing={2}>
-      <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-        Organisations
-      </Typography>
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Organisations" description="Every organisation on this instance, newest first." />
+      <AdminSearchForm action="/super-admin/orgs" label="Search by name or slug" defaultValue={q} />
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Stack
-          component="form"
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          action="/super-admin/orgs"
-          method="GET"
-        >
-          <TextField
-            name="q"
-            label="Search by name or slug"
-            defaultValue={q}
-            size="small"
-            fullWidth
-          />
-          <input type="hidden" name="page" value="0" />
-          <Button type="submit" variant="contained">
-            Search
-          </Button>
-        </Stack>
-      </Paper>
+      <Table label="Organisations">
+        <THead>
+          <tr>
+            <TH>Name</TH>
+            <TH>Slug</TH>
+            <TH className="text-right">Members</TH>
+            <TH className="text-right">Events</TH>
+            <TH className="text-right">Series</TH>
+            <TH>Created</TH>
+            <TH>Link</TH>
+          </tr>
+        </THead>
+        <TBody>
+          {orgs.length === 0 ? (
+            <tr><TD colSpan={7} className="py-8 text-center text-ink-muted">No organisations.</TD></tr>
+          ) : (
+            orgs.map((o) => (
+              <TR key={o.id}>
+                <TD className="font-semibold">{o.name}</TD>
+                <TD className="font-mono text-sm">{o.slug}</TD>
+                <TD className="text-right tabular-nums">{o._count.memberships}</TD>
+                <TD className="text-right tabular-nums">{o._count.events}</TD>
+                <TD className="text-right tabular-nums">{o._count.eventSeries}</TD>
+                <TD className="whitespace-nowrap text-ink-secondary">{o.createdAt.toLocaleString()}</TD>
+                <TD>
+                  <LinkRow links={[{ href: `/super-admin/orgs/${o.id}`, label: "View" }, { href: `/${o.slug}`, label: "Public" }, { href: `/dashboard/${o.slug}`, label: "Dashboard" }]} />
+                </TD>
+              </TR>
+            ))
+          )}
+        </TBody>
+      </Table>
 
-      <Paper variant="outlined" sx={{ borderRadius: 3, overflow: "hidden" }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Name</TableCell>
-              <TableCell>Slug</TableCell>
-              <TableCell align="right">Members</TableCell>
-              <TableCell align="right">Events</TableCell>
-              <TableCell align="right">Series</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Link</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {orgs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <Typography color="text.secondary">No organisations.</Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              orgs.map((o) => (
-                <TableRow key={o.id} hover>
-                  <TableCell sx={{ fontWeight: 650 }}>{o.name}</TableCell>
-                  <TableCell sx={{ fontFamily: "monospace" }}>{o.slug}</TableCell>
-                  <TableCell align="right">{o._count.memberships}</TableCell>
-                  <TableCell align="right">{o._count.events}</TableCell>
-                  <TableCell align="right">{o._count.eventSeries}</TableCell>
-                  <TableCell>{o.createdAt.toLocaleString()}</TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/super-admin/orgs/${o.id}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      View
-                    </Link>
-                    {" · "}
-                    <Link href={`/${o.slug}`} style={{ textDecoration: "none" }}>
-                      Public
-                    </Link>
-                    {" · "}
-                    <Link
-                      href={`/dashboard/${o.slug}`}
-                      style={{ textDecoration: "none" }}
-                    >
-                      Dashboard
-                    </Link>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Paper>
-
-      <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
-        <Link
-          href={`/super-admin/orgs?q=${encodeURIComponent(q)}&page=${Math.max(0, page - 1)}`}
-          style={{ textDecoration: "none" }}
-        >
-          Prev
-        </Link>
-        <Typography color="text.secondary">·</Typography>
-        <Typography color="text.secondary">Page {page + 1}</Typography>
-        <Typography color="text.secondary">·</Typography>
-        <Link
-          href={`/super-admin/orgs?q=${encodeURIComponent(q)}&page=${page + 1}`}
-          style={{ textDecoration: "none" }}
-        >
-          Next
-        </Link>
-      </Stack>
-    </Stack>
+      <AdminPager basePath="/super-admin/orgs" query={q} page={page} />
+    </div>
   );
 }
-

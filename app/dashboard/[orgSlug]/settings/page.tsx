@@ -1,14 +1,14 @@
-import Stack from "@mui/material/Stack";
-import Typography from "@mui/material/Typography";
-import Paper from "@mui/material/Paper";
-import Grid from "@mui/material/Grid";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
 import Link from "next/link";
+import { ExternalLink, KeyRound } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { canDeleteOrg, requireOrgRole } from "@/lib/permissions";
 import { EditOrgForm } from "@/components/org/EditOrgForm";
+import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { DeleteOrganisationButton } from "@/components/dashboard/DeleteOrganisationButton";
+import { OrgPageHeader } from "@/components/dashboard/org/OrgPageHeader";
+import { Button } from "@/components/ui/button";
+import { Chip } from "@/components/ui/display";
+import { cn } from "@/lib/cn";
 
 import type { Metadata } from "next";
 
@@ -18,6 +18,8 @@ export const metadata: Metadata = {
   title: "Settings",
   description: "Edit organisation details.",
 };
+
+const sectionCard = "rounded-2xl border border-line bg-canvas p-5 sm:p-6";
 
 export default async function OrgSettingsPage({ params }: Props) {
   const { orgSlug } = await params;
@@ -30,89 +32,106 @@ export default async function OrgSettingsPage({ params }: Props) {
 
   if (!org) {
     // requireOrgRole guarantees the org exists; this is defensive.
-    return (
-      <Typography color="text.secondary">
-        Organisation not found.
-      </Typography>
-    );
+    return <p className="text-body-ui text-ink-muted">Organisation not found.</p>;
   }
 
+  const isOwner = membership.role === "OWNER";
+  const canDelete = canDeleteOrg(membership);
+  // Owner-only, tenant-scoped counts. "Active" means the client is enabled and
+  // holds at least one credential that is neither revoked nor expired.
+  const now = new Date();
+  const [totalApiClients, activeApiClients] = isOwner
+    ? await Promise.all([
+        prisma.apiClient.count({ where: { organisationId: organisation.id } }),
+        prisma.apiClient.count({
+          where: {
+            organisationId: organisation.id,
+            status: "ACTIVE",
+            credentials: { some: { revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } },
+          },
+        }),
+      ])
+    : [0, 0];
+
   return (
-    <Stack spacing={3.5}>
-      <Paper
-        variant="outlined"
-        sx={{
-          p: { xs: 2.5, sm: 3.5 },
-          borderRadius: "22px",
-          borderColor: "rgba(255,255,255,0.09)",
-          background: "linear-gradient(120deg, rgba(10,132,255,0.14), rgba(28,28,30,0.96) 60%)",
-        }}
-      >
-        <Typography variant="overline" sx={{ color: "#0A84FF", fontWeight: 700, letterSpacing: "1.5px", lineHeight: 1.3 }}>
-          Organisation settings
-        </Typography>
-        <Typography variant="h4" component="h1" sx={{ mt: 0.5, fontWeight: 700, letterSpacing: "-1px" }}>
-          Shape your workspace
-        </Typography>
-        <Typography variant="body2" sx={{ mt: 1, color: "rgba(255,255,255,0.58)", maxWidth: 560 }}>
-          Update the details people see when they visit {org.name}.
-        </Typography>
-      </Paper>
+    <div className="flex flex-col gap-7">
+      <OrgPageHeader
+        organisation={{ name: org.name, slug: org.slug, logoUrl: org.logoUrl }}
+        title="Settings"
+        description={`What people see on your public page, and how ${org.name} connects to other tools.`}
+      />
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 8 }}>
-          <EditOrgForm
-            organisationSlug={org.slug}
-            initial={{
-              name: org.name,
-              description: org.description ?? "",
-              logoUrl: org.logoUrl,
-            }}
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Stack spacing={2.5}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: "16px", borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.025)" }}>
-              <Stack spacing={1}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>About this workspace</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Changes are visible on the public organisation page as soon as you save them.
-                </Typography>
-                <Box sx={{ pt: 1 }}>
-                  <Typography variant="caption" sx={{ color: "text.secondary" }}>Organisation URL</Typography>
-                  <Typography variant="body2" sx={{ mt: 0.25, fontWeight: 600 }}>/{org.slug}</Typography>
-                </Box>
-              </Stack>
-            </Paper>
+      <div className="flex min-w-0 flex-col gap-6">
+        <EditOrgForm
+          id="profile"
+          organisationSlug={org.slug}
+          initial={{
+            name: org.name,
+            description: org.description ?? "",
+            logoUrl: org.logoUrl,
+          }}
+        />
 
-            {membership.role === "OWNER" ? (
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: "16px", borderColor: "rgba(255,255,255,0.08)", backgroundColor: "rgba(255,255,255,0.025)" }}>
-                <Stack spacing={1.25}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>API access</Typography>
-                  <Typography variant="body2" color="text.secondary">Manage machine clients, scopes, and rotatable credentials.</Typography>
-                  <Link href={`/dashboard/${org.slug}/settings/api`} style={{ textDecoration: "none" }}>
-                    <Button variant="outlined" size="small">Manage API access</Button>
-                  </Link>
-                </Stack>
-              </Paper>
-            ) : null}
+        <section id="public-page" aria-labelledby="public-page-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+          <div className="min-w-0 flex-1">
+            <h2 id="public-page-title" className="text-h4 text-ink">Public page</h2>
+            <p className="mt-0.5 text-body-ui text-ink-muted">One link that always lists what is coming up. The address can&apos;t be changed.</p>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="max-w-full truncate rounded-full bg-muted px-3.5 py-2 font-mono text-sm text-ink-secondary">/{org.slug}</span>
+            <CopyOrganisationUrl slug={org.slug} />
+            <Link
+              href={`/${org.slug}`}
+              className="inline-flex min-h-9 items-center gap-1 px-2 text-sm font-semibold text-ink-secondary underline-offset-4 hover:text-ink hover:underline"
+            >
+              Open
+              <ExternalLink aria-hidden className="size-3.5" />
+            </Link>
+          </div>
+        </section>
 
-            {canDeleteOrg(membership) ? (
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: "16px", borderColor: "rgba(255,69,58,0.35)", backgroundColor: "rgba(255,69,58,0.06)" }}>
-                <Stack spacing={1.25}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700, color: "#FF6961" }}>Danger zone</Typography>
-                  <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.65)" }}>
-                    Permanently delete this organisation and all of its events, registrations, and memberships.
-                  </Typography>
-                  <Box sx={{ pt: 0.5 }}>
-                    <DeleteOrganisationButton organisationSlug={org.slug} />
-                  </Box>
-                </Stack>
-              </Paper>
-            ) : null}
-          </Stack>
-        </Grid>
-      </Grid>
-    </Stack>
+        {isOwner ? (
+          <section id="api-access" aria-labelledby="api-access-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+            <div className="min-w-0 flex-1">
+              <h2 id="api-access-title" className="text-h4 text-ink">API access</h2>
+              <p className="mt-0.5 text-body-ui text-ink-muted">Let another system read your events with a scoped, rotatable key.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Chip tone={activeApiClients > 0 ? "success" : "neutral"}>
+                {totalApiClients === 0
+                  ? "No clients yet"
+                  : activeApiClients === 0
+                    ? "No active clients"
+                    : `${activeApiClients} active ${activeApiClients === 1 ? "client" : "clients"}`}
+              </Chip>
+              <Button asChild variant="secondary">
+                <Link href={`/dashboard/${org.slug}/settings/api`}>
+                  <KeyRound aria-hidden className="size-4" />
+                  Manage API access
+                </Link>
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {canDelete ? (
+          <section
+            id="danger-zone"
+            aria-labelledby="danger-zone-title"
+            className={cn(sectionCard, "flex flex-col gap-4 border-[1.5px] border-danger-border md:flex-row md:items-center")}
+          >
+            <div className="min-w-0 flex-1">
+              <h2 id="danger-zone-title" className="text-h4 text-danger-fg">Delete organisation</h2>
+              <p className="mt-0.5 text-body-ui text-ink-secondary">
+                Permanently removes {org.name} with all of its events, registrations and memberships. You&apos;ll be asked to type the name to confirm.
+              </p>
+            </div>
+            <div className="shrink-0">
+              <DeleteOrganisationButton organisationSlug={org.slug} organisationName={org.name} />
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </div>
   );
 }
