@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { recordThrottledAuditEvent } from "@/lib/audit";
 import { auth } from "@/lib/auth";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { canUseBadges } from "@/lib/badge/access";
@@ -24,6 +25,7 @@ const photoInput = eventInput.extend({
 }).strict();
 
 const NOT_FOUND = "Event not found.";
+const DESIGN_AUDIT_WINDOW_MS = 10 * 60_000;
 
 /**
  * Resolve the event from the organisation in the URL and check the caller may
@@ -68,6 +70,8 @@ export async function saveBadgeDesign(input: unknown): Promise<ActionResult<{ up
     update: { settings, updatedById: userId },
     select: { updatedAt: true },
   });
+  // The designer autosaves; one audit row per editing session is enough.
+  await recordThrottledAuditEvent({ action: "BADGE_DESIGN_UPDATED", actorUserId: userId, organisationId: event.organisationId, targetType: "Event", targetId: event.id, windowMs: DESIGN_AUDIT_WINDOW_MS });
   return { ok: true, data: { updatedAt: saved.updatedAt.toISOString() } };
 }
 

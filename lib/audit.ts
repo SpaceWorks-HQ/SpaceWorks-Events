@@ -30,3 +30,23 @@ export async function recordAuditEvent(params: {
     },
   });
 }
+
+/**
+ * For autosaving editors: record the event unless the same actor already has
+ * one for the same action and target within `windowMs`.
+ */
+export async function recordThrottledAuditEvent(params: Parameters<typeof recordAuditEvent>[0] & { windowMs: number }) {
+  const { windowMs, ...event } = params;
+  const recent = await (event.client ?? prisma).auditEvent.findFirst({
+    where: {
+      action: event.action,
+      actorUserId: event.actorUserId ?? null,
+      targetType: event.targetType ?? null,
+      targetId: event.targetId ?? null,
+      createdAt: { gt: new Date(Date.now() - windowMs) },
+    },
+    select: { id: true },
+  });
+  if (recent) return null;
+  return recordAuditEvent(event);
+}
