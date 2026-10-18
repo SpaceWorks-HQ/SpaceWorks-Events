@@ -381,7 +381,7 @@
   transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 320ms ease-out;
 }
 
-/* 404 box buddy (components/feedback/NotFoundPet.tsx). Motion is driven by data-state;
+/* 404 golden retriever (components/feedback/NotFoundPet.tsx). Motion is driven by data-state;
    the reduced-motion rule above stills every loop. */
 .yy-pet { will-change: transform; }
 .yy-pet-body { transition: transform 160ms ease-out; }
@@ -437,27 +437,33 @@
   animation: yy-pet-heart 1.2s ease-out forwards;
 }
 
-/* Footprints: little square box-feet in the muted ink. */
+/* Fading paw prints in the muted ink. */
 .yy-pet-paw {
   position: absolute;
   bottom: 10px;
-  width: 7px;
+  width: 9px;
   height: 7px;
-  border-radius: 2px;
+  border-radius: 50% 50% 45% 45%;
   background: var(--yy-text-muted);
   opacity: 0;
   pointer-events: none;
   animation: yy-pet-paw 1.8s ease-out forwards;
 }
 
-/* The ear flaps flutter when the buddy is patted. */
-.yy-pet-ear { transform-box: fill-box; transform-origin: 50% 100%; }
-.yy-pet[data-happy] .yy-pet-ear { animation: yy-pet-flap 0.22s ease-in-out 4 alternate; }
-@keyframes yy-pet-flap { from { transform: rotate(-10deg); } to { transform: rotate(12deg); } }
+/* The floppy ear swings as the dog trots and flaps when patted; the tongue
+   comes out when it is happy. */
+.yy-pet-ear { transform-box: fill-box; transform-origin: 60% 8%; }
+.yy-pet[data-state="walk"] .yy-pet-ear,
+.yy-pet[data-state="run"] .yy-pet-ear { animation: yy-pet-flap 0.32s ease-in-out infinite alternate; }
+.yy-pet[data-happy] .yy-pet-ear { animation: yy-pet-flap 0.2s ease-in-out 6 alternate; }
+@keyframes yy-pet-flap { from { transform: rotate(-6deg); } to { transform: rotate(10deg); } }
+.yy-pet-tongue { transform-box: fill-box; transform-origin: 50% 0; transform: scaleY(0); transition: transform 160ms ease-out; }
+.yy-pet[data-happy] .yy-pet-tongue,
+.yy-pet[data-state="run"] .yy-pet-tongue { transform: scaleY(1); }
 
 @keyframes yy-pet-step { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
 @keyframes yy-pet-bob { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
-@keyframes yy-pet-wag { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+@keyframes yy-pet-wag { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(16deg); } }
 @keyframes yy-pet-tilt { 0%, 70%, 100% { transform: rotate(0deg); } 80%, 90% { transform: rotate(-9deg); } }
 @keyframes yy-pet-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
 @keyframes yy-pet-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.95); } }
