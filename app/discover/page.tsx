@@ -4,6 +4,7 @@ import { EventPrivacyType, EventStatus, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import type { Metadata } from "next";
+import { MoodTile } from "@/components/brand/MoodTile";
 import { DiscoverEventCard } from "@/components/discover/DiscoverEventCard";
 import { Container } from "@/components/landing/primitives";
 import { Button } from "@/components/ui/button";
@@ -320,10 +321,7 @@ export default async function DiscoverPage({
 
         {pageItems.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-[16px] border border-line bg-panel px-6 py-10 text-center">
-            <span aria-hidden className="relative mb-2 block size-14">
-              <span className="absolute inset-0 rounded-[14px] bg-sw-sky" />
-              <span className="absolute -right-2 -top-2 size-6 rounded-full bg-sw-citron" />
-            </span>
+            <MoodTile mood="thinking" size={56} className="mb-2" />
             <p className="text-label text-ink">Nothing matches just yet</p>
             <p className="max-w-md text-body-ui text-ink-muted">Try a different search, or clear the filters to see every upcoming event.</p>
             {hasActiveFilters ? (
@@ -403,10 +401,10 @@ export default async function DiscoverPage({
 
       {/* Host your own (Figma 125:3219) */}
       <Container className="pb-16 lg:pb-[88px]">
-        <div className="flex flex-col items-start gap-6 rounded-[24px] bg-tint-peach p-6 sm:p-8 md:flex-row md:items-center">
+        <div className="flex flex-col items-start gap-6 rounded-[16px] bg-sw-citron p-6 text-sw-ink sm:p-8 md:flex-row md:items-center">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <h2 className="text-h3 text-ink">Running something?</h2>
-            <p className="max-w-[640px] text-body text-ink-secondary">Set up your organisation and publish your first free event in a few minutes.</p>
+            <h2 className="text-h3 text-sw-ink">Running something?</h2>
+            <p className="max-w-[640px] text-body text-sw-ink">Set up your organisation and publish your first free event in a few minutes.</p>
           </div>
           <Button asChild variant="primary" size="lg" className="shrink-0">
             <Link href={getStartedHref}>Start organising</Link>

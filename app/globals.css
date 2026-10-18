@@ -255,11 +255,6 @@
   /* One short expressive phrase per public layout (never in dashboard chrome). */
   .font-accent { font-family: var(--font-accent); font-weight: 500; letter-spacing: -0.01em; }
 
-  /* Highlighter mark under a display word on Space Works Events' own pages. */
-  .yy-highlight {
-    background-image: linear-gradient(transparent 62%, var(--yy-highlight-peach) 62%, var(--yy-highlight-peach) 92%, transparent 92%);
-  }
-
   /* Accent placeholder cover: solid accent with a soft cream dot grid. */
   .yy-cover-placeholder {
     background-color: var(--yy-accent);
@@ -386,7 +381,8 @@
   transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 320ms ease-out;
 }
 
-/* 404 companion (components/feedback/NotFoundPet.tsx). Motion is driven by data-state. */
+/* 404 golden retriever (components/feedback/NotFoundPet.tsx). Motion is driven by data-state;
+   the reduced-motion rule above stills every loop. */
 .yy-pet { will-change: transform; }
 .yy-pet-body { transition: transform 160ms ease-out; }
 .yy-pet-leg { transform-box: fill-box; transform-origin: 50% 0; }
@@ -428,31 +424,46 @@
 .yy-pet[data-state="sleep"] .yy-pet-zzz { animation: yy-pet-zzz 2.8s ease-out infinite; }
 .yy-pet[data-state="sleep"] .yy-pet-zzz:nth-of-type(2) { animation-delay: 1.4s; font-size: 11px; }
 
+/* Hearts are small Workshop Orange fills (never text). */
 .yy-pet-heart {
   position: absolute;
   top: -4px;
-  color: var(--yy-accent);
-  font-size: 16px;
-  line-height: 1;
+  width: 14px;
+  height: 13px;
+  background: var(--sw-orange);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 13'%3E%3Cpath d='M7 13 1.2 7.2A3.6 3.6 0 0 1 7 2.4a3.6 3.6 0 0 1 5.8 4.8Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 13'%3E%3Cpath d='M7 13 1.2 7.2A3.6 3.6 0 0 1 7 2.4a3.6 3.6 0 0 1 5.8 4.8Z'/%3E%3C/svg%3E") center / contain no-repeat;
   pointer-events: none;
   animation: yy-pet-heart 1.2s ease-out forwards;
 }
 
+/* Fading paw prints in the muted ink. */
 .yy-pet-paw {
   position: absolute;
   bottom: 10px;
   width: 9px;
   height: 7px;
   border-radius: 50% 50% 45% 45%;
-  background: var(--yy-accent);
+  background: var(--yy-text-muted);
   opacity: 0;
   pointer-events: none;
   animation: yy-pet-paw 1.8s ease-out forwards;
 }
 
+/* The floppy ear swings as the dog trots and flaps when patted; the tongue
+   comes out when it is happy. */
+.yy-pet-ear { transform-box: fill-box; transform-origin: 60% 8%; }
+.yy-pet[data-state="walk"] .yy-pet-ear,
+.yy-pet[data-state="run"] .yy-pet-ear { animation: yy-pet-flap 0.32s ease-in-out infinite alternate; }
+.yy-pet[data-happy] .yy-pet-ear { animation: yy-pet-flap 0.2s ease-in-out 6 alternate; }
+@keyframes yy-pet-flap { from { transform: rotate(-6deg); } to { transform: rotate(10deg); } }
+.yy-pet-tongue { transform-box: fill-box; transform-origin: 50% 0; transform: scaleY(0); transition: transform 160ms ease-out; }
+.yy-pet[data-happy] .yy-pet-tongue,
+.yy-pet[data-state="run"] .yy-pet-tongue { transform: scaleY(1); }
+
 @keyframes yy-pet-step { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
 @keyframes yy-pet-bob { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
-@keyframes yy-pet-wag { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+@keyframes yy-pet-wag { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(16deg); } }
 @keyframes yy-pet-tilt { 0%, 70%, 100% { transform: rotate(0deg); } 80%, 90% { transform: rotate(-9deg); } }
 @keyframes yy-pet-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
 @keyframes yy-pet-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.95); } }
@@ -460,19 +471,7 @@
 @keyframes yy-pet-heart { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px) scale(1.15); } }
 @keyframes yy-pet-paw { 0% { opacity: 0.35; } 100% { opacity: 0; } }
 
-/* Light/dark asset pairs (components/landing/ThemedImage.tsx): dot icons and the
-   logo have ink dots that must follow the theme. */
-.yy-img-dark { display: none; }
-:root[data-color-mode="dark"] .yy-img-light,
-.yy-dark-band .yy-img-light { display: none; }
-:root[data-color-mode="dark"] .yy-img-dark,
-.yy-dark-band .yy-img-dark { display: block; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-color-mode]) .yy-img-light { display: none; }
-  :root:not([data-color-mode]) .yy-img-dark { display: block; }
-}
-
-/* DotLoader (components/brand/DotLoader.tsx): the three dots hop one after
+/* BrandLoader (components/brand/BrandLoader.tsx): the three dots hop one after
    the other; with reduced motion they rest on the baseline. */
 @keyframes yy-dot-jump {
   0%, 45%, 100% { transform: translateY(0); }
@@ -480,37 +479,6 @@
 }
 .yy-dot-loader-jump {
   animation: yy-dot-jump 1.2s cubic-bezier(0.45, 0, 0.3, 1) infinite;
-}
-
-/* Dot faces (components/brand/DotFace.tsx): on hover of the face or a .group
-   card, dots ripple out from the centre, the eyes blink and the face lifts.
-   Mouse only, and nothing moves under reduced motion. */
-@keyframes yy-face-ripple {
-  0%, 100% { scale: 1; }
-  40% { scale: 1.16; }
-}
-@keyframes yy-face-blink {
-  0%, 50%, 74%, 100% { transform: none; }
-  62% { transform: scaleY(0.15); }
-}
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .yy-face {
-    transition: transform 320ms cubic-bezier(0.34, 1.4, 0.64, 1);
-  }
-  .yy-face:hover,
-  .group:hover .yy-face {
-    transform: translateY(-4px) rotate(-4deg);
-  }
-  .yy-face:hover .yy-face-dot,
-  .group:hover .yy-face-dot {
-    animation: yy-face-ripple 560ms cubic-bezier(0.45, 0, 0.2, 1) var(--yy-face-delay, 0ms) both;
-  }
-  .yy-face:hover .yy-face-eye,
-  .group:hover .yy-face-eye {
-    animation:
-      yy-face-ripple 560ms cubic-bezier(0.45, 0, 0.2, 1) var(--yy-face-delay, 0ms) both,
-      yy-face-blink 900ms ease-in-out both;
-  }
 }
 
 /* 404 ticket (components/feedback/NotFoundExperience.tsx): once the stub is
@@ -546,3 +514,18 @@
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath d='M0 7L5 0L10 7Z'/%3E%3C/svg%3E") top / 10px 7px repeat-x;
 }
 /* ---- End live ticket tear-away ---- */
+
+/* Mood tiles and icon tiles (components/brand/MoodTile.tsx, landing IconTile):
+   the icon gives one quick wiggle on hover of its tile or of a `.group` card.
+   The tile itself never moves. Mouse only; nothing moves under reduced motion. */
+@keyframes sw-wiggle {
+  0%, 100% { transform: none; }
+  35% { transform: rotate(-14deg) scale(1.12); }
+  70% { transform: rotate(9deg) scale(1.04); }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .sw-wiggle-host:hover .sw-wiggle,
+  .group:hover .sw-wiggle {
+    animation: sw-wiggle 200ms cubic-bezier(0.34, 1.4, 0.64, 1) both;
+  }
+}

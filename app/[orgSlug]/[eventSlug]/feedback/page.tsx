@@ -20,7 +20,7 @@ export default async function FeedbackPage({ params }: Props) {
         <p className="text-sm font-bold text-accent-text">{event.title} · {formatDayShort(event.startDateTime, event.timezone)}</p>
         <h1 className="text-display-m break-words text-ink">{event.feedbackForm.title}</h1>
       </header>
-      <div className="rounded-xl border border-line bg-canvas p-5 shadow-raised sm:p-7">
+      <div className="rounded-xl border border-line bg-panel p-5 sm:p-7">
         <PublicFeedbackForm orgSlug={orgSlug} eventSlug={eventSlug} fields={fields} thankYouMessage={event.feedbackForm.thankYouMessage} certificateEnabled={event.feedbackForm.certificateEnabled} />
       </div>
     </div>

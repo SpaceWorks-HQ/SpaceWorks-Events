@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Sign in", robots: { index: false, fo
 /** An illustrative event card for the brand panel (product proof, not live data). */
 function SampleEvent({ month, day, title, meta, className }: { month: string; day: string; title: string; meta: string; className?: string }) {
   return (
-    <div className={`flex items-center gap-3.5 rounded-2xl border border-line bg-panel p-4 ${className ?? ""}`}>
+    <div className={`flex items-center gap-3.5 rounded-xl border border-line bg-panel p-4 ${className ?? ""}`}>
       <span className="flex h-[60px] w-14 shrink-0 flex-col items-center overflow-hidden rounded-[10px] border border-line bg-panel">
         <span className="w-full bg-primary py-[3px] text-center text-[11px] font-semibold uppercase leading-[1.3] tracking-[0.08em] text-on-primary">{month}</span>
         <span className="text-[22px] font-semibold leading-[1.35] tabular-nums text-ink">{day}</span>
@@ -56,7 +56,7 @@ export default async function LoginPage() {
 
       {/* Brand panel: the stacked lockup, the accent phrase and a few real product objects. */}
       <aside aria-hidden className="relative hidden overflow-hidden p-4 md:block">
-        <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-[28px] bg-surface p-12">
+        <div className="relative flex h-full flex-col justify-between gap-10 overflow-hidden rounded-[16px] bg-surface p-12">
           <SpaceWorksLogo variant="lockup-stacked" height={72} className="self-start" />
           <div className="relative flex flex-col gap-4 py-6">
             <span className="absolute -right-16 -top-10 size-44 rounded-full bg-sw-citron" />

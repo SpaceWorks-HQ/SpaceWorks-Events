@@ -21,16 +21,18 @@ const MOOD_TILES: Record<Mood, { icon: LucideIcon; fill: string }> = {
 /**
  * A decorative mood tile: the Space Works stand-in for Yuyu's dot faces in
  * empty states, greetings and activity rows. `size` is the tile edge in px.
+ * The icon gives a quick wiggle when the tile, or a surrounding `.group`
+ * card, is hovered (mouse only; still under reduced motion).
  */
 export function MoodTile({ mood, size = 48, className }: { mood: Mood; size?: number; className?: string }) {
   const { icon: Icon, fill } = MOOD_TILES[mood];
   return (
     <span
       aria-hidden
-      className={cn("inline-flex shrink-0 items-center justify-center text-sw-ink", fill, className)}
+      className={cn("sw-wiggle-host inline-flex shrink-0 items-center justify-center text-sw-ink", fill, className)}
       style={{ width: size, height: size, borderRadius: Math.max(6, Math.round(size / 4)) }}
     >
-      <Icon size={Math.round(size * 0.5)} strokeWidth={2} />
+      <Icon size={Math.round(size * 0.5)} strokeWidth={2} className="sw-wiggle" />
     </span>
   );
 }

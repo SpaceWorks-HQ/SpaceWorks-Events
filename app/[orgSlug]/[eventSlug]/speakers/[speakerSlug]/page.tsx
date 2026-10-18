@@ -62,7 +62,7 @@ export default async function SpeakerPage({ params }: { params: Promise<{ orgSlu
           <ul className="flex flex-col gap-3">
             {sessions.map((session) => (
               <li key={session.id}>
-                <Link href={`/${org.slug}/${event.slug}/sessions/${session.slug}`} className="flex items-center gap-5 rounded-lg border border-line bg-canvas p-4 transition-colors hover:bg-subtle">
+                <Link href={`/${org.slug}/${event.slug}/sessions/${session.slug}`} className="flex items-center gap-5 rounded-lg border border-line bg-panel p-4 transition-colors hover:bg-subtle">
                   <span className="w-[112px] shrink-0">
                     <span className="block text-[15px] font-bold text-ink">{formatTime(session.start, event.timezone)}</span>
                     <span className="block text-sm text-ink-muted">{formatDayShort(session.start, event.timezone)}</span>

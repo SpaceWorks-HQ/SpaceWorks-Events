@@ -30,11 +30,11 @@ function readSystemDark() {
 function subscribe(onStoreChange: () => void) {
   const media = window.matchMedia("(prefers-color-scheme: dark)");
   window.addEventListener("storage", onStoreChange);
-  window.addEventListener("yuyu:color-mode-change", onStoreChange);
+  window.addEventListener("swe:color-mode-change", onStoreChange);
   media.addEventListener("change", onStoreChange);
   return () => {
     window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener("yuyu:color-mode-change", onStoreChange);
+    window.removeEventListener("swe:color-mode-change", onStoreChange);
     media.removeEventListener("change", onStoreChange);
   };
 }
@@ -61,13 +61,8 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/**
- * Switch modes in a single frame, then animate: a circular reveal from the
- * toggle where View Transitions are supported, otherwise a short colour
- * cross-fade. Reduced-motion users get an instant switch.
- */
+/** The feathered edge animates a registered custom property (see globals.css). */
 function supportsFeatheredReveal() {
-  // The feathered edge animates a registered custom property (see globals.css).
   return typeof CSS !== "undefined" && typeof CSS.registerProperty === "function" && CSS.supports("mask-image", "radial-gradient(circle, #000, transparent)");
 }
 
@@ -103,13 +98,7 @@ function transitionColorMode(commit: () => void, origin?: ColorModeOrigin) {
     root.style.removeProperty("--yy-reveal-x");
     root.style.removeProperty("--yy-reveal-y");
   };
-  const transition = doc.startViewTransition(async () => {
-    // Decode the other mode's illustration twins first so they don't pop in
-    // after the reveal; capped so the switch never feels slow.
-    const twins = Array.from(document.querySelectorAll<HTMLImageElement>("img.yy-img-light, img.yy-img-dark"));
-    await Promise.race([Promise.allSettled(twins.map((image) => image.decode())), new Promise((resolve) => window.setTimeout(resolve, 150))]);
-    commit();
-  });
+  const transition = doc.startViewTransition(commit);
   // Hold the final frame: without fill the mask snaps back to 0 for a frame
   // before the transition tears down, flashing the old mode.
   const timing: KeyframeAnimationOptions = { duration: 720, easing: "cubic-bezier(0.45, 0, 0.2, 1)", fill: "forwards", pseudoElement: "::view-transition-new(root)" };
@@ -177,7 +166,7 @@ export function Providers({
       const commit = () => {
         // Tokens and React state (icons, labels) change in the same frame.
         applyColorMode(resolved);
-        flushSync(() => window.dispatchEvent(new Event("yuyu:color-mode-change")));
+        flushSync(() => window.dispatchEvent(new Event("swe:color-mode-change")));
       };
       if (resolved === mode) commit();
       else transitionColorMode(commit, origin);

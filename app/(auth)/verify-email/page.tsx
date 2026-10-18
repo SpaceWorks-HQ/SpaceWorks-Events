@@ -13,7 +13,7 @@ export default async function VerifyEmailPage({
   const { token } = await searchParams;
   const safeToken = typeof token === "string" ? token : "";
   return (
-    <div className="flex w-full max-w-[440px] flex-col items-center gap-5 rounded-2xl border border-line bg-canvas p-6 text-center sm:p-8">
+    <div className="flex w-full max-w-[440px] flex-col items-center gap-5 rounded-xl border border-line bg-panel p-6 text-center sm:p-8">
       <span aria-hidden className="flex size-14 items-center justify-center rounded-xl bg-sw-citron text-sw-ink [&_svg]:size-6">
         <Mail />
       </span>

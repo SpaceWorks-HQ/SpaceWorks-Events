@@ -4,8 +4,8 @@ import { Button } from "@/components/ui/button";
 import { GitHubMark } from "@/components/ui/github-mark";
 import { CONTRIBUTING_URL, DISCUSSIONS_URL, GITHUB_REPO, GITHUB_URL, NEW_ISSUE_URL, SETUP_GUIDE_URL } from "@/lib/openSource";
 import { Container, IconTile, SectionHeading, type IconTileTone } from "../primitives";
+import { BuildingNote } from "./BuildingNote";
 import { SpaceWorksSection } from "./SpaceWorksSection";
-
 
 const story = [
   "Maker events run on goodwill. The person at the door is usually a volunteer, the budget is usually zero, and the guest list often lives in a spreadsheet next to the soldering irons.",
@@ -42,14 +42,8 @@ export function AboutPage({ getStartedHref }: { getStartedHref: string }) {
               Most event tools are built to sell tickets. Space Works Events is built for the other kind of event: the free build night, the soldering workshop, the campus hack club, organised by volunteers in their spare time.
             </p>
           </div>
-          {/* Brand block: the page's accent phrase on Citron, with simple shapes in brand colours. */}
-          <div aria-hidden className="relative w-full overflow-hidden rounded-[16px] bg-sw-citron p-8 sm:p-10 lg:w-[420px] lg:shrink-0">
-            <span className="absolute -right-10 -top-10 size-40 rounded-full bg-sw-sky" />
-            <span className="absolute -bottom-6 right-20 size-24 rounded-[16px] bg-sw-teal" />
-            {/* The page's one bold moment. */}
-            <span className="absolute -bottom-10 -right-10 size-28 rounded-tl-full bg-sw-orange" />
-            <p className="relative max-w-[260px] pb-20 font-accent text-[32px] font-medium leading-[1.1] text-sw-ink">Open doors. Open source.</p>
-          </div>
+          {/* The team's note: the page's accent phrase on the envelope, and its one orange moment on the seal. */}
+          <BuildingNote className="lg:w-[420px] lg:shrink-0" />
         </Container>
       </section>
 
@@ -71,7 +65,7 @@ export function AboutPage({ getStartedHref }: { getStartedHref: string }) {
           <SectionHeading id="principles-title" overline="What we believe" title="Six promises we design by" />
           <ul className="grid auto-rows-fr gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {principles.map((principle) => (
-              <li key={principle.title} className="flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
+              <li key={principle.title} className="group flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
                 <IconTile icon={principle.icon} tone={principle.tone} />
                 <h3 className="text-h4 text-ink">{principle.title}</h3>
                 <p className="text-body-ui text-ink-secondary">{principle.body}</p>
@@ -87,7 +81,7 @@ export function AboutPage({ getStartedHref }: { getStartedHref: string }) {
           <SectionHeading id="open-title" overline="Open and yours" title="Read it, run it, help shape it" />
           <ul className="grid gap-5 md:grid-cols-3">
             {openCards.map((card) => (
-              <li key={card.title} className="flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
+              <li key={card.title} className="group flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
                 <IconTile icon={card.icon} />
                 <h3 className="text-h4 text-ink">{card.title}</h3>
                 <p className="text-body-ui text-ink-secondary">{card.body}</p>

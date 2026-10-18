@@ -66,7 +66,7 @@ export function EventCard(props: {
         href={href}
         className={cn(
           "flex items-center gap-4 rounded-lg border border-line p-4 transition-colors hover:bg-subtle",
-          draft ? "bg-subtle" : "bg-canvas",
+          draft ? "bg-subtle" : "bg-panel",
         )}
       >
         <DateBlock month={date.month} day={date.day} tone={draft ? "draft" : "accent"} />
@@ -83,7 +83,7 @@ export function EventCard(props: {
   }
 
   return (
-    <Link href={href} className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-canvas transition-colors hover:bg-subtle">
+    <Link href={href} className="flex h-full flex-col overflow-hidden rounded-xl border border-line bg-panel transition-colors hover:bg-subtle">
       {event.coverImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- event covers are served by the app's own upload route
         <img src={event.coverImageUrl} alt="" className="h-[140px] w-full object-cover" />

@@ -145,8 +145,8 @@ export function NotFoundExperience() {
           className="relative flex flex-col sm:flex-row"
         >
           {/* Main part (a drop-shadow wrapper, so the ripped edge keeps its shadow) */}
-          <div className="relative min-w-0 flex-1">
-          <div className={cn("relative h-full overflow-hidden rounded-t-[20px] border border-line bg-panel sm:rounded-l-[20px] sm:rounded-tr-none sm:border-r-0", ripping && "yy-ripped-right")}>
+          <div className={cn("relative min-w-0 flex-1", ripping && "yy-ticket-shadow")}>
+          <div className={cn("relative h-full overflow-hidden rounded-t-[16px] border border-line bg-panel sm:rounded-l-[16px] sm:rounded-tr-none sm:border-r-0", ripping && "yy-ripped-right")}>
             <div className="bg-primary px-5 py-3.5 text-on-primary">
               <p className="text-label">Space Works Events · Lost &amp; found</p>
               <p className="font-accent text-[22px] font-medium leading-tight sm:text-[24px]">Page not found</p>
@@ -181,7 +181,7 @@ export function NotFoundExperience() {
                   initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.35, delay: reduceMotion ? 0 : 0.4 }}
-                  className="flex h-full flex-col items-center justify-center gap-3 rounded-b-[20px] border border-dashed border-line-strong bg-sw-citron px-5 sm:ml-2 py-6 text-center sm:rounded-r-[20px] sm:rounded-bl-none"
+                  className="flex h-full flex-col items-center justify-center gap-3 rounded-b-[16px] border border-dashed border-line-strong bg-sw-citron px-5 sm:ml-2 py-6 text-center sm:rounded-r-[16px] sm:rounded-bl-none"
                 >
                   <p className="text-overline text-sw-ink">Your stub says</p>
                   <p className="text-[20px] font-semibold leading-tight text-sw-ink">There’s plenty else on</p>
@@ -211,7 +211,7 @@ export function NotFoundExperience() {
                         transition: { duration: 0.85, times: [0, 0.28, 1], ease: [0.3, 0, 0.5, 1] },
                       }}
                   className={cn(
-                    "relative flex h-full cursor-grab touch-pan-y flex-col items-center justify-center gap-2 overflow-hidden rounded-b-[20px] border border-line bg-panel px-5 py-5 active:cursor-grabbing sm:rounded-r-[20px] sm:rounded-bl-none sm:border-l-0",
+                    "relative flex h-full cursor-grab touch-pan-y flex-col items-center justify-center gap-2 overflow-hidden rounded-b-[16px] border border-line bg-panel px-5 py-5 active:cursor-grabbing sm:rounded-r-[16px] sm:rounded-bl-none sm:border-l-0",
                     ripping && "yy-ripped-left",
                   )}
                 >

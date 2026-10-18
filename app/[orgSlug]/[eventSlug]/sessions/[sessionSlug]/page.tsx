@@ -56,7 +56,7 @@ export default async function SessionPage({ params }: { params: Promise<{ orgSlu
             <ul className="grid max-w-[560px] gap-2.5">
               {speakers.map((speaker) => (
                 <li key={speaker.id}>
-                  <Link href={`/${org.slug}/${event.slug}/speakers/${speaker.slug}`} className="flex items-center gap-3.5 rounded-lg border border-line bg-canvas p-4 transition-colors hover:bg-subtle">
+                  <Link href={`/${org.slug}/${event.slug}/speakers/${speaker.slug}`} className="flex items-center gap-3.5 rounded-lg border border-line bg-panel p-4 transition-colors hover:bg-subtle">
                     <Avatar name={speaker.name} src={speaker.photoUrl} size="lg" tone="accent" />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[16px] font-bold text-ink">{speaker.name}</span>
@@ -76,7 +76,7 @@ export default async function SessionPage({ params }: { params: Promise<{ orgSlu
           {nextOnTrack ? (
             <div>
               <h2 className="mb-2 text-overline text-ink-muted">Next on {session.track.name}</h2>
-              <Link href={`/${org.slug}/${event.slug}/sessions/${nextOnTrack.slug}`} className="block rounded-lg border border-line bg-canvas p-4 transition-colors hover:bg-subtle">
+              <Link href={`/${org.slug}/${event.slug}/sessions/${nextOnTrack.slug}`} className="block rounded-lg border border-line bg-panel p-4 transition-colors hover:bg-subtle">
                 <span className="block text-sm font-bold text-accent-text">{formatTime(nextOnTrack.effectiveStartDateTime, event.timezone)}</span>
                 <span className="mt-1 block text-[16px] font-bold text-ink">{nextOnTrack.title}</span>
                 {nextOnTrack.speakers.length > 0 ? <span className="mt-0.5 block text-sm text-ink-muted">{nextOnTrack.speakers.map((item) => item.speaker.name).join(", ")}</span> : null}
@@ -89,7 +89,7 @@ export default async function SessionPage({ params }: { params: Promise<{ orgSlu
               <ul className="flex flex-col gap-2.5">
                 {alsoNow.map((item) => (
                   <li key={item.id}>
-                    <Link href={`/${org.slug}/${event.slug}/sessions/${item.slug}`} className="block rounded-lg border border-line bg-canvas p-4 transition-colors hover:bg-subtle">
+                    <Link href={`/${org.slug}/${event.slug}/sessions/${item.slug}`} className="block rounded-lg border border-line bg-panel p-4 transition-colors hover:bg-subtle">
                       <span className="block text-sm font-semibold text-ink-secondary">{item.track.name}</span>
                       <span className="mt-1 block text-[16px] font-bold text-ink">{item.title}</span>
                       {item.speakers.length > 0 ? <span className="mt-0.5 block text-sm text-ink-muted">{item.speakers.map((entry) => entry.speaker.name).join(", ")}</span> : null}

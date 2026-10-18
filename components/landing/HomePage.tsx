@@ -15,6 +15,7 @@ import {
   Star,
   Ticket,
 } from "lucide-react";
+import { MoodTile, type Mood } from "@/components/brand/MoodTile";
 import { Button } from "@/components/ui/button";
 import { GitHubMark } from "@/components/ui/github-mark";
 import { CONTRIBUTING_URL, DISCUSSIONS_URL, GITHUB_REPO, GITHUB_URL, LICENSE_URL, NEW_ISSUE_URL, SETUP_GUIDE_URL } from "@/lib/openSource";
@@ -40,11 +41,11 @@ const features = [
 ];
 
 /** Status words people see along the way. Every status pairs a colour with a word. */
-const statuses = [
-  { pill: "Registered", tone: "bg-sw-citron text-sw-ink", title: "You’re in", body: "The moment someone registers, with the ticket in their inbox." },
-  { pill: "Waitlisted", tone: "bg-sw-sky text-sw-ink", title: "On the waitlist", body: "Honest about the queue, and we tell them when a spot opens." },
-  { pill: "Checked in", tone: "bg-accent-soft text-ink", title: "Through the door", body: "A quick scan, and their ticket updates on their phone." },
-  { pill: "Feedback sent", tone: "bg-sw-yellow text-sw-ink", title: "Thanks for coming", body: "Feedback in ten seconds, and the certificate follows." },
+const statuses: Array<{ pill: string; tone: string; mood: Mood; title: string; body: string }> = [
+  { pill: "Registered", tone: "bg-sw-citron text-sw-ink", mood: "cheering", title: "You’re in", body: "The moment someone registers, with the ticket in their inbox." },
+  { pill: "Waitlisted", tone: "bg-sw-sky text-sw-ink", mood: "waiting", title: "On the waitlist", body: "Honest about the queue, and we tell them when a spot opens." },
+  { pill: "Checked in", tone: "bg-accent-soft text-ink", mood: "done", title: "Through the door", body: "A quick scan, and their ticket updates on their phone." },
+  { pill: "Feedback sent", tone: "bg-sw-yellow text-sw-ink", mood: "love", title: "Thanks for coming", body: "Feedback in ten seconds, and the certificate follows." },
 ];
 
 const doorPoints = [
@@ -174,20 +175,31 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
                     <span className="text-label tabular-nums text-ink">48 going</span>
                     <span className="text-caption tabular-nums text-ink-muted">12 spots left</span>
                   </div>
-                  <span className="block h-2 overflow-hidden rounded-full bg-track">
-                    <span className="block h-full w-4/5 rounded-full bg-primary" />
+                  {/* 48 of 60 places, drawn as building blocks (Yuyu's dot meter, in Space Works shapes). */}
+                  <span className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-1">
+                    {Array.from({ length: 15 }, (_, index) => (
+                      <span key={index} className={index < 12 ? "block h-3 rounded-[3px] bg-primary dark:bg-sw-citron" : "block h-3 rounded-[3px] bg-track"} />
+                    ))}
                   </span>
                 </div>
                 <span className="inline-flex h-11 w-full items-center justify-center rounded-full bg-primary text-[15px] font-semibold text-on-primary">Register — it’s free</span>
               </div>
             </div>
 
-            <div className="absolute bottom-0 right-0 flex w-[290px] max-w-[88%] flex-col gap-3.5 rounded-[16px] border border-line-strong bg-panel p-5 sm:bottom-auto sm:left-[262px] sm:right-auto sm:top-[476px]">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[20px] font-semibold text-ink">You’re in, Meera!</p>
-                <span className="rounded-full bg-sw-citron px-2.5 py-0.5 text-[12px] font-semibold text-sw-ink">Registered</span>
+            <div className="group absolute bottom-0 right-0 flex w-[290px] max-w-[88%] flex-col gap-3.5 rounded-[16px] border border-line-strong bg-panel p-5 sm:bottom-auto sm:left-[262px] sm:right-auto sm:top-[476px]">
+              <div className="flex items-center gap-3">
+                <MoodTile mood="cheering" size={48} />
+                <div className="flex min-w-0 flex-col items-start gap-1">
+                  <p className="text-[20px] font-semibold leading-tight text-ink">You’re in, Meera!</p>
+                  <span className="rounded-full bg-sw-citron px-2.5 py-0.5 text-[12px] font-semibold text-sw-ink">Registered</span>
+                </div>
               </div>
-              <span className="block border-t-2 border-dashed border-line-strong" />
+              {/* Perforation with punched notches, like the live ticket. */}
+              <span className="relative -mx-5 block">
+                <span className="mx-5 block border-t-2 border-dashed border-line-strong" />
+                <span className="absolute -left-2.5 -top-[9px] size-5 rounded-full border border-line-strong bg-canvas" />
+                <span className="absolute -right-2.5 -top-[9px] size-5 rounded-full border border-line-strong bg-canvas" />
+              </span>
               <div className="flex items-center gap-3.5">
                 <span className="shrink-0 rounded-[10px] border border-line bg-white p-2">
                   <SampleQr />
@@ -208,7 +220,7 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
           </div>
           <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {steps.map((step, index) => (
-              <li key={step.title} className="flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
+              <li key={step.title} className="group flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
                 <div className="flex items-center justify-between">
                   <span className="flex size-9 items-center justify-center rounded-full bg-sw-citron text-[17px] font-semibold tabular-nums text-sw-ink">{index + 1}</span>
                   <IconTile icon={step.icon} />
@@ -227,7 +239,7 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
           <SectionHeading id="features-title" overline="Features" title="Everything a volunteer crew needs" lead="One place for the whole event, so nobody has to juggle five tools on the morning of." />
           <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {features.map((feature) => (
-              <li key={feature.title} className="flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
+              <li key={feature.title} className="group flex flex-col gap-3 rounded-[16px] border border-line bg-panel p-6">
                 <IconTile icon={feature.icon} />
                 <h3 className="text-h4 text-ink">{feature.title}</h3>
                 <p className="text-body-ui text-ink-secondary">{feature.body}</p>
@@ -256,7 +268,8 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
           />
           <ul className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {statuses.map((status) => (
-              <li key={status.title} className="flex flex-col items-start gap-3 rounded-[16px] border border-line bg-panel p-6">
+              <li key={status.title} className="group flex flex-col items-start gap-3 rounded-[16px] border border-line bg-panel p-6">
+                <MoodTile mood={status.mood} size={56} />
                 <span className={`inline-flex min-h-8 items-center rounded-full px-3.5 text-[14px] font-semibold ${status.tone}`}>{status.pill}</span>
                 <h3 className="text-h4 text-ink">{status.title}</h3>
                 <p className="text-body-ui text-ink-secondary">{status.body}</p>
