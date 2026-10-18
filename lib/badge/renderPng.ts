@@ -28,7 +28,10 @@ async function textPaths(op: BadgeTextOp) {
     if (d) out += `<path transform="translate(${n(cursor)} ${n(op.baseline)}) scale(${scale.toPrecision(6)} ${(-scale).toPrecision(6)})" d="${d}"/>`;
     cursor += glyph.advanceWidth * scale + tracking;
   }
-  return out ? `<g fill="${op.color}">${out}</g>` : "";
+  if (!out) return "";
+  const rotate = op.rotateDeg ? ` transform="rotate(${n(op.rotateDeg)} ${n(op.x)} ${n(op.baseline)})"` : "";
+  const opacity = op.opacity !== undefined ? ` fill-opacity="${n(op.opacity)}"` : "";
+  return `<g fill="${op.color}"${opacity}${rotate}>${out}</g>`;
 }
 
 export async function renderBadgeSvg(scene: BadgeScene, dpi = PNG_DPI) {
@@ -57,7 +60,8 @@ export async function renderBadgeSvg(scene: BadgeScene, dpi = PNG_DPI) {
         parts.push(`<clipPath id="c${clipId}"><path d="${roundedRectPath(at.x, at.y, at.w, at.h, radius)}"/></clipPath>`);
         parts.push(`<image clip-path="url(#c${clipId})" x="${n(at.x)}" y="${n(at.y)}" width="${n(at.w)}" height="${n(at.h)}" preserveAspectRatio="none" href="${attr(href)}"/>`);
       } else {
-        parts.push(`<image x="${n(at.x)}" y="${n(at.y)}" width="${n(at.w)}" height="${n(at.h)}" preserveAspectRatio="none" href="${attr(href)}"/>`);
+        const opacity = op.opacity !== undefined ? ` opacity="${n(op.opacity)}"` : "";
+        parts.push(`<image x="${n(at.x)}" y="${n(at.y)}" width="${n(at.w)}" height="${n(at.h)}"${opacity} preserveAspectRatio="none" href="${attr(href)}"/>`);
       }
     } else if (op.kind === "qr") {
       const qr = qrModules(op.value);

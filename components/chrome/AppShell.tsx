@@ -10,6 +10,7 @@ import {
   CalendarDays,
   ChevronsUpDown,
   Home,
+  IdCard,
   LogOut,
   Menu as MenuIcon,
   Moon,
@@ -253,6 +254,9 @@ function SidebarContents({
             ) : null}
             {isMember ? (
               <NavItem href={`${base}/members`} icon={<Users />} active={pathname.startsWith(`${base}/members`)} collapsed={collapsed} onNavigate={onNavigate}>Members</NavItem>
+            ) : null}
+            {isMember ? (
+              <NavItem href={`${base}/ids`} icon={<IdCard />} active={pathname.startsWith(`${base}/ids`)} collapsed={collapsed} onNavigate={onNavigate}>Member IDs</NavItem>
             ) : null}
             {isAdmin ? (
               // API access lives inside Settings (owners only), not in the menu.

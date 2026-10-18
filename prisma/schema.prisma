@@ -135,6 +135,7 @@ model User {
   eventCollaboratorInvitesUsed EventCollaboratorInvite[] @relation("EventCollaboratorInviteUsedBy")
   eventBroadcasts   EventBroadcast[]
   badgeDesignsUpdated EventBadgeDesign[]
+  idMemberships     IdMember[]
 }
 
 model Account {
@@ -188,6 +189,7 @@ model Organisation {
   auditEvents       AuditEvent[]
   rsvpDeletionUndos RsvpDeletionUndo[]
   apiClients        ApiClient[]
+  idProgrammes      IdProgramme[]
 }
 
 /// A tenant-bound machine identity. It never authenticates through Auth.js.
@@ -981,4 +983,122 @@ model Asset {
   @@index([organisationId])
   @@index([createdAt])
   @@index([provider])
+}
+
+/// Member IDs: an organisation's ID card programme (Aarannu-style digital IDs).
+enum IdProgrammeStatus {
+  DRAFT
+  ACTIVE
+  CLOSED
+}
+
+enum IdMemberStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  REVOKED
+}
+
+enum IdFieldType {
+  TEXT
+  SELECT
+  DATE
+  EMAIL
+  PHONE
+}
+
+enum IdFieldPlacement {
+  FRONT
+  BACK
+  HIDDEN
+}
+
+enum IdMemberSource {
+  FORM
+  IMPORT
+  MANUAL
+}
+
+/// A set of ID cards an organisation issues: who can join, how long cards last, and the front/back design.
+model IdProgramme {
+  id               String            @id @default(cuid())
+  organisationId   String
+  name             String
+  slug             String
+  description      String            @default("")
+  status           IdProgrammeStatus @default(DRAFT)
+  /// Public join form accepts new requests (only while ACTIVE).
+  registrationOpen Boolean           @default(false)
+  requiresApproval Boolean           @default(true)
+  /// Printed ID numbers are `<idPrefix>-<year>-<sequence>`.
+  idPrefix         String
+  nextSequence     Int               @default(1)
+  /// A fixed expiry date for every card, or a number of days from issue; neither means no expiry.
+  validUntil       DateTime?
+  validityDays     Int?
+  /// Front and back card design (normalised by lib/memberIds/design.ts).
+  design           Json?
+  /// Managed upload used as an image watermark.
+  watermarkUrl     String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  fields       IdProgrammeField[]
+  members      IdMember[]
+
+  @@unique([organisationId, slug])
+  @@index([organisationId, createdAt])
+}
+
+/// A custom question on the join form, optionally printed on the card front or back.
+model IdProgrammeField {
+  id          String           @id @default(cuid())
+  programmeId String
+  key         String
+  label       String
+  type        IdFieldType      @default(TEXT)
+  required    Boolean          @default(false)
+  options     String[]         @default([])
+  placement   IdFieldPlacement @default(FRONT)
+  sortOrder   Int              @default(0)
+
+  programme IdProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  @@unique([programmeId, key])
+  @@index([programmeId, sortOrder])
+}
+
+/// One person's ID card in a programme. `verifyToken` is an opaque bearer value printed in the QR.
+model IdMember {
+  id             String         @id @default(cuid())
+  programmeId    String
+  organisationId String
+  userId         String?
+  name           String
+  /// Lower-cased; one card per email per programme.
+  email          String
+  photoUrl       String?
+  fieldValues    Json           @default("{}")
+  status         IdMemberStatus @default(PENDING)
+  source         IdMemberSource @default(FORM)
+  idNumber       String?
+  verifyToken    String         @unique
+  issuedAt       DateTime?
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  /// Organiser's note for a rejection or revocation. Never shown on the verify page.
+  statusReason   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  programme IdProgramme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([programmeId, email])
+  @@unique([programmeId, idNumber])
+  @@index([programmeId, status, createdAt])
+  @@index([organisationId])
+  @@index([userId])
+  @@index([email])
 }

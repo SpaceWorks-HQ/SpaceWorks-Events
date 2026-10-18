@@ -13,10 +13,11 @@ import {
   PT_TO_MM,
   sponsorStripHeightMm,
   TILE_PADDING_MM,
+  watermarkSizePt,
   type IdCardLayoutElement,
   type IdCardPrintSettings,
 } from "@/lib/idCardPrint";
-import { badgeImageUrls } from "@/lib/badge/layout";
+import { badgeImageUrls, memberLine, watermarkImageBox } from "@/lib/badge/layout";
 import { resolveBadgePalette, SYMBOL_ASSET } from "@/lib/badge/palette";
 import { attendeeInitials, printableFields, type BadgeBranding, type IdCardAttendee } from "@/lib/badge/types";
 import { ELEMENT_LABELS, SAFE_MARGIN_MM } from "./shared";
@@ -184,8 +185,46 @@ export function BadgeCanvas({
   const photoRadius = settings.photoShape === "circle" ? "50%" : px(photoSide * 0.2);
   const stripHeight = sponsorStripHeightMm(settings.widthMm, settings.heightMm);
 
+  const mark = settings.watermark;
+  const markColour = mark.colour === "text" ? palette.text : palette.accent === palette.background ? palette.text : palette.accent;
+  const markText = mark.kind === "text" ? mark.text.trim().toLocaleUpperCase("en") : "";
+  const markBox = watermarkImageBox(settings.widthMm, settings.heightMm);
+  const idLine = settings.showIdNumber ? memberLine(settings.idNumberLabel, attendee.idNumber) : "";
+  const validLine = settings.showValidUntil ? memberLine(settings.validUntilLabel, attendee.validUntil) : "";
+
   let content: ReactNode = (
     <>
+      {markText ? (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: "50%",
+            top: "50%",
+            transform: `translate(-50%, -50%) rotate(${mark.angleDeg}deg)`,
+            fontSize: ptPx(watermarkSizePt(markText, settings.widthMm, settings.heightMm, mark.angleDeg)),
+            fontWeight: 700,
+            lineHeight: 1,
+            letterSpacing: "0.04em",
+            whiteSpace: "nowrap",
+            color: markColour,
+            opacity: mark.opacityPct / 100,
+            pointerEvents: "none",
+          }}
+        >
+          {markText}
+        </span>
+      ) : null}
+      {images.watermark ? (
+        // eslint-disable-next-line @next/next/no-img-element -- managed watermark upload drawn to scale
+        <img
+          aria-hidden
+          src={images.watermark}
+          alt=""
+          draggable={false}
+          style={{ position: "absolute", left: px(markBox.x), top: px(markBox.y), width: px(markBox.w), height: px(markBox.h), objectFit: "contain", opacity: mark.opacityPct / 100, filter: mono ? "grayscale(1)" : undefined, pointerEvents: "none" }}
+        />
+      ) : null}
       {decor.frame ? (
         <span aria-hidden style={{ position: "absolute", inset: px(decor.frame.insetMm), border: rule(decor.frame.ruleMm, palette.rule), borderRadius: px(decor.frame.radiusMm), pointerEvents: "none" }} />
       ) : null}
@@ -204,6 +243,7 @@ export function BadgeCanvas({
         </div>
       ) : null}
 
+      {settings.showName ? (
       <p
         {...itemProps("name")}
         style={itemStyle("name", {
@@ -219,6 +259,19 @@ export function BadgeCanvas({
       >
         {attendee.displayName}
       </p>
+      ) : null}
+
+      {idLine ? (
+        <p {...itemProps("idNumber")} style={itemStyle("idNumber", { margin: 0, width: px(settings.elementSizes.idNumber), fontSize: ptPx(settings.elementTextSizes.idNumber), lineHeight: ID_CARD_LINE_HEIGHT.body, fontWeight: weight(bold.idNumber), letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums", overflowWrap: "anywhere" })}>
+          {idLine}
+        </p>
+      ) : null}
+
+      {validLine ? (
+        <p {...itemProps("validUntil")} style={itemStyle("validUntil", { margin: 0, width: px(settings.elementSizes.validUntil), fontSize: ptPx(settings.elementTextSizes.validUntil), lineHeight: ID_CARD_LINE_HEIGHT.body, fontWeight: weight(bold.validUntil), overflowWrap: "anywhere" })}>
+          {validLine}
+        </p>
+      ) : null}
 
       {settings.showEmail && attendee.email ? (
         <p {...itemProps("email")} style={itemStyle("email", { margin: 0, width: px(settings.elementSizes.email), fontSize: ptPx(settings.elementTextSizes.email), lineHeight: ID_CARD_LINE_HEIGHT.body, fontWeight: weight(bold.email), overflowWrap: "anywhere" })}>
@@ -318,6 +371,7 @@ export function BadgeCanvas({
         />
       ) : null}
 
+      {settings.showQr ? (
       <div {...itemProps("qr")} style={itemStyle("qr", { background: palette.qrLight, padding: px(TILE_PADDING_MM), lineHeight: 0, zIndex: interaction?.selected === "qr" ? 3 : 2 })}>
         <QRCode
           value={attendee.checkInQrToken}
@@ -328,6 +382,7 @@ export function BadgeCanvas({
           level="M"
         />
       </div>
+      ) : null}
     </>
   );
 

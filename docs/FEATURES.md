@@ -73,6 +73,16 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 
 Only eligible confirmed attendees receive a scannable ticket by default. Organisers can explicitly handle exceptional status cases where supported by the check-in workflow.
 
+## Member IDs
+
+- ID card programmes per organisation (inspired by Aarannu): a public join form with custom questions (text, choice, date, email, phone) and an optional photo, or import from a CSV file or a public Google Sheet with a column-mapping step, preview and de-duplication by email.
+- Owners and admins approve, reject (with a private reason), revoke, reinstate, renew and edit members, upload photos, and add people by hand; plain members see a read-only list without emails.
+- Approval issues a per-programme ID number (`PREFIX-YEAR-0001`) and an expiry from the programme's rule (fixed date, days from approval, or none).
+- Cards have a front and a back, designed with the badge designer: four presets (Community, Corporate, Event pass, Student) in Space Works colours, ID number and valid-until items, answers placed on the front or back, and a text or image watermark.
+- Downloads: one card as a two-page PDF or a 300 dpi PNG, every card as one PDF or a ZIP of PDFs. "Your ID card" emails go through the outbox with the PDF attached.
+- Each card's QR opens `/verify/:token` (an opaque 128-bit token) showing Valid, Expired, Revoked or Card not found.
+- Holders see their cards in Account → Your IDs, with a tilting, flipping holographic viewer (static under reduced motion).
+
 ## Feedback and certificates
 
 - Per-event feedback form with configurable title, thank-you message, open/closed state, and custom questions. Organisers can start from quick pulse, event review, or session-and-speaker-review templates, then tailor the form before opening it.

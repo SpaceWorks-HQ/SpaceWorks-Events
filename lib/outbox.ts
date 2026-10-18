@@ -9,6 +9,7 @@ import { isBroadcastDesign } from "@/lib/email/broadcastDesigns";
 import { sendPasswordResetEmail } from "@/lib/email/passwordReset";
 import { sendEmailVerificationEmail } from "@/lib/email/emailVerification";
 import { describeOperationalError } from "@/lib/redactSensitiveText";
+import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 
 type OutboxClient = Prisma.TransactionClient | typeof prisma;
 
@@ -497,6 +498,13 @@ export async function deliverOutboxBatch(limit = 20) {
           brand: broadcastBrandFor(event),
           messageId: stableMessageId,
         });
+      } else if (message.kind === MEMBER_ID_EMAIL_KIND) {
+        const payload = asMemberIdEmailPayload(message.payload);
+        if (!payload) throw new PermanentOutboxError();
+        if ((await deliverMemberIdCardEmail(payload, stableMessageId)) === "dropped") {
+          await prisma.outboxMessage.deleteMany({ where: { id: message.id, status: OutboxStatus.PROCESSING, lockedAt: claimTime } });
+          continue;
+        }
       } else {
         throw new PermanentOutboxError();
       }

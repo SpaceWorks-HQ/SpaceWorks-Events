@@ -29,6 +29,8 @@ export const ELEMENT_LABELS: Record<IdCardLayoutElement, string> = {
   symbol: "Space Works symbol",
   photo: "Photo",
   sponsors: "Sponsor logos",
+  idNumber: "ID number",
+  validUntil: "Valid until",
 };
 
 export const registrationFieldKey = (key: string) => `registration:${key}`;
