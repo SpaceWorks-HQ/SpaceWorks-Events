@@ -76,8 +76,8 @@ describe("BrandLoader", () => {
     const html = render(createElement(BrandLoader, { label: "Loading event" }));
     expect(html).toContain('role="status"');
     expect(html).toContain("Loading event");
-    expect(html.match(/motion-safe:animate-bounce/g)).toHaveLength(3);
-    expect(html).not.toMatch(/(?<!motion-safe:)animate-bounce/);
+    expect(html.match(/yy-dot-loader-jump/g)).toHaveLength(3);
+    expect(html).not.toMatch(/animate-bounce/);
   });
 });
 

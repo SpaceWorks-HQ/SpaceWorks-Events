@@ -118,7 +118,7 @@ test("login and crawler controls render", async ({ page }) => {
   await page.goto("/login");
   await page.evaluate(() => {
     localStorage.setItem("swe:color-mode", "light");
-    window.dispatchEvent(new Event("yuyu:color-mode-change"));
+    window.dispatchEvent(new Event("swe:color-mode-change"));
   });
   await expect(page.locator("html")).toHaveAttribute("data-color-mode", "light");
   await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();

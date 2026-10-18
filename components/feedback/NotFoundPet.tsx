@@ -9,9 +9,11 @@ const WANDER_AFTER_MS = 4_500;
 const SLEEP_AFTER_MS = 15_000;
 
 /**
- * A small decorative pup that lives along the bottom of the 404 page. It runs
- * toward the pointer (or a tap on touch screens), watches the pointer, leaves
- * fading paw prints, wanders and naps when ignored, and wags when petted.
+ * A small decorative box buddy that lives along the bottom of the 404 page: a
+ * cardboard box on legs with the Space Works symbol's teal and orange flaps.
+ * It runs toward the pointer (or a tap on touch screens), watches the pointer,
+ * leaves fading footprints, wanders and naps when ignored, and wags its tail
+ * flap and sends up hearts when patted.
  * Purely decorative: hidden from assistive tech and click-through (it never
  * blocks page controls), and it sits still for reduced-motion users.
  */
@@ -27,7 +29,6 @@ export function NotFoundPet() {
     for (let i = 0; i < 3; i++) {
       const heart = document.createElement("span");
       heart.className = "yy-pet-heart";
-      heart.textContent = "♥";
       heart.style.left = `${24 + i * 12}px`;
       heart.style.animationDelay = `${i * 120}ms`;
       pet.appendChild(heart);
@@ -185,37 +186,38 @@ export function NotFoundPet() {
         <span className="yy-pet-zzz">z</span>
         <span className="yy-pet-zzz">z</span>
         <div ref={bodyRef} className="yy-pet-body">
-          <svg viewBox="0 0 80 64" className="block w-full overflow-visible">
+          {/* A little cardboard box on legs, with the Space Works symbol's teal and
+              orange flaps for ears and tail. Brand fills with Deep Ink lines; the legs
+              and shadow follow the text ink so they read in both modes. */}
+          <svg viewBox="0 0 80 64" className="block w-full overflow-visible" strokeLinejoin="round" strokeLinecap="round">
             <ellipse cx="40" cy="61" rx="26" ry="3" className="fill-ink opacity-10" />
-            <path className="yy-pet-tail fill-none stroke-accent" d="M16 38 C 8 36, 5 27, 9 20" strokeWidth="6" strokeLinecap="round" />
-            <rect className="yy-pet-leg yy-pet-leg-a fill-accent" x="20" y="44" width="7" height="14" rx="3.5" />
-            <rect className="yy-pet-leg yy-pet-leg-b fill-accent" x="31" y="44" width="7" height="14" rx="3.5" />
-            <rect className="yy-pet-leg yy-pet-leg-b fill-accent" x="44" y="44" width="7" height="14" rx="3.5" />
-            <rect className="yy-pet-leg yy-pet-leg-a fill-accent" x="54" y="44" width="7" height="14" rx="3.5" />
+            <path className="yy-pet-tail fill-sw-teal stroke-sw-ink" d="M17 30 L7 20 L11 16 L21 26 Z" strokeWidth="1.8" />
+            <rect className="yy-pet-leg yy-pet-leg-a fill-ink" x="17" y="45" width="6" height="13" rx="3" />
+            <rect className="yy-pet-leg yy-pet-leg-b fill-ink" x="27" y="45" width="6" height="13" rx="3" />
+            <rect className="yy-pet-leg yy-pet-leg-b fill-ink" x="38" y="45" width="6" height="13" rx="3" />
+            <rect className="yy-pet-leg yy-pet-leg-a fill-ink" x="48" y="45" width="6" height="13" rx="3" />
             <g className="yy-pet-torso">
-              <rect className="fill-accent" x="14" y="26" width="50" height="24" rx="12" />
-              <ellipse cx="38" cy="44" rx="15" ry="5" className="fill-white opacity-25" />
+              <rect className="fill-sw-citron stroke-sw-ink" x="12" y="25" width="44" height="24" rx="4" strokeWidth="2" />
+              <path className="fill-none stroke-sw-ink opacity-40" d="M13 33 H44" strokeWidth="1.6" strokeDasharray="3 3" />
               <g className="yy-pet-head">
-                <path className="fill-accent" d="M48 16 L51 2 L59 12 Z" />
-                <path className="fill-accent" d="M64 12 L72 2 L74 16 Z" />
-                <path d="M51 7 L53 13 L56 12 Z" className="fill-white opacity-40" />
-                <circle cx="61" cy="25" r="16" className="fill-accent" />
-                <circle cx="52" cy="31" r="3" className="fill-white opacity-25" />
-                <circle cx="71" cy="31" r="3" className="fill-white opacity-25" />
+                <path className="yy-pet-ear fill-sw-teal stroke-sw-ink" d="M45 15 L57 15 L54 6 L40 7 Z" strokeWidth="1.8" />
+                <path className="yy-pet-ear fill-sw-orange stroke-sw-ink" d="M60 15 L72 15 L78 8 L64 6 Z" strokeWidth="1.8" />
+                <rect className="fill-sw-cream stroke-sw-ink" x="44" y="12" width="29" height="27" rx="5" strokeWidth="2" />
+                <circle cx="50" cy="31" r="2.4" className="fill-sw-sky" />
+                <circle cx="68" cy="31" r="2.4" className="fill-sw-sky" />
                 <g className="yy-pet-eyes">
-                  <circle cx="55" cy="23" r="4.2" className="fill-white" />
-                  <circle cx="67" cy="23" r="4.2" className="fill-white" />
                   <g className="yy-pet-pupils">
-                    <circle cx="55" cy="23" r="2.3" fill="#18181B" />
-                    <circle cx="67" cy="23" r="2.3" fill="#18181B" />
+                    <circle cx="53.5" cy="24" r="3" className="fill-sw-ink" />
+                    <circle cx="64.5" cy="24" r="3" className="fill-sw-ink" />
+                    <circle cx="54.5" cy="23" r="0.9" className="fill-sw-cream" />
+                    <circle cx="65.5" cy="23" r="0.9" className="fill-sw-cream" />
                   </g>
                 </g>
                 <g className="yy-pet-sleepy-eyes">
-                  <path d="M51.5 24 q3.5 3 7 0" className="fill-none" stroke="#18181B" strokeWidth="1.8" strokeLinecap="round" />
-                  <path d="M63.5 24 q3.5 3 7 0" className="fill-none" stroke="#18181B" strokeWidth="1.8" strokeLinecap="round" />
+                  <path d="M50.5 24.5 q3 2.6 6 0" className="fill-none stroke-sw-ink" strokeWidth="1.8" />
+                  <path d="M61.5 24.5 q3 2.6 6 0" className="fill-none stroke-sw-ink" strokeWidth="1.8" />
                 </g>
-                <path d="M59.5 29 q1.5 1.6 3 0" className="fill-none" stroke="#18181B" strokeWidth="1.6" strokeLinecap="round" />
-                <circle cx="61" cy="28" r="1.4" fill="#18181B" />
+                <path d="M57 30 q2 2 4 0" className="fill-none stroke-sw-ink" strokeWidth="1.6" />
               </g>
             </g>
           </svg>

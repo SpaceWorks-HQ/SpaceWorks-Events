@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 
-/** Maker Teal, Workshop Orange and an ink dot (cream in dark mode), bouncing in turn. */
+/** Maker Teal, Workshop Orange and an ink dot (cream in dark mode), hopping left to right in turn. */
 const DOTS = [
   { className: "bg-primary", delay: 0 },
   { className: "bg-highlight", delay: 160 },
@@ -8,7 +8,7 @@ const DOTS = [
 ] as const;
 
 /**
- * Loading indicator: three brand dots that bounce one after the other. `size`
+ * Loading indicator: three brand dots that hop one after the other. `size`
  * is the overall width in px. Still under reduced motion. Announces `label`
  * politely to assistive technology.
  */
@@ -20,7 +20,7 @@ export function BrandLoader({ size = 48, label = "Loading", className }: { size?
         {DOTS.map((item, index) => (
           <span
             key={index}
-            className={cn("block shrink-0 rounded-full motion-safe:animate-bounce", item.className)}
+            className={cn("yy-dot-loader-jump block shrink-0 rounded-full", item.className)}
             style={{ width: dot, height: dot, animationDelay: `${item.delay}ms` }}
           />
         ))}
