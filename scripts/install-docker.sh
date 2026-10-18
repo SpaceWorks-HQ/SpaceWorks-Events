@@ -40,7 +40,8 @@ case "$family" in
     fi
     ;;
   *" arch "*|*" manjaro "*)
-    pacman -Sy --noconfirm --needed docker docker-compose docker-buildx
+    # Arch supports only full upgrades, never a partial -Sy.
+    pacman -Syu --noconfirm --needed docker docker-compose docker-buildx
     ;;
   *" suse "*|*" opensuse "*|*" sles "*)
     zypper --non-interactive install docker docker-compose docker-buildx

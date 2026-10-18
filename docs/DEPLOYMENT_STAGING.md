@@ -45,6 +45,13 @@ the maintained, S3-compatible fork of the archived MinIO:
 docker compose --env-file .env.staging -f compose.staging.yml up silo-init
 ```
 
+**Staging hosts created before the switch from MinIO to Silo:** set
+`S3_ENDPOINT="http://silo:9000"` in `.env.staging`. Silo reads MinIO's data
+format, so to keep the old uploads, copy the `minio_data` volume into `silo_data`
+before starting `silo` (for example
+`docker run --rm -v <project>_minio_data:/from:ro -v <project>_silo_data:/to alpine cp -a /from/. /to/`).
+Start with `--remove-orphans` so the old `minio` containers are removed.
+
 Run database migrations:
 
 ```bash

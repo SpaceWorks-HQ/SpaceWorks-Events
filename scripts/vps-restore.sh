@@ -41,7 +41,19 @@ if [[ $assume_yes = 0 ]]; then
   ask answer 'Type RESTORE to continue' '' is_nonempty
   [[ "$answer" = RESTORE ]] || { say 'Cancelled. Nothing was changed.'; exit 2; }
 fi
-bash "$SWE_REPO_DIR/scripts/vps-backup.sh" --no-objects
+SWE_BACKUP_PROTECT=$backup bash "$SWE_REPO_DIR/scripts/vps-backup.sh" --no-objects
+# A failed restore must not leave the site down; the database restore is one
+# transaction, so a failure there keeps the current data.
+stopped=0
+restart_on_failure() {
+  local status=$?
+  [[ $status != 0 && $stopped = 1 ]] || return 0
+  warn 'The restore failed; starting the services again.'
+  compose up -d >/dev/null 2>&1 || warn 'Start them with scripts/vps-compose.sh up -d.'
+  exit "$status"
+}
+trap restart_on_failure EXIT
+stopped=1
 compose stop proxy scheduler app
 compose exec -T postgres pg_restore -U swevents -d swevents --clean --if-exists --single-transaction --exit-on-error \
   < "$backup/database.dump"

@@ -93,6 +93,8 @@ require_tty
 case "$SWE_CONFIG_DIR/" in "$source_dir/"*|"$SWE_DIR/"*) die 'Keep production configuration outside the source and install directories.' ;; esac
 [[ ! -e "$SWE_CONFIG_DIR/compose.env" ]] \
   || die "$SWE_CONFIG_DIR already holds a configuration. Use the update procedure; setup never replaces secrets."
+[[ ! -e "$SWE_CONFIG_DIR" || -z "$(ls -A "$SWE_CONFIG_DIR")" ]] \
+  || die "$SWE_CONFIG_DIR has files but no configuration. Move them away, then rerun."
 
 # Checks only: nothing changes before the summary is confirmed.
 case $(uname -m) in
@@ -133,14 +135,14 @@ else
 fi
 ask admin_email 'Super-admin email (sign up with it to administer this instance)' '' is_email 'Enter an email address.'
 printf '\nOutgoing email needs an authenticated SMTP relay on a verified sending domain (Brevo, Amazon SES, Postmark...).\n' >/dev/tty
-ask EMAIL_FROM 'Sender, as Name <address@your-verified-domain>' "Space Works Events <events@$site_host>" is_nonempty
+ask EMAIL_FROM 'Sender, as Name <address@your-verified-domain>' "Space Works Events <events@$site_host>" is_env_value "Enter a sender without ' or \\ characters."
 ask SMTP_HOST 'SMTP host' 'smtp-relay.brevo.com' is_hostname 'Enter the relay hostname, such as smtp-relay.brevo.com.'
 default_port=587
 [[ "${SMTP_HOST,,}" != *brevo.com ]] || default_port=2525
 ask SMTP_PORT 'SMTP port (Brevo: 2525 or 587; implicit TLS: 465)' "$default_port" is_port 'Enter a port number between 1 and 65535.'
 SMTP_SECURE=false
 if [[ $SMTP_PORT = 465 ]]; then SMTP_SECURE=true; fi
-ask SMTP_USER 'SMTP login' '' is_nonempty
+ask SMTP_USER 'SMTP login' '' is_env_value "Enter the login, without ' or \\ characters."
 ask_secret SMTP_PASSWORD 'SMTP password or key (hidden)'
 make_swap=0
 if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; building the app needs about 4 GB. Create a 4 GB swap file at /swapfile?" Y; then
@@ -185,15 +187,21 @@ if [[ $managed = 1 ]]; then
   conf_set "$(install_conf)" SWE_PENDING_RELEASE "$revision"
 fi
 cd "$SWE_REPO_DIR"
-install -d -m 0700 "$SWE_CONFIG_DIR"
 say 'Building the operator tools image (a few minutes), then generating secrets and internal certificates.'
 docker build --quiet --target ops --tag "swevents-ops:$version" . >/dev/null
-docker run --rm --volume "$SWE_CONFIG_DIR:/config" "swevents-ops:$version" \
-  node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host"
+# Generate everything beside the final directory and rename it into place, so an
+# interrupted run never leaves a half-written configuration behind.
+staging_config="$SWE_CONFIG_DIR.partial"
+rm -rf -- "$staging_config"
+install -d -m 0700 "$staging_config"
+docker run --rm --volume "$staging_config:/config" "swevents-ops:$version" \
+  node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host" >/dev/null
 export EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD
-docker run --rm --volume "$SWE_CONFIG_DIR:/config" \
+docker run --rm --volume "$staging_config:/config" \
   --env EMAIL_FROM --env SMTP_HOST --env SMTP_PORT --env SMTP_SECURE --env SMTP_USER --env SMTP_PASSWORD \
   "swevents-ops:$version" node docker/vps/configure-smtp.mjs
 unset SMTP_PASSWORD SMTP_USER
+rmdir "$SWE_CONFIG_DIR" 2>/dev/null || true
+mv -T "$staging_config" "$SWE_CONFIG_DIR"
 start_stack
 finish

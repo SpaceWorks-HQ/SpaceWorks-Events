@@ -42,7 +42,7 @@ As root or a user with `sudo`:
 curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/main/install.sh | bash
 ```
 
-The bootstrap checks the architecture, Linux distribution, sudo and `curl`/`tar`,
+The bootstrap checks for Linux, the architecture, root or sudo and `curl`/`tar`,
 resolves `main` (or `--ref`) to one commit and downloads that archive into
 temporary storage. The release's `scripts/setup-vps.sh` then checks disk space and
 ports 80/443 and asks every question first: mode 1 (everything on the VPS) or
@@ -58,10 +58,16 @@ distribution family's official source if missing, copies the release to
 `/etc/spaceworks-events`, builds the images, applies migrations, waits for healthy
 services and runs the VPS checks. `current` then points at the release and
 `/opt/spaceworks-events/install.conf` records the configuration directory and the
-repository to update from. `SWE_DIR` and `SWE_CONFIG_DIR` change the two locations.
-`--ref` installs a branch, tag or commit, and `--repo owner/name` a fork. `curl … | sudo bash`
-works too. DNS, firewall policy, SMTP provisioning and off-server backups remain
-operator tasks.
+repository to update from. `--dir` changes the installation directory, `--ref`
+installs a branch, tag or commit, and `--repo owner/name` a fork; pass options as
+`curl … | bash -s -- --dir /srv/spaceworks-events`. To keep secrets somewhere
+other than `/etc/spaceworks-events`, set the variable on the `bash` side of the
+pipe: `curl … | SWE_CONFIG_DIR=/srv/events-config bash`. Running `curl … | sudo bash`
+as root works too. DNS, firewall policy, SMTP provisioning and off-server backups
+remain operator tasks.
+
+Answers are stored in single-quoted env files, so the sender, SMTP login and
+password cannot contain `'` or `\`; the installer asks again if they do.
 
 If setup stops after confirmation (a failed build, a full disk), fix the cause and
 run the one-liner again: it offers to **resume** that release without generating
@@ -187,8 +193,10 @@ Run the one-liner again and choose **1) Update to the latest release** (or pass
 If any step after the backup fails, it restores the previous `compose.env` and
 starts the previous release's retained images. **Migrations that already ran are
 not reversed**; review migrations before updating, and restore the pre-update
-backup if an older release cannot run on the newer schema. For automation, run
-`sudo bash <new release>/scripts/update-vps.sh --yes`. For split hosting, deploy
+backup if an older release cannot run on the newer schema. For automation, unpack
+the new release with its commit in a `.release` file and run
+`sudo bash <new release>/scripts/update-vps.sh --yes`; it is copied into
+`releases/` like any other update. For split hosting, deploy
 the identical commit to Netlify after the backend update.
 
 For a checkout-based installation, follow the manual steps below.
@@ -236,8 +244,9 @@ sudo bash /opt/spaceworks-events/current/scripts/vps-backup.sh
 The services keep running. The script writes `/etc/spaceworks-events/backups/<UTC time>/`
 with a consistent `database.dump` (checked with `pg_restore --list`), `config.tar.gz`
 (every secret, including `MFA_ENCRYPTION_KEY` and the CA) and `objects/` (every
-uploaded file, mirrored from Silo). It keeps the newest seven backups
-(`SWE_BACKUP_KEEP` changes that). `--no-objects` skips the files; updates use it.
+uploaded file, mirrored from Silo). `--no-objects` skips the files; updates and
+restores use it. It keeps the newest seven full and seven database-only backups
+(`SWE_BACKUP_KEEP` changes that), and never removes the backup being restored.
 Schedule it, for example with a root cron entry
 `30 3 * * * bash /opt/spaceworks-events/current/scripts/vps-backup.sh`, and copy each
 backup off this server, encrypted, the same day. A backup on the same VPS is not a
@@ -256,10 +265,28 @@ database in one transaction. It then copies the backup's files back into Silo
 starts everything and runs the VPS checks.
 
 On a **new server**, restore the configuration before anything else, because the
-database contains data encrypted with its keys. Extract `config.tar.gz` into
-`/etc/spaceworks-events` (mode 0700, root-owned). Download and extract the same
-release recorded in the backup's `version` file. Run its `scripts/vps-compose.sh up -d --wait`
-with `SWE_CONFIG_DIR` set, then run `vps-restore.sh`. Point DNS at the new server.
+database holds data encrypted with its keys. Do not run a fresh install: it would
+generate different keys. Copy the backup directory to the server (here
+`/root/<time>`). Then, as root, unpack the release named in its `version` file and
+record it as an unfinished installation:
+
+```bash
+backup=/root/<time>
+commit=$(curl -fsSL -H 'Accept: application/vnd.github.sha' \
+  "https://api.github.com/repos/SpaceWorks-HQ/SpaceWorks-Events/commits/$(sed 's/^vps-//' "$backup/version")")
+release=/opt/spaceworks-events/releases/$commit
+mkdir -p "$release"
+curl -fsSL "https://codeload.github.com/SpaceWorks-HQ/SpaceWorks-Events/tar.gz/$commit" | tar -xz -C "$release" --strip-components=1
+echo "$commit" > "$release/.release"
+install -d -m 0700 /etc/spaceworks-events
+tar -xzf "$backup/config.tar.gz" -C /etc/spaceworks-events
+printf "SWE_CONFIG_DIR='/etc/spaceworks-events'\nSWE_PENDING_RELEASE='%s'\n" "$commit" > /opt/spaceworks-events/install.conf
+command -v docker >/dev/null || bash "$release/scripts/install-docker.sh"
+```
+
+Run the one-liner and choose **Resume**. It builds and starts that release with
+the restored keys. Then run `vps-restore.sh "$backup"` and point DNS at the new
+server. Later updates work as usual.
 
 For the production recovery baseline, also configure encrypted off-server
 retention, backup-failure alerts, PostgreSQL WAL archiving/PITR or

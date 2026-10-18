@@ -25,9 +25,9 @@ What you need
 What it does
   1. Checks this server and downloads the pinned release into temporary storage.
   2. Asks every question, shows a summary and waits for your confirmation.
-  3. Installs to /opt/spaceworks-events (SWE_DIR) with secrets in
-     /etc/spaceworks-events, then builds and starts the app, PostgreSQL, Redis,
-     Silo object storage, Caddy HTTPS, migrations and the email scheduler.
+  3. Installs to /opt/spaceworks-events with secrets in /etc/spaceworks-events,
+     then builds and starts the app, PostgreSQL, Redis, Silo object storage,
+     Caddy HTTPS, migrations and the email scheduler.
   Run the same command later to update, back up or check the installation.
 
 Options
@@ -42,51 +42,9 @@ EOF
 say() { printf '[Space Works Events] %s\n' "$*"; }
 die() { printf '[Space Works Events] ERROR: %s\n' "$*" >&2; exit 1; }
 usage() { die 'Usage: install.sh [--ref REF] [--repo OWNER/NAME] [--dir PATH] [--update] [--help]'; }
-
-repository=${SWE_REPOSITORY:-}
-ref=${SWE_REF:-main}
-install_dir=${SWE_DIR:-/opt/spaceworks-events}
-action=''
-while (($# > 0)); do
-  case "$1" in
-    -h|--help) show_guide; exit 0 ;;
-    --ref) (($# > 1)) || usage; ref=$2; shift ;;
-    --ref=*) ref=${1#--ref=} ;;
-    --repo) (($# > 1)) || usage; repository=$2; shift ;;
-    --repo=*) repository=${1#--repo=} ;;
-    --dir) (($# > 1)) || usage; install_dir=$2; shift ;;
-    --dir=*) install_dir=${1#--dir=} ;;
-    --update) action=update ;;
-    *) usage ;;
-  esac
-  shift
-done
-[[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,150}$ && "$ref" != *..* ]] || die 'Invalid release reference.'
-install_dir=${install_dir%/}
-[[ "$install_dir" = /* && -n "${install_dir#/}" && "$install_dir" != *[[:space:]:\'\"]* ]] \
-  || die 'Use an absolute installation directory without spaces, quotes or colons.'
-if [[ -n "${SWE_CONFIG_DIR:-}" ]]; then
-  [[ "$SWE_CONFIG_DIR" = /* && "$SWE_CONFIG_DIR" != / && "$SWE_CONFIG_DIR" != *[[:space:]:\'\"]* ]] \
-    || die 'SWE_CONFIG_DIR must be an absolute path without spaces, quotes or colons.'
-fi
-
-show_guide
-[[ $(uname -s) = Linux ]] || die 'Run this on the Linux server that will host Space Works Events.'
-case $(uname -m) in
-  x86_64|amd64|aarch64|arm64) ;;
-  *) die "Unsupported architecture $(uname -m); use an x86_64 or arm64 server." ;;
-esac
-for dependency in curl tar; do
-  command -v "$dependency" >/dev/null || die "Install $dependency first, then rerun."
-done
-{ : </dev/tty; } 2>/dev/null || die 'An interactive terminal is required (for SSH, use ssh -t).'
-SUDO=()
-if [[ $(id -u) != 0 ]]; then
-  command -v sudo >/dev/null || die 'Run this as root, or install sudo.'
-  SUDO=(sudo)
-  say 'Installation steps run as root; sudo may ask for your password.'
-fi
 as_root() { ${SUDO[@]+"${SUDO[@]}"} "$@"; }
+# Children never read the curl pipe: their questions come from the terminal.
+run_root() { as_root "${RUN_ENV[@]}" "$@" </dev/null; }
 prompt() {
   local reply
   printf '%s' "$1" >/dev/tty
@@ -94,25 +52,68 @@ prompt() {
   printf '%s' "${reply%$'\r'}"
 }
 conf_get() {
-  as_root sed -n "s/^$1=//p" "$install_dir/install.conf" 2>/dev/null | tail -n 1 | tr -d "'\r" || true
+  as_root sed -n "s/^$2=//p" "$1/install.conf" 2>/dev/null | tail -n 1 | tr -d "'\r" || true
 }
 
-installed=''
-if as_root test -L "$install_dir/current"; then
-  installed=$(basename "$(as_root readlink -f "$install_dir/current")")
-fi
-pending=''
-if as_root test -f "$install_dir/install.conf"; then pending=$(conf_get SWE_PENDING_RELEASE); fi
-repository=${repository:-$(conf_get SWE_REPOSITORY)}
-repository=${repository:-SpaceWorks-HQ/SpaceWorks-Events}
-[[ "$repository" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$ && "$repository" != */. && "$repository" != */.. ]] \
-  || die 'The repository must be a GitHub owner/name.'
-run_env=(env "SWE_DIR=$install_dir" "SWE_REPOSITORY=$repository")
-[[ -z "${SWE_CONFIG_DIR:-}" ]] || run_env+=("SWE_CONFIG_DIR=$SWE_CONFIG_DIR")
+# Everything runs from main, so under `curl | bash` the whole script has been
+# read before any child process could consume the rest of the pipe.
+main() {
+  local repository=${SWE_REPOSITORY:-} ref=${SWE_REF:-main} install_dir=${SWE_DIR:-/opt/spaceworks-events}
+  local action='' installed='' pending='' config_dir='' choice='' revision='' status=0 file=''
+  while (($# > 0)); do
+    case "$1" in
+      -h|--help) show_guide; exit 0 ;;
+      --ref) (($# > 1)) || usage; ref=$2; shift ;;
+      --ref=*) ref=${1#--ref=} ;;
+      --repo) (($# > 1)) || usage; repository=$2; shift ;;
+      --repo=*) repository=${1#--repo=} ;;
+      --dir) (($# > 1)) || usage; install_dir=$2; shift ;;
+      --dir=*) install_dir=${1#--dir=} ;;
+      --update) action=update ;;
+      *) usage ;;
+    esac
+    shift
+  done
+  [[ "$ref" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,150}$ && "$ref" != *..* ]] || die 'Invalid release reference.'
+  install_dir=${install_dir%/}
+  [[ "$install_dir" = /* && -n "${install_dir#/}" && "$install_dir" != *[[:space:]:\'\"]* ]] \
+    || die 'Use an absolute installation directory without spaces, quotes or colons.'
+  if [[ -n "${SWE_CONFIG_DIR:-}" ]]; then
+    [[ "$SWE_CONFIG_DIR" = /* && "$SWE_CONFIG_DIR" != / && "$SWE_CONFIG_DIR" != *[[:space:]:\'\"]* ]] \
+      || die 'SWE_CONFIG_DIR must be an absolute path without spaces, quotes or colons.'
+  fi
 
-if [[ -n "$installed" ]]; then
-  if [[ -z "$action" ]]; then
-    choice=$(prompt "
+  show_guide
+  [[ $(uname -s) = Linux ]] || die 'Run this on the Linux server that will host Space Works Events.'
+  case $(uname -m) in
+    x86_64|amd64|aarch64|arm64) ;;
+    *) die "Unsupported architecture $(uname -m); use an x86_64 or arm64 server." ;;
+  esac
+  for file in curl tar; do
+    command -v "$file" >/dev/null || die "Install $file first, then rerun."
+  done
+  { : </dev/tty; } 2>/dev/null || die 'An interactive terminal is required (for SSH, use ssh -t).'
+  SUDO=()
+  if [[ $(id -u) != 0 ]]; then
+    command -v sudo >/dev/null || die 'Run this as root, or install sudo.'
+    SUDO=(sudo)
+    say 'Installation steps run as root; sudo may ask for your password.'
+  fi
+
+  if as_root test -L "$install_dir/current"; then
+    installed=$(basename "$(as_root readlink -f "$install_dir/current")")
+  fi
+  if as_root test -f "$install_dir/install.conf"; then pending=$(conf_get "$install_dir" SWE_PENDING_RELEASE); fi
+  repository=${repository:-$(conf_get "$install_dir" SWE_REPOSITORY)}
+  repository=${repository:-SpaceWorks-HQ/SpaceWorks-Events}
+  [[ "$repository" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$ && "$repository" != */. && "$repository" != */.. ]] \
+    || die 'The repository must be a GitHub owner/name.'
+  RUN_ENV=(env "SWE_DIR=$install_dir" "SWE_REPOSITORY=$repository")
+  [[ -z "${SWE_CONFIG_DIR:-}" ]] || RUN_ENV+=("SWE_CONFIG_DIR=$SWE_CONFIG_DIR")
+
+  if [[ -n "$installed" ]]; then
+    if [[ -z "$action" ]]; then
+      choice=$(prompt "
 Space Works Events is installed in $install_dir (commit ${installed:0:12}).
 What do you want to do?
   1) Update to the latest release - backs up the database first, keeps your settings and data
@@ -120,63 +121,81 @@ What do you want to do?
   3) Check status and health
   4) Cancel - change nothing
 Choose 1-4 [4]: ")
-    case "${choice:-4}" in
-      1) action=update ;;
-      2) as_root "${run_env[@]}" bash "$install_dir/current/scripts/vps-backup.sh"; exit 0 ;;
-      3) as_root "${run_env[@]}" bash "$install_dir/current/scripts/vps-status.sh"; exit 0 ;;
-      4) say 'Cancelled. Nothing was changed.'; exit 0 ;;
-      *) die 'Invalid choice. Nothing was changed.' ;;
-    esac
-  fi
-elif [[ -n "$pending" ]]; then
-  if ! [[ "$pending" =~ ^[a-f0-9]{40}$ ]] || ! as_root test -f "$install_dir/releases/$pending/scripts/setup-vps.sh"; then
-    die "$install_dir/install.conf names an unfinished release that is missing. Repair it by hand."
-  fi
-  choice=$(prompt "
-A previous setup of commit ${pending:0:12} in $install_dir did not finish.
-  1) Resume - continue it, keeping any secrets it already generated
+      case "${choice:-4}" in
+        1) action=update ;;
+        2) run_root bash "$install_dir/current/scripts/vps-backup.sh"; exit 0 ;;
+        3) run_root bash "$install_dir/current/scripts/vps-status.sh"; exit 0 ;;
+        4) say 'Cancelled. Nothing was changed.'; exit 0 ;;
+        *) die 'Invalid choice. Nothing was changed.' ;;
+      esac
+    fi
+  elif [[ -n "$pending" ]]; then
+    if ! [[ "$pending" =~ ^[a-f0-9]{40}$ ]] || ! as_root test -f "$install_dir/releases/$pending/scripts/setup-vps.sh"; then
+      die "$install_dir/install.conf names an unfinished release that is missing. Repair it by hand."
+    fi
+    config_dir=${SWE_CONFIG_DIR:-$(conf_get "$install_dir" SWE_CONFIG_DIR)}
+    if as_root test -f "${config_dir:-/etc/spaceworks-events}/compose.env"; then
+      choice=$(prompt "
+A previous setup of commit ${pending:0:12} in $install_dir did not finish; its secrets exist.
+  1) Resume - build and start it, keeping those secrets
   2) Cancel - change nothing
 Choose 1-2 [1]: ")
-  case "${choice:-1}" in
-    1) as_root "${run_env[@]}" bash "$install_dir/releases/$pending/scripts/setup-vps.sh" --resume; exit 0 ;;
-    2) say 'Cancelled. Nothing was changed.'; exit 0 ;;
-    *) die 'Invalid choice. Nothing was changed.' ;;
-  esac
-else
-  [[ "$action" != update ]] || die "There is no installation in $install_dir to update."
-  if as_root test -e "$install_dir" && [[ -n "$(as_root find "$install_dir" -mindepth 1 -maxdepth 1 ! -name .lock -print -quit)" ]]; then
-    die "$install_dir has files but no installation record. Choose another --dir or empty it first."
+      case "${choice:-1}" in
+        1) run_root bash "$install_dir/releases/$pending/scripts/setup-vps.sh" --resume; exit 0 ;;
+        2) say 'Cancelled. Nothing was changed.'; exit 0 ;;
+        *) die 'Invalid choice. Nothing was changed.' ;;
+      esac
+    fi
+    choice=$(prompt "
+A previous setup of commit ${pending:0:12} in $install_dir stopped before generating secrets.
+  1) Continue it - answer the questions again for that commit
+  2) Start over with $ref - remove the unfinished copy and download again
+  3) Cancel - change nothing
+Choose 1-3 [1]: ")
+    case "${choice:-1}" in
+      1) run_root bash "$install_dir/releases/$pending/scripts/setup-vps.sh" --resume; exit 0 ;;
+      2) as_root rm -rf -- "$install_dir/releases" "$install_dir/install.conf"; action=install ;;
+      3) say 'Cancelled. Nothing was changed.'; exit 0 ;;
+      *) die 'Invalid choice. Nothing was changed.' ;;
+    esac
+  else
+    [[ "$action" != update ]] || die "There is no installation in $install_dir to update."
+    if as_root test -e "$install_dir" && [[ -n "$(as_root find "$install_dir" -mindepth 1 -maxdepth 1 ! -name .lock -print -quit)" ]]; then
+      die "$install_dir has files but no installation record. Choose another --dir or empty it first."
+    fi
+    action=install
   fi
-  action=install
-fi
 
-say "Resolving $ref in $repository."
-revision=$(curl --fail --silent --show-error --location --proto '=https' \
-  --header 'Accept: application/vnd.github.sha' \
-  "https://api.github.com/repos/$repository/commits/$ref") || die "Could not find $ref in $repository on GitHub."
-[[ "$revision" =~ ^[a-f0-9]{40}$ ]] || die 'GitHub returned an unexpected commit id.'
-if [[ "$action" = update && "$revision" = "$installed" ]]; then
-  say "Already on the latest release (commit ${revision:0:12}). Nothing to update."
-  exit 0
-fi
-stage=$(mktemp -d)
-trap 'rm -rf -- "$stage"' EXIT
-say "Downloading commit ${revision:0:12} into temporary storage."
-curl --fail --silent --show-error --location --proto '=https' \
-  "https://codeload.github.com/$repository/tar.gz/$revision" -o "$stage/source.tar.gz"
-mkdir "$stage/source"
-tar -xzf "$stage/source.tar.gz" -C "$stage/source" --strip-components=1 --no-same-owner
-rm -f "$stage/source.tar.gz"
-printf '%s\n' "$revision" > "$stage/source/.release"
-for file in scripts/vps-lib.sh scripts/setup-vps.sh scripts/update-vps.sh scripts/vps-compose.sh compose.production.yml; do
-  [[ -f "$stage/source/$file" ]] || die "Commit ${revision:0:12} has no $file; it predates this installer."
-done
-run_env+=(SWE_STAGED=1)
-status=0
-if [[ "$action" = update ]]; then
-  as_root "${run_env[@]}" bash "$stage/source/scripts/update-vps.sh" || status=$?
-else
-  as_root "${run_env[@]}" bash "$stage/source/scripts/setup-vps.sh" || status=$?
-fi
-# 2 is a cancellation at the confirmation prompt; it already said so.
-[[ $status = 0 || $status = 2 ]] || die "Stopped with an error (exit $status). Fix the cause above, then run the installer again."
+  say "Resolving $ref in $repository."
+  revision=$(curl --fail --silent --show-error --location --proto '=https' \
+    --header 'Accept: application/vnd.github.sha' \
+    "https://api.github.com/repos/$repository/commits/$ref") || die "Could not find $ref in $repository on GitHub."
+  [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || die 'GitHub returned an unexpected commit id.'
+  if [[ "$action" = update && "$revision" = "$installed" ]]; then
+    say "Already on the latest release (commit ${revision:0:12}). Nothing to update."
+    exit 0
+  fi
+  # Root runs the staged scripts, so only root may write the staging directory.
+  STAGE=$(as_root mktemp -d)
+  trap 'as_root rm -rf -- "$STAGE"' EXIT
+  say "Downloading commit ${revision:0:12} into temporary storage."
+  as_root curl --fail --silent --show-error --location --proto '=https' \
+    "https://codeload.github.com/$repository/tar.gz/$revision" -o "$STAGE/source.tar.gz"
+  as_root mkdir "$STAGE/source"
+  as_root tar -xzf "$STAGE/source.tar.gz" -C "$STAGE/source" --strip-components=1 --no-same-owner
+  as_root rm -f "$STAGE/source.tar.gz"
+  printf '%s\n' "$revision" | as_root tee "$STAGE/source/.release" >/dev/null
+  for file in scripts/vps-lib.sh scripts/setup-vps.sh scripts/update-vps.sh scripts/vps-compose.sh compose.production.yml; do
+    as_root test -f "$STAGE/source/$file" || die "Commit ${revision:0:12} has no $file; it predates this installer."
+  done
+  RUN_ENV+=(SWE_STAGED=1)
+  if [[ "$action" = update ]]; then
+    run_root bash "$STAGE/source/scripts/update-vps.sh" || status=$?
+  else
+    run_root bash "$STAGE/source/scripts/setup-vps.sh" || status=$?
+  fi
+  # 2 is a cancellation at the confirmation prompt; it already said so.
+  [[ $status = 0 || $status = 2 ]] || die "Stopped with an error (exit $status). Fix the cause above, then run the installer again."
+}
+
+main "$@"

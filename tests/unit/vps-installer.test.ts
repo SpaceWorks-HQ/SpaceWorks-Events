@@ -45,6 +45,10 @@ describe("VPS installer", () => {
     expect(check("is_hostname", "bad host.example.com")).toBe(false);
     expect(check("is_email", "admin@example.com")).toBe(true);
     expect(check("is_email", "admin@example")).toBe(false);
+    expect(lib(`is_env_value "Events <events@example.com>"`).status).toBe(0);
+    expect(lib(`is_env_value "it's"`).status).not.toBe(0);
+    expect(lib(`is_env_value 'trailing\\'`).status).not.toBe(0);
+    expect(lib(`is_env_value '   '`).status).not.toBe(0);
     expect(check("is_port", "2525")).toBe(true);
     expect(check("is_port", "0")).toBe(false);
     expect(check("is_port", "65536")).toBe(false);

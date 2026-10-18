@@ -16,9 +16,11 @@ require_root() { [[ $(id -u) = 0 ]] || die 'Run this as root (sudo bash ...).'; 
 require_tty() { { : </dev/tty; } 2>/dev/null || die 'An interactive terminal is required.'; }
 
 is_hostname() { [[ ${#1} -le 253 && "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; }
-is_email() { [[ "$1" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; }
+is_email() { [[ "$1" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] && is_env_value "$1"; }
 is_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 is_nonempty() { [[ -n "${1//[[:space:]]/}" ]]; }
+# Answers are stored as single-quoted env-file values, which cannot hold ' or \.
+is_env_value() { is_nonempty "$1" && [[ "$1" != *[\'\\]* ]]; }
 is_mode() { [[ "$1" = 1 || "$1" = 2 ]]; }
 is_safe_path() { [[ "$1" = /* && "$1" != / && "$1" != *[[:space:]:\'\"]* ]]; }
 is_repository() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$ && "$1" != */. && "$1" != */.. ]]; }
@@ -38,7 +40,7 @@ ask() {
   done
 }
 
-# ask_secret VAR "Question": hidden input, asked again while empty.
+# ask_secret VAR "Question": hidden input, asked again until it can be stored.
 ask_secret() {
   local var=$1 question=$2 reply
   while true; do
@@ -46,8 +48,8 @@ ask_secret() {
     IFS= read -r -s reply </dev/tty || die 'No terminal input; run this in an interactive terminal.'
     printf '\n' >/dev/tty
     reply=${reply%$'\r'}
-    if is_nonempty "$reply"; then printf -v "$var" '%s' "$reply"; return 0; fi
-    printf '  A value is required.\n' >/dev/tty
+    if is_env_value "$reply"; then printf -v "$var" '%s' "$reply"; return 0; fi
+    printf "  A value is required, without ' or \\\\ characters.\n" >/dev/tty
   done
 }
 
@@ -121,13 +123,13 @@ take_lock() {
 promote_release() {
   local source=$1 revision=$2 target="$SWE_DIR/releases/$2"
   case "$source/" in "$SWE_DIR/releases/"*) printf '%s' "$source"; return 0 ;; esac
+  # Called in a command substitution, where errexit does not apply: check each step.
   if [[ ! -d "$target" ]]; then
-    mkdir -p "$SWE_DIR/releases"
-    rm -rf "$target.partial"
-    cp -R "$source" "$target.partial"
-    chown -R 0:0 "$target.partial"
-    chmod -R go-w "$target.partial"
-    mv "$target.partial" "$target"
+    if ! { mkdir -p "$SWE_DIR/releases" && rm -rf "$target.partial" && cp -R "$source" "$target.partial" \
+      && chown -R 0:0 "$target.partial" && chmod -R go-w "$target.partial" && mv "$target.partial" "$target"; }; then
+      rm -rf "$target.partial"
+      return 1
+    fi
   fi
   printf '%s' "$target"
 }
@@ -158,15 +160,24 @@ memory_mb() { awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo; }
 swap_mb() { awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo; }
 
 # Building the Next.js image needs roughly 4 GB of memory; small VPS plans get swap.
+# Some hosts (OpenVZ/LXC containers, some btrfs roots) refuse swap files: warn and go on.
 create_swap() {
   local file=/swapfile size_mb=$1
-  [[ ! -e "$file" ]] || die "$file already exists; enable it or remove it, then rerun."
   say "Creating a ${size_mb} MB swap file at $file."
-  fallocate -l "${size_mb}M" "$file" 2>/dev/null || dd if=/dev/zero of="$file" bs=1M count="$size_mb" status=none
-  chmod 600 "$file"
-  mkswap "$file" >/dev/null
-  swapon "$file"
-  grep -q "^$file " /etc/fstab || printf '%s none swap sw 0 0\n' "$file" >> /etc/fstab
+  if [[ $(stat -f -c %T / 2>/dev/null) = btrfs ]] && command -v btrfs >/dev/null; then
+    btrfs filesystem mkswapfile --size "${size_mb}m" "$file" >/dev/null 2>&1 || true
+  else
+    if { fallocate -l "${size_mb}M" "$file" 2>/dev/null || dd if=/dev/zero of="$file" bs=1M count="$size_mb" status=none; } \
+      && chmod 600 "$file"; then
+      mkswap "$file" >/dev/null 2>&1 || true
+    fi
+  fi
+  if [[ -f "$file" ]] && swapon "$file" 2>/dev/null; then
+    grep -q "^$file " /etc/fstab || printf '%s none swap sw 0 0\n' "$file" >> /etc/fstab
+  else
+    rm -f "$file"
+    warn 'This server does not allow a swap file; the image build may run out of memory.'
+  fi
 }
 
 compose() { sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@"; }

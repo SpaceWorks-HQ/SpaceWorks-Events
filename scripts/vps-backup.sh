@@ -4,7 +4,8 @@
 # database dump is a consistent snapshot; objects are copied one by one.
 #   --no-objects  database and configuration only (used before updates)
 # Each backup contains every secret: copy it off this server, encrypted.
-# SWE_BACKUP_KEEP (default 7) is how many backups stay on this server.
+# SWE_BACKUP_KEEP (default 7) is how many backups of each kind (full and
+# database-only) stay on this server.
 set -euo pipefail
 set +x
 source_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
@@ -36,9 +37,16 @@ if [[ $objects = 1 ]]; then
 fi
 conf_get "$SWE_CONFIG_DIR/compose.env" SWE_VERSION > "$target.partial/version"
 mv "$target.partial" "$target"
-# Retention covers backups made by this script only.
-find "$backups" -mindepth 1 -maxdepth 1 -type d -name '2*Z' | sort -r | tail -n +"$((keep + 1))" | while IFS= read -r old; do
-  rm -rf -- "$old"
+# Retention covers backups made by this script only. Full and database-only
+# backups are counted separately, so updates never push out the last copy of
+# the uploads, and SWE_BACKUP_PROTECT (a restore's source) is never removed.
+full=() database_only=()
+while IFS= read -r dir; do
+  [[ "$(basename "$dir")" != "$(basename "${SWE_BACKUP_PROTECT:-/}")" ]] || continue
+  if [[ -d "$dir/objects" ]]; then full+=("$dir"); else database_only+=("$dir"); fi
+done < <(find "$backups" -mindepth 1 -maxdepth 1 -type d -name '2*Z' | sort -r)
+for dir in "${full[@]:keep}" "${database_only[@]:keep}"; do
+  rm -rf -- "$dir"
 done
 say "Backup saved to $target ($(du -sh "$target" | cut -f1))."
 say 'It contains every secret. Copy it off this server, encrypted, for example:'

@@ -24,8 +24,10 @@ revision=$(release_revision "$source_dir")
 version=$(release_version "$revision")
 previous_version=$(conf_get "$compose_env" SWE_VERSION)
 previous_dir=$(readlink -f "$SWE_DIR/current" 2>/dev/null || true)
+# An installation made by install.sh is always updated the managed way, from
+# wherever this new release was unpacked.
 managed=0
-case "$source_dir/" in "$SWE_DIR/releases/"*) managed=1 ;; esac
+[[ ! -f "$(install_conf)" ]] || managed=1
 [[ ${SWE_STAGED:-0} != 1 ]] || managed=1
 [[ "$previous_version" != "$version" ]] || { say "Already running $version; nothing to update."; exit 0; }
 
