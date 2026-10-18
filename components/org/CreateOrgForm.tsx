@@ -26,6 +26,7 @@ export function CreateOrgForm() {
   const [slugState, setSlugState] = useState<
     "idle" | "checking" | "available" | "taken"
   >("idle");
+  const [slugError, setSlugError] = useState<string | null>(null);
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   useEffect(() => {
@@ -36,8 +37,9 @@ export function CreateOrgForm() {
 
     const timer = setTimeout(async () => {
       try {
-        const available = await checkSlugAvailability(trimmed);
-        setSlugState(available ? "available" : "taken");
+        const result = await checkSlugAvailability(trimmed);
+        setSlugState(result.available ? "available" : "taken");
+        setSlugError(result.error ?? null);
       } catch (err) {
         if (process.env.NODE_ENV === "development")
           console.error("Failed to check slug availability", err);
@@ -61,7 +63,7 @@ export function CreateOrgForm() {
   let isError = false;
 
   if (slugState === "checking") {
-    helperText = "Checking availability...";
+    helperText = "Checking availability…";
   } else if (slugState === "available") {
     helperText = (
       <span className="inline-flex items-center gap-1 font-semibold text-success-fg">
@@ -73,7 +75,7 @@ export function CreateOrgForm() {
     helperText = (
       <span className="inline-flex items-center gap-1">
         <X aria-hidden className="size-3.5" />
-        This URL slug is already taken or reserved.
+        {slugError ?? "That URL can't be used"}
       </span>
     );
     isError = true;
@@ -97,7 +99,7 @@ export function CreateOrgForm() {
             logoUrl: "",
           });
           if (!res.ok) {
-            setError(res.error);
+            setError(res.fieldErrors?.slug?.[0] ?? res.fieldErrors?.name?.[0] ?? res.error);
             return;
           }
           if (res.data?.slug) {

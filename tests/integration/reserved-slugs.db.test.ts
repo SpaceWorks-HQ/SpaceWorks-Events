@@ -8,7 +8,7 @@ vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: async () => false
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined, revalidateTag: () => undefined, updateTag: () => undefined }));
 
 import { cloneEvent, createEvent, updateEventSlug } from "@/app/actions/event";
-import { createOrganisation } from "@/app/actions/org";
+import { checkSlugAvailability, createOrganisation } from "@/app/actions/org";
 import { prisma } from "@/lib/db";
 
 const suffix = randomUUID().replaceAll("-", "").slice(0, 16);
@@ -67,5 +67,13 @@ describe.sequential("reserved slugs", { timeout: 30_000 }, () => {
       expect(await createOrganisation({ name: "Shadow", slug, description: "", logoUrl: "" })).toMatchObject({ ok: false, fieldErrors: { slug: ["That URL is reserved"] } });
     }
     expect(await prisma.organisation.count({ where: { slug: { in: ["verify", "account", "about"] } } })).toBe(0);
+  });
+
+  it("explains why an organisation slug can't be used before submitting", async () => {
+    expect(await checkSlugAvailability("dashboard")).toEqual({ available: false, error: "That URL is reserved" });
+    expect(await checkSlugAvailability("a")).toEqual({ available: false, error: "Slug must be at least 2 characters" });
+    expect(await checkSlugAvailability("--x--")).toEqual({ available: false, error: "Use lowercase letters, numbers, and single hyphens" });
+    expect(await checkSlugAvailability(organisationSlug)).toEqual({ available: false, error: "That URL is already taken" });
+    expect(await checkSlugAvailability(`free-${suffix}`)).toEqual({ available: true });
   });
 });
