@@ -49,7 +49,7 @@ export async function renderBadgeSvg(scene: BadgeScene, dpi = PNG_DPI) {
     } else if (op.kind === "text") {
       parts.push(await textPaths(op));
     } else if (op.kind === "image") {
-      const prepared = await prepare(op.url, { wMm: op.w, hMm: op.h, fit: op.fit, shape: op.shape, grayscale: op.grayscale, background: scene.background });
+      const prepared = await prepare(op.url, { wMm: op.w, hMm: op.h, fit: op.fit, shape: op.shape, grayscale: op.grayscale, background: scene.background }, !op.photo);
       if (!prepared) continue;
       const at = op.fit === "cover" ? { x: op.x, y: op.y, w: op.w, h: op.h } : containBox(op, prepared.widthPx, prepared.heightPx);
       const href = `data:image/${prepared.format};base64,${prepared.data.toString("base64")}`;

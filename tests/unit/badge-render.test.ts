@@ -6,10 +6,12 @@ const mocks = vi.hoisted(() => ({ downloadFile: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ downloadFile: mocks.downloadFile }));
 
 import { CR80, normalizeIdCardPrintSettings } from "@/lib/idCardPrint";
+import { MAX_PHOTO_PX, prepareBadgeImage } from "@/lib/badge/assets";
 import { loadBadgeFonts } from "@/lib/badge/fonts";
 import { buildBadgeScene, wrapText, type BadgeScene, type BadgeTextOp } from "@/lib/badge/layout";
 import { renderBadge, renderBadgeBatch } from "@/lib/badge/render";
 import { renderBadgeSvg } from "@/lib/badge/renderPng";
+import { tryAcquireRenderSlot } from "@/lib/badge/renderSlot";
 import { pixelSize } from "@/lib/badge/sheet";
 import type { BadgeBranding, IdCardAttendee } from "@/lib/badge/types";
 
@@ -158,5 +160,36 @@ describe("badge PDF and PNG output", { timeout: 60_000 }, () => {
       expect(op.x + w, op.kind).toBeLessThanOrEqual(scene.widthMm + 0.01);
       expect(op.y + h, op.kind).toBeLessThanOrEqual(scene.heightMm + 0.01);
     }
+  });
+});
+
+describe("bulk render memory", { timeout: 60_000 }, () => {
+  it("reads shared artwork once per render but each person's photo every time", async () => {
+    const people = Array.from({ length: 3 }, (_, index) => ({ ...attendee, rsvpId: `p${index}`, checkInQrToken: `token-${index}-abcdefgh`, photoUrl }));
+    await renderBadgeBatch({ settings: colourSettings(), attendees: people, branding, layout: "card", title: "Badges" });
+    const reads = (part: string) => mocks.downloadFile.mock.calls.filter(([key]) => String(key).includes(part)).length;
+    expect(reads("organisation-logos")).toBe(1);
+    expect(reads("event-sponsors")).toBe(1);
+    expect(reads("profile-images")).toBe(3);
+  });
+
+  it("caps photo rasters at 600 px however large the box", async () => {
+    const large = await sharp({ create: { width: 2400, height: 2400, channels: 3, background: "#006E63" } }).webp().toBuffer();
+    mocks.downloadFile.mockImplementation(async () => ({ body: new Uint8Array(large), contentType: "image/webp" }));
+    const photo = await prepareBadgeImage(photoUrl, { wMm: 120, hMm: 120, fit: "cover", shape: "circle", grayscale: false, background: "#FFFFFF" });
+    expect(photo).toMatchObject({ widthPx: MAX_PHOTO_PX, heightPx: MAX_PHOTO_PX });
+    expect((await sharp(photo!.data).metadata()).width).toBe(600);
+  });
+
+  it("lets only one bulk render run at a time across routes", () => {
+    const release = tryAcquireRenderSlot();
+    expect(release).toBeTypeOf("function");
+    expect(tryAcquireRenderSlot()).toBeNull();
+    release!();
+    release!();
+    const again = tryAcquireRenderSlot();
+    expect(again).toBeTypeOf("function");
+    expect(tryAcquireRenderSlot()).toBeNull();
+    again!();
   });
 });

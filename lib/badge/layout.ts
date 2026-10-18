@@ -43,7 +43,8 @@ export type BadgeTextOp = {
 export type BadgeOp =
   | { kind: "rect"; x: number; y: number; w: number; h: number; radius: number; fill?: string; stroke?: string; strokeWidth?: number }
   | BadgeTextOp
-  | { kind: "image"; url: string; x: number; y: number; w: number; h: number; fit: "contain" | "cover"; shape: "none" | "circle" | "rounded"; grayscale: boolean; opacity?: number }
+  /** `photo` marks the per-person photo, which renderers don't cache across badges. */
+  | { kind: "image"; url: string; x: number; y: number; w: number; h: number; fit: "contain" | "cover"; shape: "none" | "circle" | "rounded"; grayscale: boolean; opacity?: number; photo?: true }
   | { kind: "qr"; value: string; x: number; y: number; size: number; dark: string; light: string }
   | { kind: "symbol"; variant: BadgeSymbolVariant; x: number; y: number; w: number; h: number };
 
@@ -317,7 +318,7 @@ export function buildBadgeScene({ settings, attendee, branding, measurer }: Badg
     const side = size.photo;
     const shape = settings.photoShape;
     if (images.photo) {
-      graphics.push({ kind: "image", url: images.photo, x: at.photo.xMm, y: at.photo.yMm, w: side, h: side, fit: "cover", shape, grayscale: mono });
+      graphics.push({ kind: "image", url: images.photo, x: at.photo.xMm, y: at.photo.yMm, w: side, h: side, fit: "cover", shape, grayscale: mono, photo: true });
     } else {
       graphics.push({ kind: "rect", x: at.photo.xMm, y: at.photo.yMm, w: side, h: side, radius: shape === "circle" ? side / 2 : side * 0.2, fill: palette.photoPlaceholder });
       const initials = measurer.clean(attendeeInitials(attendee.displayName)) || "?";
