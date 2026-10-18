@@ -84,6 +84,8 @@ export default async function DiscoverPage({
           OR: [
             { title: { contains: q, mode: "insensitive" as const } },
             { description: { contains: q, mode: "insensitive" as const } },
+            { tags: { has: q.toLowerCase() } },
+            { organisation: { name: { contains: q, mode: "insensitive" as const } } },
           ],
         }
       : {}),
@@ -104,6 +106,7 @@ export default async function DiscoverPage({
             OR: [
               { title: { contains: q, mode: "insensitive" as const } },
               { description: { contains: q, mode: "insensitive" as const } },
+              { organisation: { name: { contains: q, mode: "insensitive" as const } } },
             ],
           }
         : {}),
@@ -134,7 +137,7 @@ export default async function DiscoverPage({
     Prisma.sql`(e."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType" OR (e."privacyType" = ${EventPrivacyType.APPROVAL_REQUIRED}::"EventPrivacyType" AND e."listedPublicly" = TRUE))`,
     Prisma.sql`EXISTS (SELECT 1 FROM "EventPage" ep WHERE ep."eventId" = e."id" AND ep."isPublished" = TRUE)`,
     Prisma.sql`e."endDateTime" >= NOW()`,
-    ...(q ? [Prisma.sql`(e."title" ILIKE ${searchPattern} OR e."description" ILIKE ${searchPattern})`] : []),
+    ...(q ? [Prisma.sql`(e."title" ILIKE ${searchPattern} OR e."description" ILIKE ${searchPattern} OR ${q.toLowerCase()} = ANY(e."tags") OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = e."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
     ...(validFrom ? [Prisma.sql`e."startDateTime" >= ${validFrom}`] : []),
     ...(validToExclusive ? [Prisma.sql`e."startDateTime" < ${validToExclusive}`] : []),
   ];
@@ -142,7 +145,7 @@ export default async function DiscoverPage({
     Prisma.sql`s."status" = ${EventStatus.PUBLISHED}::"EventStatus"`,
     Prisma.sql`s."privacyType" = ${EventPrivacyType.PUBLIC}::"EventPrivacyType"`,
     Prisma.sql`i."endDateTime" >= NOW()`,
-    ...(q ? [Prisma.sql`(s."title" ILIKE ${searchPattern} OR s."description" ILIKE ${searchPattern})`] : []),
+    ...(q ? [Prisma.sql`(s."title" ILIKE ${searchPattern} OR s."description" ILIKE ${searchPattern} OR EXISTS (SELECT 1 FROM "Organisation" o WHERE o."id" = s."organisationId" AND o."name" ILIKE ${searchPattern}))`] : []),
     ...(validFrom ? [Prisma.sql`i."startDateTime" >= ${validFrom}`] : []),
     ...(validToExclusive ? [Prisma.sql`i."startDateTime" < ${validToExclusive}`] : []),
   ];
