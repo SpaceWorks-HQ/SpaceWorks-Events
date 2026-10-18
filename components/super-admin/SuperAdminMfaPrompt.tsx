@@ -17,7 +17,7 @@ export function SuperAdminMfaPrompt() {
   return (
     <div className="mx-auto w-full max-w-[440px] py-10 sm:py-16">
       <form
-        className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-6 shadow-raised sm:p-8"
+        className="flex flex-col gap-5 rounded-2xl border border-line bg-canvas p-6 sm:p-8"
         onSubmit={(event) => {
           event.preventDefault();
           startTransition(async () => {
@@ -45,7 +45,7 @@ export function SuperAdminMfaPrompt() {
             autoFocus
             autoComplete="one-time-code"
             inputMode="numeric"
-            className="font-mono text-lg tracking-[0.3em]"
+            className="font-medium tabular-nums text-lg tracking-[0.3em]"
             onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
             value={code}
           />

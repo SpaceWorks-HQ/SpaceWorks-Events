@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { ArrowLeft, LogOut, Moon, Sun, UserRound } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { YuyuWordmark } from "@/components/chrome/SiteHeader";
+import { BrandHomeLink } from "@/components/chrome/SiteHeader";
 import { useAppColorMode } from "@/components/providers";
 import { Avatar } from "@/components/ui/display";
 import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
@@ -79,22 +79,22 @@ function AccountMenu({ user }: { user: SuperAdminUser }) {
 
 /**
  * Light top bar for the instance-wide super-admin area (docs/DESIGN.md §4.13):
- * Yuyu lockup and "Super admin" label, a way back to the dashboard and the
+ * Space Works Events logo and "Super admin" label, a way back to the dashboard and the
  * account menu, then a row of section links that scrolls sideways on phones.
  */
 export function SuperAdminTopBar({ user }: { user: SuperAdminUser }) {
   const pathname = usePathname() ?? "";
   const active = activeSection(pathname);
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-canvas/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-line bg-canvas">
       <div className="mx-auto flex h-14 w-full max-w-[1200px] items-center gap-3 px-4 sm:px-6">
-        <YuyuWordmark href="/super-admin" />
+        <BrandHomeLink href="/super-admin" />
         <span aria-hidden className="h-5 w-px bg-line" />
         <span className="truncate text-label text-ink">Super admin</span>
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <Link
             href="/dashboard"
-            className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-ink-secondary transition-colors hover:bg-muted hover:text-ink"
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-ink-secondary transition-colors hover:bg-surface hover:text-ink"
           >
             <ArrowLeft aria-hidden className="size-4" />
             <span className="hidden sm:inline">Back to dashboard</span>
@@ -113,8 +113,8 @@ export function SuperAdminTopBar({ user }: { user: SuperAdminUser }) {
                   href={section.href}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "inline-flex min-h-8 items-center whitespace-nowrap rounded-full px-3 text-sm text-ink-secondary transition-colors hover:bg-muted hover:text-ink",
-                    isActive && "bg-muted font-semibold text-ink",
+                    "inline-flex min-h-8 items-center whitespace-nowrap rounded-full px-3 text-sm text-ink-secondary transition-colors hover:bg-surface hover:text-ink",
+                    isActive && "bg-surface font-semibold text-ink",
                   )}
                 >
                   {section.label}

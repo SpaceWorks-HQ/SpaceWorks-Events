@@ -4,8 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DotLockup } from "@/components/brand/DotLockup";
-import { DotMark } from "@/components/brand/DotMark";
-import { GITHUB_URL } from "@/lib/openSource";
+import { GITHUB_URL, LICENSE_URL } from "@/lib/openSource";
 
 
 const publicLinks = [
@@ -18,8 +17,25 @@ const publicLinks = [
 ];
 
 const linkClasses = "text-body-ui text-ink-secondary underline-offset-4 transition-colors hover:text-ink hover:underline";
+const creditLinkClasses = "underline underline-offset-4 hover:text-ink";
 
-/** Yuyu site footer (Figma 121:1333). "Hosted on Idlistack" lives here, never in the top nav. */
+/** "Powered by Space Works" plus the AGPL source link (the licence asks every install to offer its source). */
+function SourceCredit() {
+  return (
+    <>
+      <span>Powered by Space Works</span>
+      <span aria-hidden>·</span>
+      <span>
+        Open source under{" "}
+        <a href={LICENSE_URL} target="_blank" rel="noopener noreferrer" className={creditLinkClasses}>AGPL-3.0</a>
+      </span>
+      <span aria-hidden>·</span>
+      <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={creditLinkClasses}>Source code</a>
+    </>
+  );
+}
+
+/** Space Works Events site footer (Figma 121:1333). */
 export function SiteFooter() {
   const pathname = usePathname();
   const { status } = useSession();
@@ -30,10 +46,10 @@ export function SiteFooter() {
       <div className="mx-auto flex max-w-[1160px] flex-col gap-5 px-4 py-10 sm:px-6 xl:px-0">
         <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
           <div className="flex flex-col gap-2.5">
-            <Link href="/" className="inline-flex items-center self-start" aria-label="Yuyu home">
+            <Link href="/" className="inline-flex items-center self-start" aria-label="Space Works Events home">
               <DotLockup size="md" label={null} />
             </Link>
-            <p className="text-body-ui text-ink-secondary">Free events, run by communities.</p>
+            <p className="text-body-ui text-ink-secondary">Events for people who make things.</p>
           </div>
           <nav aria-label="Footer">
             <ul className="flex flex-wrap gap-x-6 gap-y-2">
@@ -50,48 +66,40 @@ export function SiteFooter() {
             </ul>
           </nav>
         </div>
-        <p className="border-t border-line pt-5 text-caption text-ink-muted">
-          Built by{" "}
-          <a href="https://abhiramnj.com" target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:text-ink hover:underline">Abhiram</a>
-          {" · Hosted on "}
-          <a href="https://idlistack.com" target="_blank" rel="noopener noreferrer" className="underline-offset-4 hover:text-ink hover:underline">Idlistack</a>
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-t border-line pt-5 text-caption text-ink-muted">
+          <SourceCredit />
         </p>
       </div>
     </footer>
   );
 }
 
-/** Compact footer for event-facing pages: the organiser leads, Yuyu steps back. */
+/** Compact footer for event-facing pages: the organiser leads, Space Works steps back. */
 export function EventFooter() {
   return (
     <footer className="mt-auto border-t border-line bg-canvas">
       <div className="mx-auto flex max-w-[1160px] flex-col gap-3 px-4 py-6 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <Link href="/" className="inline-flex items-center gap-2 hover:text-ink">
-          <DotMark size={18} label={null} />
-          <span>Free event, powered by Yuyu</span>
+          <span>Free event, powered by Space Works</span>
         </Link>
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <Link href="/privacy" className="underline underline-offset-4 hover:text-ink">Privacy</Link>
+          <Link href="/privacy" className={creditLinkClasses}>Privacy</Link>
           <span aria-hidden>·</span>
-          <Link href="/terms" className="underline underline-offset-4 hover:text-ink">Terms</Link>
+          <Link href="/terms" className={creditLinkClasses}>Terms</Link>
           <span aria-hidden>·</span>
-          <span>
-            Hosted on{" "}
-            <a href="https://idlistack.com" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-ink">Idlistack</a>
-          </span>
+          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={creditLinkClasses}>Source code</a>
         </p>
       </div>
     </footer>
   );
 }
 
-/** Credit under an embedded event (inside the organiser's iframe): opens Yuyu in a new tab. */
+/** Credit under an embedded event (inside the organiser's iframe): opens Space Works Events in a new tab. */
 export function EmbedCredit() {
   return (
     <footer className="flex justify-center px-4 py-5">
       <a href="/" target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-ink">
-        <DotMark size={18} label={null} />
-        <span>Free event, powered by Yuyu</span>
+        <span>Free event, powered by Space Works</span>
       </a>
     </footer>
   );

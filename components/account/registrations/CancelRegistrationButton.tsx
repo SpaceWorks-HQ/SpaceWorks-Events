@@ -11,7 +11,7 @@ import { cancelRsvp } from "@/app/actions/rsvp-cancel";
 function forgetStoredTicket(token: string) {
   try {
     for (const key of Object.keys(localStorage)) {
-      if (!key.startsWith("yuyu:rsvp:")) continue;
+      if (!key.startsWith("swe:rsvp:")) continue;
       try {
         const value = localStorage.getItem(key);
         const parsed = value ? (JSON.parse(value) as { ticketToken?: string }) : null;

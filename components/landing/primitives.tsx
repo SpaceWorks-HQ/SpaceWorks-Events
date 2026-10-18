@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { ThemedImage } from "@/components/ui/themed-image";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-/* Shared building blocks for Yuyu's own public pages (Figma "Landing page" canvas 117:288). */
+/* Shared building blocks for the Space Works Events public pages. */
 
 /** 1160px content column (140px side margins at 1440). */
 export function Container({ children, className }: { children: ReactNode; className?: string }) {
@@ -20,7 +20,20 @@ export function SectionHeading({ overline, title, lead, className, id, as: Headi
   );
 }
 
-/** A 7×7 dot icon from /public/landing with its dark-theme twin (`<name>-dark.svg`). */
-export function DotIcon({ name, size = 54, className }: { name: string; size?: number; className?: string }) {
-  return <ThemedImage src={`/landing/${name}.svg`} darkSrc={`/landing/${name}-dark.svg`} width={size} height={size} className={cn("shrink-0", className)} />;
+const tileTones = {
+  teal: "bg-accent-soft text-ink",
+  citron: "bg-sw-citron text-sw-ink",
+  sky: "bg-sw-sky text-sw-ink",
+  yellow: "bg-sw-yellow text-sw-ink",
+} as const;
+
+export type IconTileTone = keyof typeof tileTones;
+
+/** A brand icon (24px grid, 2px stroke) on a soft square tile. Decorative: the heading beside it names the thing. */
+export function IconTile({ icon: Icon, tone = "teal", size = "md", className }: { icon: LucideIcon; tone?: IconTileTone; size?: "md" | "lg"; className?: string }) {
+  return (
+    <span aria-hidden className={cn("inline-flex shrink-0 items-center justify-center rounded-[12px]", size === "lg" ? "size-16 [&_svg]:size-7" : "size-12 [&_svg]:size-6", tileTones[tone], className)}>
+      <Icon />
+    </span>
+  );
 }

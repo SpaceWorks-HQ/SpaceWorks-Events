@@ -8,7 +8,7 @@ import { ColorModeToggle } from "./ColorModeToggle";
 
 /**
  * Header for event-facing pages (event, programme, session, speaker, series,
- * feedback, organisation page). The organiser's identity leads, not Yuyu's.
+ * feedback, organisation page). The organiser’s identity leads, not Space Works’.
  */
 export function EventContextHeader({ organisation }: { organisation: { name: string; slug: string; logoUrl: string | null } }) {
   const { status } = useSession();

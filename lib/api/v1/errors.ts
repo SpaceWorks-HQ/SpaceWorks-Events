@@ -23,7 +23,7 @@ export function apiError(
   options?: { retryAfter?: number },
 ) {
   const headers: Record<string, string> = { "Cache-Control": "no-store" };
-  if (status === 401) headers["WWW-Authenticate"] = 'Bearer realm="Yuyu API"';
+  if (status === 401) headers["WWW-Authenticate"] = 'Bearer realm="Space Works Events API"';
   if (options?.retryAfter) headers["Retry-After"] = String(options.retryAfter);
   return NextResponse.json(
     { error: { code, message: messages[code] } },

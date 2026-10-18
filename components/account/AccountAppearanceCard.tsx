@@ -15,7 +15,7 @@ const OPTIONS = [
 export function AccountAppearanceCard() {
   const { preference, setColorModePreference } = useAppColorMode();
   return (
-    <AccountCard id="account-appearance" title="Appearance" description="Choose how Yuyu looks in this browser.">
+    <AccountCard id="account-appearance" title="Appearance" description="Choose how Space Works Events looks in this browser.">
       <div className="flex flex-col gap-2">
         <SegmentedControl<ColorModePreference>
           ariaLabel="Colour mode"

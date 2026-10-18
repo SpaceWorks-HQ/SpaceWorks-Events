@@ -4,7 +4,7 @@ import { AboutPage } from "@/components/landing/about/AboutPage";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Most event tools are built to sell tickets. Yuyu is built for free events run by communities: the meetup, the campus club, the NGO workshop.",
+  description: "Space Works Events is the open-source event platform from Space Works, built for free events run by maker communities: the build night, the workshop, the meetup.",
 };
 
 export default async function Page() {

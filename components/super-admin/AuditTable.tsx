@@ -51,11 +51,11 @@ export function AuditTable({ events, label, empty = "No audit events found.", hi
         ) : events.map((event) => (
           <TR key={event.id}>
             <TD className="align-top whitespace-nowrap text-ink-secondary">{event.createdAt.toLocaleString()}</TD>
-            <TD className="align-top font-mono text-sm [overflow-wrap:anywhere]">{event.action}</TD>
+            <TD className="align-top font-medium tabular-nums text-sm [overflow-wrap:anywhere]">{event.action}</TD>
             <TD className="align-top"><NameCell name={event.actor?.name ?? event.actor?.email ?? "System"} sub={event.actor?.email && event.actor.name ? event.actor.email : undefined} /></TD>
             {hideOrganisation ? null : <TD className="align-top">{event.organisation ? <NameCell href={`/super-admin/orgs/${event.organisation.id}`} name={event.organisation.name} sub={`/${event.organisation.slug}`} /> : "—"}</TD>}
-            <TD className="align-top font-mono text-sm [overflow-wrap:anywhere]">{event.targetType ? `${event.targetType}${event.targetId ? ` · ${event.targetId}` : ""}` : "—"}</TD>
-            <TD className="max-w-[280px] align-top font-mono text-xs text-ink-secondary [overflow-wrap:anywhere]">{metadataSummary(event.metadata)}</TD>
+            <TD className="align-top font-medium tabular-nums text-sm [overflow-wrap:anywhere]">{event.targetType ? `${event.targetType}${event.targetId ? ` · ${event.targetId}` : ""}` : "—"}</TD>
+            <TD className="max-w-[280px] align-top font-medium tabular-nums text-xs text-ink-secondary [overflow-wrap:anywhere]">{metadataSummary(event.metadata)}</TD>
           </TR>
         ))}
       </TBody>

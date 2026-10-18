@@ -4,7 +4,7 @@ import { Link2 } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { useToast } from "@/components/feedback/ToastProvider";
 
-/** Copies an event's public page URL (a path on this Yuyu install). `compact` renders an icon button for list rows. */
+/** Copies an event's public page URL (a path on this install). `compact` renders an icon button for list rows. */
 export function CopyEventLink({ path, title, compact = false }: { path: string; title: string; compact?: boolean }) {
   const { showToast } = useToast();
   const copy = async () => {

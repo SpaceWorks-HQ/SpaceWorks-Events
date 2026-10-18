@@ -67,7 +67,7 @@ export function RegistrationCard(props: {
   accentColor?: string | null;
 }) {
   const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor } = props;
-  const storageKey = eventInstanceId ? `yuyu:rsvp:${orgSlug}:i:${eventInstanceId}` : `yuyu:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
+  const storageKey = eventInstanceId ? `swe:rsvp:${orgSlug}:i:${eventInstanceId}` : `swe:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
   const [saved, setSaved] = useSavedRsvp(storageKey);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [shared, setShared] = useState(false);

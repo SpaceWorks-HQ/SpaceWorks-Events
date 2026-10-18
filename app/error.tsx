@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { DotFace } from "@/components/brand/DotFace";
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
@@ -11,9 +10,12 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
   }, [error]);
   return (
     <div className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-4 py-16 text-center">
-      <DotFace mood="sad" size={96} />
-      <h1 className="text-h1 text-ink">Something went wrong</h1>
-      <p className="text-body-ui text-ink-secondary">Please try again. If this keeps happening, contact the operator of this Yuyu instance.</p>
+      <span aria-hidden className="relative mb-2 block size-16">
+        <span className="absolute inset-0 rounded-[16px] bg-sw-sky" />
+        <span className="absolute -right-2 -top-2 size-7 rounded-full bg-sw-citron" />
+      </span>
+      <h1 className="text-h1 text-ink">We couldn’t load this page.</h1>
+      <p className="text-body-ui text-ink-secondary">Try again. If it keeps happening, let the team that runs this Space Works Events site know.</p>
       <Button variant="primary" onClick={reset}>Try again</Button>
     </div>
   );

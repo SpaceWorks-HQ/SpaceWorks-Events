@@ -188,7 +188,7 @@ export function CertificateBuilder(props: Props) {
       </div>
       <p className="text-caption text-ink-muted">JPEG, PNG or WebP · up to 5 MB · landscape or portrait. For sharp printing, upload original artwork at least 3508 pixels on its longest side, preferably PNG. Blank backgrounds are shareable images; do not include attendee data.</p>
       {error && <Callout tone="danger" role="alert">{error}</Callout>}
-      {!value ? <Callout tone="info">The standard Yuyu certificate will be used until you upload a background.</Callout> : <>
+      {!value ? <Callout tone="info">The standard Space Works Events certificate will be used until you upload a background.</Callout> : <>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
           <div className="flex min-w-0 flex-col gap-3">
             <div role="toolbar" aria-label="Add layers" className="flex flex-wrap items-center gap-2">

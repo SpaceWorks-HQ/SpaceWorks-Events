@@ -231,9 +231,9 @@ export function LoginForm({ accountCreationEnabled, googleSsoConfigured }: { acc
 
   return (
     <Tabs value={mode} onValueChange={(value) => switchMode(value as Mode)} className="flex flex-col gap-4">
-      <TabsList aria-label="Sign in or create an account" className="grid auto-cols-fr grid-flow-col gap-1 rounded-full border-0 bg-muted p-1">
-        <TabsTrigger value="signin" className="min-h-10 justify-center rounded-full px-4 after:hidden data-[state=active]:bg-canvas data-[state=active]:shadow-segment">Sign in</TabsTrigger>
-        {accountCreationEnabled ? <TabsTrigger value="signup" className="min-h-10 justify-center rounded-full px-4 after:hidden data-[state=active]:bg-canvas data-[state=active]:shadow-segment">Create account</TabsTrigger> : null}
+      <TabsList aria-label="Sign in or create an account" className="grid auto-cols-fr grid-flow-col gap-1 rounded-full border border-line bg-surface p-1">
+        <TabsTrigger value="signin" className="min-h-10 justify-center rounded-full px-4 after:hidden border border-transparent data-[state=active]:border-line-strong data-[state=active]:bg-panel data-[state=active]:font-semibold">Sign in</TabsTrigger>
+        {accountCreationEnabled ? <TabsTrigger value="signup" className="min-h-10 justify-center rounded-full px-4 after:hidden border border-transparent data-[state=active]:border-line-strong data-[state=active]:bg-panel data-[state=active]:font-semibold">Create account</TabsTrigger> : null}
       </TabsList>
 
       <TabsContent value={mode} className="flex flex-col gap-4 pt-0">

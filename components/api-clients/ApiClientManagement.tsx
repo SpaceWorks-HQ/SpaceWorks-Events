@@ -56,7 +56,7 @@ function SecretDialog(props: { token: string | null; onClose: () => void }) {
         <DialogHeader title="Copy this credential now" />
         <DialogBody className="flex flex-col gap-4">
           <Callout tone="warning">
-            Yuyu cannot show this value again. Store it in the consuming
+            Space Works Events cannot show this value again. Store it in the consuming
             application&apos;s secret manager.
           </Callout>
           <code className="block select-all break-all rounded-md bg-inverse px-4 py-3 font-mono text-sm text-on-inverse">
