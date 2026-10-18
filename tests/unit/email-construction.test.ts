@@ -43,6 +43,16 @@ describe("email construction", () => {
     expect(`${message.html}${message.text}`).not.toMatch(/yuyu/i);
   });
 
+  it("leaves the hosted lockup out instead of linking localhost when no public address is set", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "");
+    await sendRSVPConfirmation({ to: "person@example.test", eventTitle: "Meetup", status: RsvpStatus.WAITLISTED, checkInToken: "tok" });
+    vi.unstubAllEnvs();
+    const message = mocks.sendMail.mock.calls[0]?.[0];
+    expect(message.html).not.toContain("<img");
+    expect(message.html).not.toContain("localhost");
+    expect(message.html).toContain(">Space Works</span>");
+  });
+
   it("HTML-escapes capability URLs in links and visible content", async () => {
     await sendCollaboratorInvitation({
       to: "person@example.test",
@@ -52,6 +62,19 @@ describe("email construction", () => {
     const message = mocks.sendMail.mock.calls[0]?.[0];
     expect(message.html).toContain("one=1&amp;two=2");
     expect(message.html).not.toContain('href="https://events.test/join/token?one=1&two=2"');
+  });
+
+  it("sends co-organiser invitations in the branded layout", async () => {
+    vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://events.test");
+    await sendCollaboratorInvitation({ to: "person@example.test", eventTitle: "Maker <Night>", inviteUrl: "https://events.test/join/event-collaborator/tok" });
+    vi.unstubAllEnvs();
+    const message = mocks.sendMail.mock.calls[0]?.[0];
+    expect(message.subject).toBe("Co-organiser invitation: Maker <Night>");
+    expect(message.html).toContain('<img src="https://events.test/brand/email-lockup.png"');
+    expect(message.html).toContain("This email was sent by Space Works Events.");
+    expect(message.html).toContain("Maker &lt;Night&gt;");
+    expect(message.html).toContain('href="https://events.test/join/event-collaborator/tok" style="background-color: #006E63;');
+    expect(message.text).toContain("https://events.test/join/event-collaborator/tok");
   });
 
   it("attaches a portable calendar invite to confirmed RSVP emails", async () => {

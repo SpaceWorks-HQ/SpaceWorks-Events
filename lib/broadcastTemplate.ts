@@ -123,6 +123,8 @@ export function broadcastHtmlToText(html: string): string {
       // and decoding twice would turn an escaped "&amp;lt;" into "<".
       return label && decodeEntities(label) !== decodeEntities(href) ? `${label} (${href})` : href;
     })
+    // The editor wraps list item text in a paragraph; keep one line per bullet.
+    .replace(/<\/p>\s*(?=<\/li>)/gi, "")
     .replace(/<li\b[^>]*>/gi, "• ")
     .replace(/<\/li>/gi, "\n")
     .replace(/<br\s*\/?>/gi, "\n")

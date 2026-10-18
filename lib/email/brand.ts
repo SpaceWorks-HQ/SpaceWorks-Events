@@ -21,13 +21,21 @@ export const EMAIL_FONT = "Gilroy, -apple-system, BlinkMacSystemFont, 'Segoe UI'
 /** Inline style for a primary email button: teal fill, cream label, 10px radius. */
 export const EMAIL_BUTTON_STYLE = `background-color: ${EMAIL_COLORS.teal}; color: ${EMAIL_COLORS.cream}; padding: 14px 28px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block;`;
 
-function baseUrl(): string {
-  return (process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000").replace(/\/$/, "");
+function baseUrl(): string | null {
+  return process.env.NEXT_PUBLIC_BASE_URL?.trim().replace(/\/$/, "") || null;
 }
 
-/** Full-colour primary lockup on Warm Cream, 180px wide, with clear space on every side. */
+/**
+ * Full-colour primary lockup on Warm Cream, 180px wide, with clear space on
+ * every side. Without a public address the hosted image cannot load, so the
+ * header falls back to the "Space Works" wordmark text instead of a localhost link.
+ */
 export function emailBrandHeader(): string {
-  return `<div style="background-color: ${EMAIL_COLORS.cream}; padding: 24px; text-align: center; border-bottom: 1px solid ${EMAIL_COLORS.line};"><img src="${baseUrl()}/brand/email-lockup.png" width="180" height="64" alt="Space Works" style="display: inline-block; width: 180px; height: 64px; border: 0; outline: none; text-decoration: none;"></div>`;
+  const base = baseUrl();
+  const mark = base
+    ? `<img src="${base}/brand/email-lockup.png" width="180" height="64" alt="Space Works" style="display: inline-block; width: 180px; height: 64px; border: 0; outline: none; text-decoration: none;">`
+    : `<span style="font-size: 22px; font-weight: 700; color: ${EMAIL_COLORS.ink};">Space Works</span>`;
+  return `<div style="background-color: ${EMAIL_COLORS.cream}; padding: 24px; text-align: center; border-bottom: 1px solid ${EMAIL_COLORS.line};">${mark}</div>`;
 }
 
 export function emailBrandFooter(): string {
