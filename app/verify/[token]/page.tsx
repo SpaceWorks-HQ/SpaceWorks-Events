@@ -4,9 +4,8 @@ import { BrandHomeLink } from "@/components/chrome/SiteHeader";
 import { Avatar } from "@/components/ui/display";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { cn } from "@/lib/cn";
-import { prisma } from "@/lib/db";
-import { memberPhotoUrl, VERIFY_TOKEN_PATTERN } from "@/lib/memberIds/data";
-import { verificationView, type VerifyState, type VerifyView } from "@/lib/memberIds/verify";
+import type { VerifyState, VerifyView } from "@/lib/memberIds/verify";
+import { lookupVerification } from "@/lib/memberIds/verifyLookup";
 
 export const dynamic = "force-dynamic";
 
@@ -22,29 +21,7 @@ type Props = { params: Promise<{ token: string }> };
 async function lookup(token: string): Promise<VerifyView | "limited"> {
   // Tight per-IP limit so the token space cannot be scanned.
   if (await isActionRateLimited("shortLink")) return "limited";
-  if (!VERIFY_TOKEN_PATTERN.test(token)) return { state: "not-found" };
-  const member = await prisma.idMember.findUnique({
-    where: { verifyToken: token },
-    select: {
-      status: true,
-      name: true,
-      idNumber: true,
-      expiresAt: true,
-      photoUrl: true,
-      organisationId: true,
-      programme: { select: { name: true, organisation: { select: { name: true } } } },
-    },
-  });
-  if (!member) return { state: "not-found" };
-  return verificationView({
-    status: member.status,
-    name: member.name,
-    idNumber: member.idNumber,
-    expiresAt: member.expiresAt,
-    photoUrl: memberPhotoUrl(member),
-    programmeName: member.programme.name,
-    organisationName: member.programme.organisation.name,
-  });
+  return lookupVerification(token);
 }
 
 const STATES: Record<VerifyState, { title: string; body: string; panel: string; icon: typeof BadgeCheck }> = {
