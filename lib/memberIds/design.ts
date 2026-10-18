@@ -1,8 +1,10 @@
 import {
   CR80,
   DEFAULT_WATERMARK,
+  ID_CARD_LINE_HEIGHT,
   layoutForPaper,
   normalizeIdCardPrintSettings,
+  PT_TO_MM,
   type IdCardLayoutFlags,
   type IdCardPrintSettings,
 } from "@/lib/idCardPrint";
@@ -39,8 +41,10 @@ export type MemberIdDesignContext = { programmeName: string; organisationName: s
 /** Upper bound for a stored design (front + back), in bytes of JSON. */
 export const MEMBER_ID_DESIGN_MAX_BYTES = 64_000;
 
-const LANDSCAPE = { widthMm: CR80.widthMm, heightMm: CR80.heightMm };
-const PORTRAIT = { widthMm: CR80.heightMm, heightMm: CR80.widthMm };
+// Saved sizes are kept to 0.1 mm, so CR80's 53.98 mm is stored as 54.
+const round1 = (mm: number) => Math.round(mm * 10) / 10;
+const LANDSCAPE = { widthMm: round1(CR80.widthMm), heightMm: round1(CR80.heightMm) };
+const PORTRAIT = { widthMm: round1(CR80.heightMm), heightMm: round1(CR80.widthMm) };
 
 type PresetLook = Pick<IdCardPrintSettings, "template" | "backgroundColor" | "accentColor" | "textColor" | "widthMm" | "heightMm" | "photoShape">;
 
@@ -66,10 +70,20 @@ function side(preset: MemberIdPreset, which: MemberIdSide, context: MemberIdDesi
     showValidUntil: front,
   };
   const base = normalizeIdCardPrintSettings({ colorMode: "colour" }, context.programmeName, context.organisationName);
+  const layout = layoutForPaper(look.template, look.widthMm, look.heightMm, flags);
+  if (!front) {
+    // The back's note runs to two or three lines: lift it (and a symbol stacked above it) clear of the edge.
+    const lineMm = layout.elementTextSizes.footer * PT_TO_MM * ID_CARD_LINE_HEIGHT.body;
+    const lift = Math.round(lineMm * (look.widthMm > look.heightMm ? 1 : 2) * 10) / 10;
+    const at = layout.elementPositions;
+    const symbolAbove = at.symbol.yMm < at.footer.yMm - 1;
+    at.footer = { ...at.footer, yMm: Math.round((at.footer.yMm - lift) * 10) / 10 };
+    if (symbolAbove) at.symbol = { ...at.symbol, yMm: Math.round((at.symbol.yMm - lift) * 10) / 10 };
+  }
   return {
     ...base,
     ...look,
-    ...layoutForPaper(look.template, look.widthMm, look.heightMm, flags),
+    ...layout,
     heading: front ? (context.organisationName || context.programmeName) : context.programmeName,
     badgeLabel: front ? BADGE_LABELS[preset] : "ABOUT THIS CARD",
     showBadgeLabel: true,
@@ -77,7 +91,7 @@ function side(preset: MemberIdPreset, which: MemberIdSide, context: MemberIdDesi
     showFooter: !front,
     footerText: front
       ? context.organisationName
-      : `This card belongs to ${context.organisationName || "the issuing organisation"}. Scan the code on the front to check it.`.slice(0, 240),
+      : `Issued by ${context.organisationName || "the organisation named on the front"}. Scan the front to check this card.`.slice(0, 240),
     nameAutoFit: true,
     showGrid: true,
     gridSizeMm: 1,
