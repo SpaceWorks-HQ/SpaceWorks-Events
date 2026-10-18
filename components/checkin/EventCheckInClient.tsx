@@ -259,17 +259,31 @@ export function EventCheckInClient(props: {
         showToast(res.error, "error");
         return;
       }
-      const completedRsvpIds = new Set([
+      // The server has answered for every entry. Rejected ones (status changed,
+      // outside the event window, removed) can never sync, so they leave the
+      // queue too; otherwise the device could never sync or clear its data.
+      const answeredRsvpIds = new Set([
         ...res.data!.syncedIds,
         ...res.data!.alreadyCheckedInIds,
+        ...res.data!.failed.map((item) => item.rsvpId),
       ]);
       await removeQueuedOfflineCheckIns(
-        pendingCheckIns.filter((item) => completedRsvpIds.has(item.rsvpId)).map((item) => item.id),
+        pendingCheckIns.filter((item) => answeredRsvpIds.has(item.rsvpId)).map((item) => item.id),
       );
+      const failed = res.data!.failed;
+      const roster = failed.length > 0 ? await getOfflineRoster(eventId) : undefined;
+      if (roster) {
+        // This device marked them checked in; the server didn't, so undo that locally.
+        const failedIds = new Set(failed.map((item) => item.rsvpId));
+        await saveOfflineRoster({ ...roster, rows: roster.rows.map((row) => (failedIds.has(row.rsvpId) ? { ...row, checkedInAt: null } : row)) });
+      }
       await refreshOfflineState();
       router.refresh();
-      if (res.data!.failed.length > 0) {
-        showToast(`${res.data!.failed.length} check-in${res.data!.failed.length === 1 ? "" : "s"} need attention.`, "warning");
+      if (failed.length > 0) {
+        const first = failed[0]!;
+        const name = roster?.rows.find((row) => row.rsvpId === first.rsvpId)?.displayName ?? "An attendee";
+        const more = failed.length > 1 ? ` and ${failed.length - 1} more` : "";
+        showToast(`Not checked in: ${name}${more}. ${first.error}`, "warning");
       } else {
         showToast("Offline check-ins synced.", "success");
       }
@@ -324,6 +338,7 @@ export function EventCheckInClient(props: {
     };
     await saveOfflineRoster(updatedRoster);
     await queueOfflineCheckIn({ eventId, rsvpId: attendee.rsvpId, checkedInAt, force: override });
+    setLookupRows((rows) => rows.map((row) => (row.rsvpId === attendee.rsvpId ? { ...row, checkedInAt } : row)));
     setLastResult({
       rsvpId: attendee.rsvpId,
       displayName: attendee.displayName,
@@ -484,6 +499,12 @@ export function EventCheckInClient(props: {
   };
 
   const runLookup = useCallback(() => {
+    // The server needs two characters; answer shorter searches here instead of with "Invalid input".
+    if (lookupQuery.trim().length < 2) {
+      setLookupRows([]);
+      showToast("Type at least two letters of a name or email.", "info");
+      return;
+    }
     if (!navigator.onLine && !stationMode) {
       void (async () => {
         const q = lookupQuery.trim().toLowerCase();
@@ -586,6 +607,9 @@ export function EventCheckInClient(props: {
         return;
       }
       showToast("Check-in removed", "success");
+      // Search results and the result card would otherwise still say "Checked in" and offer Undo again.
+      setLookupRows((rows) => rows.map((row) => (row.rsvpId === rsvpId ? { ...row, checkedInAt: null } : row)));
+      setLastResult((result) => (result?.rsvpId === rsvpId ? null : result));
       router.refresh();
     });
   };
@@ -826,12 +850,13 @@ export function EventCheckInClient(props: {
                 </div>
                 {!scanPreview.gate.ok ? <Callout tone={scanPreview.gate.blocked ? "danger" : "warning"}>{scanPreview.gate.reason}</Callout> : null}
                 <div className="text-ink"><CheckInDetailsList details={scanPreview.checkInDetails} /></div>
-                <p className="text-caption text-ink-muted">Press Enter to confirm.</p>
+                {scanPreview.gate.ok ? <p className="text-caption text-ink-muted">Press Enter to confirm.</p> : null}
               </>
             ) : null}
           </DialogBody>
           <DialogFooter>
-            {!stationMode ? <Button variant="secondary" onClick={closeScan}>Cancel</Button> : null}
+            {/* Stations are touch tablets: a blocked registration needs a visible way out, not only Esc. */}
+            <Button variant="secondary" onClick={closeScan}>Cancel</Button>
             <Button
               ref={(el) => {
                 confirmRef.current = el;
