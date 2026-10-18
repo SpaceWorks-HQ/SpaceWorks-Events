@@ -171,7 +171,11 @@ export default async function EventPage({ params }: Props) {
         aboutHtml: page?.aboutHtml
           ? sanitizeRichText(page.aboutHtml)
           : plainTextToSafeHtml(event.description),
-        sections: page?.sections ?? defaults,
+        // Sections never saved in the page editor are visible, as the editor shows them.
+        sections: [
+          ...(page?.sections ?? []),
+          ...defaults.filter((section) => !page?.sections.some((saved) => saved.type === section.type)),
+        ],
       }}
       highlights={highlights}
       sessions={effectiveEventProgram(sessions).map((session) => ({
