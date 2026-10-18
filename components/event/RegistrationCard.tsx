@@ -26,10 +26,15 @@ const statusLabels: Partial<Record<RsvpStatus, { chip: string; tone: "success" |
   PENDING_APPROVAL: { chip: "Waiting for approval", tone: "warning", action: "View approval status" },
 };
 
-function useSavedRsvp(storageKey: string) {
-  const [saved, setSaved] = useState<{ token: string; status: RsvpStatus | null } | null>(null);
+function useSavedRsvp(storageKey: string, viewerRsvp: { token: string; status: RsvpStatus } | null) {
+  const [saved, setSaved] = useState<{ token: string; status: RsvpStatus | null } | null>(viewerRsvp);
   useEffect(() => {
     const read = () => {
+      // A signed-in viewer's registration comes from the server and wins over this browser's memory.
+      if (viewerRsvp) {
+        setSaved(viewerRsvp);
+        return;
+      }
       try {
         const raw = window.localStorage.getItem(storageKey);
         const parsed = raw ? (JSON.parse(raw) as { ticketToken?: string; status?: RsvpStatus }) : null;
@@ -44,7 +49,7 @@ function useSavedRsvp(storageKey: string) {
       window.clearTimeout(timer);
       window.removeEventListener("pageshow", read);
     };
-  }, [storageKey]);
+  }, [storageKey, viewerRsvp]);
   return [saved, setSaved] as const;
 }
 
@@ -66,10 +71,12 @@ export function RegistrationCard(props: {
   title?: string;
   /** The event's accent. The sign-up dialog renders in a portal outside the page's accent scope, so it re-applies it. */
   accentColor?: string | null;
+  /** The signed-in viewer's own registration from the server. */
+  viewerRsvp?: { token: string; status: RsvpStatus } | null;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor } = props;
+  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null } = props;
   const storageKey = eventInstanceId ? `swe:rsvp:${orgSlug}:i:${eventInstanceId}` : `swe:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
-  const [saved, setSaved] = useSavedRsvp(storageKey);
+  const [saved, setSaved] = useSavedRsvp(storageKey, viewerRsvp);
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [shared, setShared] = useState(false);
