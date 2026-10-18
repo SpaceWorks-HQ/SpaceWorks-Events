@@ -620,12 +620,15 @@ export function Inspector({
   selected,
   onSelect,
   update,
+  labels = ELEMENT_LABELS,
 }: {
   settings: IdCardPrintSettings;
   branding: BadgeBranding;
   selected: IdCardLayoutElement;
   onSelect: (element: IdCardLayoutElement) => void;
   update: (patch: Partial<IdCardPrintSettings>) => void;
+  /** Item names, for designers that call things differently (member ID cards). */
+  labels?: Record<IdCardLayoutElement, string>;
 }) {
   const square = isSquareElement(selected);
   const text = isTextElement(selected);
@@ -686,14 +689,14 @@ export function Inspector({
                 selected === element ? "border-primary bg-primary text-on-primary" : "border-line text-ink-secondary hover:bg-subtle hover:text-ink",
               )}
             >
-              {ELEMENT_LABELS[element]}
+              {labels[element]}
             </button>
           ))}
         </div>
       </div>
 
       <div className="flex flex-col gap-3 rounded-[16px] border border-line p-3.5">
-        <p className="text-label text-ink">{ELEMENT_LABELS[selected]}</p>
+        <p className="text-label text-ink">{labels[selected]}</p>
         {!visible[selected] ? <p className="text-caption text-ink-muted">Hidden on the badge right now.</p> : null}
         {text ? (
           <NumberSlider

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { BadgeCanvas, BadgeFontFaces, elementHeightForMove } from "@/components/checkin/id-card/BadgeCanvas";
 import { FitArea, Inspector, NumberSlider, SaveStatusPill, Section, SwatchGroup, SwitchLine, ToggleField } from "@/components/checkin/id-card/IdCardDesigner";
-import { SAFE_MARGIN_MM, type BadgeSaveStatus } from "@/components/checkin/id-card/shared";
+import { ELEMENT_LABELS, SAFE_MARGIN_MM, type BadgeSaveStatus } from "@/components/checkin/id-card/shared";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/choice";
 import { Callout } from "@/components/ui/display";
@@ -38,6 +38,7 @@ import { PresetPicker } from "./PresetPicker";
 type DesignerField = { key: string; label: string; placement: FieldPlacement; type: FieldType };
 
 const SAVE_DELAY_MS = 900;
+const LABELS = { ...ELEMENT_LABELS, name: "Name", details: "Answers", qr: "Check QR code", header: "Heading", footer: "Footer or note" };
 const TEXT_LIMITS = [["heading", 120], ["badgeLabel", 40], ["footerText", FOOTER_MAX_LENGTH], ["idNumberLabel", 30], ["validUntilLabel", 30]] as const;
 // Member cards never use the event accent.
 const BACKGROUNDS = BADGE_BACKGROUND_KEYS.filter((key) => key !== "event");
@@ -346,7 +347,7 @@ export function MemberIdDesigner({
         </section>
 
         <aside aria-label="Selected item" className="order-1 border-line p-4 sm:p-5 lg:order-none lg:max-h-[860px] lg:overflow-y-auto lg:border-l">
-          <Inspector settings={drawn} branding={branding} selected={selected} onSelect={setSelected} update={update} />
+          <Inspector settings={drawn} branding={branding} selected={selected} onSelect={setSelected} update={update} labels={LABELS} />
         </aside>
       </div>
     </div>

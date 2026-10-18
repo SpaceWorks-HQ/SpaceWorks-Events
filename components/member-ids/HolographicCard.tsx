@@ -106,6 +106,8 @@ export function HolographicCard({
     WebkitBackfaceVisibility: "hidden",
     borderRadius: 14,
     overflow: "hidden",
+    // A filter on the turning element would flatten the 3D scene, so each face carries its own lift.
+    boxShadow: "0 18px 32px -12px rgb(20 44 42 / 0.35)",
   };
 
   const sheen = (
@@ -145,7 +147,6 @@ export function HolographicCard({
             transformStyle: "preserve-3d",
             transform: reduced ? undefined : `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`,
             transition: reduced ? undefined : "transform 650ms cubic-bezier(.2,.8,.2,1)",
-            filter: "drop-shadow(0 18px 24px rgb(20 44 42 / 0.22))",
           }}
         >
           <div style={{ ...faceStyle, visibility: reduced && flipped ? "hidden" : undefined }}>

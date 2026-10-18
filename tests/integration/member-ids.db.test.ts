@@ -149,7 +149,8 @@ describe.sequential("member IDs", { timeout: 90_000 }, () => {
     as(ids.member);
     expect((await setIdMemberStatus({ organisationSlug: slugA, programmeId: ids.programmeA, memberIds, action: "approve" })).ok).toBe(false);
     as(ids.outsider);
-    expect((await setIdMemberStatus({ organisationSlug: slugB, programmeId: ids.programmeB, memberIds, action: "approve" })).data?.count ?? 0).toBe(0);
+    // Org A's member ids sent through the outsider's own programme touch nothing.
+    expect(await setIdMemberStatus({ organisationSlug: slugB, programmeId: ids.programmeB, memberIds, action: "approve" })).toEqual({ ok: true, data: { count: 0 } });
     expect(await prisma.idMember.count({ where: { programmeId: ids.programmeA, status: "APPROVED" } })).toBe(0);
 
     as(ids.admin);

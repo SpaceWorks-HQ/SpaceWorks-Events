@@ -21,6 +21,9 @@ Dynamic segments are shown as `:name` for readability.
 | `/:orgSlug/i/:instanceId` | Recurring-series instance and RSVP |
 | `/:shortCode` | Event short link: a 7-character code (letters and digits, always at least one uppercase letter, so it never matches a lowercase organisation slug) that temporarily redirects to the event's current public page. Unknown or unpublished codes return the same not-found page as an unknown organisation; lookups are rate-limited |
 | `/ticket/:token` | Attendee ticket status and QR page; tears off the QR stub live when the attendee is checked in |
+| `/:orgSlug/ids` | An organisation's ID programmes that are taking card requests |
+| `/:orgSlug/ids/:programmeSlug` | Member ID join form (sign-in required; only while the programme is active with requests open) and the requester's own status |
+| `/verify/:token` | Public member ID check (QR target): Valid / Expired show name, photo, programme, organisation, ID number and valid-until; Revoked shows status only; pending, rejected and unknown tokens share one "Card not found". `noindex`, `no-referrer`, rate limited per IP |
 | `/join/org/:token` | Accept an organisation invitation |
 | `/login` | Password and Google sign-in/signup |
 | `/verify-email` | Consume a one-time email-verification link and activate a password account |
@@ -28,6 +31,7 @@ Dynamic segments are shown as `:name` for readability.
 | `/account` | Authenticated account profile settings |
 | `/account/security` | Authenticated password, MFA, recovery-code, and session controls |
 | `/account/registrations` | Authenticated list of the signed-in user's own registrations, tickets, certificates, and personal data download |
+| `/account/ids` | Authenticated ID wallet: the user's own member ID cards (linked to the account, or issued to its verified email) with a holographic flip viewer and downloads |
 | `/account/organisations` | Authenticated list of the user's memberships and roles, event co-organiser roles, pending co-organiser invites, and leave-organisation control (blocked for the sole owner) |
 
 ## User and organisation dashboard
@@ -40,6 +44,8 @@ Dynamic segments are shown as `:name` for readability.
 | `/dashboard/:orgSlug` | Organisation events and series |
 | `/dashboard/:orgSlug/settings` | Organisation settings |
 | `/dashboard/:orgSlug/members` | Members, roles, and invitations |
+| `/dashboard/:orgSlug/ids` | Member ID programmes (all members read; owners/admins create) |
+| `/dashboard/:orgSlug/ids/:programmeId` | Programme members (approve, reject, revoke, renew, email, download), import (CSV or public Google Sheet with column mapping), front/back card designer and settings; owners/admins only except the read-only member list |
 | `/dashboard/:orgSlug/event/:eventId` | Event overview, attendees, forms, invites, and feedback |
 | `/dashboard/:orgSlug/event/:eventId/schedule` | Standalone-event programme planning and live delay management |
 | `/dashboard/:orgSlug/event/:eventId/check-in` | Online/offline check-in station; organisation admin or exact event `CHECK_IN` grant |
@@ -59,6 +65,9 @@ Every super-admin page additionally requires a current TOTP verification, and ea
 | --- | --- | --- |
 | `POST /api/rsvp` | Optional session | Submit an event or instance RSVP |
 | `POST /api/feedback` | Public, rate-limited | Submit feedback; email is used only for certificate-enabled forms |
+| `GET /api/exports/member-ids/:programmeId/cards/:memberId` | Session; programme organisation OWNER/ADMIN | One approved member's card: `format=pdf` (two pages, front and back) or `format=png&side=front|back` (300 dpi); audited, `no-store` |
+| `GET /api/exports/member-ids/:programmeId/cards` | Session; programme organisation OWNER/ADMIN | Every approved card as one PDF (up to 500) or `format=zip` with one PDF per member (up to 200); one bulk render per process; audited |
+| `GET /api/exports/account/ids/:memberId` | Session; the card's own holder | The signed-in user's own approved card as PDF or PNG |
 | `POST /api/check-in/station` | PIN-scoped station session, rate-limited | Open and operate a venue check-in station |
 | `GET /api/search?q=...` | Public, rate-limited | Return matching public events |
 | `GET /api/ticket/:token/download` | Opaque token | Download the attendee ticket |
