@@ -10,6 +10,8 @@ const MAX_BROWSER_FEEDBACK_RESPONSES = 250;
 
 export async function FeedbackPanel({ ctx }: { ctx: EventDashboardContext }) {
   const { event, permissions, organisation } = ctx;
+  // The feedback form and its responses are organisation-admin only (see app/actions/feedback-form.ts).
+  if (!permissions.isAdmin) return <NoPermission>Only organisation owners and admins can manage feedback for this event.</NoPermission>;
   const record = await prisma.eventFeedbackForm.findUnique({ where: { eventId: event.id }, include: { fields: { orderBy: { sortOrder: "asc" } } } });
   const form = record ? { isOpen: record.isOpen, title: record.title, thankYouMessage: record.thankYouMessage, certificateEnabled: record.certificateEnabled, certificateTemplate: record.certificateTemplate } : null;
   const fields = (record?.fields ?? []).map((field) => ({

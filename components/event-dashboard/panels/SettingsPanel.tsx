@@ -3,6 +3,7 @@ import { toEventClientDto } from "@/lib/eventDto";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePanel";
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
+import { NoPermission } from "./shared";
 
 export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext }) {
   const { event, permissions, organisation } = ctx;
@@ -24,7 +25,12 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext }) {
           pendingInvites={pending.map((invite) => ({ id: invite.id, email: invite.email, expiresAt: invite.expiresAt.toISOString(), permissions: invite.permissions }))}
         />
       ) : null}
-      <EventManageMore organisationSlug={organisation.slug} event={toEventClientDto(event)} />
+      {/* Address, clone, embed and delete are organisation-admin actions on the server. */}
+      {permissions.isAdmin ? (
+        <EventManageMore organisationSlug={organisation.slug} event={toEventClientDto(event)} />
+      ) : (
+        <NoPermission>Only organisation owners and admins can change this event&apos;s address, clone it or delete it.</NoPermission>
+      )}
     </div>
   );
 }

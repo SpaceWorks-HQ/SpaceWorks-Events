@@ -49,12 +49,19 @@ export default async function SeriesManagePage({ params }: Props) {
     where: { eventSeriesId: series.id, userId: access.userId },
     select: { permissions: true },
   });
-  const canManageRegistrations = isAdmin || Boolean(currentGrant?.permissions.includes(EventPermission.MANAGE_REGISTRATIONS));
+  const granted = (permission: EventPermission) => isAdmin || Boolean(currentGrant?.permissions.includes(permission));
+  // Match the server actions: RSVP lifecycle and series edits are organisation-admin operations,
+  // invites and the schedule also accept the matching collaborator grant.
+  const canManageRegistrations = isAdmin;
+  const canManageInvites = granted(EventPermission.MANAGE_INVITATIONS);
+  const canManageSchedule = granted(EventPermission.PUBLISH_AND_SCHEDULE);
 
-  const invites = await prisma.seriesInvite.findMany({
-    where: { eventSeriesId: series.id },
-    orderBy: { createdAt: "desc" },
-  });
+  const invites = canManageInvites
+    ? await prisma.seriesInvite.findMany({
+        where: { eventSeriesId: series.id },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   const firstInstanceId = series.instances[0]?.id;
   const rsvps = firstInstanceId && canManageRegistrations
@@ -91,7 +98,7 @@ export default async function SeriesManagePage({ params }: Props) {
 
       <Card as="section" padding="lg" aria-labelledby="series-details-title">
         <h2 id="series-details-title" className="mb-4 text-h4 text-ink">Series details</h2>
-        <EditSeriesForm organisationSlug={organisation.slug} series={{
+        {isAdmin ? <EditSeriesForm organisationSlug={organisation.slug} series={{
           id: series.id,
           title: series.title,
           description: series.description,
@@ -100,10 +107,10 @@ export default async function SeriesManagePage({ params }: Props) {
           capacity: series.capacity,
           status: series.status,
           privacyType: series.privacyType,
-        }} />
+        }} /> : <p className="text-body-ui text-ink-muted">Only organisation owners and admins can edit this series.</p>}
       </Card>
 
-      <section aria-labelledby="series-invites-title" className="flex flex-col gap-3">
+      {canManageInvites ? <section aria-labelledby="series-invites-title" className="flex flex-col gap-3">
         <h2 id="series-invites-title" className="text-h4 text-ink">Invites</h2>
         <SeriesInvitePanel
           organisationSlug={organisation.slug}
@@ -113,9 +120,9 @@ export default async function SeriesManagePage({ params }: Props) {
             createdAt: i.createdAt.toISOString(),
           }))}
         />
-      </section>
+      </section> : null}
 
-      <ScheduleManager organisationSlug={organisation.slug} eventSeriesId={series.id} items={series.scheduleItems.map((item) => ({ ...item, startDateTime: item.startDateTime.toISOString(), endDateTime: item.endDateTime.toISOString() }))} defaultDate={series.instances[0] ? eventDateInput(series.instances[0].startDateTime, series.timezone) : ""} />
+      {canManageSchedule ? <ScheduleManager organisationSlug={organisation.slug} eventSeriesId={series.id} items={series.scheduleItems.map((item) => ({ ...item, startDateTime: item.startDateTime.toISOString(), endDateTime: item.endDateTime.toISOString() }))} defaultDate={series.instances[0] ? eventDateInput(series.instances[0].startDateTime, series.timezone) : ""} /> : null}
 
       <section aria-labelledby="series-instances-title" className="flex flex-col gap-3">
         <h2 id="series-instances-title" className="text-h4 text-ink">Upcoming instances</h2>
