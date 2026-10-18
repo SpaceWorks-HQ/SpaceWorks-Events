@@ -15,6 +15,28 @@ import { downloadFile } from "./storage";
 
 const escapeMarkup = (s: string) => s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[c]!);
 
+/**
+ * A font size that keeps one line of text inside `maxWidth`, estimated from
+ * the character count (`emWidth` is the average glyph width in em). The
+ * standard certificate is an SVG, which cannot shrink text to fit by itself.
+ */
+export function fittedFontSize(text: string, base: number, maxWidth: number, emWidth: number) {
+  const estimated = Array.from(text).length * emWidth * base;
+  return estimated <= maxWidth ? base : Math.max(12, Math.floor(maxWidth / (Array.from(text).length * emWidth)));
+}
+
+/** The built-in certificate used when an organiser has not designed one. 1600 × 1130 px. */
+export function standardCertificateSvg(input: { organisationName: string; attendee: string; eventTitle: string; issuedAt: Date }) {
+  // The frame's inner width is 1530 px; keep every line well inside it.
+  const line = 1380;
+  const organisation = fittedFontSize(input.organisationName, 42, line, 0.6);
+  const heading = fittedFontSize("CERTIFICATE OF PARTICIPATION", 72, line, 0.72);
+  const name = fittedFontSize(input.attendee, 80, line, 0.62);
+  const title = fittedFontSize(input.eventTitle, 62, line, 0.62);
+  const issued = input.issuedAt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1130" viewBox="0 0 1600 1130"><rect width="1600" height="1130" fill="#fff"/><rect x="35" y="35" width="1530" height="1060" rx="20" fill="none" stroke="#1d3557" stroke-width="8"/><text x="800" y="175" text-anchor="middle" font-family="'DejaVu Serif',serif" font-size="${organisation}" fill="#1d3557">${escapeMarkup(input.organisationName)}</text><text x="800" y="335" text-anchor="middle" font-family="'DejaVu Serif',serif" font-size="${heading}" font-weight="700" fill="#111827">CERTIFICATE OF PARTICIPATION</text><text x="800" y="455" text-anchor="middle" font-family="'DejaVu Sans',sans-serif" font-size="35" fill="#4b5563">This certifies that</text><text x="800" y="585" text-anchor="middle" font-family="'DejaVu Serif',serif" font-size="${name}" font-weight="700" fill="#111827">${escapeMarkup(input.attendee)}</text><line x1="360" y1="620" x2="1240" y2="620" stroke="#94a3b8" stroke-width="3"/><text x="800" y="715" text-anchor="middle" font-family="'DejaVu Sans',sans-serif" font-size="35" fill="#4b5563">has completed the feedback for</text><text x="800" y="805" text-anchor="middle" font-family="'DejaVu Serif',serif" font-size="${title}" font-weight="700" fill="#1d3557">${escapeMarkup(input.eventTitle)}</text><text x="800" y="945" text-anchor="middle" font-family="'DejaVu Sans',sans-serif" font-size="28" fill="#64748b">Issued ${issued}</text></svg>`;
+}
+
 /** Merge-tag values for one certificate; dates use the event's timezone. */
 export function certificateMergeValues(input: { name: string; eventTitle: string; eventStart: Date; timeZone: string; organisationName: string; issuedAt: Date }): CertificateMergeValues {
   return {

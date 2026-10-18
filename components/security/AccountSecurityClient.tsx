@@ -106,7 +106,7 @@ export function AccountSecurityClient(props: { mfaEnabled: boolean }) {
                     const result = await confirmMfaEnrollment({ code });
                     if (!result.ok || !result.data)
                       setError(
-                        result.ok ? "Could not enable MFA." : result.error,
+                        result.ok ? "Could not turn on two-step verification." : result.error,
                       );
                     else {
                       setEnabled(true);
@@ -129,16 +129,16 @@ export function AccountSecurityClient(props: { mfaEnabled: boolean }) {
               <Input value={code} onChange={(event) => setCode(event.target.value)} autoComplete="one-time-code" />
             </Field>
             <Button variant="dangerQuiet" disabled={pending || !code.trim()} onClick={() => setConfirming(true)}>
-              Disable MFA
+              Turn off two-step
             </Button>
           </div>
         ) : null}
       </div>
       <ConfirmationDialog
         open={confirming}
-        title="Disable multi-factor authentication?"
+        title="Turn off two-step verification?"
         message="Password sign-in will no longer require an authenticator code. You will be signed out on success."
-        confirmLabel="Disable MFA"
+        confirmLabel="Turn off two-step"
         loading={pending}
         onCancel={() => setConfirming(false)}
         onConfirm={() => {

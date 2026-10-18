@@ -238,8 +238,13 @@ export default async function TicketPage({ params }: Props) {
             <MoodTile mood="cheering" size={64} />
             <p className="text-display-m break-words text-ink">You&apos;re in, {name}!</p>
           </div>
-        ) : rsvp.status === "WAITLISTED" ? (
-          <MoodTile mood="waiting" size={64} />
+        ) : rsvp.status === "WAITLISTED" || rsvp.status === "PENDING_APPROVAL" ? (
+          <div className="flex items-center gap-4">
+            <MoodTile mood="waiting" size={64} />
+            <p className="text-display-m break-words text-ink">
+              {rsvp.status === "WAITLISTED" ? `You're on the waitlist, ${name}.` : `Request sent, ${name}.`}
+            </p>
+          </div>
         ) : null}
 
         {confirmed ? (
@@ -250,7 +255,9 @@ export default async function TicketPage({ params }: Props) {
             {ticketMain}
             <div className="px-6 pb-6">
               <Callout tone={rsvp.status === "REJECTED" ? "danger" : "info"}>
-                A scannable ticket will be available after this registration is confirmed.
+                {rsvp.status === "REJECTED"
+                  ? "This registration wasn't approved, so there is no ticket."
+                  : "A scannable ticket will be available after this registration is confirmed."}
               </Callout>
             </div>
           </article>
@@ -260,7 +267,7 @@ export default async function TicketPage({ params }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <Button asChild variant="primary" size="lg" fullWidth>
               <a href={googleCalendarEventUrl(calendarEvent)} target="_blank" rel="noreferrer" aria-label={`Add ${title} to Google Calendar`}>
-                <CalendarPlus aria-hidden className="size-[18px]" />
+                <CalendarPlus aria-hidden className="size-[18px] shrink-0" />
                 Add to calendar
               </a>
             </Button>

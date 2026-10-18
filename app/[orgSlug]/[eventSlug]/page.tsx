@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ContentVisibility, EventPrivacyType } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { auth } from "@/lib/auth";
 import {
   isEventPublished,
   shouldIndexPublicEvent,
@@ -9,6 +10,7 @@ import {
 import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { countConfirmedForEvent } from "@/lib/rsvpCapacity";
 import { EventWebsiteShell } from "@/components/event/EventWebsiteShell";
+import { normalizeSections } from "@/components/event-dashboard/event-page/summary";
 import { effectiveEventProgram } from "@/lib/eventProgram";
 import { plainTextToSafeHtml, sanitizeRichText } from "@/lib/richText";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
@@ -53,7 +55,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: event.title,
       description,
       type: "website",
-      images: event.coverImageUrl ? [{ url: event.coverImageUrl }] : undefined,
+      // Without a cover, leave `images` out so the generated share card (opengraph-image.tsx) is used.
+      ...(event.coverImageUrl ? { images: [{ url: event.coverImageUrl }] } : {}),
     },
   };
 }
@@ -94,6 +97,7 @@ export default async function EventPage({ params }: Props) {
     resources,
     form,
     confirmed,
+    viewerRsvp,
   ] = await Promise.all([
     prisma.eventPage.findUnique({
       where: { eventId: event.id },
@@ -135,18 +139,15 @@ export default async function EventPage({ params }: Props) {
       include: { fields: { orderBy: { sortOrder: "asc" } } },
     }),
     countConfirmedForEvent(event.id),
+    auth().then((session) =>
+      session?.user?.id
+        ? prisma.rSVP.findFirst({
+            where: { eventId: event.id, userId: session.user.id },
+            select: { checkInToken: true, status: true },
+          })
+        : null,
+    ),
   ]);
-  const defaults = [
-    "HERO",
-    "ABOUT",
-    "HIGHLIGHTS",
-    "SCHEDULE",
-    "SPEAKERS",
-    "SPONSORS",
-    "VENUE",
-    "FAQ",
-    "RESOURCES",
-  ].map((type) => ({ type, isVisible: true }));
   return (
     <EventWebsiteShell
       orgSlug={org.slug}
@@ -171,7 +172,8 @@ export default async function EventPage({ params }: Props) {
         aboutHtml: page?.aboutHtml
           ? sanitizeRichText(page.aboutHtml)
           : plainTextToSafeHtml(event.description),
-        sections: page?.sections ?? defaults,
+        // Sections the organiser never saved show by default, as in the editor.
+        sections: normalizeSections(page?.sections),
       }}
       highlights={highlights}
       sessions={effectiveEventProgram(sessions).map((session) => ({
@@ -215,6 +217,7 @@ export default async function EventPage({ params }: Props) {
       }
       registrationFull={event.capacity != null && confirmed >= event.capacity}
       approvalRequired={event.privacyType === EventPrivacyType.APPROVAL_REQUIRED}
+      viewerRsvp={viewerRsvp ? { token: viewerRsvp.checkInToken, status: viewerRsvp.status } : null}
     />
   );
 }

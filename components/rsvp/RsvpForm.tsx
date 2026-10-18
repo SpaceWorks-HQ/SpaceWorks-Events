@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { RsvpStatus } from "@prisma/client";
 import { CheckCircle2, Download } from "lucide-react";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
@@ -102,6 +103,7 @@ export function RsvpForm(props: {
     return () => window.clearTimeout(timer);
   }, [lsKey]);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   const fields = useMemo(() => registrationFields ?? [], [registrationFields]);
   const questionsState = useRegistrationAnswers(fields);
@@ -158,6 +160,8 @@ export function RsvpForm(props: {
     }
     onRsvpSaved?.(rsvp);
     setDone(true);
+    // Re-read the going count and spots left, which now include this registration.
+    router.refresh();
   }
 
   if (status === "loading") {
@@ -185,9 +189,9 @@ export function RsvpForm(props: {
               </a>
             </Button>
           ) : null}
-          {isConfirmed && href ? (
+          {href ? (
             <Button asChild variant="secondary" size="sm">
-              <Link href={href}>View ticket</Link>
+              <Link href={href}>{isConfirmed ? "View ticket" : "View status"}</Link>
             </Button>
           ) : null}
         </div>
