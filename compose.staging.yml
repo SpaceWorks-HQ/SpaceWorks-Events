@@ -28,28 +28,36 @@ services:
       timeout: 5s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
+  # Silo: the maintained, S3-compatible fork of the archived MinIO. It keeps
+  # MinIO's MINIO_* settings, health endpoints and mc client.
+  silo:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - silo_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  minio-init:
-    image: minio/mc:latest
+  silo-init:
+    image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: "no"
     depends_on:
-      - minio
+      silo:
+        condition: service_healthy
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
       S3_BUCKET: ${S3_BUCKET}
     entrypoint: >
       /bin/sh -c '
-      until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 2; done;
+      until mc alias set local http://silo:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 2; done;
       mc mb --ignore-existing local/"$$S3_BUCKET";
       mc anonymous set none local/"$$S3_BUCKET";
       '
@@ -87,13 +95,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      minio-init:
+      silo-init:
         condition: service_completed_successfully
 
 volumes:
   postgres_data:
   redis_data:
-  minio_data:
+  silo_data:
 
 secrets:
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:

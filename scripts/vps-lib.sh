@@ -1,0 +1,172 @@
+# Shared helpers for the VPS setup, update, backup, restore and status scripts.
+# Sourced, never executed. Prompts read the terminal directly because
+# `curl | bash` feeds the installer itself on stdin.
+# shellcheck shell=bash
+
+SWE_DIR=${SWE_DIR:-/opt/spaceworks-events}
+SWE_DEFAULT_CONFIG_DIR=/etc/spaceworks-events
+# shellcheck disable=SC2034 # used by the scripts that source this file
+SWE_DEFAULT_REPOSITORY=SpaceWorks-HQ/SpaceWorks-Events
+
+say() { printf '[Space Works Events] %s\n' "$*"; }
+warn() { printf '[Space Works Events] WARNING: %s\n' "$*" >&2; }
+die() { printf '[Space Works Events] ERROR: %s\n' "$*" >&2; exit 1; }
+
+require_root() { [[ $(id -u) = 0 ]] || die 'Run this as root (sudo bash ...).'; }
+require_tty() { { : </dev/tty; } 2>/dev/null || die 'An interactive terminal is required.'; }
+
+is_hostname() { [[ ${#1} -le 253 && "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; }
+is_email() { [[ "$1" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]]; }
+is_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
+is_nonempty() { [[ -n "${1//[[:space:]]/}" ]]; }
+is_mode() { [[ "$1" = 1 || "$1" = 2 ]]; }
+is_safe_path() { [[ "$1" = /* && "$1" != / && "$1" != *[[:space:]:\'\"]* ]]; }
+is_repository() { [[ "$1" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$ && "$1" != */. && "$1" != */.. ]]; }
+
+# ask VAR "Question" DEFAULT VALIDATOR "Hint shown when the answer is invalid"
+# Asks again until the validator accepts the answer (Enter takes the default).
+ask() {
+  local var=$1 question=$2 default=${3-} check=${4:-is_nonempty} hint=${5:-'Please enter a valid value.'} reply
+  while true; do
+    if [[ -n "$default" ]]; then printf '%s [%s]: ' "$question" "$default" >/dev/tty
+    else printf '%s: ' "$question" >/dev/tty; fi
+    IFS= read -r reply </dev/tty || die 'No terminal input; run this in an interactive terminal.'
+    reply=${reply%$'\r'}
+    reply=${reply:-$default}
+    if "$check" "$reply"; then printf -v "$var" '%s' "$reply"; return 0; fi
+    printf '  %s\n' "$hint" >/dev/tty
+  done
+}
+
+# ask_secret VAR "Question": hidden input, asked again while empty.
+ask_secret() {
+  local var=$1 question=$2 reply
+  while true; do
+    printf '%s: ' "$question" >/dev/tty
+    IFS= read -r -s reply </dev/tty || die 'No terminal input; run this in an interactive terminal.'
+    printf '\n' >/dev/tty
+    reply=${reply%$'\r'}
+    if is_nonempty "$reply"; then printf -v "$var" '%s' "$reply"; return 0; fi
+    printf '  A value is required.\n' >/dev/tty
+  done
+}
+
+# confirm "Question" Y|N: succeeds on yes. The default is taken on Enter.
+confirm() {
+  local question=$1 default=${2:-N} reply
+  while true; do
+    if [[ "$default" = Y ]]; then printf '%s [Y/n]: ' "$question" >/dev/tty
+    else printf '%s [y/N]: ' "$question" >/dev/tty; fi
+    IFS= read -r reply </dev/tty || die 'No terminal input; run this in an interactive terminal.'
+    reply=${reply%$'\r'}
+    case "${reply:-$default}" in
+      [Yy]|[Yy][Ee][Ss]) return 0 ;;
+      [Nn]|[Nn][Oo]) return 1 ;;
+    esac
+    printf '  Answer y or n.\n' >/dev/tty
+  done
+}
+
+# Values written by these scripts only; parsed, never sourced.
+conf_get() {
+  local file=$1 name=$2 value
+  [[ -f "$file" ]] || return 0
+  value=$(sed -n "s/^$name=//p" "$file" | tail -n 1 | tr -d '\r')
+  value=${value#\'}; value=${value%\'}
+  printf '%s' "$value"
+}
+
+conf_set() {
+  local file=$1 name=$2 value=$3
+  touch "$file"
+  { grep -v "^$name=" "$file" || true; printf "%s='%s'\n" "$name" "$value"; } > "$file.new"
+  chmod 600 "$file.new"
+  mv -f "$file.new" "$file"
+}
+
+install_conf() { printf '%s/install.conf' "$SWE_DIR"; }
+
+# The configuration directory recorded by the installer, else the default.
+load_config_dir() {
+  local recorded
+  recorded=$(conf_get "$(install_conf)" SWE_CONFIG_DIR)
+  SWE_CONFIG_DIR=${SWE_CONFIG_DIR:-${recorded:-$SWE_DEFAULT_CONFIG_DIR}}
+  is_safe_path "$SWE_CONFIG_DIR" || die 'SWE_CONFIG_DIR must be an absolute path without spaces, quotes or colons.'
+  export SWE_CONFIG_DIR
+}
+
+release_revision() {
+  local dir=$1 revision
+  revision=$(cat "$dir/.release" 2>/dev/null || git -C "$dir" rev-parse HEAD 2>/dev/null || true)
+  [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || die "Cannot tell which commit $dir contains (no .release file or Git history)."
+  printf '%s' "$revision"
+}
+
+release_version() { printf 'vps-%s' "${1:0:12}"; }
+
+# One installer, updater, backup or restore at a time per installation. Child
+# scripts run by a lock holder inherit the lock.
+take_lock() {
+  [[ ${SWE_LOCK_HELD:-0} != 1 ]] || return 0
+  mkdir -p "$SWE_DIR"
+  exec 9>"$SWE_DIR/.lock"
+  if command -v flock >/dev/null; then
+    flock -n 9 || die 'Another Space Works Events install, update, backup or restore is running.'
+  fi
+  export SWE_LOCK_HELD=1
+}
+
+# Copy a staged source release into $SWE_DIR/releases/<commit> and print its path.
+# A release that is already in place is used as it is.
+promote_release() {
+  local source=$1 revision=$2 target="$SWE_DIR/releases/$2"
+  case "$source/" in "$SWE_DIR/releases/"*) printf '%s' "$source"; return 0 ;; esac
+  if [[ ! -d "$target" ]]; then
+    mkdir -p "$SWE_DIR/releases"
+    rm -rf "$target.partial"
+    cp -R "$source" "$target.partial"
+    chown -R 0:0 "$target.partial"
+    chmod -R go-w "$target.partial"
+    mv "$target.partial" "$target"
+  fi
+  printf '%s' "$target"
+}
+
+activate_release() {
+  ln -sfn "$1" "$SWE_DIR/current.new"
+  mv -Tf "$SWE_DIR/current.new" "$SWE_DIR/current"
+}
+
+# A TCP port with a listener on this host (IPv4 or IPv6).
+port_in_use() {
+  local hex file
+  printf -v hex '%04X' "$1"
+  for file in /proc/net/tcp /proc/net/tcp6; do
+    [[ -r "$file" ]] || continue
+    awk -v wanted="$hex" 'NR > 1 { split($2, address, ":"); if (toupper(address[2]) == wanted && $4 == "0A") found = 1 } END { exit !found }' "$file" && return 0
+  done
+  return 1
+}
+
+free_disk_mb() {
+  local path=$1
+  while [[ ! -e "$path" ]]; do path=$(dirname "$path"); done
+  df -Pm "$path" | awk 'NR == 2 { print $4 }'
+}
+
+memory_mb() { awk '/^MemTotal:/ { print int($2 / 1024) }' /proc/meminfo; }
+swap_mb() { awk '/^SwapTotal:/ { print int($2 / 1024) }' /proc/meminfo; }
+
+# Building the Next.js image needs roughly 4 GB of memory; small VPS plans get swap.
+create_swap() {
+  local file=/swapfile size_mb=$1
+  [[ ! -e "$file" ]] || die "$file already exists; enable it or remove it, then rerun."
+  say "Creating a ${size_mb} MB swap file at $file."
+  fallocate -l "${size_mb}M" "$file" 2>/dev/null || dd if=/dev/zero of="$file" bs=1M count="$size_mb" status=none
+  chmod 600 "$file"
+  mkswap "$file" >/dev/null
+  swapon "$file"
+  grep -q "^$file " /etc/fstab || printf '%s none swap sw 0 0\n' "$file" >> /etc/fstab
+}
+
+compose() { sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@"; }

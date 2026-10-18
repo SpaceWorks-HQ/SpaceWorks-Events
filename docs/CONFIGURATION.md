@@ -87,9 +87,9 @@ Configure SMTP, Google SSO, and backup status under **Super admin → Settings**
 | --- | --- | --- |
 | `S3_BUCKET` | Required | Private object-store bucket |
 | `S3_REGION` | Required | Bucket region; `auto` for Cloudflare R2 |
-| `S3_ENDPOINT` | Provider-dependent | Custom HTTPS endpoint for R2, MinIO, or another compatible service |
+| `S3_ENDPOINT` | Provider-dependent | Custom HTTPS endpoint for R2, Silo, or another compatible service |
 | `S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY` | Provider-dependent | Configure both, or neither when using a workload/IAM role |
-| `S3_FORCE_PATH_STYLE` | Optional | Set to `1` for providers that require path-style addressing (`1` for Cloudflare R2 and MinIO) |
+| `S3_FORCE_PATH_STYLE` | Optional | Set to `1` for providers that require path-style addressing (`1` for Cloudflare R2 and Silo) |
 
 The bucket must remain private. Existing database-backed assets can be moved with `npm run storage:migrate` after S3 is configured.
 
