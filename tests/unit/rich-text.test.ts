@@ -23,4 +23,10 @@ describe("event website rich text", () => {
     expect(richTextToPlainText("<h2>Welcome</h2><p>Bring your <strong>ideas</strong>.</p>"))
       .toBe("Welcome Bring your ideas.");
   });
+
+  it("keeps the summary as plain text rather than HTML entities", () => {
+    expect(richTextToPlainText("<p>Tom &amp; Jerry’s &lt;maker&gt; night, &quot;bring kit&quot;</p>"))
+      .toBe("Tom & Jerry’s <maker> night, \"bring kit\"");
+    expect(richTextToPlainText("<p>&amp;lt;b&amp;gt;</p>")).toBe("&lt;b&gt;");
+  });
 });
