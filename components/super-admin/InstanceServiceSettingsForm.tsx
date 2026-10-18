@@ -6,6 +6,7 @@ import { CheckboxField } from "@/components/ui/choice";
 import { Callout, Card, SettingsRow } from "@/components/ui/display";
 import { Field, Input, PasswordInput } from "@/components/ui/field";
 import { saveInstanceServiceSettings } from "@/app/actions/instance-settings";
+import { backupInputToIso } from "@/lib/backupTime";
 
 type Values = { emailFrom: string; smtpService: string; smtpHost: string; smtpPort: string; smtpSecure: boolean; smtpUser: string; smtpAllowUnauthenticated: boolean; googleClientId: string; backupProvider: string; backupLastSuccessAt: string; backupRetentionDays: string; hasSmtpPassword: boolean; hasGoogleClientSecret: boolean };
 type TextKey = { [K in keyof Values]: Values[K] extends string ? K : never }[keyof Values];
@@ -20,7 +21,13 @@ export function InstanceServiceSettingsForm({ initial }: { initial: Values }) {
   function submit() {
     startTransition(async () => {
       setStatus(null);
-      const result = await saveInstanceServiceSettings({ ...values, smtpPort: values.smtpPort || undefined, backupRetentionDays: values.backupRetentionDays || undefined, backupLastSuccessAt: values.backupLastSuccessAt ? new Date(values.backupLastSuccessAt).toISOString() : undefined, smtpPassword: smtpPassword || undefined, googleClientSecret: googleClientSecret || undefined });
+      const result = await saveInstanceServiceSettings({ ...values, smtpPort: values.smtpPort || undefined, backupRetentionDays: values.backupRetentionDays || undefined, backupLastSuccessAt: backupInputToIso(values.backupLastSuccessAt), smtpPassword: smtpPassword || undefined, googleClientSecret: googleClientSecret || undefined });
+      if (result.ok) {
+        // Saved secrets are write-only: clear the inputs and show that a value is kept.
+        setValues((current) => ({ ...current, hasSmtpPassword: current.hasSmtpPassword || Boolean(smtpPassword), hasGoogleClientSecret: current.hasGoogleClientSecret || Boolean(googleClientSecret) }));
+        setSmtpPassword("");
+        setGoogleClientSecret("");
+      }
       setStatus(result.ok ? "Settings saved." : result.error ?? "Could not save settings.");
     });
   }
@@ -67,7 +74,7 @@ export function InstanceServiceSettingsForm({ initial }: { initial: Values }) {
         <SettingsRow title="Backup configuration" description="This records backup posture only; backup creation and restore access remain with the database provider.">
           <div className="flex flex-col gap-4">
             {field("backupProvider", "Provider")}
-            {field("backupLastSuccessAt", "Last successful backup", "datetime-local")}
+            {field("backupLastSuccessAt", "Last successful backup (UTC)", "datetime-local")}
             {field("backupRetentionDays", "Retention days", "number")}
           </div>
         </SettingsRow>
