@@ -76,10 +76,10 @@ Only eligible confirmed attendees receive a scannable ticket by default. Organis
 ## Member IDs
 
 - ID card programmes per organisation (inspired by Aarannu): a public join form with custom questions (text, choice, date, email, phone) and an optional photo, or import from a CSV file or a public Google Sheet with a column-mapping step, preview and de-duplication by email.
-- Owners and admins approve, reject (with a private reason), revoke, reinstate, renew and edit members, upload photos, and add people by hand; plain members see a read-only list without emails.
+- Owners and admins approve, reject (with a private reason), revoke, reinstate, renew, edit and delete members (deleting also removes the stored photo), upload photos, and add people by hand; plain members see a read-only list without emails. Deleting a programme removes its members' photos and its watermark.
 - Approval issues a per-programme ID number (`PREFIX-YEAR-0001`) and an expiry from the programme's rule (fixed date, days from approval, or none).
 - Cards have a front and a back, designed with the badge designer: four presets (Community, Corporate, Event pass, Student) in Space Works colours, ID number and valid-until items, answers placed on the front or back, and a text or image watermark.
-- Downloads: one card as a two-page PDF or a 300 dpi PNG, every card as one PDF or a ZIP of PDFs. "Your ID card" emails go through the outbox with the PDF attached.
+- Downloads: one card as a two-page PDF or a 300 dpi PNG, every card as one PDF or a ZIP of PDFs. "Your ID card" emails go through the outbox with the PDF attached. Bulk sends reach only members who joined themselves or were never emailed; nobody is emailed twice in 24 hours (an owner or admin can resend one card after that); and an organisation can queue at most 200 card emails in any 24 hours (50 in its first week).
 - Each card's QR opens `/verify/:token` (an opaque 128-bit token) showing Valid, Expired, Revoked or Card not found.
 - Holders see their cards in Account → Your IDs, with a tilting, flipping holographic viewer (static under reduced motion).
 
