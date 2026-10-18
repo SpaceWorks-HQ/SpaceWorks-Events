@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 
 // v2 intentionally avoids browsers retaining the old page-scoped v1 cookie,
 // which could not be sent to the station API endpoint.
-export const CHECK_IN_STATION_COOKIE = "yuyu.check-in-station.v2";
+export const CHECK_IN_STATION_COOKIE = "swe.check-in-station.v2";
 export const CHECK_IN_STATION_GRACE_MS = 60 * 60 * 1000;
 export const CHECK_IN_STATION_EARLY_ACCESS_MS = 24 * 60 * 60 * 1000;
 
@@ -31,7 +31,7 @@ function encryptionKey() {
     "sha256",
     rootEncryptionKey(),
     Buffer.alloc(0),
-    "yuyu-check-in-station-pin-v2",
+    "swe-check-in-station-pin-v2",
     32,
   ));
 }

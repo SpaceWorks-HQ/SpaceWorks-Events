@@ -9,6 +9,8 @@ import { CHECK_IN_STATION_COOKIE, createCheckInStationProof, hasValidCheckInStat
 import { gateCheckInForStatus, parseCheckInPayload } from "@/lib/checkIn";
 import { getCheckInDetails, getRegistrationDetails } from "@/lib/checkInDetails";
 import { commitCheckInProjection, commitUndoCheckInProjection } from "@/lib/checkInMutations";
+import { badgeBrandingFor, badgeDesignFor, loadBadgeEvent } from "@/lib/badge/data";
+import { attendeePhotoUrl } from "@/lib/badge/imageUrl";
 
 const bodySchema = z.object({
   organisationSlug: z.string().trim().min(1).max(120), eventSlug: z.string().trim().min(1).max(160),
@@ -26,16 +28,16 @@ function failure(error = "Station access is unavailable.", status = 400) { retur
 function attendeeLabel(r: { user: { name: string | null; email: string | null } | null; guestName: string | null; guestEmail: string | null }) {
   return r.user?.name?.trim() || r.guestName?.trim() || r.user?.email || r.guestEmail || "Guest";
 }
-const rsvpInclude = { user: { select: { name: true, email: true } }, answers: { include: { field: { select: { key: true, label: true } } } } } as const;
+const rsvpInclude = { user: { select: { id: true, name: true, email: true, profileImageUrl: true, image: true } }, answers: { include: { field: { select: { key: true, label: true } } } } } as const;
 type StationRsvp = Prisma.RSVPGetPayload<{ include: typeof rsvpInclude }>;
 function toData(rsvp: StationRsvp, force = false) {
-  return { rsvpId: rsvp.id, displayName: attendeeLabel(rsvp), email: rsvp.user?.email ?? rsvp.guestEmail, status: rsvp.status, alreadyCheckedIn: Boolean(rsvp.checkedInAt), checkedInAt: rsvp.checkedInAt?.toISOString() ?? null, checkInQrToken: rsvp.checkInToken, checkInDetails: getCheckInDetails(rsvp.answers), registrationDetails: getRegistrationDetails(rsvp.answers), gate: gateCheckInForStatus(rsvp.status, force) };
+  return { rsvpId: rsvp.id, displayName: attendeeLabel(rsvp), email: rsvp.user?.email ?? rsvp.guestEmail, status: rsvp.status, alreadyCheckedIn: Boolean(rsvp.checkedInAt), checkedInAt: rsvp.checkedInAt?.toISOString() ?? null, checkInQrToken: rsvp.checkInToken, checkInDetails: getCheckInDetails(rsvp.answers), registrationDetails: getRegistrationDetails(rsvp.answers), photoUrl: attendeePhotoUrl(rsvp.user), gate: gateCheckInForStatus(rsvp.status, force) };
 }
 
 export async function POST(request: Request) {
   let input: z.infer<typeof bodySchema>;
   try { input = bodySchema.parse(await request.json()); } catch { return failure("Invalid request."); }
-  const event = await prisma.event.findFirst({ where: { slug: input.eventSlug, organisation: { slug: input.organisationSlug } }, select: { id: true, title: true, slug: true, organisationId: true, startDateTime: true, endDateTime: true, checkInStationPinHash: true, checkInStationSecretVersion: true, organisation: { select: { slug: true, name: true, logoUrl: true } } } });
+  const event = await prisma.event.findFirst({ where: { slug: input.eventSlug, organisation: { slug: input.organisationSlug } }, select: { id: true, title: true, slug: true, organisationId: true, startDateTime: true, endDateTime: true, checkInStationPinHash: true, checkInStationSecretVersion: true, organisation: { select: { slug: true, name: true } } } });
   if (!event || !event.checkInStationPinHash) return failure();
   if (input.action === "unlock") {
     const allowed = await checkRateLimitById("checkinStationPin", `ip:${getClientIpFromHeaders(request.headers)}:event:${event.id}`);
@@ -56,12 +58,15 @@ export async function POST(request: Request) {
   if (!hasValidCheckInStationProof(proof, event.id, event.checkInStationSecretVersion, event.startDateTime, event.endDateTime)) return failure("Station access has expired.", 401);
   if (!(await checkRateLimitById("checkin", `station:${event.id}:${getClientIpFromHeaders(request.headers)}`))) return failure("Too many check-in requests. Please try again shortly.", 429);
   if (input.action === "bootstrap") {
-    const [confirmed, checkedIn, recentRsvps, form] = await Promise.all([
+    const [confirmed, checkedIn, recentRsvps, form, badgeEvent] = await Promise.all([
       prisma.rSVP.count({ where: { eventId: event.id, status: "CONFIRMED" } }), prisma.rSVP.count({ where: { eventId: event.id, checkedInAt: { not: null } } }),
       prisma.rSVP.findMany({ where: { eventId: event.id, checkedInAt: { not: null } }, orderBy: { checkedInAt: "desc" }, take: 200, include: { user: { select: { name: true, email: true } } } }),
       prisma.eventRegistrationForm.findUnique({ where: { eventId: event.id }, select: { fields: { select: { key: true, label: true }, orderBy: { sortOrder: "asc" } } } }),
+      loadBadgeEvent(event.id),
     ]);
-    return NextResponse.json({ ok: true, data: { organisationName: event.organisation.name, organisationLogoUrl: event.organisation.logoUrl, eventId: event.id, eventTitle: event.title, registrationFields: form?.fields ?? [], stats: { confirmed, checkedIn }, recent: recentRsvps.map((r) => ({ rsvpId: r.id, displayName: attendeeLabel({ ...r, guestName: null }), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() })) } });
+    // The station prints the event's saved badge design (read-only here).
+    const badge = badgeEvent ? { design: badgeDesignFor(badgeEvent), branding: badgeBrandingFor(badgeEvent) } : null;
+    return NextResponse.json({ ok: true, data: { organisationName: event.organisation.name, badge, eventId: event.id, eventTitle: event.title, registrationFields: form?.fields ?? [], stats: { confirmed, checkedIn }, recent: recentRsvps.map((r) => ({ rsvpId: r.id, displayName: attendeeLabel({ ...r, guestName: null }), email: r.user?.email ?? r.guestEmail, checkedInAt: r.checkedInAt!.toISOString() })) } });
   }
   let rsvp: StationRsvp | null = null;
   if (input.action === "previewToken") {
