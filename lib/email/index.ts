@@ -224,10 +224,14 @@ export async function sendEventInvitation(params: {
 
 export async function sendCollaboratorInvitation(params: { to: string; eventTitle: string; inviteUrl: string; messageId?: string }) {
   const { transporter, from } = await getEmailTransport();
-  const subject = `Co-organizer invitation: ${headerText(params.eventTitle)}`;
+  const subject = `Co-organiser invitation: ${headerText(params.eventTitle)}`;
   const safeUrl = escapeHtml(params.inviteUrl);
-  const text = `You have been invited to co-organize "${params.eventTitle}". Sign in with this email address to accept:\n${params.inviteUrl}`;
-  const html = `<p>You have been invited to co-organize <strong>${escapeHtml(params.eventTitle)}</strong>.</p><p><a href="${safeUrl}">Accept co-organizer invite</a></p><p>${safeUrl}</p>`;
+  const text = `You have been invited to co-organise "${params.eventTitle}". Sign in with this email address to accept:\n${params.inviteUrl}\n\nSpace Works Events`;
+  const html = emailLayout(escapeHtml(subject), `
+          <h2 style="${HEADING_STYLE}">Help run ${escapeHtml(params.eventTitle)}</h2>
+          <p style="${BODY_STYLE}">You have been invited to co-organise <strong>${escapeHtml(params.eventTitle)}</strong>. Sign in with this email address to accept.</p>
+          <p style="margin:28px 0;"><a href="${safeUrl}" style="${EMAIL_BUTTON_STYLE}">Accept invite</a></p>
+          <p style="font-size:13px; color:${EMAIL_COLORS.inkMuted}; overflow-wrap:anywhere;">${safeUrl}</p>`);
   if (!transporter) { console.log("[EMAIL MOCK] collaborator invitation queued"); return; }
   await transporter.sendMail({ messageId: params.messageId, from, to: params.to, subject, text, html });
 }
