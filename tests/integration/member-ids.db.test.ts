@@ -382,6 +382,19 @@ describe.sequential("member IDs", { timeout: 90_000 }, () => {
     expect(audit).toMatchObject({ actorUserId: ids.admin, organisationId: ids.orgA, metadata: { removed: true } });
   });
 
+  it("deletes the stored watermark image when it is removed", async () => {
+    as(ids.owner);
+    const watermarkKey = `organisations/${ids.orgA}/member-id-watermarks/${randomUUID()}.webp`;
+    await prisma.asset.create({ data: { key: watermarkKey, contentType: "image/webp", provider: "database", fileData: new Uint8Array([1]), organisationId: ids.orgA } });
+    await prisma.idProgramme.update({ where: { id: ids.programmeA }, data: { watermarkUrl: `/api/uploads/${watermarkKey}` } });
+    const form = new FormData();
+    form.set("organisationSlug", slugA);
+    form.set("programmeId", ids.programmeA);
+    form.set("remove", "1");
+    expect(await uploadIdProgrammeWatermark(form)).toEqual({ ok: true, data: { url: null } });
+    expect(await prisma.asset.count({ where: { key: watermarkKey } })).toBe(0);
+  });
+
   it("keeps every member inside its programme's organisation at the database layer", async () => {
     await expect(prisma.idMember.create({
       data: { programmeId: ids.programmeA, organisationId: ids.orgB, name: "Misplaced", email: `misplaced-${suffix}@example.test`, source: "MANUAL", verifyToken: randomBytes(16).toString("base64url") },
