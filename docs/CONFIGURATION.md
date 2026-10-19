@@ -35,7 +35,7 @@ If Google OAuth is enabled, register the matching callback with Google Cloud:
 https://events.example.com/api/auth/callback/google
 ```
 
-Leave `ALLOWED_ACTION_ORIGINS` empty when browsers reach the application on this same hostname (including `*.onrender.com`). Configure it only if a trusted CDN or reverse proxy uses a different host for Server Action requests; no platform hostname is hard-coded.
+Leave `ALLOWED_ACTION_ORIGINS` empty when browsers reach the application on this same hostname (including `*.onrender.com`). Configure it only if a trusted CDN or reverse proxy uses a different host for Server Action requests; no platform hostname is hard-coded. It is read when the image is **built**, so it needs your own build; the published release images refuse to start with it set (see [Releases and container images](CONTAINER_IMAGES.md)).
 
 ### Changing the public domain
 

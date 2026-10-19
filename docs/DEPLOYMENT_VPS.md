@@ -17,10 +17,11 @@ with the transport and privacy requirements of this Events application. Use
 
 - A 64-bit (x86_64 or arm64) Linux VPS: Ubuntu/Debian, Fedora/RHEL/Alma/Rocky,
   Arch or openSUSE. The installer installs Docker Engine + Compose when missing.
-  Start with **2 vCPU, 4 GB RAM and 30 GB SSD** for a small installation, with
+  Start with **2 vCPU, 2 GB RAM and 30 GB SSD** for a small installation, with
   extra space for uploads and backups. These are starting estimates, not
-  load-tested capacity limits. Building the image needs about 4 GB of memory; the
-  installer offers a swap file on smaller servers.
+  load-tested capacity limits. Releases run published images; only a source
+  build (`--ref`) compiles on the server, which needs about 4 GB of memory. The
+  installer offers a swap file when memory is short.
 - A domain, such as `events.example.com`, whose DNS A record points to the VPS.
   Add an AAAA record only if IPv6 reaches this host too. Start with DNS-only
   records; the supplied proxy assumes clients connect directly to Caddy.
@@ -43,23 +44,28 @@ curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/mai
 ```
 
 The bootstrap checks for Linux, the architecture, root or sudo and `curl`/`tar`,
-resolves `main` (or `--ref`) to one commit and downloads that archive into
-temporary storage. The release's `scripts/setup-vps.sh` then checks disk space and
-ports 80/443 and asks every question first: mode 1 (everything on the VPS) or
+finds the latest [GitHub Release](CONTAINER_IMAGES.md#versions-and-releases)
+(or the one named with `--release v<version>`) and downloads its source into
+temporary storage. The release's `scripts/setup-vps.sh` then checks disk space
+and ports 80/443 and asks every question first: mode 1 (everything on the VPS) or
 mode 2 ([Netlify + VPS](DEPLOYMENT_SPLIT.md)), hostnames, super-admin email,
 verified sender and SMTP relay (password hidden; Brevo is prefilled on port 2525).
-Invalid answers are asked again. On a server with less than 4 GB of memory it
-offers a 4 GB swap file. It reports what the hostname resolves to and shows one
-summary of every answer and host change. **Nothing changes before you confirm.**
+Invalid answers are asked again. When memory is short it offers a 4 GB swap file.
+It reports what the hostname resolves to and shows one summary of every answer
+and host change. **Nothing changes before you confirm.**
 
 After confirmation it creates the swap file if accepted, installs Docker from the
 distribution family's official source if missing, copies the release to
 `/opt/spaceworks-events/releases/<commit>`, generates configuration in
-`/etc/spaceworks-events`, builds the images, applies migrations, waits for healthy
-services and runs the VPS checks. `current` then points at the release and
-`/opt/spaceworks-events/install.conf` records the configuration directory and the
-repository to update from. `--dir` changes the installation directory, `--ref`
-installs a branch, tag or commit, and `--repo owner/name` a fork; pass options as
+`/etc/spaceworks-events`, downloads the release's images from GitHub Packages,
+applies migrations, waits for healthy services and runs the VPS checks.
+`current` then points at the release and `/opt/spaceworks-events/install.conf`
+records the configuration directory and the repository to update from.
+
+`--ref` installs a branch, tag or commit instead and **builds** its images on the
+server (versions `vps-<commit>`); a later update moves it to the latest release.
+`--dir` changes the installation directory and `--repo owner/name` installs a
+fork, which needs its own published release (or `--ref`). Pass options as
 `curl … | bash -s -- --dir /srv/spaceworks-events`. To keep secrets somewhere
 other than `/etc/spaceworks-events`, set the variable on the `bash` side of the
 pipe: `curl … | SWE_CONFIG_DIR=/srv/events-config bash`. Running `curl … | sudo bash`
@@ -181,11 +187,13 @@ Run the one-liner again and choose **1) Update to the latest release** (or pass
 `--update` to skip the menu). The menu also offers **2) Back up now** and
 **3) Check status and health**. The updater:
 
-1. stops if the installation already runs the latest commit;
-2. shows the current and new release and asks for confirmation;
+1. stops if the installation already runs the latest release (`--release` picks
+   another, `--ref` a source build);
+2. shows the current and new version and asks for confirmation;
 3. backs up the database and configuration (`scripts/vps-backup.sh --no-objects`);
-4. changes only `SWE_VERSION` in `compose.env`, builds the new images while the site
-   keeps running, runs preflight, applies migrations and verifies the schema;
+4. changes only the version and image names in `compose.env`, downloads the new
+   images (or builds them for `--ref`) while the site keeps running, runs
+   preflight, applies migrations and verifies the schema;
 5. recreates the services, waits for them to be healthy and runs the VPS checks;
 6. points `current` at the new release and keeps the three newest releases and
    their images.
@@ -194,7 +202,8 @@ If any step after the backup fails, it restores the previous `compose.env` and
 starts the previous release's retained images. **Migrations that already ran are
 not reversed**; review migrations before updating, and restore the pre-update
 backup if an older release cannot run on the newer schema. For automation, unpack
-the new release with its commit in a `.release` file and run
+the new release with its commit in a `.release` file (and, for a published
+release, its version in `.release-version`) and run
 `sudo bash <new release>/scripts/update-vps.sh --yes`; it is copied into
 `releases/` like any other update. For split hosting, deploy
 the identical commit to Netlify after the backend update.
@@ -272,20 +281,23 @@ record it as an unfinished installation:
 
 ```bash
 backup=/root/<time>
+version=$(cat "$backup/version")   # a release such as 0.1.0-main.42.<commit>, or vps-<commit>
+case "$version" in vps-*) ref=${version#vps-} ;; *) ref=v$version ;; esac
 commit=$(curl -fsSL -H 'Accept: application/vnd.github.sha' \
-  "https://api.github.com/repos/SpaceWorks-HQ/SpaceWorks-Events/commits/$(sed 's/^vps-//' "$backup/version")")
+  "https://api.github.com/repos/SpaceWorks-HQ/SpaceWorks-Events/commits/$ref")
 release=/opt/spaceworks-events/releases/$commit
 mkdir -p "$release"
 curl -fsSL "https://codeload.github.com/SpaceWorks-HQ/SpaceWorks-Events/tar.gz/$commit" | tar -xz -C "$release" --strip-components=1
 echo "$commit" > "$release/.release"
+case "$version" in vps-*) ;; *) echo "$version" > "$release/.release-version" ;; esac
 install -d -m 0700 /etc/spaceworks-events
 tar -xzf "$backup/config.tar.gz" -C /etc/spaceworks-events
 printf "SWE_CONFIG_DIR='/etc/spaceworks-events'\nSWE_PENDING_RELEASE='%s'\n" "$commit" > /opt/spaceworks-events/install.conf
 command -v docker >/dev/null || bash "$release/scripts/install-docker.sh"
 ```
 
-Run the one-liner and choose **Resume**. It builds and starts that release with
-the restored keys. Then run `vps-restore.sh "$backup"` and point DNS at the new
+Run the one-liner and choose **Resume**. It downloads (or, for a `vps-` version,
+builds) and starts that release with the restored keys. Then run `vps-restore.sh "$backup"` and point DNS at the new
 server. Later updates work as usual.
 
 For the production recovery baseline, also configure encrypted off-server

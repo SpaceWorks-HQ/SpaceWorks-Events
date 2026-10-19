@@ -106,6 +106,41 @@ release_revision() {
 
 release_version() { printf 'vps-%s' "${1:0:12}"; }
 
+# A published release (install.sh writes its image version to .release-version)
+# pulls images from GitHub Packages; any other source is built on this server.
+is_published_version() { [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9-]+\.[0-9]+\.[0-9a-f]{12}$ ]]; }
+source_version() {
+  local dir=$1 revision=$2 published
+  published=$(cat "$dir/.release-version" 2>/dev/null || true)
+  if [[ -z "$published" ]]; then release_version "$revision"; return 0; fi
+  is_published_version "$published" && [[ "${published: -12}" = "${revision:0:12}" ]] \
+    || die "$dir/.release-version does not match its commit."
+  printf '%s' "$published"
+}
+
+# Point compose.env at the images for VERSION: GitHub Packages for a published
+# release, local names (compose.production.yml defaults) for a source build.
+set_image_settings() {
+  local file=$1 version=$2 repository=$3 prefix=''
+  if is_published_version "$version"; then
+    prefix="ghcr.io/$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')/spaceworks-events"
+  fi
+  conf_set "$file" SWE_APP_IMAGE "$prefix"
+  conf_set "$file" SWE_MIGRATOR_IMAGE "${prefix:+$prefix-migrator}"
+  conf_set "$file" SWE_OPS_IMAGE "${prefix:+$prefix-ops}"
+}
+
+# Pull a published release's images, or build them from this source.
+fetch_images() {
+  if is_published_version "$1"; then
+    say 'Downloading the release images from GitHub Packages.'
+    compose pull --quiet ops migrator app
+  else
+    say 'Building images from source. This takes several minutes on a small server.'
+    compose build ops migrator app
+  fi
+}
+
 # One installer, updater, backup or restore at a time per installation. Child
 # scripts run by a lock holder inherit the lock.
 take_lock() {
@@ -119,7 +154,7 @@ take_lock() {
 }
 
 # Copy a staged source release into $SWE_DIR/releases/<commit> and print its path.
-# A release that is already in place is used as it is.
+# A release that is already in place is reused, taking the staged image version.
 promote_release() {
   local source=$1 revision=$2 target="$SWE_DIR/releases/$2"
   case "$source/" in "$SWE_DIR/releases/"*) printf '%s' "$source"; return 0 ;; esac
@@ -130,6 +165,10 @@ promote_release() {
       rm -rf "$target.partial"
       return 1
     fi
+  elif [[ -f "$source/.release-version" ]]; then
+    cp "$source/.release-version" "$target/.release-version" || return 1
+  else
+    rm -f "$target/.release-version" || return 1
   fi
   printf '%s' "$target"
 }
@@ -180,4 +219,11 @@ create_swap() {
   fi
 }
 
-compose() { sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@"; }
+# These scripts never attach a terminal to a container: the installer runs them
+# with stdin from /dev/null, and Compose refuses a TTY without one.
+compose() {
+  case "${1:-}" in
+    run|exec) local command=$1; shift; sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$command" -T "$@" ;;
+    *) sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@" ;;
+  esac
+}
