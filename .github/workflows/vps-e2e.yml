@@ -10,9 +10,9 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.1.0-feat-release-images.2.558614591d1d
-  # The dev merge commit: installs it from source the way earlier installers did.
-  OLD_SOURCE: dc6c345c40d793e703e7cd3cd4e902fa22701ba4
+  RELEASE: v0.1.0-feat-release-images.4.006bcdad81b3
+  # Built from source first (a vps-<commit> install), then moved to the release's images.
+  OLD_SOURCE: 006bcdad81b3c5851edd972d10f1ff09baefafd9
 
 jobs:
   vps:
@@ -70,6 +70,7 @@ jobs:
       - name: Install the release from published images
         if: matrix.scenario == 'fresh-release'
         run: |
+          set -o pipefail
           expect install.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" | tee install.log
           grep -q 'Downloading the release images from GitHub Packages' install.log
           ! grep -q 'Building images from source' install.log
@@ -77,6 +78,7 @@ jobs:
       - name: Install dev from source, then update to the release
         if: matrix.scenario == 'source-then-update'
         run: |
+          set -o pipefail
           # The new installer builds an older commit from source with --ref.
           expect install.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--ref $OLD_SOURCE" | tee install.log
           grep -q "vps-${OLD_SOURCE:0:12} is running" install.log
