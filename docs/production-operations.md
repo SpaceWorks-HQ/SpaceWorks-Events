@@ -32,7 +32,7 @@ root Compose file is development-only, and `compose.staging.yml` is not a
 production topology. Kubernetes operators should use the
 [Helm chart](../charts/spaceworks-events/README.md).
 
-1. Build and test the immutable image in CI. The [container image publishing guide](CONTAINER_IMAGES.md) covers automated publication of the application and migration images.
+1. Build and test the immutable image in CI. The [releases and container images guide](CONTAINER_IMAGES.md) covers automated publication of the application, migration and operator images.
 2. Run `npm run db:status`, then `npm run db:deploy` once as a release job using the migration database role. Run `npm run storage:migrate` when legacy database assets remain.
 3. Deploy application instances using a least-privileged runtime database role and production secrets from a secrets manager.
 4. Verify the in-process outbox worker has recorded a fresh heartbeat after deployment. Configure an independent scheduler to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET` as a recovery path; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.

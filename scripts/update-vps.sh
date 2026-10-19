@@ -21,7 +21,10 @@ load_config_dir
 compose_env="$SWE_CONFIG_DIR/compose.env"
 [[ -f "$compose_env" ]] || die "No installation configuration in $SWE_CONFIG_DIR."
 revision=$(release_revision "$source_dir")
-version=$(release_version "$revision")
+version=$(source_version "$source_dir" "$revision")
+repository=${SWE_REPOSITORY:-$(conf_get "$(install_conf)" SWE_REPOSITORY)}
+repository=${repository:-$SWE_DEFAULT_REPOSITORY}
+is_repository "$repository" || die 'SWE_REPOSITORY must be a GitHub owner/name.'
 previous_version=$(conf_get "$compose_env" SWE_VERSION)
 previous_dir=$(readlink -f "$SWE_DIR/current" 2>/dev/null || true)
 # An installation made by install.sh is always updated the managed way, from
@@ -71,11 +74,12 @@ restore_previous() {
 }
 trap restore_previous EXIT
 cp -p "$compose_env" "$compose_env.previous"
-# Only the release label changes; hostnames, secrets and volumes stay.
+# Only the release label and image names change; hostnames, secrets and volumes stay.
 conf_set "$compose_env" SWE_VERSION "$version"
-say 'Building the new images. The site keeps running meanwhile.'
+set_image_settings "$compose_env" "$version" "$repository"
+say 'Fetching the new images. The site keeps running meanwhile.'
 compose config --quiet
-compose build ops migrator app
+fetch_images "$version"
 compose run --rm --no-deps ops node docker/vps/check.mjs preflight
 compose run --rm migrator
 compose run --rm --no-deps ops node scripts/verify-production-schema.mjs
@@ -93,9 +97,10 @@ if [[ $managed = 1 ]]; then
     count=$((count + 1))
     name=$(basename "$dir")
     [[ $count -gt 3 && "$name" =~ ^[a-f0-9]{40}$ && "$dir" != "$SWE_REPO_DIR" ]] || continue
+    old=$( (source_version "$dir" "$name") 2>/dev/null || release_version "$name")
     rm -rf -- "$dir"
-    old=$(release_version "$name")
-    docker image rm "swevents-app:$old" "swevents-migrator:$old" "swevents-ops:$old" >/dev/null 2>&1 || true
+    docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -E "(/spaceworks-events[a-z-]*|^swevents-[a-z]+):$old\$" \
+      | xargs -r docker image rm >/dev/null 2>&1 || true
   done < <(find "$SWE_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
 fi
 say "Updated to $version. Verify sign-in, email, uploads and live check-in."

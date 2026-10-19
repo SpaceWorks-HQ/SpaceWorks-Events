@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -19,7 +19,9 @@ describe("VPS installer", () => {
     expect(help).toContain("--update");
     expect(help).toContain("Silo object storage");
     for (const [args, message] of [
-      [["--ref", "../../bad"], "Invalid release reference"],
+      [["--ref", "../../bad"], "Invalid source reference"],
+      [["--release", "main"], "Invalid release tag"],
+      [["--release", "v0.1.0-main.1.0123456789ab", "--ref", "main"], "Choose either --release or --ref"],
       [["--dir", "relative/path"], "absolute installation directory"],
       [["--dir", "/"], "absolute installation directory"],
       [["--unknown"], "Usage: install.sh"],
@@ -31,11 +33,48 @@ describe("VPS installer", () => {
     execFileSync("bash", ["-n", ...scripts], { cwd: root });
   });
 
-  it("installs from main by default and pins the commit, not the branch", () => {
+  it("installs the latest release by default, pinned to its commit and images", () => {
     const installer = readFileSync(path.join(root, "install.sh"), "utf8");
-    expect(installer).toContain("ref=${SWE_REF:-main}");
+    expect(installer).toContain("/releases/latest");
     expect(installer).toContain("application/vnd.github.sha");
     expect(installer).toContain("codeload.github.com/$repository/tar.gz/$revision");
+    expect(installer).toContain('"$STAGE/source/.release-version"');
+  });
+
+  it("pulls published release images and builds everything else", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "swe-release-test-"));
+    const dir = directory.replaceAll("\\", "/");
+    const commit = "0123456789abcdef0123456789abcdef01234567";
+    try {
+      expect(lib(`is_published_version 0.1.0-main.42.0123456789ab`).status).toBe(0);
+      expect(lib(`is_published_version 0.1.0-feat-x.3.0123456789ab`).status).toBe(0);
+      expect(lib(`is_published_version vps-0123456789ab`).status).not.toBe(0);
+      expect(lib(`source_version '${dir}' ${commit}`).stdout).toBe("vps-0123456789ab");
+      writeFileSync(path.join(directory, ".release-version"), "0.1.0-main.42.0123456789ab\n");
+      expect(lib(`source_version '${dir}' ${commit}`).stdout).toBe("0.1.0-main.42.0123456789ab");
+      expect(lib(`source_version '${dir}' ffffffffffff${commit.slice(12)}`).status).not.toBe(0);
+      const settings = (version: string) => lib(
+        `set_image_settings '${dir}/compose.env' ${version} SpaceWorks-HQ/SpaceWorks-Events; cat '${dir}/compose.env'`,
+      ).stdout;
+      expect(settings("0.1.0-main.42.0123456789ab")).toBe([
+        "SWE_APP_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events'",
+        "SWE_MIGRATOR_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-migrator'",
+        "SWE_OPS_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-ops'", "",
+      ].join("\n"));
+      expect(settings("vps-0123456789ab")).toBe("SWE_APP_IMAGE=''\nSWE_MIGRATOR_IMAGE=''\nSWE_OPS_IMAGE=''\n");
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("publishes generic multi-platform images and releases only when VERSION changes", () => {
+    const workflow = readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8");
+    expect(readFileSync(path.join(root, "VERSION"), "utf8").trim()).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(workflow).toContain("NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid");
+    expect(workflow).toContain("ubuntu-24.04-arm");
+    expect(workflow).toContain('previous=$(git show HEAD^:VERSION');
+    for (const image of ["spaceworks-events", "spaceworks-events-migrator", "spaceworks-events-ops"]) expect(workflow).toContain(image);
+    expect(workflow).not.toMatch(/secrets\.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY|vars\.NEXT_PUBLIC_BASE_URL/);
+    const entrypoint = readFileSync(path.join(root, "scripts/docker-entrypoint.sh"), "utf8");
+    expect(entrypoint).toContain("spaceworks-events-origin.invalid");
   });
 
   it("accepts only well-formed answers", () => {
