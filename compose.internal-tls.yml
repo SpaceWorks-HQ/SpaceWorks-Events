@@ -1,0 +1,14 @@
+# Added by scripts/vps-compose.sh when compose.env has SWE_CADDY_TLS='internal':
+# for LAN and test installs whose hostnames are not publicly reachable. Caddy
+# issues certificates from its own local CA, and the frontend, which calls the
+# backend by its HTTPS name, trusts that CA. Browsers will warn until the CA
+# (caddy_data: caddy/pki/authorities/local/root.crt) is trusted on each device.
+services:
+  proxy:
+    environment:
+      SWE_CADDY_OPTIONS: local_certs
+  frontend:
+    environment:
+      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+    volumes:
+      - caddy_data:/caddy-data:ro

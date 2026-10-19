@@ -86,6 +86,14 @@ conf_set() {
   mv -f "$file.new" "$file"
 }
 
+conf_unset() {
+  local file=$1 name=$2
+  [[ -f "$file" ]] || return 0
+  { grep -v "^$name=" "$file" || true; } > "$file.new"
+  chmod 600 "$file.new"
+  mv -f "$file.new" "$file"
+}
+
 install_conf() { printf '%s/install.conf' "$SWE_DIR"; }
 
 # The configuration directory recorded by the installer, else the default.
@@ -121,23 +129,28 @@ source_version() {
 # Point compose.env at the images for VERSION: GitHub Packages for a published
 # release, local names (compose.production.yml defaults) for a source build.
 set_image_settings() {
-  local file=$1 version=$2 repository=$3 prefix=''
+  local file=$1 version=$2 repository=$3 prefix='' name
   if is_published_version "$version"; then
     prefix="ghcr.io/$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')/spaceworks-events"
   fi
-  conf_set "$file" SWE_APP_IMAGE "$prefix"
-  conf_set "$file" SWE_MIGRATOR_IMAGE "${prefix:+$prefix-migrator}"
-  conf_set "$file" SWE_OPS_IMAGE "${prefix:+$prefix-ops}"
+  conf_set "$file" SWE_BACKEND_IMAGE "${prefix:+$prefix-backend}"
+  conf_set "$file" SWE_FRONTEND_IMAGE "${prefix:+$prefix-frontend}"
+  # Settings of releases before 0.9.1, which had separate migrator and ops images.
+  for name in SWE_APP_IMAGE SWE_MIGRATOR_IMAGE SWE_OPS_IMAGE; do conf_unset "$file" "$name"; done
 }
 
-# Pull a published release's images, or build them from this source.
+# Pull a published release's images, or build them from this source. The
+# backend image also runs migrations and the operator tools; the frontend
+# image is needed only by the split layout.
 fetch_images() {
-  if is_published_version "$1"; then
+  local version=$1 layout=${2:-single} services=(app)
+  [[ "$layout" != split ]] || services+=(frontend)
+  if is_published_version "$version"; then
     say 'Downloading the release images from GitHub Packages.'
-    compose pull --quiet ops migrator app
+    compose pull --quiet "${services[@]}"
   else
     say 'Building images from source. This takes several minutes on a small server.'
-    compose build ops migrator app
+    compose build "${services[@]}"
   fi
 }
 

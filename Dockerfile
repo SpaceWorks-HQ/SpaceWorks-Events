@@ -77,8 +77,59 @@ RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
     export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; \
     npm run build
 
-# Stage 3: Production runner (keep this the LAST stage: Render builds the final
-# stage because a Blueprint cannot select a build target)
+# The separately deployable rendering frontend (the frontend/ workspace),
+# published as spaceworks-events-frontend. It holds no database, mail, Redis or
+# storage client and reaches the backend only through the authenticated gateway.
+FROM node:22-alpine AS frontend-builder
+WORKDIR /app
+ARG NEXT_PUBLIC_BASE_URL
+ARG NEXT_PUBLIC_BACKEND_ORIGIN
+ENV NEXT_PUBLIC_BASE_URL=$NEXT_PUBLIC_BASE_URL
+ENV NEXT_PUBLIC_BACKEND_ORIGIN=$NEXT_PUBLIC_BACKEND_ORIGIN
+ENV BACKEND_ORIGIN=$NEXT_PUBLIC_BACKEND_ORIGIN
+ARG NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+COPY --from=deps /app ./
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV SWE_DISABLE_BUILD_CACHE=1
+ENV SWE_FRONTEND_STANDALONE=1
+RUN npx prisma generate
+RUN --mount=type=secret,id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY \
+    if [ -s /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY ]; then \
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="$(cat /run/secrets/NEXT_SERVER_ACTIONS_ENCRYPTION_KEY)"; \
+    fi; \
+    if [ -z "$NEXT_SERVER_ACTIONS_ENCRYPTION_KEY" ]; then \
+      echo "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is required: pass it as a BuildKit secret or build arg." >&2; \
+      exit 1; \
+    fi; \
+    export NEXT_SERVER_ACTIONS_ENCRYPTION_KEY; \
+    npm run build:frontend
+
+FROM node:22-alpine AS frontend
+WORKDIR /app
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
+# Standalone output for a workspace keeps its path below the repository root.
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/standalone ./
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/.next/static ./frontend/.next/static
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/frontend/public ./frontend/public
+COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN rm -f frontend/.env frontend/.env.local frontend/.env.production .env
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+# Where docker-entrypoint.sh finds the build to apply the public origins to.
+ENV SWE_NEXT_DIR=/app/frontend/.next
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/sw.js').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["node", "frontend/server.js"]
+
+# Stage 3: Production runner, published as spaceworks-events-backend (keep this
+# the LAST stage: Render builds the final stage because a Blueprint cannot
+# select a build target). The same image applies migrations (`migrate`) and
+# runs the VPS operator tools (scripts/, docker/vps/) as root.
 FROM node:22-alpine AS runner
 WORKDIR /app
 
@@ -87,7 +138,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 # Sharp renders ticket and certificate SVGs on the server. Alpine has no
 # system fonts by default, which otherwise turns every text glyph into a box.
-RUN apk add --no-cache font-dejavu && fc-cache -f
+# OpenSSL creates the VPS's private CA and service certificates (ops role).
+RUN apk add --no-cache font-dejavu openssl && fc-cache -f
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -105,6 +157,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 # Prisma CLI for the optional MIGRATE_ON_START=1 path (root-owned, read-only).
 COPY --from=prisma-cli /opt/prisma-cli/node_modules /opt/prisma-cli/node_modules
 COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Operator tools (setup, preflight, schema checks, smoke tests), root-owned.
+COPY scripts/*.mjs ./scripts/
+COPY docker/vps ./docker/vps
 
 # Next's standalone trace may include dotenv files when a build is performed
 # from a developer checkout. Secrets belong only in the runtime environment.

@@ -44,30 +44,24 @@ port private and expose it only through the trusted proxy.
 
 Every green build of `main` publishes public images to GitHub Packages that
 work for any installation (see [Releases and container images](CONTAINER_IMAGES.md)):
-pull `ghcr.io/spaceworks-hq/spaceworks-events:<version>` and
-`ghcr.io/spaceworks-hq/spaceworks-events-migrator:<version>` and skip this
-section. The commands below build your own images instead.
-
-Build the application and migration targets from the same reviewed commit and
-give both the same immutable release version:
+pull `ghcr.io/spaceworks-hq/spaceworks-events-backend:<version>` and skip this
+section. The same image runs the application and, with the command `migrate`,
+the one-shot migrations. The commands below build your own image instead.
 
 ```bash
 export SWE_VERSION=1.0.0
 
 docker build \
-  --target migrator \
-  --tag ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION} \
-  .
-
-docker build \
   --target runner \
   --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" \
-  --tag ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION} \
+  --tag ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} \
   .
 ```
 
-Export `NEXT_PUBLIC_BASE_URL` with the production HTTPS origin before building.
-It is compiled into the image and must match the runtime canonical URL.
+Export `NEXT_PUBLIC_BASE_URL` with the production HTTPS origin before building;
+it is compiled into the image and must match the runtime canonical URL. (Build
+with `https://spaceworks-events-origin.invalid` instead for an image that takes
+its origin at start, like the published one.)
 
 The Server Actions key is passed through a BuildKit secret mount and is required
 only by the application build. (Builders without BuildKit secrets, such as
@@ -118,16 +112,15 @@ deployment record.
 
 ## First installation
 
-For a new empty database, run the one-shot migration image before starting the
-application:
+For a new empty database, run the image's one-shot `migrate` role before
+starting the application:
 
 ```bash
-docker pull ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION}
-docker pull ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
+docker pull ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION}
 
 docker run --rm \
   --env-file /secure/path/swevents.env \
-  ghcr.io/spaceworks-hq/spaceworks-events-migrator:${SWE_VERSION}
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} migrate
 
 node --env-file=/secure/path/swevents.env scripts/verify-production-schema.mjs
 ```
@@ -141,7 +134,7 @@ docker run -d \
   --restart unless-stopped \
   --env-file /secure/path/swevents.env \
   --publish 127.0.0.1:3000:3000 \
-  ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION}
 ```
 
 If the proxy is another container, use a private Docker network instead of a
@@ -171,8 +164,8 @@ Use this order for every release:
 
 1. Complete the [production release checklist](PRODUCTION_RELEASE.md).
 2. Take and verify a database backup and record the current application image.
-3. Pull the new application and migrator images.
-4. Run the new migrator image once. A failed migration blocks the rollout.
+3. Pull the new backend image.
+4. Run it once with the command `migrate`. A failed migration blocks the rollout.
 5. Replace the application container with the new immutable image.
 6. Verify liveness, authenticated database readiness, outbox heartbeat, email
    delivery, Redis health, and error rate before completing the deployment.
@@ -188,7 +181,7 @@ docker run -d \
   --restart unless-stopped \
   --env-file /secure/path/swevents.env \
   --publish 127.0.0.1:3000:3000 \
-  ghcr.io/spaceworks-hq/spaceworks-events:${SWE_VERSION}
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION}
 ```
 
 Remove `swevents-previous` only after the new release is healthy. Reverting the
@@ -213,21 +206,21 @@ The `runner` image bundles a pinned Prisma CLI and the migrations. With
 `MIGRATE_ON_START=1`, its entrypoint (`scripts/docker-entrypoint.sh`) runs
 `prisma migrate deploy` before starting the server and exits non-zero if a
 migration fails. Use this only where no separate release step exists (the
-Render free plan); with several replicas, keep the separate migrator step so
+Render free plan); with several replicas, keep the separate `migrate` step so
 one release applies migrations exactly once.
 
 Migrations connect through `DIRECT_URL` and fall back to `DATABASE_URL`. Set
 `DIRECT_URL` to a direct or session-mode connection whenever `DATABASE_URL`
 goes through a transaction pooler (for example Supabase on port 6543 with
-`pgbouncer=true`). This applies to the migrator image as well.
+`pgbouncer=true`). This applies to the `migrate` role as well.
 
 ## Current image-packaging limitations
 
-The separate `ops` target packages setup, preflight, schema and archive tools
-for the [VPS deployment](DEPLOYMENT_VPS.md); it is not an application server.
-The `runner` image does not contain operational scripts. The `migrator` image
-contains Prisma migrations but not the storage migration, backup, or restore
-scripts. Consequently:
+The `runner` image also carries the [VPS](DEPLOYMENT_VPS.md) operator tools
+(`docker/vps/*.mjs`: setup, preflight, schema checks and smoke tests), which the
+VPS stack runs as its `ops` service. It contains Prisma migrations but not the
+storage migration, backup, or restore scripts' PostgreSQL client tools.
+Consequently:
 
 - run `npm run storage:migrate` from a trusted checkout when legacy
   database-backed assets still exist; and
