@@ -20,6 +20,8 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+  push:  # TEMPORARY: test the pipeline from this branch; removed before merging
+    branches: [feat/release-images]
 
 permissions:
   contents: read
@@ -32,7 +34,7 @@ jobs:
   prepare:
     # Never expose publishing credentials to a pull request or fork workflow.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
@@ -66,7 +68,7 @@ jobs:
             echo "::error file=VERSION::VERSION must be a version like 1.2.3 (got '$base')"
             exit 1
           fi
-          if [[ "$EVENT" == workflow_dispatch && "$BRANCH" != main ]]; then
+          if [[ "$EVENT" != workflow_run && "$BRANCH" != main ]]; then
             label=$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-30)
             label=${label%-}
             release=true prerelease=true
