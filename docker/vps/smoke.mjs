@@ -31,8 +31,10 @@ try {
     await tx.organisation.delete({ where: { id: org.id } });
     throw rollback;
   }).catch((error) => { if (error !== rollback) throw error; });
+  // Pages come from the website container in the split layout.
+  const site = process.env.SWE_LAYOUT === "split" ? "http://frontend:3000" : "http://app:3000";
   for (const path of ["/", "/login", "/api/health"]) {
-    const response = await fetch(`http://app:3000${path}`, { signal: AbortSignal.timeout(15_000), redirect: "manual" });
+    const response = await fetch(`${site}${path}`, { signal: AbortSignal.timeout(15_000), redirect: "manual" });
     await response.body?.cancel();
     assert.equal(response.status, 200, `Application route ${path} must render`);
   }

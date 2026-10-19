@@ -1,13 +1,13 @@
 name: Release
 run-name: Release ${{ github.event_name == 'workflow_run' && 'main' || github.ref_name }}@${{ github.event.workflow_run.head_sha || github.sha }}
 
-# Every commit on main that passes the Quality gate publishes the three
-# container images to GitHub Packages, for linux/amd64 and linux/arm64:
-#   ghcr.io/<owner>/spaceworks-events          the application (runner target)
-#   ghcr.io/<owner>/spaceworks-events-migrator one-shot database migrations
-#   ghcr.io/<owner>/spaceworks-events-ops      VPS setup, checks and backups
-# The images are the same for every installation: the public origin is a
-# placeholder that scripts/docker-entrypoint.sh replaces at start, and each
+# Every commit on main that passes the Quality gate publishes two container
+# images to GitHub Packages, for linux/amd64 and linux/arm64, as SpaceWorks does:
+#   ghcr.io/<owner>/spaceworks-events-backend   the application and API (runner
+#       target); the same image runs migrations (`migrate`) and the VPS tools
+#   ghcr.io/<owner>/spaceworks-events-frontend  the website alone (frontend/)
+# The images are the same for every installation: public origins are
+# placeholders that scripts/docker-entrypoint.sh replaces at start, and each
 # installation supplies its own NEXT_SERVER_ACTIONS_ENCRYPTION_KEY at runtime.
 #
 # Image versions look like 0.1.0-main.42.a1b2c3d4e5f6 (VERSION, run, commit).
@@ -133,32 +133,8 @@ jobs:
           echo "::add-mask::$key"
           echo "BUILD_ACTIONS_KEY=$key" >> "$GITHUB_ENV"
 
-      - name: Build migrator
-        id: migrator
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: migrator
-          platforms: ${{ matrix.platform }}
-          labels: ${{ env.LABELS }}
-          outputs: type=image,name=${{ env.REGISTRY }}/spaceworks-events-migrator,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=migrator-${{ matrix.runner }}
-          cache-to: type=gha,mode=max,scope=migrator-${{ matrix.runner }}
-
-      - name: Build ops
-        id: ops
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          target: ops
-          platforms: ${{ matrix.platform }}
-          labels: ${{ env.LABELS }}
-          outputs: type=image,name=${{ env.REGISTRY }}/spaceworks-events-ops,push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=ops-${{ matrix.runner }}
-          cache-to: type=gha,mode=max,scope=ops-${{ matrix.runner }}
-
-      - name: Build application
-        id: app
+      - name: Build backend
+        id: backend
         uses: docker/build-push-action@v7
         env:
           NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ env.BUILD_ACTIONS_KEY }}
@@ -167,26 +143,44 @@ jobs:
           target: runner
           platforms: ${{ matrix.platform }}
           labels: ${{ env.LABELS }}
-          outputs: type=image,name=${{ env.REGISTRY }}/spaceworks-events,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ env.REGISTRY }}/spaceworks-events-backend,push-by-digest=true,name-canonical=true,push=true
           build-args: |
             NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid
           secret-envs: |
             NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
-          cache-from: type=gha,scope=app-${{ matrix.runner }}
-          cache-to: type=gha,mode=max,scope=app-${{ matrix.runner }}
+          cache-from: type=gha,scope=backend-${{ matrix.runner }}
+          cache-to: type=gha,mode=max,scope=backend-${{ matrix.runner }}
           # The throwaway key changes every run; never reuse a cached build stage.
           no-cache-filters: builder
 
+      - name: Build frontend
+        id: frontend
+        uses: docker/build-push-action@v7
+        env:
+          NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${{ env.BUILD_ACTIONS_KEY }}
+        with:
+          context: .
+          target: frontend
+          platforms: ${{ matrix.platform }}
+          labels: ${{ env.LABELS }}
+          outputs: type=image,name=${{ env.REGISTRY }}/spaceworks-events-frontend,push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid
+            NEXT_PUBLIC_BACKEND_ORIGIN=https://spaceworks-events-backend.invalid
+          secret-envs: |
+            NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+          cache-from: type=gha,scope=frontend-${{ matrix.runner }}
+          cache-to: type=gha,mode=max,scope=frontend-${{ matrix.runner }}
+          no-cache-filters: frontend-builder
+
       - name: Record digests
         env:
-          APP: ${{ steps.app.outputs.digest }}
-          MIGRATOR: ${{ steps.migrator.outputs.digest }}
-          OPS: ${{ steps.ops.outputs.digest }}
+          BACKEND: ${{ steps.backend.outputs.digest }}
+          FRONTEND: ${{ steps.frontend.outputs.digest }}
         run: |
-          mkdir -p digests/spaceworks-events digests/spaceworks-events-migrator digests/spaceworks-events-ops
-          touch "digests/spaceworks-events/${APP#sha256:}" \
-            "digests/spaceworks-events-migrator/${MIGRATOR#sha256:}" \
-            "digests/spaceworks-events-ops/${OPS#sha256:}"
+          mkdir -p digests/spaceworks-events-backend digests/spaceworks-events-frontend
+          touch "digests/spaceworks-events-backend/${BACKEND#sha256:}" \
+            "digests/spaceworks-events-frontend/${FRONTEND#sha256:}"
       - uses: actions/upload-artifact@v4
         with:
           name: digests-${{ matrix.runner }}
@@ -224,7 +218,7 @@ jobs:
           # As in SpaceWorks, the rolling tags (main, latest and the series, e.g.
           # 0.1) move only for main builds that are still the head of main.
           head=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
-          for image in spaceworks-events spaceworks-events-migrator spaceworks-events-ops; do
+          for image in spaceworks-events-backend spaceworks-events-frontend; do
             name="ghcr.io/$OWNER/$image"
             tags=(--tag "$name:$VERSION" --tag "$name:sha-${SHA:0:12}")
             if [[ "$PRERELEASE" == false && "$SHA" == "$head" ]]; then
@@ -261,7 +255,7 @@ jobs:
             title="$title (test build $VERSION)"
             flags=(--prerelease --latest=false)
             install="curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/v$VERSION/install.sh | bash -s -- --release v$VERSION"
-          elif [[ "$EVENT" != workflow_dispatch             && "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$BASE-main." --jq length)" != 0 ]]; then
+          elif [[ "$EVENT" != workflow_dispatch && "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$BASE-main." --jq length)" != 0 ]]; then
             echo "A concurrent build already released $BASE; publishing images only."
             exit 0
           fi
@@ -275,9 +269,8 @@ jobs:
 
           Container images (linux/amd64, linux/arm64):
 
-          - \`ghcr.io/$OWNER/spaceworks-events:$VERSION\`
-          - \`ghcr.io/$OWNER/spaceworks-events-migrator:$VERSION\`
-          - \`ghcr.io/$OWNER/spaceworks-events-ops:$VERSION\`
+          - \`ghcr.io/$OWNER/spaceworks-events-backend:$VERSION\`: application and API; also runs migrations (\`migrate\`) and the VPS tools
+          - \`ghcr.io/$OWNER/spaceworks-events-frontend:$VERSION\`: the website, for the split layout
 
           Built from \`$SHA\`.
           EOF

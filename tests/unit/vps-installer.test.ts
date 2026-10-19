@@ -56,12 +56,14 @@ describe("VPS installer", () => {
       const settings = (version: string) => lib(
         `set_image_settings '${dir}/compose.env' ${version} SpaceWorks-HQ/SpaceWorks-Events; cat '${dir}/compose.env'`,
       ).stdout;
+      // A 0.9.0 installation's separate migrator/ops image settings are dropped.
+      writeFileSync(path.join(directory, "compose.env"), "SWE_VERSION='0.9.0-main.1.0123456789ab'\nSWE_APP_IMAGE='x'\nSWE_MIGRATOR_IMAGE='y'\nSWE_OPS_IMAGE='z'\n");
       expect(settings("0.1.0-main.42.0123456789ab")).toBe([
-        "SWE_APP_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events'",
-        "SWE_MIGRATOR_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-migrator'",
-        "SWE_OPS_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-ops'", "",
+        "SWE_VERSION='0.9.0-main.1.0123456789ab'",
+        "SWE_BACKEND_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-backend'",
+        "SWE_FRONTEND_IMAGE='ghcr.io/spaceworks-hq/spaceworks-events-frontend'", "",
       ].join("\n"));
-      expect(settings("vps-0123456789ab")).toBe("SWE_APP_IMAGE=''\nSWE_MIGRATOR_IMAGE=''\nSWE_OPS_IMAGE=''\n");
+      expect(settings("vps-0123456789ab")).toBe("SWE_VERSION='0.9.0-main.1.0123456789ab'\nSWE_BACKEND_IMAGE=''\nSWE_FRONTEND_IMAGE=''\n");
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 
@@ -72,10 +74,25 @@ describe("VPS installer", () => {
     expect(workflow).toContain("ubuntu-24.04-arm");
     expect(workflow).toContain("matching-refs/tags/v$base-main.");
     expect(workflow).not.toContain("TEMPORARY");
-    for (const image of ["spaceworks-events", "spaceworks-events-migrator", "spaceworks-events-ops"]) expect(workflow).toContain(image);
+    for (const image of ["spaceworks-events-backend", "spaceworks-events-frontend"]) expect(workflow).toContain(image);
+    expect(workflow).not.toMatch(/spaceworks-events-(migrator|ops)\b/);
+    expect(workflow).toContain("NEXT_PUBLIC_BACKEND_ORIGIN=https://spaceworks-events-backend.invalid");
     expect(workflow).not.toMatch(/secrets\.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY|vars\.NEXT_PUBLIC_BASE_URL/);
     const entrypoint = readFileSync(path.join(root, "scripts/docker-entrypoint.sh"), "utf8");
     expect(entrypoint).toContain("spaceworks-events-origin.invalid");
+    expect(entrypoint).toContain("spaceworks-events-backend.invalid");
+  });
+
+  it("runs the split layout as website and API containers behind one Caddy", () => {
+    const compose = readFileSync(path.join(root, "compose.production.yml"), "utf8");
+    expect(compose).toMatch(/migrator:\n(?:.*\n)*?\s+command: \["migrate"\]/);
+    expect(compose).toMatch(/frontend:\n(?:.*\n)*?\s+profiles: \[split\]/);
+    expect(compose).toContain('aliases: ["${PUBLIC_HOST}"]');
+    const split = readFileSync(path.join(root, "docker/vps/Caddyfile.split"), "utf8");
+    expect(split).toContain("reverse_proxy frontend:3000");
+    expect(split).toContain("reverse_proxy app:3000");
+    const wrapper = readFileSync(path.join(root, "scripts/vps-compose.sh"), "utf8");
+    expect(wrapper).toContain("COMPOSE_PROFILES=split");
   });
 
   it("accepts only well-formed answers", () => {
@@ -135,6 +152,26 @@ describe("VPS installer", () => {
       expect(run("renew-certificates").status).toBe(0);
       expect(readFileSync(path.join(directory, "tls/ca.key")).equals(ca)).toBe(true);
       expect(readFileSync(path.join(directory, "app.env"), "utf8") === app).toBe(true);
+      expect(readFileSync(path.join(directory, "compose.env"), "utf8")).toContain("SWE_LAYOUT='netlify'");
+      expect(frontend).toContain("FRONTEND_TRUSTED_IP_HEADER='x-nf-client-connection-ip'");
     } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("records the split and single layouts for Compose and Caddy", { timeout: 30_000 }, () => {
+    for (const [args, expected] of [
+      [["api.events.example.com", "admin@example.com", "v1", "events.example.com", "split"],
+        ["SWE_LAYOUT='split'", "SITE_HOST='events.example.com'", "SWE_CADDYFILE='Caddyfile.split'", "PUBLIC_ORIGIN='https://events.example.com'"]],
+      [["events.example.com", "admin@example.com", "v1"], ["SWE_LAYOUT='single'", "PUBLIC_ORIGIN='https://events.example.com'"]],
+    ] as const) {
+      const directory = mkdtempSync(path.join(tmpdir(), "swe-layout-test-"));
+      try {
+        const result = spawnSync(process.execPath, ["docker/vps/setup.mjs", ...args], { cwd: root, env: { ...process.env, SWE_SETUP_CONFIG_DIR: directory }, encoding: "utf8" });
+        expect(result.status, result.stderr).toBe(0);
+        const compose = readFileSync(path.join(directory, "compose.env"), "utf8");
+        for (const line of expected) expect(compose).toContain(line);
+        if (args[4] === "split") expect(readFileSync(path.join(directory, "frontend.env"), "utf8")).toContain("FRONTEND_TRUSTED_IP_HEADER='x-real-ip'");
+        else expect(compose).not.toContain("SWE_CADDYFILE");
+      } finally { rmSync(directory, { recursive: true, force: true }); }
+    }
   });
 });

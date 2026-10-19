@@ -1,18 +1,31 @@
-# Full single-VPS deployment. Use scripts/vps-compose.sh, not docker-compose.yml.
+# The VPS deployment. Use scripts/vps-compose.sh, not docker-compose.yml.
+# Layouts (SWE_LAYOUT in compose.env; vps-compose.sh turns on the profile):
+#   split    website (frontend) and API (backend) containers on this VPS, two hostnames
+#   single   one app container serves the website and the API, one hostname
+#   netlify  the website runs on Netlify; this VPS serves the API
+# Published releases set SWE_BACKEND_IMAGE / SWE_FRONTEND_IMAGE to
+# ghcr.io/<owner>/spaceworks-events-backend|frontend; otherwise the images are
+# built here under the local names below. Both carry placeholder public
+# origins that the entrypoint replaces, so a hostname change needs no rebuild.
 x-logging: &logging
   driver: json-file
   options:
     max-size: "10m"
     max-file: "3"
-x-app: &app
-  # Published releases set SWE_*_IMAGE to ghcr.io/<owner>/spaceworks-events*;
-  # without them, the images are built locally under these names.
-  image: ${SWE_APP_IMAGE:-swevents-app}:${SWE_VERSION:?Set a release version}
+x-backend: &backend
+  image: ${SWE_BACKEND_IMAGE:-swevents-backend}:${SWE_VERSION:?Set a release version}
   env_file: ${SWE_CONFIG_DIR:?Set an external configuration directory}/app.env
   volumes:
     - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
   networks: [edge, data]
   logging: *logging
+x-build: &build
+  context: .
+  args:
+    NEXT_PUBLIC_BASE_URL: https://spaceworks-events-origin.invalid
+    NEXT_PUBLIC_BACKEND_ORIGIN: https://spaceworks-events-backend.invalid
+  # A throwaway build key (see secrets below); containers get theirs at runtime.
+  secrets: [NEXT_SERVER_ACTIONS_ENCRYPTION_KEY]
 
 services:
   postgres:
@@ -84,11 +97,10 @@ services:
     networks: [data]
     logging: *logging
 
+  # The backend image's migrate role: applies pending migrations once, then exits.
   migrator:
-    image: ${SWE_MIGRATOR_IMAGE:-swevents-migrator}:${SWE_VERSION}
-    build:
-      context: .
-      target: migrator
+    image: ${SWE_BACKEND_IMAGE:-swevents-backend}:${SWE_VERSION}
+    command: ["migrate"]
     restart: "no"
     env_file: ${SWE_CONFIG_DIR}/migrator.env
     volumes:
@@ -98,34 +110,52 @@ services:
     networks: [data]
     logging: *logging
 
+  # The backend: the whole application in the single layout, the API otherwise.
   app:
-    <<: *app
+    <<: *backend
     restart: unless-stopped
     build:
-      context: .
+      <<: *build
       target: runner
-      args:
-        NEXT_PUBLIC_BASE_URL: ${PUBLIC_ORIGIN:-https://${PUBLIC_HOST:?Set the public hostname}}
-      secrets: [NEXT_SERVER_ACTIONS_ENCRYPTION_KEY]
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
       storage-init: { condition: service_completed_successfully }
       migrator: { condition: service_completed_successfully }
 
+  # The website in the split layout. It holds no database, Redis, storage or
+  # mail credentials and reaches the backend through its HTTPS name, which the
+  # proxy answers on the internal network.
+  frontend:
+    image: ${SWE_FRONTEND_IMAGE:-swevents-frontend}:${SWE_VERSION}
+    profiles: [split]
+    restart: unless-stopped
+    build:
+      <<: *build
+      target: frontend
+    env_file: ${SWE_CONFIG_DIR}/frontend.env
+    depends_on:
+      app: { condition: service_healthy }
+    networks: [edge]
+    logging: *logging
+
   proxy:
     image: caddy:2-alpine
     restart: unless-stopped
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST}
+      SITE_HOST: ${SITE_HOST:-}
+      SWE_CADDY_OPTIONS: ${SWE_CADDY_OPTIONS:-}
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes:
-      - ./docker/vps/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./docker/vps/${SWE_CADDYFILE:-Caddyfile}:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
       app: { condition: service_healthy }
-    networks: [edge]
+    networks:
+      edge:
+        aliases: ["${PUBLIC_HOST}"]
     logging: *logging
 
   scheduler:
@@ -141,13 +171,14 @@ services:
     networks: [edge]
     logging: *logging
 
+  # The backend image's operator tools (setup, preflight, checks), run on demand.
   ops:
-    <<: *app
-    image: ${SWE_OPS_IMAGE:-swevents-ops}:${SWE_VERSION}
+    <<: *backend
     profiles: [tools]
-    build:
-      context: .
-      target: ops
+    user: "0:0"
+    command: ["node", "scripts/check-production-env.mjs"]
+    environment:
+      SWE_LAYOUT: ${SWE_LAYOUT:-single}
     volumes:
       - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
       - ${SWE_CONFIG_DIR}/backups:/app/backups
@@ -165,5 +196,7 @@ volumes:
   caddy_config:
 
 secrets:
+  # A throwaway key that vps-compose.sh generates per run: builds never see an
+  # installation's real key, which containers receive at runtime instead.
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:
-    file: ${SWE_CONFIG_DIR}/actions-key
+    environment: SWE_BUILD_KEY

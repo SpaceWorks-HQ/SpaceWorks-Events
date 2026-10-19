@@ -6,9 +6,12 @@ import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
 process.umask(0o077);
 const dir = process.env.SWE_SETUP_CONFIG_DIR || "/config";
 if (!dir.startsWith("/") || dir.includes("\0")) throw new Error("Use an absolute external configuration directory.");
-const [hostInput, email, version, frontendInput] = process.argv.slice(2);
+// Layout: with a frontend hostname, "split" (frontend container on this VPS)
+// or "netlify" (the default, for compatibility); without one, "single".
+const [hostInput, email, version, frontendInput, layoutInput] = process.argv.slice(2);
 const host = hostInput?.toLowerCase();
 const frontendHost = frontendInput?.toLowerCase();
+const layout = frontendHost ? (layoutInput === "split" ? "split" : "netlify") : "single";
 const hostname = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/i;
 if (frontendHost && (!hostname.test(frontendHost) || frontendHost === host)) throw new Error("Split mode requires a distinct frontend hostname.");
 const publicOrigin = `https://${frontendHost || host}`;
@@ -42,12 +45,16 @@ const adminPassword = hex(), appPassword = hex(), redisPassword = hex(), storage
 const actionsKey = key(), cronSecret = hex(), readinessSecret = hex();
 const dbUrl = (user, password) => `postgresql://${user}:${password}@postgres:5432/swevents?sslmode=require&sslcert=/tls/ca.crt&sslaccept=strict`;
 const envText = (values) => Object.entries(values).map(([name, value]) => `${name}='${String(value).replaceAll("'", "\\'")}'`).join("\n") + "\n";
-write("compose.env", envText({ PUBLIC_HOST: host, PUBLIC_ORIGIN: publicOrigin, SWE_VERSION: version }));
+write("compose.env", envText({
+  PUBLIC_HOST: host, PUBLIC_ORIGIN: publicOrigin, SWE_VERSION: version, SWE_LAYOUT: layout,
+  ...(layout === "split" ? { SITE_HOST: frontendHost, SWE_CADDYFILE: "Caddyfile.split" } : {}),
+}));
 const peerKey = frontendHost ? hex() : undefined;
 if (frontendHost) write("frontend.env", envText({
   NEXT_PUBLIC_BASE_URL: publicOrigin, BACKEND_ORIGIN: `https://${host}`,
   NEXT_PUBLIC_BACKEND_ORIGIN: `https://${host}`, FRONTEND_GATEWAY_SECRET: peerKey,
-  FRONTEND_TRUSTED_IP_HEADER: "x-nf-client-connection-ip",
+  // Caddy on this VPS overwrites X-Real-IP; Netlify sets its own client-IP header.
+  FRONTEND_TRUSTED_IP_HEADER: layout === "split" ? "x-real-ip" : "x-nf-client-connection-ip",
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: key(),
 }));
 write("actions-key", actionsKey);

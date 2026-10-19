@@ -127,6 +127,8 @@ main() {
     || die 'The repository must be a GitHub owner/name.'
   RUN_ENV=(env "SWE_DIR=$install_dir" "SWE_REPOSITORY=$repository")
   [[ -z "${SWE_CONFIG_DIR:-}" ]] || RUN_ENV+=("SWE_CONFIG_DIR=$SWE_CONFIG_DIR")
+  # LAN and test installs whose hostnames are not public: Caddy's local CA.
+  [[ "${SWE_CADDY_TLS:-}" != internal ]] || RUN_ENV+=(SWE_CADDY_TLS=internal)
 
   if [[ -n "$installed" ]]; then
     if [[ -z "$action" ]]; then

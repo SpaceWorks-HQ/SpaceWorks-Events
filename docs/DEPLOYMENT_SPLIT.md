@@ -15,6 +15,11 @@ thin action/API proxies, so this is a Next.js deployment rather than a static SP
 | VPS private Docker network | TLS PostgreSQL, TLS/password Redis, private Silo S3 storage |
 | External operator services | Authenticated SMTP relay, monitoring, encrypted off-server backup/PITR |
 
+The same split also runs entirely on the VPS: the installer's default layout
+puts the website in the `spaceworks-events-frontend` container next to the
+backend, behind one Caddy (see [Hosting layouts](DEPLOYMENT_VPS.md#hosting-layouts)).
+This guide covers the Netlify variant.
+
 The [SpaceWorks reference](https://github.com/SpaceWorks-HQ/SpaceWorks) uses a
 Vite frontend and Django API. Events keeps its Next.js UI, sessions and Server
 Actions through explicit backend contracts. Both deployments must use the same
@@ -32,8 +37,8 @@ certificate. Use DNS-only API records initially so Caddy sees the real client IP
 
 Run the [curl installer](DEPLOYMENT_VPS.md#guided-installation), or run
 `sudo bash scripts/setup-vps.sh` from a reviewed checkout.
-Choose **2 = Netlify frontend + VPS backend**. Enter the API hostname, distinct
-frontend hostname, admin email and SMTP details. The generated external files are:
+Choose **3 = website on Netlify, API on this VPS**. Enter the API hostname, distinct
+website hostname, admin email and SMTP details. The generated external files are:
 
 - `compose.env`: `PUBLIC_HOST` for Caddy, `PUBLIC_ORIGIN` for the frontend and the immutable image version.
 - `app.env`: complete backend configuration; `AUTH_URL` and `NEXT_PUBLIC_BASE_URL` both equal the frontend HTTPS origin.
@@ -44,7 +49,7 @@ The manual equivalent adds the frontend hostname as the last setup argument:
 
 ```bash
 # /config is the owner-only external configuration mount in the ops container.
-node docker/vps/setup.mjs api.events.example.com admin@example.com release-version events.example.com
+node docker/vps/setup.mjs api.events.example.com admin@example.com release-version events.example.com netlify
 ```
 
 Run that command inside the ops container as in the VPS guide, configure SMTP,

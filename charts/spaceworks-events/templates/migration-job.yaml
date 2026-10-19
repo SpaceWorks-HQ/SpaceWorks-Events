@@ -32,7 +32,8 @@ spec:
         - name: migrate
           image: "{{ .Values.migration.image.repository }}:{{ default .Chart.AppVersion .Values.migration.image.tag }}"
           imagePullPolicy: {{ .Values.migration.image.pullPolicy }}
-          command: ["node", "scripts/prisma.mjs", "migrate", "deploy"]
+          # The backend image's migrate role (docker-entrypoint.sh).
+          args: ["migrate"]
           envFrom:
             - secretRef:
                 name: {{ required "existingSecret is required" .Values.existingSecret }}
