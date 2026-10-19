@@ -28,6 +28,12 @@ load_config_dir
 SWE_REPO_DIR=$source_dir
 has_objects=0
 [[ ! -d "$backup/objects" ]] || has_objects=1
+# Files are put back only into the bundled Silo; an external bucket is the provider's.
+[[ "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_STORAGE)" != external ]] || has_objects=0
+# The services that serve requests, as this installation runs them.
+serving=(app scheduler)
+[[ "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_CADDY_TLS)" = proxy ]] || serving+=(proxy)
+[[ "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_LAYOUT)" != split ]] || serving+=(frontend)
 if [[ $assume_yes = 0 ]]; then
   require_tty
   {
@@ -54,7 +60,7 @@ restart_on_failure() {
 }
 trap restart_on_failure EXIT
 stopped=1
-compose stop proxy scheduler app
+compose stop "${serving[@]}"
 compose exec postgres pg_restore -U swevents -d swevents --clean --if-exists --single-transaction --exit-on-error \
   < "$backup/database.dump"
 if [[ $has_objects = 1 ]]; then

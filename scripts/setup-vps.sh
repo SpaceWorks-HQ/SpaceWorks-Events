@@ -103,13 +103,16 @@ case $(uname -m) in
   x86_64|amd64|aarch64|arm64) ;;
   *) die "Unsupported architecture $(uname -m); use an x86_64 or arm64 server." ;;
 esac
-for port in 80 443; do
-  ! port_in_use "$port" || die "TCP port $port is already in use (another web server?). Free it, then rerun."
-done
 disk_mb=$(free_disk_mb /var/lib/docker)
 (( disk_mb >= 10240 )) || die "At least 10 GB of free disk is needed for images, data and backups; only $disk_mb MB is free."
 has_docker=0
 if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then has_docker=1; fi
+# compose.external-storage.yml uses `!override` (Compose 2.24.4 and later).
+if [[ $has_docker = 1 ]]; then
+  compose_version=$(docker compose version --short 2>/dev/null | sed 's/^v//')
+  printf '%s\n%s\n' 2.24.4 "$compose_version" | sort -V -C \
+    || die "Docker Compose ${compose_version:-unknown} is too old; 2.24.4 or newer is needed (Docker's official packages provide it)."
+fi
 # Published images only need memory to run; a source build needs about 4 GB.
 offer_swap=0 needed_mb=1800
 [[ $published = 1 ]] || needed_mb=3800
@@ -160,6 +163,39 @@ case $hosting_mode in
     ;;
 esac
 ask admin_email 'Super-admin email (sign up with it to administer this instance)' '' is_email 'Enter an email address.'
+cat >/dev/tty <<'EOF'
+
+HTTPS
+  1 = LAN or trial: Caddy issues its own certificate (browsers warn until it is trusted)
+  2 = automatic HTTPS: Caddy with Let's Encrypt; DNS must point at this server
+  3 = I already run a reverse proxy on this server; it forwards HTTPS to this stack
+EOF
+https_default=2
+[[ "${SWE_CADDY_TLS:-}" != internal ]] || https_default=1
+[[ "${SWE_CADDY_TLS:-}" != proxy ]] || https_default=3
+ask https_mode 'HTTPS' "$https_default" is_hosting 'Enter 1, 2 or 3.'
+acme_email=''
+[[ $https_mode != 2 ]] || ask acme_email 'Certificate email (Let'"'"'s Encrypt expiry notices)' "$admin_email" is_plain_email 'Enter a plain address such as you@example.com.'
+cat >/dev/tty <<'EOF'
+
+File storage (event covers, ID cards, uploads)
+  1 = bundled Silo object storage on this server
+  2 = an external S3-compatible bucket (Cloudflare R2, Amazon S3...): create a private
+      bucket and an access key limited to it first
+EOF
+is_choice2() { [[ "$1" =~ ^[12]$ ]]; }
+ask storage_mode 'File storage' 1 is_choice2 'Enter 1 or 2.'
+if [[ $storage_mode = 2 ]]; then
+  is_https_endpoint() { [[ "$1" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]]; }
+  is_bucket() { [[ "$1" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; }
+  is_region() { [[ "$1" =~ ^[a-z0-9-]{1,32}$ ]]; }
+  ask S3_ENDPOINT 'S3 endpoint' '' is_https_endpoint 'Enter the HTTPS endpoint, such as https://<account>.r2.cloudflarestorage.com.'
+  S3_ENDPOINT=${S3_ENDPOINT%/}
+  ask S3_REGION 'Region (R2: auto)' auto is_region 'Enter a region such as auto or eu-west-1.'
+  ask S3_BUCKET 'Bucket' '' is_bucket 'Enter a bucket name: lowercase letters, digits, dots and hyphens.'
+  ask S3_ACCESS_KEY_ID 'Access key ID' '' is_env_value "Enter the access key, without ' or \\ characters."
+  ask_secret S3_SECRET_ACCESS_KEY 'Secret access key (hidden)'
+fi
 printf '\nOutgoing email needs an authenticated SMTP relay on a verified sending domain (Brevo, Amazon SES, Postmark...).\n' >/dev/tty
 ask EMAIL_FROM 'Sender, as Name <address@your-verified-domain>' "Space Works Events <events@$site_host>" is_env_value "Enter a sender without ' or \\ characters."
 ask SMTP_HOST 'SMTP host' 'smtp-relay.brevo.com' is_hostname 'Enter the relay hostname, such as smtp-relay.brevo.com.'
@@ -170,10 +206,21 @@ SMTP_SECURE=false
 if [[ $SMTP_PORT = 465 ]]; then SMTP_SECURE=true; fi
 ask SMTP_USER 'SMTP login' '' is_env_value "Enter the login, without ' or \\ characters."
 ask_secret SMTP_PASSWORD 'SMTP password or key (hidden)'
+install_runner=0
+# Only installs made by the one-line installer can update themselves.
+if [[ $managed = 1 ]] && command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
+  confirm 'Install a GitHub Actions runner on this server for automatic deploys of new releases?' N && install_runner=1
+fi
 make_swap=0
 if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; Space Works Events needs about $(( (needed_mb + 999) / 1000 )) GB. Create a 4 GB swap file at /swapfile?" Y; then
   make_swap=1
 fi
+# Ports: Caddy needs 80/443; behind an existing proxy the stack listens on localhost.
+ports=(80 443)
+if [[ $https_mode = 3 ]]; then ports=(8080); [[ $layout != split ]] || ports+=(8081); fi
+for port in "${ports[@]}"; do
+  ! port_in_use "$port" || die "TCP port $port is already in use. Free it, then rerun."
+done
 resolves() { getent ahosts "$1" 2>/dev/null | awk '{ print $1 }' | sort -u | tr '\n' ' ' || true; }
 dns=$(resolves "$public_host")
 site_dns=''
@@ -203,8 +250,15 @@ install_path=$source_dir
   else
     printf '  Services:        app (backend) container, PostgreSQL 16, Redis 7,\n'
   fi
-  printf '                   Silo object storage, Caddy HTTPS on ports 80/443, one-shot migrations and an\n'
-  printf '                   email-outbox scheduler (Docker Compose project swevents)\n'
+  [[ $storage_mode = 2 ]] || printf '                   Silo object storage,\n'
+  case $https_mode in
+    1) printf '                   Caddy HTTPS with its own local certificate on ports 80/443,\n' ;;
+    2) printf '                   Caddy automatic HTTPS (Let'"'"'s Encrypt, %s) on ports 80/443,\n' "$acme_email" ;;
+    3) printf '                   no Caddy: your proxy forwards to 127.0.0.1:8080%s,\n' "$([[ $layout != split ]] || echo ' (API) and :8081 (website)')" ;;
+  esac
+  printf '                   one-shot migrations and an email-outbox scheduler (Docker Compose project swevents)\n'
+  [[ $storage_mode = 1 ]] || printf '  File storage:    bucket %s at %s (region %s)\n' "$S3_BUCKET" "$S3_ENDPOINT" "$S3_REGION"
+  [[ $install_runner = 0 ]] || printf '  Auto-deploy:     GitHub Actions runner (asks for a registration token at the end)\n'
   printf '  DNS:             %s\n' "${dns:-$public_host does not resolve yet; HTTPS starts working once it points here}"
   [[ $layout != split ]] || printf '                   %s\n' "${site_dns:-$frontend_host does not resolve yet}"
   printf 'Host changes\n'
@@ -253,7 +307,19 @@ docker run --rm --user 0:0 --volume "$staging_config:/config" "$ops_image" \
   node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host" "$layout" >/dev/null
 set_image_settings "$staging_config/compose.env" "$version" "$repository"
 # LAN and test installs: Caddy's local CA instead of public certificates.
-[[ "${SWE_CADDY_TLS:-}" != internal ]] || conf_set "$staging_config/compose.env" SWE_CADDY_TLS internal
+case $https_mode in
+  1) conf_set "$staging_config/compose.env" SWE_CADDY_TLS internal ;;
+  2) conf_set "$staging_config/compose.env" SWE_CADDY_OPTIONS "email $acme_email" ;;
+  3) conf_set "$staging_config/compose.env" SWE_CADDY_TLS proxy ;;
+esac
+if [[ $storage_mode = 2 ]]; then
+  conf_set "$staging_config/compose.env" SWE_STORAGE external
+  export S3_ENDPOINT S3_REGION S3_BUCKET S3_ACCESS_KEY_ID S3_SECRET_ACCESS_KEY
+  docker run --rm --user 0:0 --volume "$staging_config:/config" \
+    --env S3_ENDPOINT --env S3_REGION --env S3_BUCKET --env S3_ACCESS_KEY_ID --env S3_SECRET_ACCESS_KEY \
+    "$ops_image" node docker/vps/configure-storage.mjs
+  unset S3_SECRET_ACCESS_KEY S3_ACCESS_KEY_ID
+fi
 export EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD
 docker run --rm --user 0:0 --volume "$staging_config:/config" \
   --env EMAIL_FROM --env SMTP_HOST --env SMTP_PORT --env SMTP_SECURE --env SMTP_USER --env SMTP_PASSWORD \
@@ -263,3 +329,7 @@ rmdir "$SWE_CONFIG_DIR" 2>/dev/null || true
 mv -T "$staging_config" "$SWE_CONFIG_DIR"
 start_stack
 finish
+if [[ $install_runner = 1 ]]; then
+  bash "$SWE_REPO_DIR/scripts/install-runner.sh" \
+    || warn 'The runner was not installed. Run the installer again and choose the auto-deploy option.'
+fi

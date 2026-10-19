@@ -14,9 +14,19 @@ SWE_BUILD_KEY=${SWE_BUILD_KEY:-$(head -c 32 /dev/urandom | base64 | tr -d '\n')}
 export SWE_BUILD_KEY
 repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 setting() { sed -n "s/^$1='\{0,1\}\([^']*\)'\{0,1\}$/\1/p" "$SWE_CONFIG_DIR/compose.env" 2>/dev/null | tail -n 1; }
-# The split layout runs the frontend container too.
-if [ "$(setting SWE_LAYOUT)" = split ]; then export COMPOSE_PROFILES=split; fi
-# Prepended in reverse: the base file first, then the internal-TLS override.
-if [ "$(setting SWE_CADDY_TLS)" = internal ]; then set -- --file "$repo_dir/compose.internal-tls.yml" "$@"; fi
+tls=$(setting SWE_CADDY_TLS) storage=$(setting SWE_STORAGE)
+# Profiles: the split layout runs the website container; Caddy and bundled Silo
+# run unless an existing reverse proxy or an external bucket replaces them.
+profiles=''
+[ "$(setting SWE_LAYOUT)" != split ] || profiles='split'
+[ "$tls" = proxy ] || profiles=${profiles:+$profiles,}caddy
+[ "$storage" = external ] || profiles=${profiles:+$profiles,}silo
+export COMPOSE_PROFILES="$profiles"
+# Prepended in reverse: the base file first, then the overrides.
+if [ "$storage" = external ]; then set -- --file "$repo_dir/compose.external-storage.yml" "$@"; fi
+case "$tls" in
+  internal) set -- --file "$repo_dir/compose.internal-tls.yml" "$@" ;;
+  proxy) set -- --file "$repo_dir/compose.external-proxy.yml" "$@" ;;
+esac
 set -- --file "$repo_dir/compose.production.yml" "$@"
 exec docker compose --project-name swevents --env-file "$SWE_CONFIG_DIR/compose.env" "$@"

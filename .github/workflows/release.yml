@@ -57,6 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT: ${{ github.event_name }}
           BRANCH: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
           RUN_NUMBER: ${{ github.run_number }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -67,7 +68,8 @@ jobs:
             echo "::error file=VERSION::VERSION must be a version like 1.2.3 (got '$base')"
             exit 1
           fi
-          if [[ "$EVENT" != workflow_run && "$BRANCH" != main ]]; then
+          # A full-ref test: a tag named main never counts as the main branch.
+          if [[ "$EVENT" != workflow_run && "$REF" != refs/heads/main ]]; then
             label=$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-30)
             label=${label%-}
             release=true prerelease=true
@@ -237,8 +239,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      created: ${{ steps.publish.outputs.created }}
     steps:
       - name: Publish the GitHub Release
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ needs.prepare.outputs.owner }}
@@ -277,3 +282,31 @@ jobs:
           )
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
             --title "$title" --notes "$notes" --generate-notes "${flags[@]}"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  # Automatic deploys, as in SpaceWorks: a self-hosted runner on the VPS (see
+  # scripts/install-runner.sh) updates it to each published release. Opt-in with
+  # the repository variable SWE_DEPLOY=true, so a repository or fork without a
+  # runner never waits. Only main releases deploy; pre-releases never do.
+  # SECURITY: the runner controls Docker (root on the VPS). Never target its
+  # label from pull_request workflows; require approval for fork workflows. This
+  # job checks out no code and uses no third-party actions.
+  deploy:
+    needs: [prepare, github-release]
+    if: >-
+      needs.github-release.outputs.created == 'true' &&
+      needs.prepare.outputs.prerelease == 'false' &&
+      vars.SWE_DEPLOY == 'true'
+    runs-on: [self-hosted, spaceworks-events-prod]
+    environment: production
+    concurrency:
+      group: spaceworks-events-deploy
+      cancel-in-progress: false
+    permissions: {}
+    timeout-minutes: 60
+    steps:
+      - name: Deploy the published release
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        # The runner account may run only this wrapper as root (install-runner.sh).
+        run: sudo -n /usr/local/sbin/swevents-deploy "v$VERSION"

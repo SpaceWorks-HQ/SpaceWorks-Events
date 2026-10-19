@@ -66,7 +66,9 @@ services:
     networks: [data]
     logging: *logging
 
+  # Bundled Silo object storage (profile silo); external S3 skips both services.
   storage:
+    profiles: [silo]
     image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: unless-stopped
     env_file: ${SWE_CONFIG_DIR}/storage.env
@@ -84,6 +86,7 @@ services:
     logging: *logging
 
   storage-init:
+    profiles: [silo]
     image: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
     restart: "no"
     env_file: ${SWE_CONFIG_DIR}/storage-init.env
@@ -139,7 +142,9 @@ services:
     networks: [edge]
     logging: *logging
 
+  # Caddy HTTPS edge (profile caddy); an existing reverse proxy replaces it.
   proxy:
+    profiles: [caddy]
     image: caddy:2-alpine
     restart: unless-stopped
     environment:

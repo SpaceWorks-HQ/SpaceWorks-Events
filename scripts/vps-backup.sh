@@ -24,6 +24,11 @@ keep=${SWE_BACKUP_KEEP:-7}
 [[ "$keep" =~ ^[1-9][0-9]*$ ]] || die 'SWE_BACKUP_KEEP must be a positive number.'
 [[ ! -d "$SWE_DIR" ]] || take_lock
 SWE_REPO_DIR=$source_dir
+# An external bucket keeps the uploads; back it up with your storage provider.
+if [[ $objects = 1 && "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_STORAGE)" = external ]]; then
+  say 'Uploads are in the external bucket and are not copied; back it up with your storage provider.'
+  objects=0
+fi
 umask 077
 backups="$SWE_CONFIG_DIR/backups"
 target="$backups/$(date -u +%Y%m%dT%H%M%SZ)"
