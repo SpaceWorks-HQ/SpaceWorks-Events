@@ -117,10 +117,7 @@ The full list lives in [Features](docs/FEATURES.md).
       <img src="docs/readme/screens/member-id-wallet-dark.webp" alt="A member's ID card in the account wallet, in dark mode" />
       <p><strong>ID wallet, dark mode.</strong> Tilt it, flip it, verify it.</p>
     </td>
-    <td width="50%" valign="top">
-      <img src="docs/readme/screens/not-found.webp" alt="The 404 page: a torn ticket and a golden retriever along the bottom" />
-      <p><strong>404.</strong> This page isn't on the programme, but the golden retriever is.</p>
-    </td>
+    <td width="50%" valign="top"></td>
   </tr>
 </table>
 
