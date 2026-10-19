@@ -390,38 +390,27 @@
   transition: transform 520ms cubic-bezier(0.34, 1.4, 0.64, 1), opacity 320ms ease-out;
 }
 
-/* 404 golden retriever (components/feedback/NotFoundPet.tsx). Motion is driven by data-state;
-   the reduced-motion rule above stills every loop. */
+/* Patch on the 404 page (components/feedback/NotFoundPet.tsx). Each direction is one sprite sheet of
+   the design system's eight-frame walk cycle (heading left uses the approved left-facing sheet; Patch
+   is never flipped). Frame N sits at N/7 of the sheet. Motion is driven by data-state, data-facing
+   and data-happy; the reduced-motion rule above stills every loop. */
 .yy-pet { will-change: transform; }
-.yy-pet-body { transition: transform 160ms ease-out; }
-.yy-pet-leg { transform-box: fill-box; transform-origin: 50% 0; }
-.yy-pet-tail { transform-box: fill-box; transform-origin: 100% 100%; animation: yy-pet-wag 1.4s ease-in-out infinite; }
-.yy-pet-head { transform-box: fill-box; transform-origin: 30% 80%; }
-.yy-pet-pupils { transform: translate(var(--look-x, 0px), var(--look-y, 0px)); transition: transform 120ms ease-out; }
-.yy-pet-eyes { transform-box: fill-box; transform-origin: 50% 50%; animation: yy-pet-blink 5.2s infinite; }
-.yy-pet-sleepy-eyes { opacity: 0; }
-
-.yy-pet[data-state="walk"] .yy-pet-leg-a,
-.yy-pet[data-state="run"] .yy-pet-leg-a { animation: yy-pet-step 0.32s ease-in-out infinite alternate; }
-.yy-pet[data-state="walk"] .yy-pet-leg-b,
-.yy-pet[data-state="run"] .yy-pet-leg-b { animation: yy-pet-step 0.32s ease-in-out infinite alternate-reverse; }
-.yy-pet[data-state="run"] .yy-pet-leg { animation-duration: 0.18s; }
-.yy-pet[data-state="walk"] .yy-pet-torso,
-.yy-pet[data-state="run"] .yy-pet-torso { animation: yy-pet-bob 0.32s ease-in-out infinite alternate; }
-.yy-pet[data-state="run"] .yy-pet-torso { animation-duration: 0.18s; }
-.yy-pet[data-state="run"] .yy-pet-tail { animation-duration: 0.3s; }
-.yy-pet[data-state="sit"] .yy-pet-head { animation: yy-pet-tilt 4s ease-in-out infinite; }
-.yy-pet[data-happy] .yy-pet-tail { animation: yy-pet-wag 0.18s ease-in-out infinite; }
-.yy-pet[data-happy] .yy-pet-torso { animation: yy-pet-bob 0.22s ease-in-out 4 alternate; }
-
-.yy-pet[data-state="sleep"] .yy-pet-eyes { opacity: 0; animation: none; }
-.yy-pet[data-state="sleep"] .yy-pet-sleepy-eyes { opacity: 1; }
-.yy-pet[data-state="sleep"] .yy-pet-torso { animation: yy-pet-breathe 3s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
-.yy-pet[data-state="sleep"] .yy-pet-tail { animation: none; }
+.yy-pet-sprite {
+  aspect-ratio: 256 / 176;
+  width: 100%;
+  background: url("/brand/patch/patch-walk-right.webp") 0 0 / 800% 100% no-repeat;
+}
+.yy-pet[data-facing="left"] .yy-pet-sprite { background-image: url("/brand/patch/patch-walk-left.webp"); }
+.yy-pet[data-state="walk"] .yy-pet-sprite { animation: yy-pet-walk 0.96s steps(8) infinite; }
+.yy-pet[data-state="run"] .yy-pet-sprite { animation: yy-pet-walk 0.48s steps(8) infinite; }
+/* Asleep or patted: frame 6, Patch's eyes closed happily as drawn on the walk sheet. */
+.yy-pet[data-state="sleep"] .yy-pet-sprite,
+.yy-pet[data-happy] .yy-pet-sprite { animation: none; background-position: calc(500% / 7) 0; }
+.yy-pet[data-happy] { animation: yy-pet-bounce 0.22s ease-in-out 4 alternate; }
 
 .yy-pet-zzz {
   position: absolute;
-  right: 4px;
+  right: 10%;
   top: -6px;
   font-family: var(--font-display);
   font-weight: 600;
@@ -430,6 +419,7 @@
   opacity: 0;
   pointer-events: none;
 }
+.yy-pet[data-facing="left"] .yy-pet-zzz { right: auto; left: 10%; }
 .yy-pet[data-state="sleep"] .yy-pet-zzz { animation: yy-pet-zzz 2.8s ease-out infinite; }
 .yy-pet[data-state="sleep"] .yy-pet-zzz:nth-of-type(2) { animation-delay: 1.4s; font-size: 11px; }
 
@@ -449,7 +439,7 @@
 /* Fading paw prints in the muted ink. */
 .yy-pet-paw {
   position: absolute;
-  bottom: 10px;
+  bottom: 6px;
   width: 9px;
   height: 7px;
   border-radius: 50% 50% 45% 45%;
@@ -459,23 +449,8 @@
   animation: yy-pet-paw 1.8s ease-out forwards;
 }
 
-/* The floppy ear swings as the dog trots and flaps when patted; the tongue
-   comes out when it is happy. */
-.yy-pet-ear { transform-box: fill-box; transform-origin: 60% 8%; }
-.yy-pet[data-state="walk"] .yy-pet-ear,
-.yy-pet[data-state="run"] .yy-pet-ear { animation: yy-pet-flap 0.32s ease-in-out infinite alternate; }
-.yy-pet[data-happy] .yy-pet-ear { animation: yy-pet-flap 0.2s ease-in-out 6 alternate; }
-@keyframes yy-pet-flap { from { transform: rotate(-6deg); } to { transform: rotate(10deg); } }
-.yy-pet-tongue { transform-box: fill-box; transform-origin: 50% 0; transform: scaleY(0); transition: transform 160ms ease-out; }
-.yy-pet[data-happy] .yy-pet-tongue,
-.yy-pet[data-state="run"] .yy-pet-tongue { transform: scaleY(1); }
-
-@keyframes yy-pet-step { from { transform: rotate(-16deg); } to { transform: rotate(16deg); } }
-@keyframes yy-pet-bob { from { transform: translateY(0); } to { transform: translateY(-2.5px); } }
-@keyframes yy-pet-wag { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(16deg); } }
-@keyframes yy-pet-tilt { 0%, 70%, 100% { transform: rotate(0deg); } 80%, 90% { transform: rotate(-9deg); } }
-@keyframes yy-pet-blink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
-@keyframes yy-pet-breathe { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.95); } }
+@keyframes yy-pet-walk { from { background-position: 0 0; } to { background-position: calc(800% / 7) 0; } }
+@keyframes yy-pet-bounce { from { translate: 0 0; } to { translate: 0 -3px; } }
 @keyframes yy-pet-zzz { 0% { opacity: 0; transform: translate(0, 0) scale(0.7); } 25% { opacity: 0.8; } 100% { opacity: 0; transform: translate(14px, -26px) scale(1.2); } }
 @keyframes yy-pet-heart { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 20% { opacity: 1; } 100% { opacity: 0; transform: translateY(-34px) scale(1.15); } }
 @keyframes yy-pet-paw { 0% { opacity: 0.35; } 100% { opacity: 0; } }
