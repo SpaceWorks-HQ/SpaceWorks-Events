@@ -138,13 +138,24 @@ What do you want to do?
   1) Update to the latest release - backs up the database first, keeps your settings and data
   2) Back up now - database, configuration and uploads
   3) Check status and health
-  4) Cancel - change nothing
-Choose 1-4 [4]: ")
-      case "${choice:-4}" in
+  4) Automatic deploys - install or remove the GitHub Actions runner
+  5) Cancel - change nothing
+Choose 1-5 [5]: ")
+      case "${choice:-5}" in
         1) action=update ;;
         2) run_root bash "$install_dir/current/scripts/vps-backup.sh"; exit 0 ;;
         3) run_root bash "$install_dir/current/scripts/vps-status.sh"; exit 0 ;;
-        4) say 'Cancelled. Nothing was changed.'; exit 0 ;;
+        4)
+          as_root test -f "$install_dir/current/scripts/install-runner.sh" \
+            || die 'This release predates automatic deploys. Update first (option 1), then rerun.'
+          choice=$(prompt "Install or re-register the runner (i), or remove it (r)? [i]: ")
+          case "${choice:-i}" in
+            i|I) run_root bash "$install_dir/current/scripts/install-runner.sh" ;;
+            r|R) run_root bash "$install_dir/current/scripts/install-runner.sh" --remove ;;
+            *) die 'Invalid choice. Nothing was changed.' ;;
+          esac
+          exit 0 ;;
+        5) say 'Cancelled. Nothing was changed.'; exit 0 ;;
         *) die 'Invalid choice. Nothing was changed.' ;;
       esac
     fi

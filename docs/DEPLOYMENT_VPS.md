@@ -26,7 +26,8 @@ with the transport and privacy requirements of this Events application. Use
   Add an AAAA record only if IPv6 reaches this host too. Start with DNS-only
   records; the supplied proxy assumes clients connect directly to Caddy.
 - Allow inbound TCP 80 and 443 (plus UDP 443 for HTTP/3) and restrict SSH to
-  administrators. Only Caddy publishes application ports. Do not publish the
+  administrators. Only Caddy publishes application ports (or, behind your own
+  reverse proxy, the app listens on `127.0.0.1` only). Do not publish the
   app, database, Redis, storage API or storage console ports.
 - An authenticated SMTP relay and a verified sending domain with SPF, DKIM and
   DMARC. Outgoing mail uses this relay; the stack does not operate a public mail
@@ -47,9 +48,12 @@ The bootstrap checks for Linux, the architecture, root or sudo and `curl`/`tar`,
 finds the latest [GitHub Release](CONTAINER_IMAGES.md#versions-and-releases)
 (or the one named with `--release v<version>`) and downloads its source into
 temporary storage. The release's `scripts/setup-vps.sh` then checks disk space
-and ports 80/443 and asks every question first: the hosting layout (below),
-hostnames, super-admin email, verified sender and SMTP relay (password hidden;
-Brevo is prefilled on port 2525).
+and the Docker Compose version (2.24.4 or newer, if Docker is already
+installed) and asks every question first: the hosting layout (below),
+hostnames, super-admin email, HTTPS, file storage, verified sender, SMTP relay
+(password hidden; Brevo is prefilled on port 2525) and automatic deploys. It
+then checks that the ports it needs are free (80/443 for Caddy; 8080 and 8081
+behind an existing proxy).
 Invalid answers are asked again. When memory is short it offers a 4 GB swap file.
 It reports what the hostname resolves to and shows one summary of every answer
 and host change. **Nothing changes before you confirm.**
@@ -83,10 +87,96 @@ gateway between them, and live check-in streamed from the API, depend on two
 origins. `compose.env` records the layout (`SWE_LAYOUT`); installations from
 before 0.9.1 keep the `single` (or Netlify) layout they were set up with.
 
-For a LAN or test install whose hostnames are not publicly reachable, run the
-installer with `SWE_CADDY_TLS=internal` on the `bash` side of the pipe. Caddy
-then issues certificates from its own local CA, which the frontend trusts;
-browsers warn until that CA is trusted on each device.
+### HTTPS
+
+As in SpaceWorks, setup asks how HTTPS reaches the stack:
+
+| Choice | What runs | Notes |
+| --- | --- | --- |
+| 1 LAN or trial | Caddy with its own local certificate authority | For hostnames that are not publicly reachable. Browsers warn until the CA (`caddy_data` volume: `caddy/pki/authorities/local/root.crt`) is trusted on each device. The website container receives only that public certificate. |
+| 2 Automatic HTTPS (default) | Caddy with Let's Encrypt | DNS must point at this server and ports 80/443 must be reachable. An optional certificate email gets expiry notices. |
+| 3 Existing reverse proxy | No Caddy | The API listens on `127.0.0.1:8080` and, in the split layout, the website on `127.0.0.1:8081`. Your proxy terminates HTTPS, preserves `Host`, overwrites `X-Real-IP` with the client address, sends `X-Forwarded-Proto: https` and does not buffer responses (live check-in streams). In the split layout the website calls the API's HTTPS name through this server's own proxy. |
+
+Behind an existing proxy, the app trusts `X-Real-IP` for rate limits and audit
+records, so the proxy **must overwrite** it with the client address (a proxy
+that passes the client's own header through lets anyone spoof their IP). In
+the split layout the website reaches the API by its HTTPS name on this server's
+Docker bridge address, so the proxy must also listen there (or on all
+addresses) with a publicly trusted certificate. Examples:
+
+```nginx
+# nginx, for each hostname
+location / {
+  proxy_pass http://127.0.0.1:8080;   # 8081 for the split layout's website
+  proxy_set_header Host $host;
+  proxy_set_header X-Real-IP $remote_addr;
+  proxy_set_header X-Forwarded-Proto https;
+  proxy_buffering off;
+}
+```
+
+```apache
+# Apache (mod_proxy, mod_headers)
+ProxyPreserveHost On
+RequestHeader set X-Real-IP "%{REMOTE_ADDR}s"
+RequestHeader set X-Forwarded-Proto "https"
+ProxyPass / http://127.0.0.1:8080/ flushpackets=on
+ProxyPassReverse / http://127.0.0.1:8080/
+```
+
+Unlike SpaceWorks there is no plain-HTTP mode: Events requires HTTPS origins
+and secure cookies in production, so LAN and trial installs use Caddy's own
+certificate instead. `compose.env` records the choice (`SWE_CADDY_TLS`:
+`internal`, `proxy`, or unset for automatic).
+
+### File storage
+
+Setup also asks where uploads (event covers, ID cards, attachments) live:
+bundled **Silo** on this server (default) or an **external S3-compatible bucket**
+such as Cloudflare R2 or Amazon S3. For an external bucket, create a private
+bucket and an access key limited to it first, then enter the HTTPS endpoint,
+region (`auto` for R2), bucket, access key and secret (hidden). The application
+reads and writes the bucket itself; browsers never talk to it, so no CORS is
+needed. With external storage (`SWE_STORAGE='external'`) the Silo services do
+not run and `vps-backup.sh` copies the database and configuration only: back
+the bucket up with your provider. To change the bucket later, edit `S3_*` in
+`app.env` and recreate the app (`scripts/vps-compose.sh up -d`).
+
+### Automatic deploys
+
+Like SpaceWorks, an installation can update itself whenever a release is
+published. Answer **yes** to *Install a GitHub Actions runner on this server for
+automatic deploys?* during setup, or later choose **4) Automatic deploys** in the
+installer's menu. The runner (`scripts/install-runner.sh`) asks for a
+registration token from the repository's **Settings → Actions → Runners → New
+self-hosted runner**, downloads GitHub's official runner, checks it against the
+published SHA-256, registers it with the label `spaceworks-events-prod` and runs
+it as a systemd service under its own unprivileged account, `swe-runner`.
+Then, in the repository:
+
+1. **Settings → Secrets and variables → Actions → Variables:** add `SWE_DEPLOY` = `true`.
+2. **Settings → Environments → production → Deployment branches and tags:**
+   selected branches, `main` only (optionally add required reviewers).
+3. **Settings → Actions → General → Fork pull request workflows:** require approval
+   for all external contributors.
+
+Each GitHub Release (a `VERSION` bump reaching `main`) then ends with a `deploy`
+job on this server that runs `sudo /usr/local/sbin/swevents-deploy v<version>`,
+which runs `scripts/vps-deploy.sh`: a backup, the new images, migrations, health
+checks, and the previous release restored if the new one is unhealthy. Nothing
+connects in from GitHub; the runner polls outward.
+
+**Security model.** A repository-level runner accepts any workflow that names
+its label, so anyone who can push workflows to the repository can run code on
+this server. That code runs as `swe-runner`, which has no Docker access; its
+only root permission (`/etc/sudoers.d/spaceworks-events-deploy`) is the deploy
+wrapper, and `vps-deploy.sh` installs only a published, non-pre-release GitHub
+Release whose commit is on `main`. Keep write access to trusted maintainers.
+Remove the runner with menu option 4 or
+`sudo bash /opt/spaceworks-events/current/scripts/install-runner.sh --remove`,
+then delete the `SWE_DEPLOY` variable.
+
+### Other options
 
 `--ref` installs a branch, tag or commit instead and **builds** its images on the
 server (versions `vps-<commit>`); a later update moves it to the latest release.
@@ -276,7 +366,7 @@ runtime key stable across ordinary builds and upgrades.
 
 ## Backups and recovery
 
-Persistent volumes hold PostgreSQL, Redis, Silo object storage and Caddy
+Persistent volumes hold PostgreSQL, Redis and, when they run here, Silo object storage and Caddy
 certificates. Back up **both database and uploaded objects**, plus the external
 configuration:
 
@@ -354,7 +444,7 @@ cd /opt/spaceworks-events/current   # or your checkout
 export SWE_CONFIG_DIR=/etc/spaceworks-events
 scripts/vps-compose.sh run --rm --no-deps --volume "$SWE_CONFIG_DIR:/config" \
   ops node docker/vps/setup.mjs renew-certificates
-scripts/vps-compose.sh up -d --force-recreate postgres redis storage app proxy scheduler
+scripts/vps-compose.sh up -d --force-recreate
 scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
 ```
 

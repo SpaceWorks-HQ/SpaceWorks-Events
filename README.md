@@ -149,7 +149,10 @@ It checks the server, picks the latest [release](https://github.com/SpaceWorks-H
 and asks every question first: the layout (by default the website and API
 containers both on this VPS, at `events.example.com` and `api.events.example.com`;
 or one app container on one hostname; or the website on Netlify), hostnames, the
-super-admin email and your SMTP relay (Brevo is prefilled on port 2525). Invalid answers are asked again. One summary lists every choice and host
+super-admin email, HTTPS (automatic Let's Encrypt, a LAN/trial certificate, or
+your existing reverse proxy), file storage (bundled Silo or an external S3/R2
+bucket), your SMTP relay (Brevo is prefilled on port 2525) and whether to set up
+automatic deploys. Invalid answers are asked again. One summary lists every choice and host
 change, and **nothing changes until you confirm it**. Then it installs Docker if
 needed, generates every secret and internal TLS certificate without printing them,
 downloads the release's ready-made images from
@@ -170,7 +173,9 @@ Run the same command again. An existing installation shows a menu:
 2. **Back up now** — database, configuration and uploaded files, into
    `/etc/spaceworks-events/backups/`. Copy backups off the server; they hold every secret.
 3. **Check status and health** — services, disk, newest backup and live checks.
-4. **Cancel** (the default).
+4. **Automatic deploys** — install (or remove) a GitHub Actions runner so every
+   published release updates the server by itself, as in SpaceWorks.
+5. **Cancel** (the default).
 
 Releases live in `/opt/spaceworks-events/releases/<commit>` with `current` pointing
 at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--release`

@@ -17,6 +17,8 @@ require_tty() { { : </dev/tty; } 2>/dev/null || die 'An interactive terminal is 
 
 is_hostname() { [[ ${#1} -le 253 && "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; }
 is_email() { [[ "$1" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] && is_env_value "$1"; }
+# Stricter, for values that end up in the Caddyfile.
+is_plain_email() { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
 is_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 is_nonempty() { [[ -n "${1//[[:space:]]/}" ]]; }
 # Answers are stored as single-quoted env-file values, which cannot hold ' or \.
@@ -230,6 +232,19 @@ create_swap() {
     rm -f "$file"
     warn 'This server does not allow a swap file; the image build may run out of memory.'
   fi
+}
+
+# Install distribution packages with the family's package manager.
+install_packages() {
+  # shellcheck disable=SC1091
+  ( . /etc/os-release
+    case " ${ID:-} ${ID_LIKE:-} " in
+      *" debian "*|*" ubuntu "*) export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq "$@" ;;
+      *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) dnf install -y "$@" 2>/dev/null || yum install -y "$@" ;;
+      *" arch "*|*" manjaro "*) pacman -Syu --noconfirm --needed "$@" ;;
+      *" suse "*|*" opensuse "*|*" sles "*) zypper --non-interactive install "$@" ;;
+      *) exit 1 ;;
+    esac ) || die "Could not install $*; install it with your package manager, then rerun."
 }
 
 # These scripts never attach a terminal to a container: the installer runs them
