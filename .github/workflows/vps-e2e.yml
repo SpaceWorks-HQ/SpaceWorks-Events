@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.9.2-feat-installer-parity.12.29e5a7c70260
+  RELEASE: v0.9.2-feat-installer-parity.13.ee11cc8326f7
   OLD_RELEASE: v0.9.1-main.11.f2e7307410ee
   SILO: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
 
