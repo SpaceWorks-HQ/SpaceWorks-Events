@@ -237,8 +237,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      created: ${{ steps.publish.outputs.created }}
     steps:
       - name: Publish the GitHub Release
+        id: publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ needs.prepare.outputs.owner }}
@@ -277,3 +280,30 @@ jobs:
           )
           gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --target "$SHA" \
             --title "$title" --notes "$notes" --generate-notes "${flags[@]}"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+  # Automatic deploys, as in SpaceWorks: a self-hosted runner on the VPS (see
+  # scripts/install-runner.sh) updates it to each published release. Opt-in with
+  # the repository variable SWE_DEPLOY=true, so a repository or fork without a
+  # runner never waits. Only main releases deploy; pre-releases never do.
+  # SECURITY: the runner controls Docker (root on the VPS). Never target its
+  # label from pull_request workflows; require approval for fork workflows. This
+  # job checks out no code and uses no third-party actions.
+  deploy:
+    needs: [prepare, github-release]
+    if: >-
+      needs.github-release.outputs.created == 'true' &&
+      needs.prepare.outputs.prerelease == 'false' &&
+      vars.SWE_DEPLOY == 'true'
+    runs-on: [self-hosted, spaceworks-events-prod]
+    environment: production
+    concurrency:
+      group: spaceworks-events-deploy
+      cancel-in-progress: false
+    permissions: {}
+    timeout-minutes: 60
+    steps:
+      - name: Deploy the published release
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: bash "${SWE_DIR:-/opt/spaceworks-events}/current/scripts/vps-deploy.sh" "v$VERSION"

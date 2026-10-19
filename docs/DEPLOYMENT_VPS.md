@@ -83,10 +83,62 @@ gateway between them, and live check-in streamed from the API, depend on two
 origins. `compose.env` records the layout (`SWE_LAYOUT`); installations from
 before 0.9.1 keep the `single` (or Netlify) layout they were set up with.
 
-For a LAN or test install whose hostnames are not publicly reachable, run the
-installer with `SWE_CADDY_TLS=internal` on the `bash` side of the pipe. Caddy
-then issues certificates from its own local CA, which the frontend trusts;
-browsers warn until that CA is trusted on each device.
+### HTTPS
+
+As in SpaceWorks, setup asks how HTTPS reaches the stack:
+
+| Choice | What runs | Notes |
+| --- | --- | --- |
+| 1 LAN or trial | Caddy with its own local certificate authority | For hostnames that are not publicly reachable. Browsers warn until the CA (`caddy_data` volume: `caddy/pki/authorities/local/root.crt`) is trusted on each device. The website container receives only that public certificate. |
+| 2 Automatic HTTPS (default) | Caddy with Let's Encrypt | DNS must point at this server and ports 80/443 must be reachable. An optional certificate email gets expiry notices. |
+| 3 Existing reverse proxy | No Caddy | The API listens on `127.0.0.1:8080` and, in the split layout, the website on `127.0.0.1:8081`. Your proxy terminates HTTPS, preserves `Host`, overwrites `X-Real-IP` with the client address, sends `X-Forwarded-Proto: https` and does not buffer responses (live check-in streams). In the split layout the website calls the API's HTTPS name through this server's own proxy. |
+
+Unlike SpaceWorks there is no plain-HTTP mode: Events requires HTTPS origins
+and secure cookies in production, so LAN and trial installs use Caddy's own
+certificate instead. `compose.env` records the choice (`SWE_CADDY_TLS`:
+`internal`, `proxy`, or unset for automatic).
+
+### File storage
+
+Setup also asks where uploads (event covers, ID cards, attachments) live:
+bundled **Silo** on this server (default) or an **external S3-compatible bucket**
+such as Cloudflare R2 or Amazon S3. For an external bucket, create a private
+bucket and an access key limited to it first, then enter the HTTPS endpoint,
+region (`auto` for R2), bucket, access key and secret (hidden). The application
+reads and writes the bucket itself; browsers never talk to it, so no CORS is
+needed. With external storage (`SWE_STORAGE='external'`) the Silo services do
+not run and `vps-backup.sh` copies the database and configuration only: back
+the bucket up with your provider. To change the bucket later, edit `S3_*` in
+`app.env` and recreate the app (`scripts/vps-compose.sh up -d`).
+
+### Automatic deploys
+
+Like SpaceWorks, an installation can update itself whenever a release is
+published. Answer **yes** to *Install a GitHub Actions runner on this server for
+automatic deploys?* during setup, or later choose **4) Automatic deploys** in the
+installer's menu. The runner (`scripts/install-runner.sh`) asks for a
+registration token from the repository's **Settings → Actions → Runners → New
+self-hosted runner**, downloads GitHub's official runner, checks it against the
+published SHA-256, registers it with the label `spaceworks-events-prod` and runs
+it as a systemd service. Then, in the repository:
+
+1. **Settings → Secrets and variables → Actions → Variables:** add `SWE_DEPLOY` = `true`.
+2. **Settings → Actions → General → Fork pull request workflows:** require approval
+   for all external contributors.
+3. Protect `main` so only maintainers merge; in an organization, limit the runner
+   group to this repository (and to `release.yml` on `refs/heads/main` where the
+   plan allows).
+
+Each GitHub Release (a `VERSION` bump reaching `main`) then ends with a `deploy`
+job on this server that runs `scripts/vps-deploy.sh v<version>`: a backup, the
+new images, migrations, health checks, and the previous release restored if the
+new one is unhealthy. Nothing connects in from GitHub; the runner polls outward.
+The runner controls Docker, which is root on this server, so keep the
+restrictions above. Remove it with menu option 4 or
+`sudo bash /opt/spaceworks-events/current/scripts/install-runner.sh --remove`,
+then delete the `SWE_DEPLOY` variable.
+
+### Other options
 
 `--ref` installs a branch, tag or commit instead and **builds** its images on the
 server (versions `vps-<commit>`); a later update moves it to the latest release.

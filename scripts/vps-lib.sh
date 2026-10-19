@@ -234,6 +234,19 @@ create_swap() {
 
 # These scripts never attach a terminal to a container: the installer runs them
 # with stdin from /dev/null, and Compose refuses a TTY without one.
+# Install distribution packages with the family's package manager.
+install_packages() {
+  # shellcheck disable=SC1091
+  ( . /etc/os-release
+    case " ${ID:-} ${ID_LIKE:-} " in
+      *" debian "*|*" ubuntu "*) export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y -qq "$@" ;;
+      *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*) dnf install -y "$@" 2>/dev/null || yum install -y "$@" ;;
+      *" arch "*|*" manjaro "*) pacman -Syu --noconfirm --needed "$@" ;;
+      *" suse "*|*" opensuse "*|*" sles "*) zypper --non-interactive install "$@" ;;
+      *) exit 1 ;;
+    esac ) || die "Could not install $*; install it with your package manager, then rerun."
+}
+
 compose() {
   case "${1:-}" in
     run|exec) local command=$1; shift; sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$command" -T "$@" ;;

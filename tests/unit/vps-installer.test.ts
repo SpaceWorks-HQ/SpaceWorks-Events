@@ -92,7 +92,8 @@ describe("VPS installer", () => {
     expect(split).toContain("reverse_proxy frontend:3000");
     expect(split).toContain("reverse_proxy app:3000");
     const wrapper = readFileSync(path.join(root, "scripts/vps-compose.sh"), "utf8");
-    expect(wrapper).toContain("COMPOSE_PROFILES=split");
+    expect(wrapper).toContain("[ \"$(setting SWE_LAYOUT)\" != split ] || profiles='split'");
+    expect(wrapper).toContain("export COMPOSE_PROFILES=\"$profiles\"");
   });
 
   it("accepts only well-formed answers", () => {
@@ -173,5 +174,61 @@ describe("VPS installer", () => {
         else expect(compose).not.toContain("SWE_CADDYFILE");
       } finally { rmSync(directory, { recursive: true, force: true }); }
     }
+  });
+
+  it("stores an external bucket's settings and rejects unsafe ones", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "swe-storage-test-"));
+    const good = { S3_ENDPOINT: "https://abc.r2.cloudflarestorage.com", S3_REGION: "auto", S3_BUCKET: "events-files", S3_ACCESS_KEY_ID: "key-id", S3_SECRET_ACCESS_KEY: "secret-value" };
+    const run = (values: Record<string, string>) => spawnSync(process.execPath, ["docker/vps/configure-storage.mjs"], {
+      cwd: root, encoding: "utf8", env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_SETUP_CONFIG_DIR: directory, ...values },
+    });
+    try {
+      writeFileSync(path.join(directory, "app.env"), "AUTH_SECRET='x'\nS3_BUCKET='spaceworks-events'\nS3_ENDPOINT='https://storage:9000'\n");
+      const result = run(good);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).not.toContain("secret-value");
+      const app = readFileSync(path.join(directory, "app.env"), "utf8");
+      expect(app).toContain("AUTH_SECRET='x'");
+      expect(app).toContain("S3_ENDPOINT='https://abc.r2.cloudflarestorage.com'");
+      expect(app).toContain("S3_SECRET_ACCESS_KEY='secret-value'");
+      expect(app).toContain("S3_FORCE_PATH_STYLE='1'");
+      expect(app.match(/^S3_BUCKET=/gm)).toHaveLength(1);
+      for (const bad of [{ S3_ENDPOINT: "http://abc.example.com" }, { S3_ENDPOINT: "https://abc.example.com/path" }, { S3_BUCKET: "Bad_Bucket" }, { S3_SECRET_ACCESS_KEY: "it's" }]) {
+        expect(run({ ...good, ...bad }).status, JSON.stringify(bad)).not.toBe(0);
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it("picks the official runner build only with one published checksum", () => {
+    const python = spawnSync("python3", ["--version"]).status === 0 ? "python3" : "python";
+    if (spawnSync(python, ["--version"]).status !== 0) return;
+    const sha = "a".repeat(64);
+    const release = (body: string, digest = "") => JSON.stringify({
+      tag_name: "v2.330.0", draft: false, prerelease: false, published_at: "2026-10-01T00:00:00Z", body,
+      assets: [{ name: "actions-runner-linux-x64-2.330.0.tar.gz", digest, browser_download_url: "https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz" }],
+    });
+    const pick = (input: string) => spawnSync(python, ["scripts/runner-release.py", "x64"], { cwd: root, input, encoding: "utf8" });
+    const ok = pick(release(`actions-runner-linux-x64-2.330.0.tar.gz <!-- BEGIN SHA linux-x64 -->${sha}<!-- END SHA linux-x64 -->`));
+    expect(ok.status, ok.stderr).toBe(0);
+    expect(ok.stdout.trim().split(/\r?\n/)).toEqual([
+      "https://github.com/actions/runner/releases/download/v2.330.0/actions-runner-linux-x64-2.330.0.tar.gz", sha,
+    ]);
+    expect(pick(release("no checksum here")).status).not.toBe(0);
+    expect(pick(release(`actions-runner-linux-x64-2.330.0.tar.gz ${sha}`, `sha256:${"b".repeat(64)}`)).status).not.toBe(0);
+  });
+
+  it("chooses HTTPS and storage like SpaceWorks: Caddy and Silo unless replaced", () => {
+    const wrapper = readFileSync(path.join(root, "scripts/vps-compose.sh"), "utf8");
+    expect(wrapper).toContain('[ "$tls" = proxy ] || profiles=${profiles:+$profiles,}caddy');
+    expect(wrapper).toContain('[ "$storage" = external ] || profiles=${profiles:+$profiles,}silo');
+    const compose = readFileSync(path.join(root, "compose.production.yml"), "utf8");
+    expect(compose).toMatch(/proxy:\n\s+profiles: \[caddy\]/);
+    expect(compose).toMatch(/storage:\n\s+profiles: \[silo\]/);
+    expect(readFileSync(path.join(root, "compose.external-proxy.yml"), "utf8")).toContain('"127.0.0.1:8080:3000"');
+    expect(readFileSync(path.join(root, "compose.external-storage.yml"), "utf8")).toContain("depends_on: !override");
+    const workflow = readFileSync(path.join(root, ".github/workflows/release.yml"), "utf8");
+    expect(workflow).toContain("runs-on: [self-hosted, spaceworks-events-prod]");
+    expect(workflow).toContain("vars.SWE_DEPLOY == 'true'");
+    expect(workflow).not.toMatch(/deploy:[\s\S]*actions\/checkout/);
   });
 });
