@@ -9,6 +9,9 @@ unset PUBLIC_HOST PUBLIC_ORIGIN SITE_HOST SWE_VERSION SWE_LAYOUT SWE_CADDYFILE S
   SWE_BACKEND_IMAGE SWE_FRONTEND_IMAGE COMPOSE_PROFILES
 # Use Compose's direct builder; Bake may reject an external secret-file path.
 export COMPOSE_BAKE=false
+# Builds compile with a throwaway Server Actions key; the real one is runtime-only.
+SWE_BUILD_KEY=${SWE_BUILD_KEY:-$(head -c 32 /dev/urandom | base64 | tr -d '\n')}
+export SWE_BUILD_KEY
 repo_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 setting() { sed -n "s/^$1='\{0,1\}\([^']*\)'\{0,1\}$/\1/p" "$SWE_CONFIG_DIR/compose.env" 2>/dev/null | tail -n 1; }
 # The split layout runs the frontend container too.

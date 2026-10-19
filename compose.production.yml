@@ -24,7 +24,7 @@ x-build: &build
   args:
     NEXT_PUBLIC_BASE_URL: https://spaceworks-events-origin.invalid
     NEXT_PUBLIC_BACKEND_ORIGIN: https://spaceworks-events-backend.invalid
-  # Only for compiling; every container receives its own key at runtime.
+  # A throwaway build key (see secrets below); containers get theirs at runtime.
   secrets: [NEXT_SERVER_ACTIONS_ENCRYPTION_KEY]
 
 services:
@@ -196,5 +196,7 @@ volumes:
   caddy_config:
 
 secrets:
+  # A throwaway key that vps-compose.sh generates per run: builds never see an
+  # installation's real key, which containers receive at runtime instead.
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:
-    file: ${SWE_CONFIG_DIR}/actions-key
+    environment: SWE_BUILD_KEY

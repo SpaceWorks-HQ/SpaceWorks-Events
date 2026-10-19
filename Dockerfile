@@ -14,23 +14,14 @@ COPY frontend/package.json ./frontend/package.json
 COPY prisma/schema.prisma ./prisma/schema.prisma
 RUN npm ci
 
-# A small, purpose-built target for CI/CD or Helm pre-upgrade migration Jobs.
-# Build and publish this target separately from the application runtime image.
+# A small migration-only target, used by the staging Compose file. Releases
+# migrate with the backend image's `migrate` role instead.
 # scripts/prisma.mjs defaults DIRECT_URL to DATABASE_URL when it is unset.
 FROM deps AS migrator
 WORKDIR /app
 COPY prisma ./prisma
 COPY scripts/prisma.mjs ./scripts/prisma.mjs
 CMD ["node", "scripts/prisma.mjs", "migrate", "deploy"]
-
-# Operator-only image for VPS setup, preflight, schema checks and backups.
-# Never serve requests from this image or publish it as the application image.
-FROM migrator AS ops
-USER root
-RUN apk add --no-cache openssl postgresql16-client
-COPY scripts ./scripts
-COPY docker/vps ./docker/vps
-CMD ["node", "scripts/check-production-env.mjs"]
 
 # Prisma CLI only, pinned to the lockfile's version, so the runner can apply
 # migrations on start (MIGRATE_ON_START=1) on platforms without a release job,

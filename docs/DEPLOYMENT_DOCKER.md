@@ -218,9 +218,11 @@ goes through a transaction pooler (for example Supabase on port 6543 with
 
 The `runner` image also carries the [VPS](DEPLOYMENT_VPS.md) operator tools
 (`docker/vps/*.mjs`: setup, preflight, schema checks and smoke tests), which the
-VPS stack runs as its `ops` service. It contains Prisma migrations but not the
-storage migration, backup, or restore scripts' PostgreSQL client tools.
-Consequently:
+VPS stack runs as its `ops` service, and the Prisma CLI for its `migrate` role.
+The `db-backup`, `db-restore` and storage-migration scripts are copied in too,
+but cannot run there: the image has no PostgreSQL client tools and not all of
+their dependencies. (The VPS stack backs up through its PostgreSQL container
+instead.) Consequently:
 
 - run `npm run storage:migrate` from a trusted checkout when legacy
   database-backed assets still exist; and

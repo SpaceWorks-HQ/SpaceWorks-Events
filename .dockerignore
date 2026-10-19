@@ -2,6 +2,8 @@
 # build contexts. Runtime secrets must be injected by the deployment platform.
 .env
 .env.*
+**/.env
+**/.env.*
 !.env.example
 .git
 .github

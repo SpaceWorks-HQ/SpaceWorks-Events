@@ -5,8 +5,10 @@
 #   node server.js            the backend web server (default)
 #   node frontend/server.js   the frontend web server (frontend image default)
 #   migrate                   apply pending database migrations once, then exit
-#   anything else             runs as given, e.g. the VPS operator tools:
-#                             node docker/vps/check.mjs
+#   node docker/vps/*.mjs,    the VPS operator tools, run as given
+#   node scripts/*.mjs
+#   anything else             treated like a web server: it gets the origins
+#                             applied and needs the runtime key (fails closed)
 #
 # Release images are built once for every installation, so the public origins
 # Next.js compiles in are placeholders, replaced before a web server starts:
@@ -56,7 +58,10 @@ apply_origin() {
 }
 
 case "${1:-}:${2:-}" in
-  node:*server.js)
+  node:docker/vps/*|node:scripts/*|node:/app/docker/vps/*|node:/app/scripts/*)
+    # Operator tools never serve requests and need no web settings.
+    ;;
+  *)
     if grep -rqF -e spaceworks-events-origin.invalid -e spaceworks-events-backend.invalid "$built" 2>/dev/null; then
       # The build's own key ships in every copy of the image; never fall back to it.
       if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then

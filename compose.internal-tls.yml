@@ -7,8 +7,26 @@ services:
   proxy:
     environment:
       SWE_CADDY_OPTIONS: local_certs
+  # Hands the frontend only the local CA's public certificate, never its keys.
+  caddy-root:
+    image: caddy:2-alpine
+    profiles: [split]
+    restart: "no"
+    network_mode: none
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        until [ -s /data/caddy/pki/authorities/local/root.crt ]; do sleep 1; done;
+        cp /data/caddy/pki/authorities/local/root.crt /export/root.crt && chmod 644 /export/root.crt
+    volumes:
+      - caddy_data:/data:ro
+      - caddy_root:/export
   frontend:
     environment:
-      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
+      NODE_EXTRA_CA_CERTS: /caddy-root/root.crt
     volumes:
-      - caddy_data:/caddy-data:ro
+      - caddy_root:/caddy-root:ro
+
+volumes:
+  caddy_root:

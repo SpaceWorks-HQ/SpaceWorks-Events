@@ -88,11 +88,20 @@ describe("image entrypoint", () => {
   });
 
   it("runs operator tools as given, without touching the build or needing web settings", () => {
-    const directory = build({ "server/page.js": `"${placeholder}"` });
-    const result = run(directory, ["echo", "ops task"], {});
+    const directory = build({ "server/page.js": `"${placeholder}"`, "scripts/tool.mjs": 'console.log("ops task");' });
+    const result = spawnSync("sh", [path.join(root, "scripts/docker-entrypoint.sh"), "node", "scripts/tool.mjs"], {
+      cwd: directory, encoding: "utf8", env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/") },
+    });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain("ops task");
     expect(readFileSync(path.join(directory, "server/page.js"), "utf8")).toBe(`"${placeholder}"`);
+  });
+
+  it("fails closed for any other command on a release build", () => {
+    const directory = build({ "server/page.js": `"${placeholder}"` });
+    const result = run(directory, ["node", "--enable-source-maps", path.join(directory, "server.js")], {});
+    expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain("server started");
   });
 
   it("leaves an image built with a real origin alone", () => {
