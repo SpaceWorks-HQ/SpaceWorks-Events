@@ -18,8 +18,10 @@ the way SpaceWorks publishes `spaceworks-backend` and `spaceworks-frontend`:
 | `ghcr.io/spaceworks-hq/spaceworks-events-frontend` | `frontend` | `node frontend/server.js`: the website alone (the `frontend/` workspace). It holds no database, Redis, storage or mail credentials and calls the backend through the authenticated gateway. |
 
 Releases before 0.9.1 published `spaceworks-events`, `-migrator` and `-ops`
-instead; those packages keep their old versions, and updating moves an
-installation to the two images above.
+instead. Those packages have been deleted. An installation still on 0.9.0
+keeps running from the images it already pulled but cannot pull them again,
+so rerun the one-line installer and choose **Update**; it moves to the two
+images above.
 
 Pull requests and forks' pull requests never publish.
 
