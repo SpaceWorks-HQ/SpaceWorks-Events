@@ -23,6 +23,10 @@ services:
       - caddy_data:/data:ro
       - caddy_root:/export
   frontend:
+    # Node reads the CA once at start; `up --wait` also needs a dependent here
+    # to accept caddy-root's exit.
+    depends_on:
+      caddy-root: { condition: service_completed_successfully }
     environment:
       NODE_EXTRA_CA_CERTS: /caddy-root/root.crt
     volumes:
