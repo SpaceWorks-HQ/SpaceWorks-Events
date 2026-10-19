@@ -27,6 +27,16 @@ if grep -rqF "$placeholder_host" "$built" 2>/dev/null; then
     echo "[entrypoint] Set NEXT_PUBLIC_BASE_URL to this site's origin, such as https://events.example.com (no path or trailing slash)." >&2
     exit 1
   fi
+  # The build's own key ships in every copy of the image; never fall back to it.
+  if [ -z "${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:-}" ]; then
+    echo "[entrypoint] Set NEXT_SERVER_ACTIONS_ENCRYPTION_KEY to this installation's own stable key." >&2
+    exit 1
+  fi
+  # next.config.ts compiles the Server Action origin allow-list into the build.
+  if [ -n "${ALLOWED_ACTION_ORIGINS:-}" ]; then
+    echo "[entrypoint] ALLOWED_ACTION_ORIGINS takes effect only at build time; build your own image to use it." >&2
+    exit 1
+  fi
   host="${origin#*://}"
   echo "[entrypoint] Applying the public origin $origin"
   grep -rlF "$placeholder_host" "$built" | while IFS= read -r file; do

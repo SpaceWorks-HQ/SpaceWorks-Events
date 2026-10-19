@@ -174,7 +174,7 @@ at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--releas
 for a specific release, `--ref` to build a branch or commit from source (needs
 4 GB of memory), `--repo` for a fork, `--dir` for another location and `--update`
 to skip the menu; `bash install.sh --help` lists them. A new release is published
-whenever `VERSION` changes on `main`. A restore is a
+by the first `main` build of each new `VERSION`. A restore is a
 deliberate step: `sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh <backup>`.
 
 The installer does not change DNS or firewall rules, provision SMTP or copy backups

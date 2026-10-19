@@ -11,8 +11,9 @@ run-name: Release ${{ github.event_name == 'workflow_run' && 'main' || github.re
 # installation supplies its own NEXT_SERVER_ACTIONS_ENCRYPTION_KEY at runtime.
 #
 # Image versions look like 0.1.0-main.42.a1b2c3d4e5f6 (VERSION, run, commit).
-# A GitHub Release (tag v<version>) is published only when VERSION changes, or
-# on a manual run on main; the VPS installer installs the latest release.
+# A GitHub Release (tag v<version>) is published by the first main build of
+# each VERSION (or a manual run on main); the VPS installer installs the latest
+# release, so bumping VERSION is how a change reaches installations.
 # A manual run on any other branch publishes a pre-release for testing.
 on:
   workflow_run:
@@ -20,9 +21,6 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
-  push:  # TEMPORARY: test the pipeline from this branch; removed before merging
-    branches: [feat/release-images]
-    paths-ignore: [.github/workflows/vps-e2e.yml]
 
 permissions:
   contents: read
@@ -35,7 +33,7 @@ jobs:
   prepare:
     # Never expose publishing credentials to a pull request or fork workflow.
     if: >-
-      github.event_name == 'workflow_dispatch' || github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_repository.full_name == github.repository)
@@ -51,12 +49,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 2
           persist-credentials: false
 
       - name: Work out the version
         id: release
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT: ${{ github.event_name }}
           BRANCH: ${{ github.ref_name }}
           RUN_NUMBER: ${{ github.run_number }}
@@ -75,10 +73,12 @@ jobs:
             release=true prerelease=true
           else
             label=main prerelease=false
-            # HEAD^ is the previous main commit (the first parent of a merge).
-            previous=$(git show HEAD^:VERSION 2>/dev/null | tr -d '[:space:]' || true)
+            # Decided by state, not by the diff: the first main build of a VERSION
+            # releases it, whichever commit changed VERSION and however it merged.
+            # Reruns and later commits of the same VERSION only publish images.
+            existing=$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$base-main." --jq length)
             release=false
-            if [[ "$EVENT" == workflow_dispatch || "$previous" != "$base" ]]; then release=true; fi
+            if [[ "$EVENT" == workflow_dispatch || "$existing" == 0 ]]; then release=true; fi
           fi
           version="$base-$label.$RUN_NUMBER.${sha:0:12}"
           {
@@ -125,8 +125,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Next.js needs a Server Actions key to build. This one is random, used
-      # once and never stored: every installation overrides it at runtime.
+      # Next.js needs a Server Actions key to build. This one is random per build
+      # and never used: the image refuses to start without the installation's own key.
       - name: Generate a throwaway build key
         run: |
           key=$(openssl rand -base64 32)
@@ -252,6 +252,7 @@ jobs:
           BASE: ${{ needs.prepare.outputs.base }}
           SHA: ${{ needs.prepare.outputs.sha }}
           PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          EVENT: ${{ github.event_name }}
         run: |
           set -euo pipefail
           title="Space Works Events $BASE"
@@ -260,8 +261,9 @@ jobs:
             title="$title (test build $VERSION)"
             flags=(--prerelease --latest=false)
             install="curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/v$VERSION/install.sh | bash -s -- --release v$VERSION"
-          elif [[ "$SHA" != "$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)" ]]; then
-            flags=(--latest=false)
+          elif [[ "$EVENT" != workflow_dispatch             && "$(gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v$BASE-main." --jq length)" != 0 ]]; then
+            echo "A concurrent build already released $BASE; publishing images only."
+            exit 0
           fi
           install=${install:-"curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/main/install.sh | bash"}
           notes=$(cat <<EOF

@@ -26,9 +26,11 @@ tagged `<VERSION>-main.<run>.<commit>`, for example `0.1.0-main.42.a1b2c3d4e5f6`
 and `sha-<commit>`. The newest main build also gets the rolling tags `main`,
 `latest` and its series (`0.1`).
 
-A **GitHub Release** is published only when a push to `main` changes
-`VERSION`, or when the workflow is run by hand on `main`
-(**Actions → Release → Run workflow**). Its tag is `v<version>` and its notes
+A **GitHub Release** is published by the first green build on `main` of each
+`VERSION` (whichever commit changed it, and even if an earlier build of that
+commit failed), or when the workflow is run by hand on `main`
+(**Actions → Release → Run workflow**). Later builds of the same `VERSION`
+publish images only. Its tag is `v<version>` and its notes
 list the images and the install command. It becomes the latest release. The
 [VPS installer](DEPLOYMENT_VPS.md) installs and updates to the latest release,
 so bumping `VERSION` is how a change reaches installations:
@@ -53,12 +55,16 @@ Nothing installation-specific is compiled in:
   the container's `NEXT_PUBLIC_BASE_URL`, after checking that the value is a
   bare origin such as `https://events.example.com`. A container without a
   valid origin refuses to start.
-- **Server Actions key.** The build uses a random key that is generated in the
-  workflow, used once and never stored. Next.js prefers
-  `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from the runtime environment over the
-  key in the build output, and production startup requires it, so every
-  installation encrypts with its own key. Keep it stable for an installation;
-  rotating it invalidates outstanding Server Action forms.
+- **Server Actions key.** The build uses a random key generated in the
+  workflow. It stays in the build output, so it is public, and it is never used:
+  Next.js prefers `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from the runtime
+  environment, and the entrypoint refuses to start a release image without it.
+  Every installation encrypts with its own key. Keep it stable for an
+  installation; rotating it invalidates outstanding Server Action forms.
+- **Server Action origins.** `ALLOWED_ACTION_ORIGINS` is compiled into the build
+  (empty in release images: same-origin only). The entrypoint refuses to start a
+  release image when it is set; build your own image if a CDN on another host
+  must invoke Server Actions.
 
 Images built with a real origin (Render, or your own `docker build`) contain no
 placeholder, and the entrypoint leaves them alone.

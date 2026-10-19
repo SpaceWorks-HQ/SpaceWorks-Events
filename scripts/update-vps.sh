@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Update an installation to this source release, keeping configuration, secrets
 # and volumes. The curl installer runs it as root from the staged new release.
-# It backs up the database and configuration first, builds the new images and
-# migrates. If the new release does not come up healthy it returns to the
+# It backs up the database and configuration first, downloads the release's
+# images (or builds them for a source install) and migrates. If the new release does not come up healthy it returns to the
 # previous release's images; database migrations are never reversed.
 #   --yes  skip the confirmation (automation)
 set -euo pipefail
@@ -41,7 +41,8 @@ if [[ $assume_yes = 0 ]]; then
     printf '  From:           %s\n' "${previous_version:-unknown}"
     printf '  To:             %s (commit %s)\n' "$version" "$revision"
     printf '  Configuration:  %s (kept as it is)\n' "$SWE_CONFIG_DIR"
-    printf 'Steps: back up the database and configuration to %s/backups, build the new\n' "$SWE_CONFIG_DIR"
+    if is_published_version "$version"; then fetch=download; else fetch=build; fi
+    printf 'Steps: back up the database and configuration to %s/backups, %s the new\n' "$SWE_CONFIG_DIR" "$fetch"
     printf 'images while the site keeps running, apply database migrations, restart and check.\n'
     printf 'If the new release is unhealthy the previous images are restored automatically;\n'
     printf 'migrations that already ran are not reversed. The site restarts briefly.\n\n'
@@ -50,17 +51,23 @@ if [[ $assume_yes = 0 ]]; then
 fi
 
 [[ $managed = 0 ]] || take_lock
-SWE_REPO_DIR=$source_dir
-[[ $managed = 0 ]] || SWE_REPO_DIR=$(promote_release "$source_dir" "$revision")
-cd "$SWE_REPO_DIR"
-say 'Backing up the database and configuration.'
-bash "$SWE_REPO_DIR/scripts/vps-backup.sh" --no-objects
-
-phase=deploying
+# Reusing a release directory rewrites its .release-version; put it back if the
+# update fails, so the directory keeps describing the version that runs.
+marker="$SWE_DIR/releases/$revision/.release-version" saved_marker=untouched
+if [[ $managed = 1 && -d "$SWE_DIR/releases/$revision" ]]; then
+  saved_marker=$(cat "$marker" 2>/dev/null || echo none)
+fi
+phase=preparing
 restore_previous() {
   local status=$?
-  [[ $status != 0 && $phase = deploying ]] || return 0
+  [[ $status != 0 ]] || return 0
   set +e
+  case "$saved_marker" in
+    untouched) ;;
+    none) rm -f "$marker" ;;
+    *) printf '%s\n' "$saved_marker" > "$marker" ;;
+  esac
+  [[ $phase = deploying ]] || exit "$status"
   warn "The update failed; returning to ${previous_version:-the previous release}."
   mv -f "$compose_env.previous" "$compose_env"
   if [[ -n "$previous_dir" && -f "$previous_dir/scripts/vps-compose.sh" ]]; then
@@ -73,6 +80,12 @@ restore_previous() {
   exit "$status"
 }
 trap restore_previous EXIT
+SWE_REPO_DIR=$source_dir
+[[ $managed = 0 ]] || SWE_REPO_DIR=$(promote_release "$source_dir" "$revision")
+cd "$SWE_REPO_DIR"
+say 'Backing up the database and configuration.'
+bash "$SWE_REPO_DIR/scripts/vps-backup.sh" --no-objects
+phase=deploying
 cp -p "$compose_env" "$compose_env.previous"
 # Only the release label and image names change; hostnames, secrets and volumes stay.
 conf_set "$compose_env" SWE_VERSION "$version"
@@ -97,9 +110,10 @@ if [[ $managed = 1 ]]; then
     count=$((count + 1))
     name=$(basename "$dir")
     [[ $count -gt 3 && "$name" =~ ^[a-f0-9]{40}$ && "$dir" != "$SWE_REPO_DIR" ]] || continue
-    old=$( (source_version "$dir" "$name") 2>/dev/null || release_version "$name")
     rm -rf -- "$dir"
-    docker image ls --format '{{.Repository}}:{{.Tag}}' | grep -E "(/spaceworks-events[a-z-]*|^swevents-[a-z]+):$old\$" \
+    # A commit may have run both as a source build and as a release: remove both.
+    docker image ls --format '{{.Repository}}:{{.Tag}}' \
+      | grep -E "(/spaceworks-events[a-z-]*|^swevents-[a-z]+):(vps-|[0-9]+\.[0-9]+\.[0-9]+-[a-z0-9-]+\.[0-9]+\.)${name:0:12}\$" \
       | xargs -r docker image rm >/dev/null 2>&1 || true
   done < <(find "$SWE_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
 fi

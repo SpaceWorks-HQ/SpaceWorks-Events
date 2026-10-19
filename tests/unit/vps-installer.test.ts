@@ -70,7 +70,8 @@ describe("VPS installer", () => {
     expect(readFileSync(path.join(root, "VERSION"), "utf8").trim()).toMatch(/^\d+\.\d+\.\d+$/);
     expect(workflow).toContain("NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid");
     expect(workflow).toContain("ubuntu-24.04-arm");
-    expect(workflow).toContain('previous=$(git show HEAD^:VERSION');
+    expect(workflow).toContain("matching-refs/tags/v$base-main.");
+    expect(workflow).not.toContain("TEMPORARY");
     for (const image of ["spaceworks-events", "spaceworks-events-migrator", "spaceworks-events-ops"]) expect(workflow).toContain(image);
     expect(workflow).not.toMatch(/secrets\.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY|vars\.NEXT_PUBLIC_BASE_URL/);
     const entrypoint = readFileSync(path.join(root, "scripts/docker-entrypoint.sh"), "utf8");

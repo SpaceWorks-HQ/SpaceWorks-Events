@@ -114,7 +114,11 @@ main() {
 
   if as_root test -L "$install_dir/current"; then
     installed=$(basename "$(as_root readlink -f "$install_dir/current")")
-    installed_version=$(as_root cat "$install_dir/current/.release-version" 2>/dev/null || printf 'vps-%s' "${installed:0:12}")
+    # compose.env records what actually runs (a failed update leaves it unchanged).
+    config_dir=${SWE_CONFIG_DIR:-$(conf_get "$install_dir" SWE_CONFIG_DIR)}
+    installed_version=$(as_root sed -n "s/^SWE_VERSION=//p" "${config_dir:-/etc/spaceworks-events}/compose.env" 2>/dev/null \
+      | tail -n 1 | tr -d "'\r" || true)
+    installed_version=${installed_version:-vps-${installed:0:12}}
   fi
   if as_root test -f "$install_dir/install.conf"; then pending=$(conf_get "$install_dir" SWE_PENDING_RELEASE); fi
   repository=${repository:-$(conf_get "$install_dir" SWE_REPOSITORY)}
@@ -150,7 +154,7 @@ Choose 1-4 [4]: ")
     if as_root test -f "${config_dir:-/etc/spaceworks-events}/compose.env"; then
       choice=$(prompt "
 A previous setup of commit ${pending:0:12} in $install_dir did not finish; its secrets exist.
-  1) Resume - build and start it, keeping those secrets
+  1) Resume - start it, keeping those secrets
   2) Cancel - change nothing
 Choose 1-2 [1]: ")
       case "${choice:-1}" in

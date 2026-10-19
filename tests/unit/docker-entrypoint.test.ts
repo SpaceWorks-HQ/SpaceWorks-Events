@@ -19,8 +19,8 @@ function build(files: Record<string, string>) {
   return directory;
 }
 
-function start(directory: string, origin?: string) {
-  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/") };
+function start(directory: string, origin?: string, extra: Record<string, string> = { NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "installation-key" }) {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/"), ...extra };
   if (origin) env.NEXT_PUBLIC_BASE_URL = origin;
   return spawnSync("sh", ["scripts/docker-entrypoint.sh", "echo", "server started"], { cwd: root, encoding: "utf8", env });
 }
@@ -56,6 +56,16 @@ describe("runner entrypoint", () => {
       expect(result.status, String(origin)).toBe(1);
       expect(result.stdout).not.toContain("server started");
       expect(readFileSync(path.join(directory, "server/page.js"), "utf8")).toBe(`"${placeholder}"`);
+    }
+  });
+
+  it("refuses to start a release build without its own key or with a build-time setting", () => {
+    const cases: Record<string, string>[] = [{}, { NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "key", ALLOWED_ACTION_ORIGINS: "cdn.example.com" }];
+    for (const extra of cases) {
+      const directory = build({ "server/page.js": `"${placeholder}"` });
+      const result = start(directory, "https://events.example.com", extra);
+      expect(result.status).toBe(1);
+      expect(result.stdout).not.toContain("server started");
     }
   });
 
