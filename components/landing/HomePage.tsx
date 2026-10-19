@@ -18,8 +18,9 @@ import {
 import { MoodTile, type Mood } from "@/components/brand/MoodTile";
 import { Button } from "@/components/ui/button";
 import { GitHubMark } from "@/components/ui/github-mark";
-import { CONTRIBUTING_URL, DISCUSSIONS_URL, GITHUB_REPO, GITHUB_URL, LICENSE_URL, NEW_ISSUE_URL, SETUP_GUIDE_URL } from "@/lib/openSource";
+import { CONTRIBUTING_URL, DISCUSSIONS_URL, GITHUB_REPO, GITHUB_URL, INSTALL_SCRIPT_URL, LICENSE_URL, NEW_ISSUE_URL, SETUP_GUIDE_URL } from "@/lib/openSource";
 import { ColourPreview } from "./ColourPreview";
+import { InstallCommand } from "./InstallCommand";
 import { Container, IconTile, SectionHeading } from "./primitives";
 
 const steps = [
@@ -62,13 +63,15 @@ const promises = [
   { title: "Make your guests sign up", body: "People can register as guests with just a name and email. Accounts are optional." },
 ];
 
-const requirements = [
-  ["App", "Docker image · Helm chart"],
-  ["Database", "PostgreSQL"],
-  ["Rate limiting", "Redis"],
-  ["Files", "S3-compatible storage"],
-  ["Email", "Any SMTP provider"],
-  ["Sign-in", "Email + optional Google"],
+/** What the one-line installer sets up on the server. */
+const installed = [
+  ["Website and API", "Frontend and backend containers"],
+  ["Database migrations", "Run by the backend on every update"],
+  ["Database", "PostgreSQL 16"],
+  ["Cache and rate limits", "Redis 7"],
+  ["Images and files", "Silo storage, or your S3 bucket"],
+  ["HTTPS", "Caddy, with automatic certificates"],
+  ["Upkeep", "Backups, status, updates with rollback"],
 ];
 
 const openLinks = [
@@ -82,7 +85,7 @@ const faqs = [
   { q: "Is Space Works Events free?", a: "Yes. It is built only for free events: there is nothing to buy and nothing to sell. If you host it yourself, you only pay for your own server." },
   { q: "Who is it for?", a: "Makerspaces, hackerspaces, workshops, build nights, campus clubs and any community that runs free events, usually with a small team of volunteers." },
   { q: "Do my guests need an account?", a: "No. Guests can register with a name and email and get their ticket by email. They can create an account later if they want one." },
-  { q: "Can I run it on my own server?", a: "Yes. It ships as a Docker image with a Helm chart. You will need PostgreSQL, Redis, S3-compatible storage and an SMTP provider." },
+  { q: "Can I run it on my own server?", a: "Yes. One command on a Linux server installs everything: the website and API, PostgreSQL, Redis, file storage and HTTPS. You only bring a domain and an SMTP provider for email. Docker images and a Helm chart are there if you prefer." },
   { q: "Is it open source?", a: "Yes. The code is public on GitHub under the AGPL-3.0 licence. Anyone can read it, report bugs, suggest ideas and send improvements." },
   { q: "What happens if the internet drops at the venue?", a: "Download the guest list before doors open and keep checking people in. Everything syncs when the connection comes back." },
 ];
@@ -343,8 +346,13 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
             <div className="flex flex-col gap-2">
               <p className="text-overline text-ink-muted">Self-host</p>
               <h2 id="self-host-title" className="text-display-m text-ink">Run it on your own server</h2>
-              <p className="text-body-l text-ink-secondary">Your guest lists stay with you. Space Works Events ships as a Docker image with a Helm chart, and every organisation on your install is kept separate from the others.</p>
+              <p className="text-body-l text-ink-secondary">Your guest lists stay with you. One command installs the whole stack on a Linux server, and every organisation on your install is kept separate from the others.</p>
             </div>
+            <InstallCommand />
+            <p className="text-body-ui text-ink-secondary">
+              On a 64-bit Linux server with 2 GB of memory, as root or a user with sudo. It asks every question first and changes nothing until you confirm.{" "}
+              <a href={INSTALL_SCRIPT_URL} target="_blank" rel="noopener noreferrer" className="text-ink underline underline-offset-4">Read install.sh</a>
+            </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="primary">
                 <a href={SETUP_GUIDE_URL} target="_blank" rel="noopener noreferrer">Read the setup guide</a>
@@ -355,9 +363,9 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
             </div>
           </div>
           <div className="mx-auto w-full max-w-[552px] overflow-hidden rounded-[16px] border border-line bg-panel lg:mx-0 lg:justify-self-end">
-            <p className="border-b border-line px-5 py-3.5 text-label text-ink">What you need</p>
+            <p className="border-b border-line px-5 py-3.5 text-label text-ink">What you get</p>
             <dl className="py-2">
-              {requirements.map(([label, value]) => (
+              {installed.map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4 px-5 py-3">
                   <dt className="text-label text-ink">{label}</dt>
                   <dd className="text-right text-[14px] font-medium text-ink-muted">{value}</dd>
