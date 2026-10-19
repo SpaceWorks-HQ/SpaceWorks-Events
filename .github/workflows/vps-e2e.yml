@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.9.1-feat-backend-frontend-images.7.2e0f9039527f
+  RELEASE: v0.9.1-feat-backend-frontend-images.9.5009e46c4237
   OLD_RELEASE: v0.9.0-main.6.5d54f5595fa1
 
 jobs:
