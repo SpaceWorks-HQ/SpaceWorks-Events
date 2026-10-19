@@ -107,6 +107,12 @@ disk_mb=$(free_disk_mb /var/lib/docker)
 (( disk_mb >= 10240 )) || die "At least 10 GB of free disk is needed for images, data and backups; only $disk_mb MB is free."
 has_docker=0
 if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then has_docker=1; fi
+# compose.external-storage.yml uses `!override` (Compose 2.24.4 and later).
+if [[ $has_docker = 1 ]]; then
+  compose_version=$(docker compose version --short 2>/dev/null | sed 's/^v//')
+  printf '%s\n%s\n' 2.24.4 "$compose_version" | sort -V -C \
+    || die "Docker Compose ${compose_version:-unknown} is too old; 2.24.4 or newer is needed (Docker's official packages provide it)."
+fi
 # Published images only need memory to run; a source build needs about 4 GB.
 offer_swap=0 needed_mb=1800
 [[ $published = 1 ]] || needed_mb=3800
@@ -169,7 +175,7 @@ https_default=2
 [[ "${SWE_CADDY_TLS:-}" != proxy ]] || https_default=3
 ask https_mode 'HTTPS' "$https_default" is_hosting 'Enter 1, 2 or 3.'
 acme_email=''
-[[ $https_mode != 2 ]] || ask acme_email 'Certificate email (Let'"'"'s Encrypt expiry notices)' "$admin_email" is_email 'Enter an email address.'
+[[ $https_mode != 2 ]] || ask acme_email 'Certificate email (Let'"'"'s Encrypt expiry notices)' "$admin_email" is_plain_email 'Enter a plain address such as you@example.com.'
 cat >/dev/tty <<'EOF'
 
 File storage (event covers, ID cards, uploads)
@@ -201,7 +207,8 @@ if [[ $SMTP_PORT = 465 ]]; then SMTP_SECURE=true; fi
 ask SMTP_USER 'SMTP login' '' is_env_value "Enter the login, without ' or \\ characters."
 ask_secret SMTP_PASSWORD 'SMTP password or key (hidden)'
 install_runner=0
-if command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
+# Only installs made by the one-line installer can update themselves.
+if [[ $managed = 1 ]] && command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
   confirm 'Install a GitHub Actions runner on this server for automatic deploys of new releases?' N && install_runner=1
 fi
 make_swap=0

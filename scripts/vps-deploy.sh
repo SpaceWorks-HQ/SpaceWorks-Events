@@ -23,6 +23,15 @@ github() { curl --fail --silent --show-error --location --proto '=https' "$@"; }
 revision=$(github --header 'Accept: application/vnd.github.sha' "https://api.github.com/repos/$repository/commits/$tag") \
   || die "Could not find release $tag in $repository."
 [[ "$revision" =~ ^[a-f0-9]{40}$ && "${revision:0:12}" = "${version: -12}" ]] || die "Release $tag does not point at its own commit."
+# Only published releases of main deploy: never a pre-release, a bare tag or a
+# commit that is not on main, whatever the workflow that asked.
+release_json=$(github "https://api.github.com/repos/$repository/releases/tags/$tag") \
+  || die "$tag is not a published GitHub Release of $repository."
+grep -Eq '"prerelease"[[:space:]]*:[[:space:]]*false' <<< "$release_json" || die "$tag is a pre-release; it is never deployed automatically."
+grep -Eq '"draft"[[:space:]]*:[[:space:]]*false' <<< "$release_json" || die "$tag is a draft release."
+status=$(github "https://api.github.com/repos/$repository/compare/main...$revision?per_page=1" \
+  | sed -n 's/^[[:space:]]*"status"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' | head -n 1)
+[[ $status = identical || $status = behind ]] || die "The commit of $tag is not on main."
 stage=$(mktemp -d)
 trap 'rm -rf -- "$stage"' EXIT
 say "Downloading $version (commit ${revision:0:12})."

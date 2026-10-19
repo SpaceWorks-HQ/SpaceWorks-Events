@@ -57,6 +57,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT: ${{ github.event_name }}
           BRANCH: ${{ github.ref_name }}
+          REF: ${{ github.ref }}
           RUN_NUMBER: ${{ github.run_number }}
           OWNER: ${{ github.repository_owner }}
         run: |
@@ -67,7 +68,8 @@ jobs:
             echo "::error file=VERSION::VERSION must be a version like 1.2.3 (got '$base')"
             exit 1
           fi
-          if [[ "$EVENT" != workflow_run && "$BRANCH" != main ]]; then
+          # A full-ref test: a tag named main never counts as the main branch.
+          if [[ "$EVENT" != workflow_run && "$REF" != refs/heads/main ]]; then
             label=$(printf '%s' "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' | cut -c1-30)
             label=${label%-}
             release=true prerelease=true
@@ -306,4 +308,5 @@ jobs:
       - name: Deploy the published release
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: bash "${SWE_DIR:-/opt/spaceworks-events}/current/scripts/vps-deploy.sh" "v$VERSION"
+        # The runner account may run only this wrapper as root (install-runner.sh).
+        run: sudo -n /usr/local/sbin/swevents-deploy "v$VERSION"

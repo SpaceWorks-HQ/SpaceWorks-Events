@@ -17,6 +17,8 @@ require_tty() { { : </dev/tty; } 2>/dev/null || die 'An interactive terminal is 
 
 is_hostname() { [[ ${#1} -le 253 && "$1" =~ ^([a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$ ]]; }
 is_email() { [[ "$1" =~ ^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$ ]] && is_env_value "$1"; }
+# Stricter, for values that end up in the Caddyfile.
+is_plain_email() { [[ "$1" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; }
 is_port() { [[ "$1" =~ ^[0-9]{1,5}$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 )); }
 is_nonempty() { [[ -n "${1//[[:space:]]/}" ]]; }
 # Answers are stored as single-quoted env-file values, which cannot hold ' or \.
@@ -232,8 +234,6 @@ create_swap() {
   fi
 }
 
-# These scripts never attach a terminal to a container: the installer runs them
-# with stdin from /dev/null, and Compose refuses a TTY without one.
 # Install distribution packages with the family's package manager.
 install_packages() {
   # shellcheck disable=SC1091
@@ -247,6 +247,8 @@ install_packages() {
     esac ) || die "Could not install $*; install it with your package manager, then rerun."
 }
 
+# These scripts never attach a terminal to a container: the installer runs them
+# with stdin from /dev/null, and Compose refuses a TTY without one.
 compose() {
   case "${1:-}" in
     run|exec) local command=$1; shift; sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$command" -T "$@" ;;

@@ -230,5 +230,14 @@ describe("VPS installer", () => {
     expect(workflow).toContain("runs-on: [self-hosted, spaceworks-events-prod]");
     expect(workflow).toContain("vars.SWE_DEPLOY == 'true'");
     expect(workflow).not.toMatch(/deploy:[\s\S]*actions\/checkout/);
+    // The runner may run only the deploy wrapper as root; a tag named main is not main.
+    expect(workflow).toContain('sudo -n /usr/local/sbin/swevents-deploy "v$VERSION"');
+    expect(workflow).toContain('"$REF" != refs/heads/main');
+    const runner = readFileSync(path.join(root, "scripts/install-runner.sh"), "utf8");
+    expect(runner).not.toContain("RUNNER_ALLOW_RUNASROOT");
+    expect(runner).toContain('runuser -m -u "$RUNNER_USER"');
+    const deploy = readFileSync(path.join(root, "scripts/vps-deploy.sh"), "utf8");
+    expect(deploy).toContain('"prerelease"[[:space:]]*:[[:space:]]*false');
+    expect(deploy).toContain("compare/main...$revision");
   });
 });
