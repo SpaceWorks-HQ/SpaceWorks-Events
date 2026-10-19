@@ -92,7 +92,7 @@ conf_set "$compose_env" SWE_VERSION "$version"
 set_image_settings "$compose_env" "$version" "$repository"
 say 'Fetching the new images. The site keeps running meanwhile.'
 compose config --quiet
-fetch_images "$version"
+fetch_images "$version" "$(conf_get "$compose_env" SWE_LAYOUT)"
 compose run --rm --no-deps ops node docker/vps/check.mjs preflight
 compose run --rm migrator
 compose run --rm --no-deps ops node scripts/verify-production-schema.mjs
@@ -118,6 +118,8 @@ if [[ $managed = 1 ]]; then
   done < <(find "$SWE_DIR/releases" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' | sort -rn | cut -d' ' -f2-)
 fi
 say "Updated to $version. Verify sign-in, email, uploads and live check-in."
-if [[ -f "$SWE_CONFIG_DIR/frontend.env" ]]; then
-  say "Deploy commit $revision to the Netlify frontend too."
+# Installations from before 0.9.1 record no layout; a frontend.env then means Netlify.
+layout=$(conf_get "$compose_env" SWE_LAYOUT)
+if [[ $layout = netlify || ( -z $layout && -f "$SWE_CONFIG_DIR/frontend.env" ) ]]; then
+  say "Deploy commit $revision to the Netlify website too."
 fi

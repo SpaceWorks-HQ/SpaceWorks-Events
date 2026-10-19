@@ -6,17 +6,14 @@ without Kubernetes, use the
 
 ## Images
 
-Publish two images from the same commit and use immutable tags:
-
-```bash
-docker build --target migrator -t ghcr.io/spaceworks-hq/spaceworks-events-migrator:VERSION .
-docker build --target runner \
-  --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY --build-arg NEXT_PUBLIC_BASE_URL="$NEXT_PUBLIC_BASE_URL" \
-  -t ghcr.io/spaceworks-hq/spaceworks-events:VERSION .
-```
-
-The Server Actions key is required by the application build, not the migrator
-build. It must be present at application runtime with the same stable value.
+The chart uses one image, `ghcr.io/spaceworks-hq/spaceworks-events-backend`,
+which every green build of `main` publishes (see
+[Releases and container images](../../docs/CONTAINER_IMAGES.md)). The
+Deployment runs it as the application and the migration Job runs its `migrate`
+role. Use an immutable version tag such as `0.9.1-main.42.a1b2c3d4e5f6`. The
+Secret must provide `NEXT_PUBLIC_BASE_URL` and the installation's own
+`NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`; the container applies the origin at start
+and refuses to start without the key.
 
 ## Runtime secret
 
@@ -35,11 +32,11 @@ Create a `values-production.yaml` outside source control:
 
 ```yaml
 image:
-  repository: ghcr.io/spaceworks-hq/spaceworks-events
+  repository: ghcr.io/spaceworks-hq/spaceworks-events-backend
   tag: "VERSION"
 migration:
   image:
-    repository: ghcr.io/spaceworks-hq/spaceworks-events-migrator
+    repository: ghcr.io/spaceworks-hq/spaceworks-events-backend
     tag: "VERSION"
 ingress:
   enabled: true

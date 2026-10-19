@@ -34,9 +34,9 @@ is_repository "$repository" || die 'SWE_REPOSITORY must be a GitHub owner/name.'
 start_stack() {
   cd "$SWE_REPO_DIR"
   compose config --quiet
-  fetch_images "$version"
+  fetch_images "$version" "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_LAYOUT)"
   compose run --rm --no-deps ops node docker/vps/check.mjs preflight
-  say 'Starting PostgreSQL, Redis, Silo storage, migrations, the app, Caddy and the scheduler.'
+  say 'Starting PostgreSQL, Redis, Silo storage, migrations, the backend and website, Caddy and the scheduler.'
   compose up -d --wait --wait-timeout 300
   compose run --rm --no-deps ops node docker/vps/check.mjs
 }
@@ -51,11 +51,12 @@ finish() {
   fi
   origin=$(conf_get "$SWE_CONFIG_DIR/compose.env" PUBLIC_ORIGIN)
   public_host=$(conf_get "$SWE_CONFIG_DIR/compose.env" PUBLIC_HOST)
+  layout=$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_LAYOUT)
   cat <<EOF
 
 Space Works Events $version is running.
   Website:        $origin
-  Health:         https://$public_host/api/health
+  API health:     https://$public_host/api/health
   Configuration:  $SWE_CONFIG_DIR (contains every secret; keep an encrypted off-server copy)
 
 Next steps
@@ -64,9 +65,9 @@ Next steps
   2. Send a test email, upload an event cover and register for a private test event.
   3. Back up: sudo bash $scripts_dir/vps-backup.sh, then copy the backup off this server.
 EOF
-  if [[ -f "$SWE_CONFIG_DIR/frontend.env" ]]; then
+  if [[ $layout = netlify ]]; then
     cat <<EOF
-  4. Deploy the frontend from the same commit ($revision) on Netlify with the
+  4. Deploy the website from the same commit ($revision) on Netlify with the
      settings in $SWE_CONFIG_DIR/frontend.env. See docs/DEPLOYMENT_SPLIT.md.
 EOF
   fi
@@ -122,20 +123,42 @@ Answer the questions below. Press Enter to accept a [default].
 Nothing on this server changes until you confirm the summary.
 
 EOF
-ask hosting_mode 'Hosting: 1 = everything on this VPS, 2 = Netlify frontend + this VPS as the backend' 1 is_mode 'Enter 1 or 2.'
+cat >/dev/tty <<'EOF'
+Hosting
+  1 = website and API containers on this VPS (two hostnames, e.g. events.example.com
+      and api.events.example.com; both DNS A records point here)
+  2 = one app container on this VPS (one hostname)
+  3 = website on Netlify, API on this VPS
+EOF
+is_hosting() { [[ "$1" =~ ^[123]$ ]]; }
+ask hosting_mode 'Hosting' 1 is_hosting 'Enter 1, 2 or 3.'
 frontend_host=''
-if [[ $hosting_mode = 1 ]]; then
-  ask public_host 'Public hostname (its DNS A record points at this server)' '' is_hostname 'Enter a hostname such as events.example.com.'
-  public_host=${public_host,,}
-  site_host=$public_host
-else
-  ask public_host 'Backend hostname for this VPS (DNS A record points here)' '' is_hostname 'Enter a hostname such as api.events.example.com.'
-  public_host=${public_host,,}
-  is_frontend_host() { is_hostname "$1" && [[ "${1,,}" != "$public_host" ]]; }
-  ask frontend_host 'Frontend hostname on Netlify' '' is_frontend_host 'Enter a different hostname, such as events.example.com or your-site.netlify.app.'
-  frontend_host=${frontend_host,,}
-  site_host=$frontend_host
-fi
+case $hosting_mode in
+  1)
+    layout='split'
+    ask frontend_host 'Website hostname' '' is_hostname 'Enter a hostname such as events.example.com.'
+    frontend_host=${frontend_host,,}
+    is_api_host() { is_hostname "$1" && [[ "${1,,}" != "$frontend_host" ]]; }
+    ask public_host 'API hostname' "api.$frontend_host" is_api_host 'Enter a different hostname, such as api.events.example.com.'
+    public_host=${public_host,,}
+    site_host=$frontend_host
+    ;;
+  2)
+    layout='single'
+    ask public_host 'Public hostname (its DNS A record points at this server)' '' is_hostname 'Enter a hostname such as events.example.com.'
+    public_host=${public_host,,}
+    site_host=$public_host
+    ;;
+  3)
+    layout='netlify'
+    ask public_host 'API hostname for this VPS (DNS A record points here)' '' is_hostname 'Enter a hostname such as api.events.example.com.'
+    public_host=${public_host,,}
+    is_frontend_host() { is_hostname "$1" && [[ "${1,,}" != "$public_host" ]]; }
+    ask frontend_host 'Website hostname on Netlify' '' is_frontend_host 'Enter a different hostname, such as events.example.com or your-site.netlify.app.'
+    frontend_host=${frontend_host,,}
+    site_host=$frontend_host
+    ;;
+esac
 ask admin_email 'Super-admin email (sign up with it to administer this instance)' '' is_email 'Enter an email address.'
 printf '\nOutgoing email needs an authenticated SMTP relay on a verified sending domain (Brevo, Amazon SES, Postmark...).\n' >/dev/tty
 ask EMAIL_FROM 'Sender, as Name <address@your-verified-domain>' "Space Works Events <events@$site_host>" is_env_value "Enter a sender without ' or \\ characters."
@@ -151,7 +174,10 @@ make_swap=0
 if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; Space Works Events needs about $(( (needed_mb + 999) / 1000 )) GB. Create a 4 GB swap file at /swapfile?" Y; then
   make_swap=1
 fi
-dns=$(getent ahosts "$public_host" 2>/dev/null | awk '{ print $1 }' | sort -u | tr '\n' ' ' || true)
+resolves() { getent ahosts "$1" 2>/dev/null | awk '{ print $1 }' | sort -u | tr '\n' ' ' || true; }
+dns=$(resolves "$public_host")
+site_dns=''
+[[ $layout != split ]] || site_dns=$(resolves "$frontend_host")
 
 install_path=$source_dir
 [[ $managed = 0 ]] || install_path="$SWE_DIR/releases/$revision"
@@ -166,12 +192,21 @@ install_path=$source_dir
   printf '  Installed to:    %s\n' "$install_path"
   printf '  Configuration:   %s (secrets, owner-only)\n' "$SWE_CONFIG_DIR"
   printf '  Website:         https://%s\n' "$site_host"
-  [[ -z "$frontend_host" ]] || printf '  Backend (VPS):   https://%s (deploy the frontend to Netlify afterwards)\n' "$public_host"
+  case $layout in
+    split) printf '  API:             https://%s (both run on this VPS)\n' "$public_host" ;;
+    netlify) printf '  API (this VPS):  https://%s (deploy the website to Netlify afterwards)\n' "$public_host" ;;
+  esac
   printf '  Super admin:     %s\n' "$admin_email"
   printf '  Email:           %s via %s:%s (implicit TLS: %s)\n' "$EMAIL_FROM" "$SMTP_HOST" "$SMTP_PORT" "$SMTP_SECURE"
-  printf '  Services:        app, PostgreSQL 16, Redis 7, Silo object storage, Caddy HTTPS on ports 80/443,\n'
-  printf '                   one-shot migrations and an email-outbox scheduler (Docker Compose project swevents)\n'
+  if [[ $layout = split ]]; then
+    printf '  Services:        website (frontend) and API (backend) containers, PostgreSQL 16, Redis 7,\n'
+  else
+    printf '  Services:        app (backend) container, PostgreSQL 16, Redis 7,\n'
+  fi
+  printf '                   Silo object storage, Caddy HTTPS on ports 80/443, one-shot migrations and an\n'
+  printf '                   email-outbox scheduler (Docker Compose project swevents)\n'
   printf '  DNS:             %s\n' "${dns:-$public_host does not resolve yet; HTTPS starts working once it points here}"
+  [[ $layout != split ]] || printf '                   %s\n' "${site_dns:-$frontend_host does not resolve yet}"
   printf 'Host changes\n'
   [[ $make_swap = 0 ]] || printf '  - create and enable a 4 GB swap file at /swapfile\n'
   [[ $has_docker = 1 ]] || printf '  - install Docker Engine and Docker Compose from the official repositories\n'
@@ -196,25 +231,31 @@ if [[ $managed = 1 ]]; then
   conf_set "$(install_conf)" SWE_PENDING_RELEASE "$revision"
 fi
 cd "$SWE_REPO_DIR"
-ops_image="swevents-ops:$version"
+# The backend image carries the operator tools (run as root to write /config).
+ops_image="swevents-backend:$version"
 if [[ $published = 1 ]]; then
-  ops_image="ghcr.io/$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')/spaceworks-events-ops:$version"
-  say 'Downloading the operator tools image, then generating secrets and internal certificates.'
+  ops_image="ghcr.io/$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')/spaceworks-events-backend:$version"
+  say 'Downloading the backend image, then generating secrets and internal certificates.'
   docker pull --quiet "$ops_image" >/dev/null || die "Cannot download $ops_image. Check that the release's packages are public on GitHub."
 else
-  say 'Building the operator tools image (a few minutes), then generating secrets and internal certificates.'
-  docker build --quiet --target ops --tag "$ops_image" . >/dev/null
+  say 'Building the backend image (several minutes), then generating secrets and internal certificates.'
+  # Origins are placeholders and the build key is throwaway: containers get theirs at runtime.
+  SWE_BUILD_KEY=$(head -c 32 /dev/urandom | base64) docker build --quiet --target runner \
+    --build-arg NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid \
+    --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=SWE_BUILD_KEY --tag "$ops_image" . >/dev/null
 fi
 # Generate everything beside the final directory and rename it into place, so an
 # interrupted run never leaves a half-written configuration behind.
 staging_config="$SWE_CONFIG_DIR.partial"
 rm -rf -- "$staging_config"
 install -d -m 0700 "$staging_config"
-docker run --rm --volume "$staging_config:/config" "$ops_image" \
-  node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host" >/dev/null
+docker run --rm --user 0:0 --volume "$staging_config:/config" "$ops_image" \
+  node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host" "$layout" >/dev/null
 set_image_settings "$staging_config/compose.env" "$version" "$repository"
+# LAN and test installs: Caddy's local CA instead of public certificates.
+[[ "${SWE_CADDY_TLS:-}" != internal ]] || conf_set "$staging_config/compose.env" SWE_CADDY_TLS internal
 export EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD
-docker run --rm --volume "$staging_config:/config" \
+docker run --rm --user 0:0 --volume "$staging_config:/config" \
   --env EMAIL_FROM --env SMTP_HOST --env SMTP_PORT --env SMTP_SECURE --env SMTP_USER --env SMTP_PASSWORD \
   "$ops_image" node docker/vps/configure-smtp.mjs
 unset SMTP_PASSWORD SMTP_USER

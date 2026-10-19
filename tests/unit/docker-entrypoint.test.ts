@@ -6,30 +6,35 @@ import { afterEach, describe, expect, it } from "vitest";
 
 const root = path.resolve(import.meta.dirname, "../..");
 const placeholder = "https://spaceworks-events-origin.invalid";
+const backendPlaceholder = "https://spaceworks-events-backend.invalid";
 const directories: string[] = [];
 
-// A fake Next.js build output as the release workflow produces it.
+// A fake Next.js build output as the release workflow produces it, beside a
+// stand-in server.js that only reports that it started.
 function build(files: Record<string, string>) {
   const directory = mkdtempSync(path.join(tmpdir(), "swe-entrypoint-"));
   directories.push(directory);
-  for (const [name, text] of Object.entries(files)) {
+  for (const [name, text] of Object.entries({ ...files, "server.js": 'console.log("server started");' })) {
     mkdirSync(path.dirname(path.join(directory, name)), { recursive: true });
     writeFileSync(path.join(directory, name), text);
   }
   return directory;
 }
 
+function run(directory: string, command: string[], variables: Record<string, string>) {
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/"), ...variables };
+  return spawnSync("sh", ["scripts/docker-entrypoint.sh", ...command], { cwd: root, encoding: "utf8", env });
+}
+
 function start(directory: string, origin?: string, extra: Record<string, string> = { NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "installation-key" }) {
-  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/"), ...extra };
-  if (origin) env.NEXT_PUBLIC_BASE_URL = origin;
-  return spawnSync("sh", ["scripts/docker-entrypoint.sh", "echo", "server started"], { cwd: root, encoding: "utf8", env });
+  return run(directory, ["node", path.join(directory, "server.js")], { ...extra, ...(origin ? { NEXT_PUBLIC_BASE_URL: origin } : {}) });
 }
 
 afterEach(() => {
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-describe("runner entrypoint", () => {
+describe("image entrypoint", () => {
   it("applies the installation's public origin to a release build before starting", () => {
     const directory = build({
       "server/app/page.js": `const base="${placeholder}";const prefix="spaceworks-events-origin.invalid/";`,
@@ -47,6 +52,19 @@ describe("runner entrypoint", () => {
       .toBe('<link rel="canonical" href="https://events.example.com/"><meta content="https%3A%2F%2Fevents.example.com">');
     // Starting again (a container restart) is a no-op.
     expect(start(directory, "https://events.example.com").status).toBe(0);
+  });
+
+  it("applies the backend origin to a frontend build", () => {
+    const directory = build({ "server/chunk.js": `"${placeholder}";new EventSource("${backendPlaceholder}/api/ticket/x/events")` });
+    const result = run(directory, ["node", path.join(directory, "server.js")], {
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "frontend-key", NEXT_PUBLIC_BASE_URL: "https://events.example.com",
+      NEXT_PUBLIC_BACKEND_ORIGIN: "https://api.events.example.com",
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(path.join(directory, "server/chunk.js"), "utf8"))
+      .toBe('"https://events.example.com";new EventSource("https://api.events.example.com/api/ticket/x/events")');
+    const missing = build({ "server/chunk.js": `"${backendPlaceholder}"` });
+    expect(run(missing, ["node", path.join(missing, "server.js")], { NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: "k" }).status).toBe(1);
   });
 
   it("refuses to start a release build without a usable origin", () => {
@@ -67,6 +85,23 @@ describe("runner entrypoint", () => {
       expect(result.status).toBe(1);
       expect(result.stdout).not.toContain("server started");
     }
+  });
+
+  it("runs operator tools as given, without touching the build or needing web settings", () => {
+    const directory = build({ "server/page.js": `"${placeholder}"`, "scripts/tool.mjs": 'console.log("ops task");' });
+    const result = spawnSync("sh", [path.join(root, "scripts/docker-entrypoint.sh"), "node", "scripts/tool.mjs"], {
+      cwd: directory, encoding: "utf8", env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/") },
+    });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain("ops task");
+    expect(readFileSync(path.join(directory, "server/page.js"), "utf8")).toBe(`"${placeholder}"`);
+  });
+
+  it("fails closed for any other command on a release build", () => {
+    const directory = build({ "server/page.js": `"${placeholder}"` });
+    const result = run(directory, ["node", "--enable-source-maps", path.join(directory, "server.js")], {});
+    expect(result.status).toBe(1);
+    expect(result.stdout).not.toContain("server started");
   });
 
   it("leaves an image built with a real origin alone", () => {

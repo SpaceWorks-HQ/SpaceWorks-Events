@@ -1,4 +1,6 @@
+# single and netlify layouts: PUBLIC_HOST is served by the backend container.
 {
+  {$SWE_CADDY_OPTIONS}
   log default {
     format filter {
       wrap json

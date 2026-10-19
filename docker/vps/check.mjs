@@ -34,7 +34,13 @@ try {
   });
   await response.body?.cancel();
   if (!response.ok) throw new Error();
-  console.log("VPS checks passed: database TLS, runtime role, schema, Redis TLS/auth, private bucket access and authenticated readiness.");
+  if (process.env.SWE_LAYOUT === "split") {
+    // The website container reaches the API over its HTTPS name and the gateway.
+    const viaFrontend = await fetch("http://frontend:3000/api/health", { signal: AbortSignal.timeout(15_000) });
+    await viaFrontend.body?.cancel();
+    if (!viaFrontend.ok) throw new Error();
+  }
+  console.log(`VPS checks passed: database TLS, runtime role, schema, Redis TLS/auth, private bucket access and authenticated readiness${process.env.SWE_LAYOUT === "split" ? ", website-to-API gateway" : ""}.`);
 } catch {
   console.error("VPS checks failed. Check service health and configuration in a trusted operator session; no connection details were logged.");
   process.exitCode = 1;

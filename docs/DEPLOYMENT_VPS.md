@@ -47,9 +47,9 @@ The bootstrap checks for Linux, the architecture, root or sudo and `curl`/`tar`,
 finds the latest [GitHub Release](CONTAINER_IMAGES.md#versions-and-releases)
 (or the one named with `--release v<version>`) and downloads its source into
 temporary storage. The release's `scripts/setup-vps.sh` then checks disk space
-and ports 80/443 and asks every question first: mode 1 (everything on the VPS) or
-mode 2 ([Netlify + VPS](DEPLOYMENT_SPLIT.md)), hostnames, super-admin email,
-verified sender and SMTP relay (password hidden; Brevo is prefilled on port 2525).
+and ports 80/443 and asks every question first: the hosting layout (below),
+hostnames, super-admin email, verified sender and SMTP relay (password hidden;
+Brevo is prefilled on port 2525).
 Invalid answers are asked again. When memory is short it offers a 4 GB swap file.
 It reports what the hostname resolves to and shows one summary of every answer
 and host change. **Nothing changes before you confirm.**
@@ -61,6 +61,32 @@ distribution family's official source if missing, copies the release to
 applies migrations, waits for healthy services and runs the VPS checks.
 `current` then points at the release and `/opt/spaceworks-events/install.conf`
 records the configuration directory and the repository to update from.
+
+### Hosting layouts
+
+Like SpaceWorks, the stack runs a backend and a frontend image (see
+[Releases and container images](CONTAINER_IMAGES.md)), with PostgreSQL, Redis,
+Silo storage, one-shot migrations (the backend image's `migrate` role), the
+email scheduler and Caddy:
+
+| Choice | Layout | Containers | DNS |
+| --- | --- | --- | --- |
+| 1 (default) | `split` | website (`frontend`) and API (`app`, the backend) | two A records to this VPS, e.g. `events.example.com` and `api.events.example.com` (the default API name) |
+| 2 | `single` | one `app` container serves the website and the API | one A record |
+| 3 | `netlify` | the API here; the website on [Netlify](DEPLOYMENT_SPLIT.md) | the API record here, the website at Netlify |
+
+In `split`, Caddy serves the website hostname from the frontend container and
+the API hostname from the backend. The frontend reaches the backend by its HTTPS
+name, which Caddy also answers on the private Docker network, so the request
+never leaves the server. The website and API need different hostnames: the
+gateway between them, and live check-in streamed from the API, depend on two
+origins. `compose.env` records the layout (`SWE_LAYOUT`); installations from
+before 0.9.1 keep the `single` (or Netlify) layout they were set up with.
+
+For a LAN or test install whose hostnames are not publicly reachable, run the
+installer with `SWE_CADDY_TLS=internal` on the `bash` side of the pipe. Caddy
+then issues certificates from its own local CA, which the frontend trusts;
+browsers warn until that CA is trusted on each device.
 
 `--ref` installs a branch, tag or commit instead and **builds** its images on the
 server (versions `vps-<commit>`); a later update moves it to the latest release.
@@ -98,14 +124,21 @@ SWE_VERSION="vps-$(git rev-parse --short HEAD)"
 export SWE_CONFIG_DIR=/etc/spaceworks-events
 sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$SWE_CONFIG_DIR"
 
-docker build --target ops --tag swevents-ops:bootstrap .
+# The backend image, with placeholder origins and a throwaway build key.
+SWE_BUILD_KEY=$(openssl rand -base64 32) docker build --target runner \
+  --build-arg NEXT_PUBLIC_BASE_URL=https://spaceworks-events-origin.invalid \
+  --secret id=NEXT_SERVER_ACTIONS_ENCRYPTION_KEY,env=SWE_BUILD_KEY \
+  --tag "swevents-backend:$SWE_VERSION" .
 docker run --rm --user "$(id -u):$(id -g)" \
   --volume "$SWE_CONFIG_DIR:/config" \
-  swevents-ops:bootstrap node docker/vps/setup.mjs \
+  "swevents-backend:$SWE_VERSION" node docker/vps/setup.mjs \
   events.example.com admin@example.com "$SWE_VERSION"
 ```
 
-Replace the hostname and admin email. Setup refuses an existing configuration;
+Replace the hostname and admin email. For the split layout, pass the API
+hostname first, then the website hostname and `split`
+(`api.events.example.com admin@example.com "$SWE_VERSION" events.example.com split`).
+Setup refuses an existing configuration;
 **do not rerun it to upgrade**. It generates independent application secrets,
 separate migration/runtime database passwords, separate storage root/application
 credentials, a Redis password and a private CA with certificates for internal
@@ -131,15 +164,16 @@ Run from the checked-out repository with `SWE_CONFIG_DIR` still exported:
 
 ```bash
 scripts/vps-compose.sh config --quiet
-scripts/vps-compose.sh build ops migrator app
+scripts/vps-compose.sh build app            # and frontend, for the split layout
 scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs preflight
 scripts/vps-compose.sh up -d
 scripts/vps-compose.sh ps
 ```
 
-BuildKit mounts the stable Server Actions key from `actions-key` during the app
-build. The public HTTPS hostname is compiled into that image. Credentials for
-PostgreSQL, Redis, storage and SMTP are runtime inputs, not build arguments.
+The images carry placeholder origins, replaced when each web container starts,
+so they need no rebuild when a hostname changes; every container receives its
+own Server Actions key at runtime. Credentials for PostgreSQL, Redis, storage
+and SMTP are runtime inputs, not build arguments.
 
 Compose waits for PostgreSQL and Redis health, creates the private storage
 bucket and application policy, and applies Prisma migrations before starting the
@@ -312,13 +346,14 @@ for incident and retention requirements.
 
 Caddy renews public HTTPS certificates automatically while DNS and ports remain
 reachable. Internal service certificates last **one year**. Schedule renewal
-well before expiry with the ops image of the running release. As root:
+well before expiry with the operator tools of the running release (the backend
+image's `ops` role). As root:
 
 ```bash
 cd /opt/spaceworks-events/current   # or your checkout
 export SWE_CONFIG_DIR=/etc/spaceworks-events
-(. "$SWE_CONFIG_DIR/compose.env"; docker run --rm --volume "$SWE_CONFIG_DIR:/config" \
-  "swevents-ops:$SWE_VERSION" node docker/vps/setup.mjs renew-certificates)
+scripts/vps-compose.sh run --rm --no-deps --volume "$SWE_CONFIG_DIR:/config" \
+  ops node docker/vps/setup.mjs renew-certificates
 scripts/vps-compose.sh up -d --force-recreate postgres redis storage app proxy scheduler
 scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
 ```

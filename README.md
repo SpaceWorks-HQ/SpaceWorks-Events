@@ -127,7 +127,9 @@ The full list lives in [Features](docs/FEATURES.md).
 ## Host it on a VPS with Docker
 
 **Yes — the complete application runs on your own VPS, installed with one line.**
-The production Docker Compose stack runs the UI and backend, **PostgreSQL 16**,
+Like SpaceWorks, it ships as a **backend** image (the API, which also runs the
+database migrations and operator tools) and a **frontend** image (the website).
+The production Docker Compose stack runs them with **PostgreSQL 16**,
 **Redis 7**, private **[Silo](https://github.com/pgsty/silo)** object storage (the
 maintained, S3-compatible fork of the archived MinIO) for images and files,
 automatic public HTTPS with Caddy, database migrations and an email-queue
@@ -144,17 +146,18 @@ curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/mai
 ```
 
 It checks the server, picks the latest [release](https://github.com/SpaceWorks-HQ/SpaceWorks-Events/releases)
-and asks every question first: everything on the VPS or a Netlify frontend,
-hostnames, the super-admin email and your SMTP relay (Brevo is prefilled on port
-2525). Invalid answers are asked again. One summary lists every choice and host
+and asks every question first: the layout (by default the website and API
+containers both on this VPS, at `events.example.com` and `api.events.example.com`;
+or one app container on one hostname; or the website on Netlify), hostnames, the
+super-admin email and your SMTP relay (Brevo is prefilled on port 2525). Invalid answers are asked again. One summary lists every choice and host
 change, and **nothing changes until you confirm it**. Then it installs Docker if
 needed, generates every secret and internal TLS certificate without printing them,
 downloads the release's ready-made images from
 [GitHub Packages](docs/CONTAINER_IMAGES.md) (amd64 and arm64), migrates and
 checks that each service is healthy. Nothing is compiled on your server.
 
-**Before you start:** 2 vCPU, 2 GB RAM and 30 GB SSD for a small instance, a
-hostname whose DNS A record points at the server, inbound ports 80 and 443, an SMTP
+**Before you start:** 2 vCPU, 2 GB RAM and 30 GB SSD for a small instance, DNS A
+records pointing at the server (two for the default layout), inbound ports 80 and 443, an SMTP
 relay on a verified sending domain, and your super-admin email.
 
 ### Update, back up and check

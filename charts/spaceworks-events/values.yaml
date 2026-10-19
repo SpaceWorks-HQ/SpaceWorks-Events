@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/spaceworks-hq/spaceworks-events
+  repository: ghcr.io/spaceworks-hq/spaceworks-events-backend
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -48,10 +48,10 @@ podDisruptionBudget:
   minAvailable: 1
 
 migration:
-  # Enable for production releases after publishing the Docker `migrator` target.
+  # Runs the backend image's `migrate` role once per release.
   enabled: true
   image:
-    repository: ghcr.io/spaceworks-hq/spaceworks-events-migrator
+    repository: ghcr.io/spaceworks-hq/spaceworks-events-backend
     tag: ""
     pullPolicy: IfNotPresent
   backoffLimit: 1

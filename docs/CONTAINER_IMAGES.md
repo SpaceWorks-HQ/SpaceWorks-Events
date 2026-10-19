@@ -9,13 +9,17 @@
 
 The `Release` workflow (`.github/workflows/release.yml`) runs after the
 `Quality gate` succeeds for a push to `main`. It checks out that exact tested
-commit and publishes three public images for `linux/amd64` and `linux/arm64`:
+commit and publishes two public images for `linux/amd64` and `linux/arm64`,
+the way SpaceWorks publishes `spaceworks-backend` and `spaceworks-frontend`:
 
-| Image | Contents |
-| --- | --- |
-| `ghcr.io/spaceworks-hq/spaceworks-events` | The application (Dockerfile `runner` target) |
-| `ghcr.io/spaceworks-hq/spaceworks-events-migrator` | One-shot `prisma migrate deploy` |
-| `ghcr.io/spaceworks-hq/spaceworks-events-ops` | VPS setup, checks, schema verification and backups |
+| Image | Dockerfile target | Roles (the container command) |
+| --- | --- | --- |
+| `ghcr.io/spaceworks-hq/spaceworks-events-backend` | `runner` | `node server.js` (default): the application and API. `migrate`: apply pending database migrations once and exit. `node docker/vps/<tool>.mjs`: the VPS operator tools (setup, preflight, checks, smoke test), run as root. |
+| `ghcr.io/spaceworks-hq/spaceworks-events-frontend` | `frontend` | `node frontend/server.js`: the website alone (the `frontend/` workspace). It holds no database, Redis, storage or mail credentials and calls the backend through the authenticated gateway. |
+
+Releases before 0.9.1 published `spaceworks-events`, `-migrator` and `-ops`
+instead; those packages keep their old versions, and updating moves an
+installation to the two images above.
 
 Pull requests and forks' pull requests never publish.
 
@@ -53,8 +57,11 @@ Nothing installation-specific is compiled in:
   Release builds use the placeholder `https://spaceworks-events-origin.invalid`.
   When the container starts, `scripts/docker-entrypoint.sh` replaces it with
   the container's `NEXT_PUBLIC_BASE_URL`, after checking that the value is a
-  bare origin such as `https://events.example.com`. A container without a
-  valid origin refuses to start.
+  bare origin such as `https://events.example.com`. The frontend image does the
+  same for `NEXT_PUBLIC_BACKEND_ORIGIN` (placeholder
+  `https://spaceworks-events-backend.invalid`), the API origin browsers use for
+  live check-in. A web server without a valid origin refuses to start; the
+  `migrate` and operator-tool roles do not need one.
 - **Server Actions key.** The build uses a random key generated in the
   workflow. It stays in the build output, so it is public, and it is never used:
   Next.js prefers `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` from the runtime
