@@ -42,6 +42,17 @@ RUN npm install --omit=dev --no-save --no-audit --no-fund \
       "prisma@$(node -p "require('/tmp/prisma-package.json').version")" \
     && npm cache clean --force
 
+# Clients the VPS operator tools (docker/vps/*.mjs) import, pinned to the
+# lockfile's versions. The application bundles its own copies into its build.
+FROM node:22-alpine AS ops-modules
+WORKDIR /opt/ops
+COPY --from=deps /app/node_modules/ioredis/package.json /tmp/ioredis-package.json
+COPY --from=deps /app/node_modules/@aws-sdk/client-s3/package.json /tmp/s3-package.json
+RUN npm install --omit=dev --no-save --no-audit --no-fund \
+      "ioredis@$(node -p "require('/tmp/ioredis-package.json').version")" \
+      "@aws-sdk/client-s3@$(node -p "require('/tmp/s3-package.json').version")" \
+    && npm cache clean --force
+
 # Stage 2: Rebuild the source code
 FROM node:22-alpine AS builder
 WORKDIR /app
@@ -160,6 +171,7 @@ COPY --chmod=755 scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.s
 # Operator tools (setup, preflight, schema checks, smoke tests), root-owned.
 COPY scripts/*.mjs ./scripts/
 COPY docker/vps ./docker/vps
+COPY --from=ops-modules /opt/ops/node_modules ./docker/vps/node_modules
 
 # Next's standalone trace may include dotenv files when a build is performed
 # from a developer checkout. Secrets belong only in the runtime environment.
