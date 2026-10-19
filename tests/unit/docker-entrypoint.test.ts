@@ -20,11 +20,9 @@ function build(files: Record<string, string>) {
 }
 
 function start(directory: string, origin?: string) {
-  return spawnSync("sh", ["scripts/docker-entrypoint.sh", "echo", "server started"], {
-    cwd: root,
-    encoding: "utf8",
-    env: { PATH: process.env.PATH, SWE_NEXT_DIR: directory.replaceAll("\\", "/"), ...(origin ? { NEXT_PUBLIC_BASE_URL: origin } : {}) },
-  });
+  const env: NodeJS.ProcessEnv = { NODE_ENV: "test", PATH: process.env.PATH ?? "", SWE_NEXT_DIR: directory.replaceAll("\\", "/") };
+  if (origin) env.NEXT_PUBLIC_BASE_URL = origin;
+  return spawnSync("sh", ["scripts/docker-entrypoint.sh", "echo", "server started"], { cwd: root, encoding: "utf8", env });
 }
 
 afterEach(() => {

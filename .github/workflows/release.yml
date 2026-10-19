@@ -1,5 +1,5 @@
 name: Release
-run-name: Release ${{ github.event_name == 'workflow_dispatch' && github.ref_name || 'main' }}@${{ github.event.workflow_run.head_sha || github.sha }}
+run-name: Release ${{ github.event_name == 'workflow_run' && 'main' || github.ref_name }}@${{ github.event.workflow_run.head_sha || github.sha }}
 
 # Every commit on main that passes the Quality gate publishes the three
 # container images to GitHub Packages, for linux/amd64 and linux/arm64:
