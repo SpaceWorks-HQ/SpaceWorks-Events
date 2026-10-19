@@ -219,4 +219,11 @@ create_swap() {
   fi
 }
 
-compose() { sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@"; }
+# These scripts never attach a terminal to a container: the installer runs them
+# with stdin from /dev/null, and Compose refuses a TTY without one.
+compose() {
+  case "${1:-}" in
+    run|exec) local command=$1; shift; sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$command" -T "$@" ;;
+    *) sh "$SWE_REPO_DIR/scripts/vps-compose.sh" "$@" ;;
+  esac
+}

@@ -55,7 +55,7 @@ restart_on_failure() {
 trap restart_on_failure EXIT
 stopped=1
 compose stop proxy scheduler app
-compose exec -T postgres pg_restore -U swevents -d swevents --clean --if-exists --single-transaction --exit-on-error \
+compose exec postgres pg_restore -U swevents -d swevents --clean --if-exists --single-transaction --exit-on-error \
   < "$backup/database.dump"
 if [[ $has_objects = 1 ]]; then
   compose run --rm --no-deps --volume "$backup:/backup:ro" --entrypoint mc storage-init \

@@ -22,6 +22,7 @@ on:
   workflow_dispatch:
   push:  # TEMPORARY: test the pipeline from this branch; removed before merging
     branches: [feat/release-images]
+    paths-ignore: [.github/workflows/vps-e2e.yml]
 
 permissions:
   contents: read
