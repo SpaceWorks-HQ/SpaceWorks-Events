@@ -143,15 +143,17 @@ as root or a user with `sudo`:
 curl -fsSL https://raw.githubusercontent.com/SpaceWorks-HQ/SpaceWorks-Events/main/install.sh | bash
 ```
 
-It checks the server, pins the latest `main` commit and asks every question first:
-everything on the VPS or a Netlify frontend, hostnames, the super-admin email and
-your SMTP relay (Brevo is prefilled on port 2525). Invalid answers are asked again.
-One summary lists every choice and host change, and **nothing changes until you
-confirm it**. Then it installs Docker if needed (offering swap on servers under
-4 GB), generates every secret and internal TLS certificate without printing them,
-builds the images, migrates and checks that each service is healthy.
+It checks the server, picks the latest [release](https://github.com/SpaceWorks-HQ/SpaceWorks-Events/releases)
+and asks every question first: everything on the VPS or a Netlify frontend,
+hostnames, the super-admin email and your SMTP relay (Brevo is prefilled on port
+2525). Invalid answers are asked again. One summary lists every choice and host
+change, and **nothing changes until you confirm it**. Then it installs Docker if
+needed, generates every secret and internal TLS certificate without printing them,
+downloads the release's ready-made images from
+[GitHub Packages](docs/CONTAINER_IMAGES.md) (amd64 and arm64), migrates and
+checks that each service is healthy. Nothing is compiled on your server.
 
-**Before you start:** 2 vCPU, 4 GB RAM and 30 GB SSD for a small instance, a
+**Before you start:** 2 vCPU, 2 GB RAM and 30 GB SSD for a small instance, a
 hostname whose DNS A record points at the server, inbound ports 80 and 443, an SMTP
 relay on a verified sending domain, and your super-admin email.
 
@@ -160,7 +162,7 @@ relay on a verified sending domain, and your super-admin email.
 Run the same command again. An existing installation shows a menu:
 
 1. **Update to the latest release** — backs up the database and configuration,
-   builds the new images while the site keeps running, migrates and restarts. If
+   downloads the new images while the site keeps running, migrates and restarts. If
    the new release is not healthy, the previous one is restored automatically.
 2. **Back up now** — database, configuration and uploaded files, into
    `/etc/spaceworks-events/backups/`. Copy backups off the server; they hold every secret.
@@ -168,9 +170,11 @@ Run the same command again. An existing installation shows a menu:
 4. **Cancel** (the default).
 
 Releases live in `/opt/spaceworks-events/releases/<commit>` with `current` pointing
-at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--ref` for
-a branch, tag or commit, `--repo` for a fork, `--dir` for another location and
-`--update` to skip the menu; `bash install.sh --help` lists them. A restore is a
+at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--release`
+for a specific release, `--ref` to build a branch or commit from source (needs
+4 GB of memory), `--repo` for a fork, `--dir` for another location and `--update`
+to skip the menu; `bash install.sh --help` lists them. A new release is published
+by the first `main` build of each new `VERSION`. A restore is a
 deliberate step: `sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh <backup>`.
 
 The installer does not change DNS or firewall rules, provision SMTP or copy backups

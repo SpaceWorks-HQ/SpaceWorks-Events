@@ -21,7 +21,9 @@ esac
 require_root
 [[ $(uname -s) = Linux ]] || die 'Run this on the Linux VPS.'
 revision=$(release_revision "$source_dir")
-version=$(release_version "$revision")
+version=$(source_version "$source_dir" "$revision")
+published=0
+if is_published_version "$version"; then published=1; fi
 # Installer-managed when staged by install.sh or already inside $SWE_DIR/releases.
 managed=0
 case "$source_dir/" in "$SWE_DIR/releases/"*) managed=1 ;; esac
@@ -31,9 +33,8 @@ is_repository "$repository" || die 'SWE_REPOSITORY must be a GitHub owner/name.'
 
 start_stack() {
   cd "$SWE_REPO_DIR"
-  say 'Building images. This takes several minutes on a small server.'
   compose config --quiet
-  compose build ops migrator app
+  fetch_images "$version"
   compose run --rm --no-deps ops node docker/vps/check.mjs preflight
   say 'Starting PostgreSQL, Redis, Silo storage, migrations, the app, Caddy and the scheduler.'
   compose up -d --wait --wait-timeout 300
@@ -108,13 +109,15 @@ disk_mb=$(free_disk_mb /var/lib/docker)
 (( disk_mb >= 10240 )) || die "At least 10 GB of free disk is needed for images, data and backups; only $disk_mb MB is free."
 has_docker=0
 if command -v docker >/dev/null && docker compose version >/dev/null 2>&1; then has_docker=1; fi
-offer_swap=0
+# Published images only need memory to run; a source build needs about 4 GB.
+offer_swap=0 needed_mb=1800
+[[ $published = 1 ]] || needed_mb=3800
 memory=$(memory_mb)
-if (( memory + $(swap_mb) < 3800 )) && [[ ! -e /swapfile ]]; then offer_swap=1; fi
+if (( memory + $(swap_mb) < needed_mb )) && [[ ! -e /swapfile ]]; then offer_swap=1; fi
 
 cat >/dev/tty <<EOF
 
-Space Works Events setup - release ${revision:0:12} from $repository
+Space Works Events setup - $version from $repository
 Answer the questions below. Press Enter to accept a [default].
 Nothing on this server changes until you confirm the summary.
 
@@ -145,7 +148,7 @@ if [[ $SMTP_PORT = 465 ]]; then SMTP_SECURE=true; fi
 ask SMTP_USER 'SMTP login' '' is_env_value "Enter the login, without ' or \\ characters."
 ask_secret SMTP_PASSWORD 'SMTP password or key (hidden)'
 make_swap=0
-if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; building the app needs about 4 GB. Create a 4 GB swap file at /swapfile?" Y; then
+if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; Space Works Events needs about $(( (needed_mb + 999) / 1000 )) GB. Create a 4 GB swap file at /swapfile?" Y; then
   make_swap=1
 fi
 dns=$(getent ahosts "$public_host" 2>/dev/null | awk '{ print $1 }' | sort -u | tr '\n' ' ' || true)
@@ -154,7 +157,12 @@ install_path=$source_dir
 [[ $managed = 0 ]] || install_path="$SWE_DIR/releases/$revision"
 {
   printf '\nSummary\n'
-  printf '  Release:         %s (%s)\n' "$revision" "$repository"
+  printf '  Release:         %s (%s, commit %s)\n' "$version" "$repository" "${revision:0:12}"
+  if [[ $published = 1 ]]; then
+    printf '  Images:          published release images from ghcr.io/%s\n' "$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')"
+  else
+    printf '  Images:          built on this server from source (several minutes)\n'
+  fi
   printf '  Installed to:    %s\n' "$install_path"
   printf '  Configuration:   %s (secrets, owner-only)\n' "$SWE_CONFIG_DIR"
   printf '  Website:         https://%s\n' "$site_host"
@@ -168,7 +176,8 @@ install_path=$source_dir
   [[ $make_swap = 0 ]] || printf '  - create and enable a 4 GB swap file at /swapfile\n'
   [[ $has_docker = 1 ]] || printf '  - install Docker Engine and Docker Compose from the official repositories\n'
   printf '  - generate secrets and private TLS certificates in %s\n' "$SWE_CONFIG_DIR"
-  printf '  - build images, create volumes, apply database migrations and start the services\n\n'
+  if [[ $published = 1 ]]; then fetch=download; else fetch=build; fi
+  printf '  - %s images, create volumes, apply database migrations and start the services\n\n' "$fetch"
 } >/dev/tty
 confirm 'Proceed?' Y || { say 'Cancelled. Nothing was changed.'; exit 2; }
 
@@ -187,19 +196,27 @@ if [[ $managed = 1 ]]; then
   conf_set "$(install_conf)" SWE_PENDING_RELEASE "$revision"
 fi
 cd "$SWE_REPO_DIR"
-say 'Building the operator tools image (a few minutes), then generating secrets and internal certificates.'
-docker build --quiet --target ops --tag "swevents-ops:$version" . >/dev/null
+ops_image="swevents-ops:$version"
+if [[ $published = 1 ]]; then
+  ops_image="ghcr.io/$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')/spaceworks-events-ops:$version"
+  say 'Downloading the operator tools image, then generating secrets and internal certificates.'
+  docker pull --quiet "$ops_image" >/dev/null || die "Cannot download $ops_image. Check that the release's packages are public on GitHub."
+else
+  say 'Building the operator tools image (a few minutes), then generating secrets and internal certificates.'
+  docker build --quiet --target ops --tag "$ops_image" . >/dev/null
+fi
 # Generate everything beside the final directory and rename it into place, so an
 # interrupted run never leaves a half-written configuration behind.
 staging_config="$SWE_CONFIG_DIR.partial"
 rm -rf -- "$staging_config"
 install -d -m 0700 "$staging_config"
-docker run --rm --volume "$staging_config:/config" "swevents-ops:$version" \
+docker run --rm --volume "$staging_config:/config" "$ops_image" \
   node docker/vps/setup.mjs "$public_host" "$admin_email" "$version" "$frontend_host" >/dev/null
+set_image_settings "$staging_config/compose.env" "$version" "$repository"
 export EMAIL_FROM SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD
 docker run --rm --volume "$staging_config:/config" \
   --env EMAIL_FROM --env SMTP_HOST --env SMTP_PORT --env SMTP_SECURE --env SMTP_USER --env SMTP_PASSWORD \
-  "swevents-ops:$version" node docker/vps/configure-smtp.mjs
+  "$ops_image" node docker/vps/configure-smtp.mjs
 unset SMTP_PASSWORD SMTP_USER
 rmdir "$SWE_CONFIG_DIR" 2>/dev/null || true
 mv -T "$staging_config" "$SWE_CONFIG_DIR"

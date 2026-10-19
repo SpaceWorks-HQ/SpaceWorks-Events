@@ -5,7 +5,9 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 x-app: &app
-  image: swevents-app:${SWE_VERSION:?Set a release version}
+  # Published releases set SWE_*_IMAGE to ghcr.io/<owner>/spaceworks-events*;
+  # without them, the images are built locally under these names.
+  image: ${SWE_APP_IMAGE:-swevents-app}:${SWE_VERSION:?Set a release version}
   env_file: ${SWE_CONFIG_DIR:?Set an external configuration directory}/app.env
   volumes:
     - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
@@ -83,7 +85,7 @@ services:
     logging: *logging
 
   migrator:
-    image: swevents-migrator:${SWE_VERSION}
+    image: ${SWE_MIGRATOR_IMAGE:-swevents-migrator}:${SWE_VERSION}
     build:
       context: .
       target: migrator
@@ -141,7 +143,7 @@ services:
 
   ops:
     <<: *app
-    image: swevents-ops:${SWE_VERSION}
+    image: ${SWE_OPS_IMAGE:-swevents-ops}:${SWE_VERSION}
     profiles: [tools]
     build:
       context: .

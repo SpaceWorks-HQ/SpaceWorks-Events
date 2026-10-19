@@ -42,9 +42,11 @@ port private and expose it only through the trusted proxy.
 
 ## Build immutable images
 
-For automated builds and GitHub Container Registry publishing after successful GitHub Actions
-checks, follow [Container image publishing](CONTAINER_IMAGES.md).
-The commands below are the manual alternative.
+Every green build of `main` publishes public images to GitHub Packages that
+work for any installation (see [Releases and container images](CONTAINER_IMAGES.md)):
+pull `ghcr.io/spaceworks-hq/spaceworks-events:<version>` and
+`ghcr.io/spaceworks-hq/spaceworks-events-migrator:<version>` and skip this
+section. The commands below build your own images instead.
 
 Build the application and migration targets from the same reviewed commit and
 give both the same immutable release version:
@@ -101,8 +103,9 @@ At minimum, verify that:
 - `EMAIL_FROM` and an authenticated `SMTP_SERVICE` or `SMTP_HOST` fallback are
   configured for bootstrap and disaster recovery;
 - `TRUSTED_PROXY_IP_HEADER` names a header overwritten by the edge; and
-- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is exactly the value used for the
-  application image build.
+- `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is this installation's stable key (for
+  your own build, the value it was built with; published images take it at
+  runtime).
 
 Run the preflight from a trusted release checkout before deploying:
 
@@ -233,7 +236,7 @@ scripts. Consequently:
 
 Follow [Production operations](production-operations.md) for backup storage,
 restore acknowledgement, retention, monitoring, and incident requirements.
-The VPS stack builds these targets on the server from a pinned source release; it
-does not pull prebuilt application images. The [one-line installer](DEPLOYMENT_VPS.md#guided-installation)
-downloads the release, installs Docker if needed and runs the guided setup;
-`sudo bash scripts/setup-vps.sh` does the same from a reviewed checkout.
+The [one-line VPS installer](DEPLOYMENT_VPS.md#guided-installation) runs the
+latest GitHub Release with its published images, or builds these targets on the
+server from a branch or commit (`--ref`); `sudo bash scripts/setup-vps.sh`
+builds from a reviewed checkout.

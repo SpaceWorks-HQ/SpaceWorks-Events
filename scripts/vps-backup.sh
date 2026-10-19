@@ -28,8 +28,8 @@ umask 077
 backups="$SWE_CONFIG_DIR/backups"
 target="$backups/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$target.partial"
-compose exec -T postgres pg_dump -U swevents -d swevents -Fc > "$target.partial/database.dump"
-compose exec -T postgres pg_restore --list < "$target.partial/database.dump" > /dev/null
+compose exec postgres pg_dump -U swevents -d swevents -Fc > "$target.partial/database.dump"
+compose exec postgres pg_restore --list < "$target.partial/database.dump" > /dev/null
 tar --exclude=./backups -czf "$target.partial/config.tar.gz" -C "$SWE_CONFIG_DIR" .
 if [[ $objects = 1 ]]; then
   compose run --rm --no-deps --volume "$target.partial:/backup" --entrypoint mc storage-init \
