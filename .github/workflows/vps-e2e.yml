@@ -1,0 +1,116 @@
+# TEMPORARY: end-to-end test of the VPS installer on fresh GitHub runners
+# against the test pre-release. Removed before merging.
+name: VPS installer end-to-end
+on:
+  push:
+    branches: [feat/release-images]
+    paths: [.github/workflows/vps-e2e.yml]
+
+permissions:
+  contents: read
+
+env:
+  RELEASE: v0.1.0-feat-release-images.2.558614591d1d
+  # The dev merge commit: installs it from source the way earlier installers did.
+  OLD_SOURCE: dc6c345c40d793e703e7cd3cd4e902fa22701ba4
+
+jobs:
+  vps:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [fresh-release, source-then-update]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Prepare the host like a fresh VPS
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq expect >/dev/null
+          # Runners ship services on 80/443 rarely; fail loudly if so.
+          sudo ss -ltnp | grep -E ':(80|443)\s' || echo 'ports 80/443 free'
+          df -h / | tail -1; free -m | head -2
+          cat > install.exp <<'EOF'
+          set timeout 3600
+          set url [lindex $argv 0]
+          set args [lindex $argv 1]
+          spawn bash -c "curl -fsSL $url | bash -s -- $args"
+          expect "Hosting:" ; send "3\r"
+          expect "Enter 1 or 2." ; expect "Hosting:" ; send "\r"
+          expect "Public hostname" ; send "events.swe-test.example\r"
+          expect "Super-admin email" ; send "admin@example.com\r"
+          expect "Sender" ; send "it's me <a@b.co>\r"
+          expect "without" ; expect "Sender" ; send "\r"
+          expect "SMTP host" ; send "\r"
+          expect "SMTP port" ; send "\r"
+          expect "SMTP login" ; send "test-login\r"
+          expect "SMTP password" ; send "test-password\r"
+          expect {
+            "swap file" { send "n\r"; exp_continue }
+            "Proceed?" { send "y\r" }
+          }
+          expect eof
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+          cat > menu.exp <<'EOF'
+          set timeout 3600
+          set url [lindex $argv 0]
+          set args [lindex $argv 1]
+          set choice [lindex $argv 2]
+          spawn bash -c "curl -fsSL $url | bash -s -- $args"
+          expect "Choose 1-4" ; send "$choice\r"
+          expect {
+            "Proceed with the update?" { send "y\r"; exp_continue }
+            eof
+          }
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+
+      - name: Install the release from published images
+        if: matrix.scenario == 'fresh-release'
+        run: |
+          expect install.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" | tee install.log
+          grep -q 'Downloading the release images from GitHub Packages' install.log
+          ! grep -q 'Building images from source' install.log
+
+      - name: Install dev from source, then update to the release
+        if: matrix.scenario == 'source-then-update'
+        run: |
+          # The new installer builds an older commit from source with --ref.
+          expect install.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--ref $OLD_SOURCE" | tee install.log
+          grep -q "vps-${OLD_SOURCE:0:12} is running" install.log
+          expect menu.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" 1 | tee update.log
+          grep -q 'Downloading the release images from GitHub Packages' update.log
+          grep -q "Updated to ${RELEASE#v}" update.log
+          # Already current: changes nothing.
+          expect -c "set timeout 600; spawn bash -c {curl -fsSL https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh | bash -s -- --release $RELEASE --update}; expect eof" | tee again.log
+          grep -q "Already on ${RELEASE#v}" again.log
+
+      - name: Check the running installation
+        run: |
+          set -x
+          export SWE_CONFIG_DIR=/etc/spaceworks-events
+          c() { sudo -E sh /opt/spaceworks-events/current/scripts/vps-compose.sh "$@"; }
+          sudo cat /opt/spaceworks-events/install.conf
+          sudo cat /opt/spaceworks-events/current/.release-version
+          sudo grep -E '^SWE_(VERSION|APP_IMAGE|MIGRATOR_IMAGE|OPS_IMAGE)=' "$SWE_CONFIG_DIR/compose.env"
+          c ps --format '{{.Service}} {{.Image}} {{.Status}}'
+          c ps --format '{{.Image}}' | grep -q "ghcr.io/spaceworks-hq/spaceworks-events:${RELEASE#v}"
+          c run --rm --no-deps ops node docker/vps/smoke.mjs
+          # The placeholder origin was replaced with this installation's origin.
+          ! c exec -T app grep -rlF spaceworks-events-origin.invalid /app/.next
+          c exec -T app node -e "fetch('http://127.0.0.1:3000/login').then(r=>r.text()).then(t=>{if(!t.includes('https://events.swe-test.example'))process.exit(1)})"
+          curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' -H 'Host: events.swe-test.example' http://127.0.0.1/login | grep -q '^308 https://events.swe-test.example/login'
+
+      - name: Back up and restore
+        run: |
+          sudo bash /opt/spaceworks-events/current/scripts/vps-backup.sh
+          backup=$(sudo sh -c 'ls -d /etc/spaceworks-events/backups/2*Z | sort | tail -n 1')
+          sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh "$backup" --yes
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          export SWE_CONFIG_DIR=/etc/spaceworks-events
+          sudo -E sh /opt/spaceworks-events/current/scripts/vps-compose.sh logs --tail 80 app migrator storage-init proxy || true
