@@ -101,6 +101,8 @@ The bucket must remain private. Existing database-backed assets can be moved wit
 
 ## Test-only bypass
 
+`PAYMENTS_FAKE_PROVIDER_URL` points every Razorpay and Stripe API call at a local fake provider for tests (a loopback `http://127.0.0.1:<port>` origin only). It is refused when `NODE_ENV=production`: startup validation fails and provider calls throw. Organisations' payment keys are not environment variables; owners enter them in Settings → Payments, encrypted with a subkey of `MFA_ENCRYPTION_KEY`.
+
 `ALLOW_INSECURE_PRODUCTION_TESTS=1` has an effect only when `CI=true`. Together they permit local HTTP, non-TLS test services, and the controlled in-memory Redis fallback while exercising a production build. Never configure this pair in a deployed environment.
 
 Validate production configuration with:

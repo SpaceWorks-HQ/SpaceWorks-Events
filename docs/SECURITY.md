@@ -12,6 +12,7 @@ This page documents implemented controls and security boundaries. It is not a su
 - Password accounts require a one-time, expiring inbox-verification link before sign-in or event creation. Tokens are stored only as hashes and consumed once.
 - Credential users can enable TOTP MFA and receive one-use recovery codes. TOTP use is claimed atomically in PostgreSQL, so a code cannot be replayed across replicas or between login and super-admin step-up. Wait for the next authenticator code when completing consecutive challenges. MFA enrollment is single-use, bound to the account session version, and cannot replace an active authenticator.
 - TOTP seeds are encrypted with AES-256-GCM using `MFA_ENCRYPTION_KEY`; recovery codes are stored as keyed hashes. Super-admin SMTP and Google client secrets are separately domain-encrypted from that key and never rendered back to the browser.
+- Organisation payment keys (Razorpay key and webhook secrets, Stripe secret key and signing secret) are encrypted with AES-256-GCM under their own HKDF subkey of `MFA_ENCRYPTION_KEY`, with the organisation id and column bound as associated data, so a value copied to another organisation or column does not decrypt. Only the owner can view or change them, changes need a recent sign-in, the page receives only "is set" flags, and the column names are on the split gateway's forbidden-field list. Audit metadata for payment settings is boolean only.
 - Sensitive account operations require recent authentication, revoke existing sessions, invalidate pending MFA setup, and write audit events. Password changes also invalidate outstanding reset links. A completed inbox password reset verifies that email while preserving any enabled MFA. Revoked JWTs return an anonymous session and are cleared by Auth.js.
 - The super-admin panel requires a second, fresh TOTP step-up verification even after a normal authenticated session. Its signed, HttpOnly proof lasts 10 minutes and is bound to the user/session version.
 - Google OAuth security, including MFA, is governed by the linked Google account. Linking to a password account requires that account’s email to be verified first; an unverified account must use inbox password recovery before linking. New Google links retain only provider identity fields, not reusable access/refresh/ID tokens. Previously stored provider tokens are not retroactively purged.
@@ -46,6 +47,14 @@ This page documents implemented controls and security boundaries. It is not a su
 - Ticket, certificate, invitation, password-reset, and MFA enrollment values are secrets or bearer capabilities.
 - They must not appear in logs, audit metadata, monitoring tags, or analytics.
 - Readiness and scheduler secrets are compared in constant time and unauthorized calls return generic responses.
+
+## Payment webhooks
+
+- Razorpay and Stripe webhooks are verified over the exact raw request bytes (capped at 256 KB) with the addressed organisation's own secret, compared in constant time, before any parsing. Stripe signatures older than five minutes are refused. The random path id only selects the organisation; a valid signature from another organisation's secret fails.
+- Each verified event is recorded once (`ProcessedWebhookEvent`, unique per organisation, provider and event id) in the same transaction that applies it, so a failure is retried and a replay is acknowledged without effect. Raw payloads are never stored.
+- `payment.authorized` is never treated as paid; only captured payments (`payment_link.paid`, `order.paid`, `payment.captured`) and paid Stripe Checkout sessions count.
+- Webhooks are served only by the backend API host; the split frontend proxy refuses `/api/webhooks/*`.
+- `PAYMENTS_FAKE_PROVIDER_URL` (tests only) is refused in production.
 
 ## Abuse protection
 

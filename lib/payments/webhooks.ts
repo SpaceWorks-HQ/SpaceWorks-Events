@@ -1,0 +1,96 @@
+import "server-only";
+
+import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import type { OnlineProvider } from "./http";
+import { verifyRazorpayWebhook } from "./providers/razorpay";
+import { verifyStripeWebhook } from "./providers/stripe";
+import { WebhookVerificationError, type VerifiedWebhookEvent } from "./providers/types";
+import { isWebhookPathId, webhookSecretForPath } from "./settings";
+
+const MAX_WEBHOOK_BYTES = 256 * 1024;
+const HEADERS = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+
+function empty(status: number) {
+  return new NextResponse(null, { status, headers: HEADERS });
+}
+
+/** The exact request bytes, capped. Signatures cover these bytes, not a parsed body. */
+async function readRawBody(request: Request): Promise<Buffer | null> {
+  const declared = Number(request.headers.get("content-length") ?? "0");
+  if (declared > MAX_WEBHOOK_BYTES || !request.body) return null;
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > MAX_WEBHOOK_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks);
+}
+
+export function verifyWebhook(provider: OnlineProvider, secret: string, rawBody: Buffer, headers: Headers): VerifiedWebhookEvent {
+  return provider === "RAZORPAY" ? verifyRazorpayWebhook(secret, rawBody, headers) : verifyStripeWebhook(secret, rawBody, headers);
+}
+
+export type WebhookContext = { organisationId: string; provider: OnlineProvider; };
+
+/**
+ * Applies a verified event inside the transaction that records it, so a
+ * failure rolls back the idempotency row and the provider retries.
+ */
+export type WebhookApplier = (tx: Prisma.TransactionClient, context: WebhookContext, event: VerifiedWebhookEvent) => Promise<void>;
+
+/**
+ * POST /api/webhooks/{razorpay,stripe}/:webhookPathId on the API host.
+ * The path only addresses the organisation; that organisation's own secret
+ * must verify the raw body before anything is parsed or stored. Verified
+ * events are recorded once per (organisation, provider, event id).
+ */
+export async function handleProviderWebhook(request: Request, provider: OnlineProvider, webhookPathId: string, apply?: WebhookApplier) {
+  if (!isWebhookPathId(webhookPathId)) return empty(404);
+  const rawBody = await readRawBody(request);
+  if (!rawBody) return empty(413);
+  const account = await webhookSecretForPath(webhookPathId, provider);
+  if (!account) return empty(404);
+
+  let event: VerifiedWebhookEvent;
+  try {
+    event = verifyWebhook(provider, account.secret, rawBody, request.headers);
+  } catch (error) {
+    if (error instanceof WebhookVerificationError) return empty(400);
+    throw error;
+  }
+
+  const context = { organisationId: account.organisationId, provider };
+  try {
+    await prisma.$transaction(async (tx) => {
+      // ON CONFLICT keeps a replay distinct from a failure inside `apply`,
+      // which must roll back and be retried by the provider.
+      const inserted = await tx.$queryRaw<Array<{ id: string; }>>`
+        INSERT INTO "ProcessedWebhookEvent" ("id", "organisationId", "provider", "eventId", "eventType")
+        VALUES (${crypto.randomUUID()}, ${account.organisationId}, ${provider}::"PaymentProvider", ${event.eventId.slice(0, 255)}, ${event.eventType || "unknown"})
+        ON CONFLICT ("organisationId", "provider", "eventId") DO NOTHING
+        RETURNING "id"
+      `;
+      if (inserted.length === 0) return;
+      await apply?.(tx, context, event);
+    });
+  } catch {
+    console.error(`[payments] ${provider.toLowerCase()} webhook could not be applied`);
+    return empty(500);
+  }
+  return NextResponse.json({ received: true }, { headers: HEADERS });
+}

@@ -111,6 +111,11 @@
       "id": "app__dashboard__orgSlug__settings__page:loadOrgSettingsView"
     },
     {
+      "module": "lib/views/app__dashboard__orgSlug__settings__payments__page",
+      "name": "loadPaymentSettingsView",
+      "id": "app__dashboard__orgSlug__settings__payments__page:loadPaymentSettingsView"
+    },
+    {
       "module": "lib/views/app__dashboard__page",
       "name": "loadDashboardView",
       "id": "app__dashboard__page:loadDashboardView"
@@ -704,6 +709,11 @@
     },
     {
       "module": "app/actions/instance-settings",
+      "name": "setPaidEventsEnabled",
+      "id": "instance-settings:setPaidEventsEnabled"
+    },
+    {
+      "module": "app/actions/instance-settings",
       "name": "saveInstanceServiceSettings",
       "id": "instance-settings:saveInstanceServiceSettings"
     },
@@ -906,6 +916,21 @@
       "module": "app/actions/password-reset",
       "name": "confirmPasswordReset",
       "id": "password-reset:confirmPasswordReset"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "savePaymentSettings",
+      "id": "payment-settings:savePaymentSettings"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "disconnectPaymentProvider",
+      "id": "payment-settings:disconnectPaymentProvider"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "testPaymentConnection",
+      "id": "payment-settings:testPaymentConnection"
     },
     {
       "module": "app/actions/registration-form",

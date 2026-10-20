@@ -14,6 +14,7 @@ import type { ActionResult } from "./org";
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
 const signupSettingSchema = z.object({ allowNewUserSignups: z.boolean() });
+const paidEventsSettingSchema = z.object({ paidEventsEnabled: z.boolean() }).strict();
 const serviceSettingsSchema = z.object({
   emailFrom: z.string().trim().max(320).optional(),
   smtpService: z.string().trim().max(120).optional(), smtpHost: z.string().trim().max(253).optional(),
@@ -47,6 +48,29 @@ export async function setNewUserRegistrationEnabled(input: unknown): Promise<Act
   });
   revalidatePath("/login");
   revalidatePath("/super-admin/auth");
+  return { ok: true };
+}
+
+/** Off by default. Turning it off stops new paid tickets; existing payments still settle and refund. */
+export async function setPaidEventsEnabled(input: unknown): Promise<ActionResult> {
+  const session = await requireSuperAdminMfa();
+  if (await isActionRateLimited("action", session.user.id)) return { ok: false, error: "Too many requests. Try again shortly." };
+  const parsed = paidEventsSettingSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid paid events setting." };
+
+  await prisma.instanceSetting.upsert({
+    where: { id: INSTANCE_SETTINGS_ID },
+    create: { id: INSTANCE_SETTINGS_ID, paidEventsEnabled: parsed.data.paidEventsEnabled },
+    update: { paidEventsEnabled: parsed.data.paidEventsEnabled },
+  });
+  await recordAuditEvent({
+    action: "PAID_EVENTS_SETTING_UPDATED",
+    actorUserId: session.user.id,
+    targetType: "InstanceSetting",
+    targetId: INSTANCE_SETTINGS_ID,
+    metadata: { paidEventsEnabled: parsed.data.paidEventsEnabled },
+  });
+  revalidatePath("/super-admin/settings");
   return { ok: true };
 }
 

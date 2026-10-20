@@ -95,6 +95,8 @@ export function validateRuntimeEnvironment() {
     throw new Error(`Invalid production environment configuration: ${details.join("; ")}`);
   }
   if (process.env.DEPLOYMENT_MODE === "backend" && !/^[a-f0-9]{64}$/.test(process.env.FRONTEND_GATEWAY_SECRET ?? "")) throw new Error("Split backend requires FRONTEND_GATEWAY_SECRET.");
+  // The fake payment provider is a test fixture; production always talks to the real providers.
+  if (process.env.PAYMENTS_FAKE_PROVIDER_URL?.trim()) throw new Error("PAYMENTS_FAKE_PROVIDER_URL must not be set in production.");
   const baseUrl = new URL(process.env.NEXT_PUBLIC_BASE_URL!);
   const authUrl = new URL(process.env.AUTH_URL!);
   const insecureCiTest = process.env.CI === "true" && process.env.ALLOW_INSECURE_PRODUCTION_TESTS === "1";

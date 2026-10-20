@@ -2,7 +2,12 @@ import "server-only";
 
 import crypto from "crypto";
 
-function encryptionKey() {
+/**
+ * A 32-byte subkey of MFA_ENCRYPTION_KEY for one purpose. Each `info` string
+ * yields an unrelated key, so ciphertext from one domain never decrypts in
+ * another.
+ */
+export function deriveSecretKey(info: string) {
   const raw = process.env.MFA_ENCRYPTION_KEY ?? "";
   const key = Buffer.from(raw, "base64");
   if (key.length !== 32 || key.toString("base64").replace(/=+$/, "") !== raw.replace(/=+$/, "")) {
@@ -10,7 +15,11 @@ function encryptionKey() {
   }
   // A domain-separated subkey prevents configuration ciphertext from being
   // interchangeable with MFA seed ciphertext.
-  return Buffer.from(crypto.hkdfSync("sha256", key, Buffer.alloc(0), "yuyu-instance-service-settings-v1", 32));
+  return Buffer.from(crypto.hkdfSync("sha256", key, Buffer.alloc(0), info, 32));
+}
+
+function encryptionKey() {
+  return deriveSecretKey("yuyu-instance-service-settings-v1");
 }
 
 export function encryptInstanceConfigSecret(value: string) {

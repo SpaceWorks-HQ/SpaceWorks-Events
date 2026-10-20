@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { canDeleteOrg, requireOrgRole } from "@/lib/permissions";
+import { configuredProvider, isProviderTestMode } from "@/lib/payments/settings";
 type Props = { params: Promise<{ orgSlug: string; }>; };
 
 export async function loadOrgSettingsView({ params }: Props) {
@@ -33,6 +34,12 @@ export async function loadOrgSettingsView({ params }: Props) {
     ])
     : [0, 0];
 
+  // Owner-only summary: which provider is ready, never key material.
+  const paymentRow = isOwner
+    ? await prisma.organisationPaymentSettings.findUnique({ where: { organisationId: organisation.id } })
+    : null;
+  const paymentProvider = configuredProvider(paymentRow);
+  const payments = { provider: paymentProvider, testMode: paymentRow && paymentProvider ? isProviderTestMode(paymentRow, paymentProvider) : false };
 
-  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients };
+  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients, payments };
 }

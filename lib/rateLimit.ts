@@ -24,7 +24,9 @@ export type Bucket =
   | "dataExport"
   | "ticketStatus"
   | "ticketEvents"
-  | "shortLink";
+  | "shortLink"
+  | "paymentWebhook"
+  | "paymentSettings";
 
 const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   global: { max: 300, windowMs: 60_000 },
@@ -54,6 +56,12 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   ticketEvents: { max: 60, windowMs: 60_000 },
   // Public short-link lookups. Kept tight so the code space cannot be scanned.
   shortLink: { max: 30, windowMs: 60_000 },
+  // Provider webhooks arrive from a few shared provider addresses, often in
+  // bursts after an outage. Kept out of the global bucket so attendee traffic
+  // can never starve settlement, while still bounding a flood.
+  paymentWebhook: { max: 600, windowMs: 60_000 },
+  // Saving keys and "Test connection" call the provider with the owner's keys.
+  paymentSettings: { max: 30, windowMs: 60 * 60_000 },
 };
 
 // Local fallback store

@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { backendHeaders, backendUrl } from "./request";
 import { backendOrigin, frontendOrigin } from "./config";
 
-const blocked = /^\/api\/(?:frontend(?:\/|$)|internal(?:\/|$)|health\/db(?:\/|$))/i;
+// Payment webhooks are configured against the API host directly; the website
+// never relays them (it would drop the signature headers anyway).
+const blocked = /^\/api\/(?:frontend(?:\/|$)|internal(?:\/|$)|health\/db(?:\/|$)|webhooks(?:\/|$))/i;
 const forwardedRequestHeaders = ["accept", "content-type", "authorization", "user-agent", "if-none-match", "range", "if-range", "x-auth-return-redirect"];
 const forwardedResponseHeaders = ["content-type", "cache-control", "etag", "content-disposition", "content-range", "accept-ranges", "retry-after", "vary", "x-content-type-options", "referrer-policy", "x-accel-buffering"];
 

@@ -20,6 +20,7 @@ const secretFields = new Set([
   "passwordHash", "mfaSecretEncrypted", "recoveryCodeHashes", "checkInStationPinHash",
   "checkInStationPinEncrypted", "checkInStationSecretVersion", "secretHash", "tokenHash",
   "smtpPasswordEncrypted", "googleClientSecretEncrypted", "access_token", "refresh_token", "id_token", "sessionToken",
+  "razorpayKeySecretEncrypted", "razorpayWebhookSecretEncrypted", "stripeSecretKeyEncrypted", "stripeWebhookSecretEncrypted",
 ]);
 
 /** Final defence: a view reader must use safe selects/DTOs before crossing hosts. */
