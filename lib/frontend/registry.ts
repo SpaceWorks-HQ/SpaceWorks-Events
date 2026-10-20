@@ -196,36 +196,37 @@ import { addTicketGuest as endpoint192 } from "@/app/actions/payment-operations"
 import { savePaymentSettings as endpoint193 } from "@/app/actions/payment-settings";
 import { disconnectPaymentProvider as endpoint194 } from "@/app/actions/payment-settings";
 import { testPaymentConnection as endpoint195 } from "@/app/actions/payment-settings";
-import { checkPromoCode as endpoint196 } from "@/app/actions/promo";
-import { upsertEventRegistrationField as endpoint197 } from "@/app/actions/registration-form";
-import { deleteEventRegistrationField as endpoint198 } from "@/app/actions/registration-form";
-import { reorderEventRegistrationFields as endpoint199 } from "@/app/actions/registration-form";
-import { addManualRsvp as endpoint200 } from "@/app/actions/rsvp-admin";
-import { updateRsvpRegistration as endpoint201 } from "@/app/actions/rsvp-admin";
-import { deleteRsvp as endpoint202 } from "@/app/actions/rsvp-admin";
-import { restoreRsvp as endpoint203 } from "@/app/actions/rsvp-admin";
-import { cancelRsvp as endpoint204 } from "@/app/actions/rsvp-cancel";
-import { approveRsvp as endpoint205 } from "@/app/actions/rsvp-lifecycle";
-import { rejectRsvp as endpoint206 } from "@/app/actions/rsvp-lifecycle";
-import { promoteFromWaitlist as endpoint207 } from "@/app/actions/rsvp-lifecycle";
-import { submitRsvp as endpoint208 } from "@/app/actions/rsvp";
-import { saveScheduleItem as endpoint209 } from "@/app/actions/schedule";
-import { setScheduleDelay as endpoint210 } from "@/app/actions/schedule";
-import { beginMfaEnrollment as endpoint211 } from "@/app/actions/security";
-import { confirmMfaEnrollment as endpoint212 } from "@/app/actions/security";
-import { disableMfa as endpoint213 } from "@/app/actions/security";
-import { revokeAllSessions as endpoint214 } from "@/app/actions/security";
-import { createEventSeries as endpoint215 } from "@/app/actions/series";
-import { updateEventSeriesMeta as endpoint216 } from "@/app/actions/series";
-import { deleteEventSeries as endpoint217 } from "@/app/actions/series";
-import { createEventShortLink as endpoint218 } from "@/app/actions/shortLink";
-import { regenerateEventShortLink as endpoint219 } from "@/app/actions/shortLink";
-import { verifySuperAdminMfa as endpoint220 } from "@/app/actions/super-admin-mfa";
-import { saveTicketType as endpoint221 } from "@/app/actions/ticket-types";
-import { archiveTicketType as endpoint222 } from "@/app/actions/ticket-types";
-import { createPromoCode as endpoint223 } from "@/app/actions/ticket-types";
-import { archivePromoCode as endpoint224 } from "@/app/actions/ticket-types";
-import { saveRefundPolicy as endpoint225 } from "@/app/actions/ticket-types";
+import { saveReceiptDetails as endpoint196 } from "@/app/actions/payment-settings";
+import { checkPromoCode as endpoint197 } from "@/app/actions/promo";
+import { upsertEventRegistrationField as endpoint198 } from "@/app/actions/registration-form";
+import { deleteEventRegistrationField as endpoint199 } from "@/app/actions/registration-form";
+import { reorderEventRegistrationFields as endpoint200 } from "@/app/actions/registration-form";
+import { addManualRsvp as endpoint201 } from "@/app/actions/rsvp-admin";
+import { updateRsvpRegistration as endpoint202 } from "@/app/actions/rsvp-admin";
+import { deleteRsvp as endpoint203 } from "@/app/actions/rsvp-admin";
+import { restoreRsvp as endpoint204 } from "@/app/actions/rsvp-admin";
+import { cancelRsvp as endpoint205 } from "@/app/actions/rsvp-cancel";
+import { approveRsvp as endpoint206 } from "@/app/actions/rsvp-lifecycle";
+import { rejectRsvp as endpoint207 } from "@/app/actions/rsvp-lifecycle";
+import { promoteFromWaitlist as endpoint208 } from "@/app/actions/rsvp-lifecycle";
+import { submitRsvp as endpoint209 } from "@/app/actions/rsvp";
+import { saveScheduleItem as endpoint210 } from "@/app/actions/schedule";
+import { setScheduleDelay as endpoint211 } from "@/app/actions/schedule";
+import { beginMfaEnrollment as endpoint212 } from "@/app/actions/security";
+import { confirmMfaEnrollment as endpoint213 } from "@/app/actions/security";
+import { disableMfa as endpoint214 } from "@/app/actions/security";
+import { revokeAllSessions as endpoint215 } from "@/app/actions/security";
+import { createEventSeries as endpoint216 } from "@/app/actions/series";
+import { updateEventSeriesMeta as endpoint217 } from "@/app/actions/series";
+import { deleteEventSeries as endpoint218 } from "@/app/actions/series";
+import { createEventShortLink as endpoint219 } from "@/app/actions/shortLink";
+import { regenerateEventShortLink as endpoint220 } from "@/app/actions/shortLink";
+import { verifySuperAdminMfa as endpoint221 } from "@/app/actions/super-admin-mfa";
+import { saveTicketType as endpoint222 } from "@/app/actions/ticket-types";
+import { archiveTicketType as endpoint223 } from "@/app/actions/ticket-types";
+import { createPromoCode as endpoint224 } from "@/app/actions/ticket-types";
+import { archivePromoCode as endpoint225 } from "@/app/actions/ticket-types";
+import { saveRefundPolicy as endpoint226 } from "@/app/actions/ticket-types";
 
 export const viewReaders = Object.freeze({
   "app__about__page:loadView": endpoint0,
@@ -426,34 +427,35 @@ export const backendActions = Object.freeze({
   "payment-settings:savePaymentSettings": endpoint193,
   "payment-settings:disconnectPaymentProvider": endpoint194,
   "payment-settings:testPaymentConnection": endpoint195,
-  "promo:checkPromoCode": endpoint196,
-  "registration-form:upsertEventRegistrationField": endpoint197,
-  "registration-form:deleteEventRegistrationField": endpoint198,
-  "registration-form:reorderEventRegistrationFields": endpoint199,
-  "rsvp-admin:addManualRsvp": endpoint200,
-  "rsvp-admin:updateRsvpRegistration": endpoint201,
-  "rsvp-admin:deleteRsvp": endpoint202,
-  "rsvp-admin:restoreRsvp": endpoint203,
-  "rsvp-cancel:cancelRsvp": endpoint204,
-  "rsvp-lifecycle:approveRsvp": endpoint205,
-  "rsvp-lifecycle:rejectRsvp": endpoint206,
-  "rsvp-lifecycle:promoteFromWaitlist": endpoint207,
-  "rsvp:submitRsvp": endpoint208,
-  "schedule:saveScheduleItem": endpoint209,
-  "schedule:setScheduleDelay": endpoint210,
-  "security:beginMfaEnrollment": endpoint211,
-  "security:confirmMfaEnrollment": endpoint212,
-  "security:disableMfa": endpoint213,
-  "security:revokeAllSessions": endpoint214,
-  "series:createEventSeries": endpoint215,
-  "series:updateEventSeriesMeta": endpoint216,
-  "series:deleteEventSeries": endpoint217,
-  "shortLink:createEventShortLink": endpoint218,
-  "shortLink:regenerateEventShortLink": endpoint219,
-  "super-admin-mfa:verifySuperAdminMfa": endpoint220,
-  "ticket-types:saveTicketType": endpoint221,
-  "ticket-types:archiveTicketType": endpoint222,
-  "ticket-types:createPromoCode": endpoint223,
-  "ticket-types:archivePromoCode": endpoint224,
-  "ticket-types:saveRefundPolicy": endpoint225,
+  "payment-settings:saveReceiptDetails": endpoint196,
+  "promo:checkPromoCode": endpoint197,
+  "registration-form:upsertEventRegistrationField": endpoint198,
+  "registration-form:deleteEventRegistrationField": endpoint199,
+  "registration-form:reorderEventRegistrationFields": endpoint200,
+  "rsvp-admin:addManualRsvp": endpoint201,
+  "rsvp-admin:updateRsvpRegistration": endpoint202,
+  "rsvp-admin:deleteRsvp": endpoint203,
+  "rsvp-admin:restoreRsvp": endpoint204,
+  "rsvp-cancel:cancelRsvp": endpoint205,
+  "rsvp-lifecycle:approveRsvp": endpoint206,
+  "rsvp-lifecycle:rejectRsvp": endpoint207,
+  "rsvp-lifecycle:promoteFromWaitlist": endpoint208,
+  "rsvp:submitRsvp": endpoint209,
+  "schedule:saveScheduleItem": endpoint210,
+  "schedule:setScheduleDelay": endpoint211,
+  "security:beginMfaEnrollment": endpoint212,
+  "security:confirmMfaEnrollment": endpoint213,
+  "security:disableMfa": endpoint214,
+  "security:revokeAllSessions": endpoint215,
+  "series:createEventSeries": endpoint216,
+  "series:updateEventSeriesMeta": endpoint217,
+  "series:deleteEventSeries": endpoint218,
+  "shortLink:createEventShortLink": endpoint219,
+  "shortLink:regenerateEventShortLink": endpoint220,
+  "super-admin-mfa:verifySuperAdminMfa": endpoint221,
+  "ticket-types:saveTicketType": endpoint222,
+  "ticket-types:archiveTicketType": endpoint223,
+  "ticket-types:createPromoCode": endpoint224,
+  "ticket-types:archivePromoCode": endpoint225,
+  "ticket-types:saveRefundPolicy": endpoint226,
 });

@@ -30,7 +30,8 @@ Sources are listed at the end.
      units, `holdExpiresAt`, and a frozen refund policy.
    - Add `OrderLine`: `kind TICKET|ADD_ON|FEE`, `ticketTypeId?`, `addOnId?`,
      `quantity`, `unitMinor`, `discountMinor`, `taxableMinor`, `taxMinor`
-     (plus the CGST, SGST and IGST split), and `taxRateBps`.
+     (plus the CGST, SGST and IGST split), and `taxRateBps`; the tax columns
+     stay zero, since no tax is computed (see §4, Receipts).
    - `RSVP.orderId` creates one RSVP per attendee. Each RSVP gets its own
      registration answers. Missing attendee details are chased by an outbox
      email.
@@ -48,7 +49,7 @@ Sources are listed at the end.
 
 | Shape | Design |
 | --- | --- |
-| Single, multi-day, online or hybrid | As planned. One ticket covers every day; day passes come later. `TicketType.attendanceMode` (optional) also sets the GST place of supply. |
+| Single, multi-day, online or hybrid | As planned. One ticket covers every day; day passes come later. |
 | **Paid series, per occurrence** | `TicketType` has `eventId` or `eventSeriesId`, never both (checked in the database), and `scope OCCURRENCE\|SERIES_PASS`. Add `EventInstance.capacity Int?`, falling back to the series capacity. `reserveRsvp` locks the instance `FOR UPDATE` and counts confirmed plus unexpired `PENDING_PAYMENT` RSVPs for that instance. Ticket-type capacity also applies per instance. |
 | **Season or course pass** | A `SeriesPass` row (`orderId`, `seriesId`, `attendeeKey`, `coversFrom`, `coversUntil`). Taking a pass locks every covered future instance with `FOR UPDATE … ORDER BY id`, needs a seat in each, and creates one `PENDING_PAYMENT` RSVP per instance under a single hold. Instances added later inside the window seat pass holders first. `TicketType.capacity` limits how many passes are sold. Courses and cohorts use this. |
 | Approval required | Pay after approval through a payment link, created lazily (fix 2). Cards are not held and captured later, because that does not work with UPI or links. |
@@ -65,7 +66,7 @@ Sources are listed at the end.
 | Invite only (`INVITE_ONLY`) | Only invitees can buy, and they still pay unless the organiser issues a complimentary ticket. Invite links stay private and are never logged. |
 | Draft or hidden (`DRAFT`, `HIDDEN`) | No sales. Unpublishing stops new holds and leaves existing orders alone. |
 | Cancelled (`CANCELLED`) | Cancelling with sales asks for confirmation, then starts the automatic full refunds in §4. |
-| Online or in-person (`isOnline`) | Same checkout. GST place of supply follows §4. |
+| Online or in-person (`isOnline`) | Same checkout. |
 | Multi-day | One ticket covers every day. |
 | Registration cut-off (`registrationClosesAt`, `registrationLeadMinutes`) | Also ends sales. Holds already taken can still be paid until they expire. |
 | **Embedded event widget** (`app/embed`) | Checkout opens in a new top-level tab (`target="_blank"`, `rel="noopener"`): the providers' pages must not run inside a frame. The widget then shows "Finish paying in the new tab", and the ticket page confirms. |
@@ -120,32 +121,18 @@ Every action is audited.
   `respondBy`) from Razorpay `payment.dispute.*` and Stripe
   `charge.dispute.*` webhooks. The ticket is flagged and the organiser
   emailed; nothing is cancelled automatically.
-- **Receipts** show the organiser's legal name and address, the order number,
-  the lines, the provider payment id and a test-mode label. A document is
-  called a "Receipt" unless the organiser is GST-registered.
-- **Opt-in GST invoices** (colleges, companies and LLP makerspaces need them):
-  - **Tax profile:** `OrganisationTaxProfile` holds `legalName`, `address`,
-    `stateCode`, `gstin?`, `registered`, `pricesIncludeTax`, `invoicePrefix`,
-    `defaultSac` (9996) and `defaultTaxRateBps` (1800).
-  - **Rates:** each ticket type and add-on has `taxRateBps`, copied onto the
-    order line.
-  - **Buyer details:** at checkout, an optional "GST invoice" section asks
-    for the buyer's legal name, GSTIN (format-checked) and state.
-  - **Place of supply:** `Event.venueStateCode`. The same state gives
-    CGST + SGST, and a different state gives IGST. Online events use the
-    buyer's state, pending a chartered accountant's confirmation.
-  - **Invoices:** `Invoice` (kind `TAX_INVOICE|RECEIPT`) has a number unique
-    per organisation, at most 16 characters, unique within the financial
-    year. It is taken from an
-    `InvoiceCounter(organisationId, financialYear)` row locked `FOR UPDATE`
-    in the settlement transaction. The invoice stores a snapshot of supplier,
-    buyer, lines and totals, kept immutable by a trigger.
-  - **Refunds** create a `CreditNote` with its own number sequence.
-  - **Documents:** a PDF is rendered from the snapshot and linked in the
-    receipt email.
-  - **Arithmetic:** inclusive prices work back to the taxable value per
-    line, in integer minor units, rounding half up.
-  - **Out of scope:** e-invoicing (IRN).
+- **Receipts, not tax invoices** (decided 2026-10-20): every paid order has a
+  downloadable PDF receipt as proof of payment, from the order page and the
+  "payment received" email (`GET /api/orders/:token/receipt`). It shows:
+  - the organisation's registered name, registration number and address,
+    set by the owner under Settings → Payments → Receipts;
+  - the order number, buyer, event, lines, discount, total paid and refunds;
+  - how it was paid, as Razorpay or Stripe report it (for example
+    "Visa •••• 4242" or "UPI ••••@okicici", read once and kept on the
+    payment), the provider's payment id, and a test-mode label.
+
+  The platform computes no GST, VAT or other tax. Prices are what the buyer
+  pays, and organisers handle any tax themselves.
 - **Deposits and instalments** come later. Fix 3's order with several payments
   makes them additive: a `PaymentScheduleItem` with its own payments and
   attempts. Razorpay `accept_partial` and card mandates are not used.
@@ -183,7 +170,7 @@ and needs no tax or coupon features from either provider.
 | Pay what you want | We validate the amount and send it as the total | `price_data.unit_amount` set to the chosen amount |
 | Add-ons, fees, group tickets | Folded into the total; the description lists them | Separate line items |
 | Promo codes and tiers | Applied by us before the total | Applied by us; Stripe coupons are not used |
-| GST | Our invoice; Razorpay's GST features are not used | Our invoice; Stripe Tax is not used |
+| Receipts | Our PDF receipt with the payment method from `GET /v1/payments/:id`; Razorpay's GST features are not used | Our PDF receipt with the method from the PaymentIntent's latest charge; Stripe Tax is not used |
 | Refunds, full and partial | `POST /v1/payments/:id/refund` with `amount`; `refund.processed` / `refund.failed` | `POST /v1/refunds` with `payment_intent` and `amount`; `refund.updated` / `charge.refunded` |
 | Disputes | `payment.dispute.created/won/lost/closed` (`respond_by`) | `charge.dispute.created/updated/closed` (`evidence_details.due_by`) |
 | Minimum amount | ₹1 (100 paise) | Currency minimum (₹0.50) |
@@ -202,13 +189,13 @@ the per-event currency there. Rework PRs 2 and 3 onto orders, then add:
 
 1. **`feat/paid-series`:** occurrence tickets, series passes, instance capacity,
    and cancelling an occurrence with refunds.
-2. **`feat/gst-invoices`:** tax profile, rates, buyer GSTIN, invoices and
-   credit notes, and PDFs.
+2. **`feat/payment-receipts`:** the organisation's registered details and PDF
+   receipts with the provider's payment details (no tax handling).
 3. **`feat/ticketing-extras`:** tiers, pay what you want and donations,
    add-ons, group tickets, member pricing, hidden tickets and access codes,
    transfers, ticket-type changes, disputes, the booking fee, collecting
    payment at the desk, and abandoned-checkout reminders.
-4. **`feat/payment-reporting`:** as planned, with orders, add-ons, tax and
+4. **`feat/payment-reporting`:** as planned, with orders, add-ons and
    series in exports and reports. The version goes to 0.10.0.
 
 ## Sources

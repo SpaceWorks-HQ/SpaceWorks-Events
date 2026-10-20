@@ -983,6 +983,11 @@
       "id": "payment-settings:testPaymentConnection"
     },
     {
+      "module": "app/actions/payment-settings",
+      "name": "saveReceiptDetails",
+      "id": "payment-settings:saveReceiptDetails"
+    },
+    {
       "module": "app/actions/promo",
       "name": "checkPromoCode",
       "id": "promo:checkPromoCode"

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Download } from "lucide-react";
 import { AttendeeDetailsForm, CancelOrderButton, ConfirmingPayment, HoldCountdown, PayNowButton } from "@/components/orders/OrderClient";
 import { Button } from "@/components/ui/button";
 import { Callout, Chip } from "@/components/ui/display";
@@ -104,6 +104,16 @@ export default async function OrderPage({ params, searchParams }: Props) {
           ) : null}
         </dl>
         {order.refundPolicy ? <p className="mt-3 text-caption text-ink-muted">{order.refundPolicy}</p> : null}
+        {order.receiptHref ? (
+          <div className="mt-4">
+            <Button asChild size="sm" variant="secondary">
+              <a href={order.receiptHref} download>
+                <Download aria-hidden className="size-4" />
+                Download receipt (PDF)
+              </a>
+            </Button>
+          </div>
+        ) : null}
       </section>
 
       <section aria-labelledby="order-tickets" className="flex flex-col gap-3">

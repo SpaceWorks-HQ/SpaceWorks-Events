@@ -303,6 +303,10 @@ model OrganisationPaymentSettings {
   webhookPathId                  String           @unique
   /// Last successful "Test connection" for the selected provider.
   verifiedAt                     DateTime?
+  /// Shown on receipts: the registered name, registration number and address.
+  receiptLegalName               String?
+  receiptRegistrationNumber      String?
+  receiptAddress                 String?
   createdAt                      DateTime         @default(now())
   updatedAt                      DateTime         @updatedAt
 
@@ -603,6 +607,9 @@ model Payment {
   offlineReference  String?
   /// Who marked it paid offline or waived it.
   settledByUserId   String?
+  /// How an online payment was made, read from the provider once paid (e.g. "card", "Visa •••• 4242").
+  methodType        String?
+  methodSummary     String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 

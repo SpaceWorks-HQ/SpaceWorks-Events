@@ -174,3 +174,30 @@ export async function testPaymentConnection(input: unknown): Promise<ActionResul
   revalidatePath(`/dashboard/${access.organisation.slug}/settings/payments`);
   return { ok: true, data: { testMode: isProviderTestMode(row, parsed.data.provider) } };
 }
+
+const receiptSchema = z.object({
+  organisationSlug: orgSlug,
+  legalName: z.string().trim().max(200, "Keep the registered name under 200 characters."),
+  registrationNumber: z.string().trim().max(80, "Keep the registration number under 80 characters."),
+  address: z.string().trim().max(500, "Keep the address under 500 characters."),
+}).strict();
+
+/** The organisation's registered details printed on every receipt. Blank fields are left off. */
+export async function saveReceiptDetails(input: unknown): Promise<ActionResult> {
+  const parsed = receiptSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the receipt details." };
+  const access = await requireOwner(parsed.data.organisationSlug, { recentSignIn: false });
+  if ("error" in access) return { ok: false, error: access.error };
+  const data = {
+    receiptLegalName: parsed.data.legalName || null,
+    receiptRegistrationNumber: parsed.data.registrationNumber || null,
+    receiptAddress: parsed.data.address || null,
+  };
+  const organisationId = access.organisation.id;
+  await prisma.$transaction(async (tx) => {
+    await tx.organisationPaymentSettings.upsert({ where: { organisationId }, create: { organisationId, webhookPathId: newWebhookPathId(), ...data }, update: data });
+    await recordAuditEvent({ action: "PAYMENT_RECEIPT_DETAILS_UPDATED", actorUserId: access.userId, organisationId, targetType: "Organisation", targetId: organisationId, client: tx });
+  });
+  revalidatePath(`/dashboard/${access.organisation.slug}/settings/payments`);
+  return { ok: true };
+}
