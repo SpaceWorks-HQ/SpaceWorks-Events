@@ -1,0 +1,285 @@
+# TEMPORARY: end-to-end test of the VPS installer on fresh GitHub runners
+# against the test pre-release. Removed before merging.
+name: VPS installer end-to-end
+on:
+  push:
+    branches: [feat/installer-0.9.3]
+    paths: [.github/workflows/vps-e2e.yml]
+
+permissions:
+  contents: read
+
+env:
+  RELEASE: v0.9.3-feat-installer-0-9-3.16.a123b65ee171
+  OLD_RELEASE: v0.9.1-main.11.f2e7307410ee
+  SILO: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
+
+jobs:
+  vps:
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [split-lan, proxy-external-storage, upgrade-from-0.9.1]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Prepare the host like a fresh VPS
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq expect >/dev/null
+          # Answers every later question; saves the backup key shown once.
+          cat > common.exp <<'EOF'
+          proc rest {harden} {
+            expect {
+              "automatic deploys" { send "n\r"; exp_continue }
+              "Back up every night?" { send "\r"; exp_continue }
+              "Encrypt backups" { send "\r"; exp_continue }
+              "off-site S3 bucket" { send "n\r"; exp_continue }
+              "Harden this server" { send "$harden\r"; exp_continue }
+              "swap file" { send "n\r"; exp_continue }
+              "Proceed?" { send "y\r"; exp_continue }
+              -re {(AGE-SECRET-KEY-1[A-Z0-9]+)} {
+                set f [open "key.txt" w]; puts $f $expect_out(1,string); close $f; exp_continue
+              }
+              "Type SAVED" { send "SAVED\r"; exp_continue }
+              eof
+            }
+          }
+          EOF
+          cat > split.exp <<'EOF'
+          set timeout 3600
+          source common.exp
+          spawn bash -c "curl -fsSL [lindex $argv 0] | bash -s -- [lindex $argv 1]"
+          expect "Install from which GitHub repository?" ; expect "Repository" ; send "\r"
+          expect "Hosting" ; send "\r"
+          expect "Website hostname" ; send "events.swe-test.example\r"
+          expect "API hostname" ; send "\r"
+          expect "Super-admin email" ; send "admin@example.com\r"
+          expect "HTTPS \\\[" ; send "1\r"
+          expect "File storage \\\[" ; send "\r"
+          expect "Sender" ; send "\r"
+          expect "SMTP host" ; send "\r"
+          expect "SMTP port" ; send "\r"
+          expect "SMTP login" ; send "test-login\r"
+          expect "SMTP password" ; send "test-password\r"
+          rest y
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+          cat > proxy.exp <<'EOF'
+          set timeout 3600
+          source common.exp
+          spawn bash -c "curl -fsSL [lindex $argv 0] | bash -s -- [lindex $argv 1]"
+          expect "Repository" ; send "\r"
+          expect "Hosting" ; send "2\r"
+          expect "Public hostname" ; send "events.swe-test.example\r"
+          expect "Super-admin email" ; send "admin@example.com\r"
+          expect "HTTPS \\\[" ; send "3\r"
+          expect "File storage \\\[" ; send "2\r"
+          expect "S3 endpoint" ; send "https://external-s3:9000\r"
+          expect "Region" ; send "us-east-1\r"
+          expect "Bucket" ; send "events-files\r"
+          expect "Access key ID" ; send "extkey\r"
+          expect "Secret access key" ; send "extsecret12345\r"
+          expect "Sender" ; send "\r"
+          expect "SMTP host" ; send "\r"
+          expect "SMTP port" ; send "\r"
+          expect "SMTP login" ; send "test-login\r"
+          expect "SMTP password" ; send "test-password\r"
+          rest n
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+          cat > resume.exp <<'EOF'
+          set timeout 3600
+          source common.exp
+          spawn bash -c "curl -fsSL [lindex $argv 0] | bash -s -- [lindex $argv 1]"
+          expect "Choose 1-2" ; send "1\r"
+          rest n
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+          cat > old.exp <<'EOF'
+          set timeout 3600
+          spawn bash -c "curl -fsSL [lindex $argv 0] | SWE_CADDY_TLS=internal bash -s -- [lindex $argv 1]"
+          expect "Hosting" ; send "\r"
+          expect "Website hostname" ; send "events.swe-test.example\r"
+          expect "API hostname" ; send "\r"
+          expect "Super-admin email" ; send "admin@example.com\r"
+          expect "Sender" ; send "\r"
+          expect "SMTP host" ; send "\r"
+          expect "SMTP port" ; send "\r"
+          expect "SMTP login" ; send "test-login\r"
+          expect "SMTP password" ; send "test-password\r"
+          expect {
+            "swap file" { send "n\r"; exp_continue }
+            "Proceed?" { send "y\r" }
+          }
+          expect eof
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+          # menu.exp URL ARGS CHOICE [answers...]: pick a menu entry, then answer prompts in order.
+          cat > menu.exp <<'EOF'
+          set timeout 3600
+          spawn bash -c "curl -fsSL [lindex $argv 0] | bash -s -- [lindex $argv 1]"
+          expect -re "Choose \[0-9\]+-\[0-9\]+" ; send "[lindex $argv 2]\r"
+          foreach answer [lrange $argv 3 end] { expect -re {: $|\]: $} ; send "$answer\r" }
+          expect {
+            "Proceed with the update?" { send "y\r"; exp_continue }
+            eof
+          }
+          catch wait result
+          exit [lindex $result 3]
+          EOF
+
+      - name: "A: split layout, LAN certificate, Silo, nightly encrypted backups, hardening"
+        if: matrix.scenario == 'split-lan'
+        run: |
+          set -o pipefail
+          expect split.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" | tee install.log
+          grep -q "${RELEASE#v} is running" install.log
+          grep -q '^AGE-SECRET-KEY-1' key.txt
+          systemctl is-enabled swevents-backup.timer swevents-certificates.timer
+          sudo grep -q '^BACKUP_AGE_RECIPIENT=' /etc/spaceworks-events/backup.env
+          ! sudo grep -q 'AGE-SECRET-KEY' -r /etc/spaceworks-events
+          sudo ufw status | tee ufw.txt
+          if sudo ss -Htlnp | grep -q '"sshd"'; then
+            port=$(sudo ss -Htlnp | awk '/"sshd"/ { n = split($4, p, ":"); print p[n]; exit }')
+            grep -q 'Status: active' ufw.txt && grep -qE "^$port/tcp +ALLOW" ufw.txt && grep -qE '^443/tcp +ALLOW' ufw.txt
+          else
+            grep -q 'Could not find the SSH port' install.log
+          fi
+          grep -qE 'fail2ban (bans|did not start)' install.log
+
+      - name: "B: single container, existing proxy, external bucket (resumed)"
+        if: matrix.scenario == 'proxy-external-storage'
+        run: |
+          set -o pipefail
+          # The bucket is not up yet: setup stops at the final check.
+          ! expect proxy.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" | tee install.log
+          grep -q 'VPS checks failed' install.log
+          [ ! -s key.txt ]
+          # An "external" S3 service with a certificate the installation trusts.
+          mkdir -p s3 && cd s3
+          openssl req -new -newkey rsa:2048 -nodes -subj /CN=external-s3 -keyout private.key -out request.csr 2>/dev/null
+          printf 'subjectAltName=DNS:external-s3\nextendedKeyUsage=serverAuth\n' > extensions.cnf
+          sudo openssl x509 -req -in request.csr -CA /etc/spaceworks-events/tls/ca.crt -CAkey /etc/spaceworks-events/tls/ca.key \
+            -CAcreateserial -CAserial ./ca.srl -days 30 -extfile extensions.cnf -out public.crt 2>/dev/null
+          sudo chmod 644 private.key public.crt
+          docker run -d --name external-s3 --network swevents_edge -e MINIO_ROOT_USER=extroot -e MINIO_ROOT_PASSWORD=extrootpass123 \
+            -v "$PWD:/certs:ro" "$SILO" server /data --certs-dir /certs
+          docker run --rm --network swevents_edge -v /etc/spaceworks-events/tls/ca.crt:/ca.crt:ro -e SSL_CERT_FILE=/ca.crt \
+            -e MC_HOST_ext=https://extroot:extrootpass123@external-s3:9000 --entrypoint sh "$SILO" -c \
+            'until mc ls ext >/dev/null 2>&1; do sleep 1; done; mc mb ext/events-files && mc admin user add ext extkey extsecret12345 && mc admin policy attach ext readwrite --user extkey'
+          cd ..
+          # Rerunning the one-liner resumes with the generated secrets and finishes the backup choices.
+          expect resume.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" | tee resume.log
+          grep -q "${RELEASE#v} is running" resume.log
+          grep -q '^AGE-SECRET-KEY-1' key.txt
+          systemctl is-enabled swevents-backup.timer swevents-certificates.timer
+          ! systemctl is-active --quiet ufw
+
+      - name: "C: 0.9.1 split install, then update to this release"
+        if: matrix.scenario == 'upgrade-from-0.9.1'
+        run: |
+          set -o pipefail
+          expect old.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$OLD_RELEASE/install.sh" "--release $OLD_RELEASE" | tee install.log
+          grep -q "${OLD_RELEASE#v} is running" install.log
+          expect menu.exp "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$RELEASE/install.sh" "--release $RELEASE" 1 | tee update.log
+          grep -q "Updated to ${RELEASE#v}" update.log
+          grep -q 'Added a weekly check' update.log
+          systemctl is-enabled swevents-certificates.timer
+          ! systemctl is-enabled --quiet swevents-backup.timer
+
+      - name: Check the running installation
+        run: |
+          set -x
+          export SWE_CONFIG_DIR=/etc/spaceworks-events
+          c() { sudo -E sh /opt/spaceworks-events/current/scripts/vps-compose.sh "$@"; }
+          sudo grep -E '^(SWE_|PUBLIC_|SITE_)' "$SWE_CONFIG_DIR/compose.env"
+          c ps --format '{{.Service}} {{.Image}} {{.Status}}'
+          c ps --format '{{.Image}}' | grep -q "ghcr.io/spaceworks-hq/spaceworks-events-backend:${RELEASE#v}"
+          # The scheduler runs from the backend image now.
+          c ps --format '{{.Service}} {{.Image}}' | grep -q "^scheduler ghcr.io/spaceworks-hq/spaceworks-events-backend:${RELEASE#v}"
+          c run --rm --no-deps ops node docker/vps/check.mjs
+          c run --rm --no-deps ops node docker/vps/smoke.mjs
+          case "${{ matrix.scenario }}" in
+            proxy-external-storage)
+              ! c ps --format '{{.Service}}' | grep -qxE 'proxy|storage|storage-init|frontend'
+              curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8080/api/health | grep -q '^200$'
+              ! sudo ss -ltn | grep -qE ':(80|443) '
+              ;;
+            *)
+              c ps --format '{{.Service}}' | grep -qx frontend
+              c ps --format '{{.Service}}' | grep -qx proxy
+              c ps --format '{{.Service}}' | grep -qx storage
+              curl -sk --resolve events.swe-test.example:443:127.0.0.1 -o /dev/null -w '%{http_code}\n' https://events.swe-test.example/login | grep -q '^200$'
+              curl -sk --resolve api.events.swe-test.example:443:127.0.0.1 -o /dev/null -w '%{http_code}\n' https://api.events.swe-test.example/api/health | grep -q '^200$'
+              ;;
+          esac
+
+      - name: Back up and restore
+        run: |
+          set -o pipefail -x
+          export SWE_CONFIG_DIR=/etc/spaceworks-events
+          sudo bash /opt/spaceworks-events/current/scripts/vps-backup.sh | tee backup.log
+          if [ "${{ matrix.scenario }}" = proxy-external-storage ]; then grep -q 'external bucket' backup.log; fi
+          backup=$(sudo sh -c 'ls -d /etc/spaceworks-events/backups/2*Z | sort | tail -n 1')
+          sudo ls -la "$backup"
+          # The app sees only the status, read-only.
+          sudo -E sh /opt/spaceworks-events/current/scripts/vps-compose.sh exec -T app cat /status/backup.json | tee status.json
+          grep -q '"lastStatus":"ok"' status.json
+          if [ -s key.txt ]; then
+            sudo test -f "$backup/backup.tar.age" && ! sudo test -e "$backup/database.dump"
+            grep -q '"encrypted":true' status.json
+            sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh "$backup" --identity "$PWD/key.txt" --yes
+            # A wrong key is refused before anything changes.
+            sudo age-keygen -o other.txt 2>/dev/null
+            ! sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh "$backup" --identity other.txt --yes
+            ! sudo sh -c 'ls -d /etc/spaceworks-events/backups/.restore* 2>/dev/null'
+          else
+            sudo test -s "$backup/database.dump"
+            sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh "$backup" --yes
+          fi
+
+      - name: Certificates, support bundle and recovery
+        if: matrix.scenario == 'split-lan'
+        run: |
+          set -o pipefail -x
+          bin=/opt/spaceworks-events/current/scripts
+          sudo bash $bin/vps-renew-certs.sh --if-due | tee renew.log
+          grep -q 'renewal is not due' renew.log
+          before=$(sudo sha256sum /etc/spaceworks-events/tls/postgres/public.crt)
+          sudo bash $bin/vps-renew-certs.sh | tee renew.log
+          grep -q 'Internal certificates renewed' renew.log
+          [ "$before" != "$(sudo sha256sum /etc/spaceworks-events/tls/postgres/public.crt)" ]
+          sudo bash $bin/vps-support.sh | tee support.log
+          bundle=$(sudo sh -c 'ls /opt/spaceworks-events/support/*.tar.gz | tail -n 1')
+          mkdir bundle && sudo tar -xzf "$bundle" -C bundle && sudo chmod -R a+r bundle
+          ls -R bundle
+          for secret in POSTGRES_PASSWORD AUTH_SECRET CRON_SECRET; do
+            value=$(sudo sh -c "sed -n \"s/^$secret='\\(.*\\)'\$/\\1/p\" /etc/spaceworks-events/*.env | head -n 1")
+            [ -n "$value" ] && ! grep -rqF "$value" bundle
+          done
+          # No account has signed up yet: recovery says so and changes nothing.
+          expect -c "set timeout 600; spawn sudo bash $bin/vps-recover.sh; expect \"Account email\"; send \"\r\"; expect \"Continue?\"; send \"y\r\"; expect eof" | tee recover.log
+          grep -q 'No account uses admin@example.com' recover.log
+
+      - name: Uninstall, keeping the data
+        if: matrix.scenario == 'upgrade-from-0.9.1'
+        run: |
+          set -o pipefail -x
+          expect -c "set timeout 1200; spawn sudo bash /opt/spaceworks-events/current/scripts/vps-uninstall.sh; expect \"Type UNINSTALL\"; send \"UNINSTALL\r\"; expect \"DELETE DATA\"; send \"\r\"; expect eof" | tee uninstall.log
+          grep -q 'Space Works Events is uninstalled' uninstall.log
+          [ ! -e /opt/spaceworks-events ]
+          sudo test -f /etc/spaceworks-events/app.env
+          docker volume ls --format '{{.Name}}' | grep -q '^swevents_postgres_data$'
+          [ -z "$(docker ps -aq --filter label=com.docker.compose.project=swevents)" ]
+          ! systemctl list-unit-files 'swevents-*' | grep -q swevents
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          export SWE_CONFIG_DIR=/etc/spaceworks-events
+          sudo -E sh /opt/spaceworks-events/current/scripts/vps-compose.sh logs --tail 60 app frontend migrator proxy scheduler || true
+          docker logs --tail 30 external-s3 2>&1 || true
