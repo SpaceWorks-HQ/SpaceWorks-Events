@@ -107,13 +107,15 @@ enum BroadcastAttendanceFilter {
 }
 
 enum OrderStatus {
+  /// A paid request waiting for approval or a waitlist place; nothing is held or charged.
+  REQUESTED
   /// Waiting for payment while its seats are held.
   PENDING
   /// Paid, free, or settled by hand: its tickets are issued.
   CONFIRMED
   /// The hold ended unpaid.
   EXPIRED
-  /// Cancelled before payment.
+  /// Declined before payment, or cancelled (and refunded) afterwards.
   CANCELLED
 }
 
@@ -143,6 +145,35 @@ enum PaymentRefundStatus {
   PENDING
   SUCCEEDED
   FAILED
+}
+
+/// How an organiser collected money by hand.
+enum OfflinePaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD_TERMINAL
+  OTHER
+}
+
+enum PromoDiscountKind {
+  PERCENT
+  FIXED
+}
+
+enum PromoAppliesPer {
+  TICKET
+  ORDER
+}
+
+/// What attendees get back if they cancel a paid ticket themselves.
+enum RefundPolicyKind {
+  /// The organiser handles refunds.
+  NONE
+  /// A full refund until `refundPolicyHours` before the start.
+  FULL_UNTIL
+  /// `refundPolicyPercent` back until `refundPolicyHours` before the start.
+  PERCENT_UNTIL
 }
 
 /// Who collected a payment. Organisations connect RAZORPAY or STRIPE; OFFLINE
@@ -187,6 +218,9 @@ model User {
   idMemberships     IdMember[]
   orders            Order[]           @relation("OrderBuyer")
   paymentRefunds    PaymentRefund[]
+  paymentsSettled   Payment[]          @relation("PaymentSettledBy")
+  paymentAmendments PaymentAmendment[] @relation("PaymentAmendmentActor")
+  promoCodesCreated PromoCode[]        @relation("PromoCodeCreatedBy")
 }
 
 model Account {
@@ -404,6 +438,12 @@ model Event {
   /// Uppercase ISO 4217 code for every ticket and order of this event, set
   /// with the first ticket type and locked after the first sale.
   currency              String?
+  /// Paid tickets: what attendees get back when they cancel. After the first
+  /// sale it can only become more generous; each order keeps a copy.
+  refundPolicyKind      RefundPolicyKind @default(NONE)
+  refundPolicyHours     Int?
+  refundPolicyPercent   Int?
+  refundPolicyText      String           @default("")
   /// Optional 7-character share code served at /{shortCode}. Always contains
   /// an uppercase letter so it can never equal a (lowercase) organisation slug.
   shortCode             String?          @unique
@@ -430,6 +470,7 @@ model Event {
   ticketTypes      TicketType[]
   orders           Order[]
   shortLinkClickDays ShortLinkClickDay[]
+  promoCodes       PromoCode[]
 
   @@unique([organisationId, slug])
   @@index([organisationId])
@@ -460,6 +501,7 @@ model TicketType {
   event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
   rsvps      RSVP[]
   orderLines OrderLine[]
+  promoCodes PromoCode[]
 
   /// Target of RSVP's composite key, so a ticket can never belong to another event.
   @@unique([id, eventId])
@@ -492,12 +534,16 @@ model Order {
   holdExpiresAt  DateTime?
   /// The latest a hold may be extended to so a provider page can open.
   holdCapAt      DateTime?
+  promoCodeId    String?
+  /// The event's refund policy when the order was placed: { kind, hours, percent, text }.
+  refundPolicy   Json?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
   buyer        User?        @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
+  promoCode    PromoCode?   @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   lines        OrderLine[]
   payments     Payment[]
   rsvps        RSVP[]
@@ -552,6 +598,11 @@ model Payment {
   /// What the buyer paid for, as shown on receipts.
   description       String
   paidAt            DateTime?
+  /// PAID_OFFLINE only. Corrections are PaymentAmendment rows, never edits.
+  offlineMethod     OfflinePaymentMethod?
+  offlineReference  String?
+  /// Who marked it paid offline or waived it.
+  settledByUserId   String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
 
@@ -559,6 +610,8 @@ model Payment {
   order        Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   attempts     PaymentCheckoutAttempt[]
   refunds      PaymentRefund[]
+  amendments   PaymentAmendment[]
+  settledBy    User?                    @relation("PaymentSettledBy", fields: [settledByUserId], references: [id], onDelete: SetNull)
 
   @@unique([provider, externalPaymentId])
   @@index([organisationId, createdAt])
@@ -614,6 +667,60 @@ model PaymentRefund {
   @@unique([paymentId, externalRefundId])
   @@index([paymentId, status])
   @@index([status, createdAt])
+}
+
+/// An append-only correction to an offline payment's method or reference.
+/// The newest row for a field is its current value.
+model PaymentAmendment {
+  id          String   @id @default(cuid())
+  paymentId   String
+  field       String
+  oldValue    String?
+  newValue    String?
+  reason      String
+  actorUserId String?
+  createdAt   DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  actor   User?   @relation("PaymentAmendmentActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId, createdAt])
+}
+
+/// A discount code for one event. Only a SHA-256 digest of the normalised
+/// code is stored, with a short hint so organisers can tell codes apart.
+model PromoCode {
+  id              String            @id @default(cuid())
+  eventId         String
+  codeDigest      String
+  hint            String
+  kind            PromoDiscountKind
+  appliesPer      PromoAppliesPer   @default(TICKET)
+  /// PERCENT: 1 to 100. 100 makes the tickets free, with no checkout.
+  percentOff      Int?
+  /// FIXED: minor units of the event's currency, per ticket or per order.
+  amountOffMinor  BigInt?
+  /// Only this ticket type, when set.
+  ticketTypeId    String?
+  /// The order needs at least this many eligible tickets.
+  minQuantity     Int               @default(1)
+  /// At most this many tickets in one order are discounted (TICKET codes).
+  perOrderLimit   Int?
+  /// Orders that may use it (held or confirmed); a released hold frees its use.
+  maxRedemptions  Int?
+  validFrom       DateTime?
+  validUntil      DateTime?
+  archivedAt      DateTime?
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId, eventId], references: [id, eventId], onDelete: NoAction)
+  createdBy  User?       @relation("PromoCodeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  orders     Order[]
+
+  @@unique([eventId, codeDigest])
+  @@index([eventId, archivedAt])
 }
 
 /// An organiser email sent to a selected set of existing registrations.

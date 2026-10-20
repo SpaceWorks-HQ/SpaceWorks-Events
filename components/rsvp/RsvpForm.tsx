@@ -13,6 +13,7 @@ import { Field, Input } from "@/components/ui/field";
 import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import { identityErrors } from "@/components/rsvp/registrationAnswers";
 import { TicketPicker, ticketAvailable } from "@/components/rsvp/TicketPicker";
+import { PromoCodeField, previewOrderTotal, type AppliedPromo, type TicketingInfo } from "@/components/rsvp/PromoCodeField";
 import { formatMoney } from "@/lib/payments/money";
 import type { PublicTicketType } from "@/lib/payments/tickets";
 
@@ -85,10 +86,14 @@ export function RsvpForm(props: {
   /** Ticket types to buy; registration without tickets when empty. */
   tickets?: PublicTicketType[];
   paidSalesOpen?: boolean;
+  /** Paid tickets: whether promo codes exist, and the refund terms. */
+  ticketing?: TicketingInfo | null;
+  /** A paid order is only a request first: it needs approval, or waits for a place. */
+  paidRequest?: "approval" | "waitlist" | null;
   /** Lets a containing event page update immediately after this tab saves an RSVP. */
   onRsvpSaved?: (rsvp: { ticketToken: string; status: RsvpStatus | null }) => void;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets = [], paidSalesOpen = false } = props;
+  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets = [], paidSalesOpen = false, ticketing = null, paidRequest = null } = props;
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     // Start with one of the first ticket that can be bought.
     const first = tickets.find((ticket) => ticketAvailable(ticket, paidSalesOpen));
@@ -99,8 +104,10 @@ export function RsvpForm(props: {
   const [framedCheckout, setFramedCheckout] = useState<{ checkoutUrl: string; orderToken: string | null } | null>(null);
   const [attendees, setAttendees] = useState<Array<{ name: string; email: string }>>([]);
   const seats = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
-  const totalMinor = tickets.reduce((sum, ticket) => sum + ticket.priceMinor * (quantities[ticket.id] ?? 0), 0);
+  const [promo, setPromo] = useState<AppliedPromo | null>(null);
+  const { totalMinor, discountMinor, promoProblem } = previewOrderTotal(tickets, quantities, promo);
   const currency = tickets[0]?.currency ?? "INR";
+  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0);
   const { data: session, status } = useSession();
   const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
@@ -154,6 +161,7 @@ export function RsvpForm(props: {
         ...(tickets.length > 0 ? {
           items: Object.entries(quantities).filter(([, quantity]) => quantity > 0).map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
           attendees: attendees.slice(0, Math.max(0, seats - 1)).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
+          ...(promo ? { promoCode: promo.code } : {}),
         } : {}),
         name,
         answers: questionsState.payload(),
@@ -232,7 +240,11 @@ export function RsvpForm(props: {
         <p className="text-body font-semibold">
           {isConfirmed
             ? "Registration confirmed. Download and save your ticket now — you’ll need it for check-in."
-            : "Registration received. We’ll let you know when its status changes."}
+            : sellsPaid && (rsvpStatus === "PENDING_APPROVAL" || rsvpStatus === "WAITLISTED")
+              ? rsvpStatus === "WAITLISTED"
+                ? "You’re on the waitlist. Nothing has been charged; if a place frees up, we’ll email you a link to pay."
+                : "Request sent. Nothing has been charged; if the organiser approves it, we’ll email you a link to pay."
+              : "Registration received. We’ll let you know when its status changes."}
         </p>
         <div className="flex flex-wrap gap-2">
           {isConfirmed && ticketDownloadUrl ? (
@@ -254,6 +266,44 @@ export function RsvpForm(props: {
   }
 
   const questions = <RegistrationQuestions controller={questionsState} />;
+  const ticketSection = tickets.length > 0 ? (
+    <div data-question-key="__ticket" className="flex flex-col gap-3">
+      <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
+      {seats > 1 ? (
+        <div className="flex flex-col gap-3">
+          <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
+          {Array.from({ length: seats - 1 }, (_, index) => (
+            <div key={index} className="grid gap-2 sm:grid-cols-2">
+              <Field label={`Ticket ${index + 2}: name`} optional>
+                <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
+              </Field>
+              <Field label={`Ticket ${index + 2}: email`} optional>
+                <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
+              </Field>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {ticketing?.promoCodes && eventSlug ? (
+        <PromoCodeField orgSlug={orgSlug} eventSlug={eventSlug} applied={promo} onApplied={setPromo} problem={promoProblem} />
+      ) : null}
+      {discountMinor > 0 ? (
+        <p className="text-body-ui text-ink">Discount: −{formatMoney(discountMinor, currency)} · Total {formatMoney(totalMinor, currency)}</p>
+      ) : null}
+      {sellsPaid && ticketing ? (
+        <p className="text-caption text-ink-muted">
+          {ticketing.refundPolicy}{ticketing.refundPolicyText ? ` ${ticketing.refundPolicyText}` : ""}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+  const submitLabel = totalMinor <= 0
+    ? "Register"
+    : paidRequest === "approval"
+      ? `Request tickets · ${formatMoney(totalMinor, currency)}`
+      : paidRequest === "waitlist"
+        ? "Join the waitlist"
+        : `Continue to payment · ${formatMoney(totalMinor, currency)}`;
   const problems = problemCount > 0 ? (
     <Callout tone="danger" role="alert">
       {problemCount === 1 ? "One answer needs a quick fix before you can register." : `${problemCount} answers need a quick fix before you can register.`}
@@ -265,26 +315,7 @@ export function RsvpForm(props: {
       <div ref={formRef} className="flex flex-col gap-3.5">
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
         {problems}
-        {tickets.length > 0 ? (
-          <div data-question-key="__ticket" className="flex flex-col gap-3">
-            <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
-            {seats > 1 ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
-                {Array.from({ length: seats - 1 }, (_, index) => (
-                  <div key={index} className="grid gap-2 sm:grid-cols-2">
-                    <Field label={`Ticket ${index + 2}: name`} optional>
-                      <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
-                    </Field>
-                    <Field label={`Ticket ${index + 2}: email`} optional>
-                      <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
-                    </Field>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
+        {ticketSection}
         <div data-question-key="__name">
           <Field label="Name" optional={!requireName} required={requireName} error={identity.name} helperText={!requireName ? `Leave blank to use ${session.user.name}.` : undefined}>
             <Input
@@ -302,7 +333,7 @@ export function RsvpForm(props: {
         </div>
         {questions}
         <Button variant="accent" size="lg" fullWidth loading={pending} loadingLabel="Registering…" onClick={submit}>
-          {totalMinor > 0 ? `Continue to payment · ${formatMoney(totalMinor, currency)}` : "Register"}
+          {submitLabel}
         </Button>
       </div>
     );
@@ -320,26 +351,7 @@ export function RsvpForm(props: {
     >
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {problems}
-      {tickets.length > 0 ? (
-        <div data-question-key="__ticket" className="flex flex-col gap-3">
-          <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
-          {seats > 1 ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
-              {Array.from({ length: seats - 1 }, (_, index) => (
-                <div key={index} className="grid gap-2 sm:grid-cols-2">
-                  <Field label={`Ticket ${index + 2}: name`} optional>
-                    <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
-                  </Field>
-                  <Field label={`Ticket ${index + 2}: email`} optional>
-                    <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
-                  </Field>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
+      {ticketSection}
       <p className="text-body-ui text-ink-muted">Your details</p>
       <div data-question-key="__name">
         <Field label="Name" required error={identity.name}>
@@ -374,7 +386,7 @@ export function RsvpForm(props: {
       </div>
       {questions}
       <Button variant="accent" size="lg" fullWidth type="submit" loading={pending} loadingLabel="Registering…">
-        {totalMinor > 0 ? `Continue to payment · ${formatMoney(totalMinor, currency)}` : "Register"}
+        {submitLabel}
       </Button>
     </form>
   );

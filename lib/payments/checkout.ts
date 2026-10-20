@@ -128,3 +128,47 @@ export async function refreshOrderFromProvider(orderId: string) {
     return;
   }
 }
+
+/** A page creation that never finished (a crash mid-request) is abandoned after this. */
+const STALLED_ATTEMPT_MS = 5 * 60_000;
+
+/**
+ * Cancel every open provider page for an order, before its seats are
+ * released or it is settled by hand. "open" when a page may still take money
+ * (try again later); "settled" when the buyer had already paid, which is then
+ * settled (and refunded if the seats are gone).
+ */
+export async function closeOpenAttempts(orderId: string, now = new Date()): Promise<"closed" | "open" | "settled"> {
+  const attempts = await prisma.paymentCheckoutAttempt.findMany({
+    where: { status: CheckoutAttemptStatus.OPEN, payment: { orderId } },
+    select: { id: true, provider: true, externalId: true, createdAt: true, payment: { select: { organisationId: true } } },
+  });
+  for (const attempt of attempts) {
+    if (!attempt.externalId) {
+      // The provider may still have created it; its webhook would carry our attempt id.
+      if (attempt.createdAt.getTime() > now.getTime() - STALLED_ATTEMPT_MS) return "open";
+      continue;
+    }
+    const provider = attempt.provider as OnlineProvider;
+    const account = await loadPaymentAccount(attempt.payment.organisationId, provider);
+    // Without keys the page can't be cancelled; a later payment still arrives by
+    // webhook and is refunded if the seats are gone.
+    if (!account) continue;
+    let state;
+    try {
+      state = await account.gateway.cancelCheckout(attempt.externalId);
+    } catch {
+      return "open"; // Outcome unknown: keep the seats held and retry next tick.
+    }
+    if (state.state === "open") return "open";
+    if (state.state === "paid") {
+      const paid = state;
+      const result = await prisma.$transaction((tx) => settlePaidNotification(tx, { organisationId: attempt.payment.organisationId, provider }, {
+        checkoutId: attempt.externalId, reference: attempt.id, paymentId: paid.paymentId, amountMinor: paid.amountMinor, currency: paid.currency,
+      }, now));
+      for (const refundId of result.refundIds) await submitPendingRefund(refundId).catch(() => undefined);
+      return "settled";
+    }
+  }
+  return "closed";
+}

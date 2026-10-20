@@ -21,7 +21,7 @@ Dynamic segments are shown as `:name` for readability.
 | `/:orgSlug/i/:instanceId` | Recurring-series instance and RSVP |
 | `/:shortCode` | Event short link: a 7-character code (letters and digits, always at least one uppercase letter, so it never matches a lowercase organisation slug) that temporarily redirects to the event's current public page. Unknown or unpublished codes return the same not-found page as an unknown organisation; lookups are rate-limited |
 | `/ticket/:token` | Attendee ticket status and QR page; tears off the QR stub live when the attendee is checked in |
-| `/order/:token` | The buyer's order (opaque access token): lines and total, payment state with "Pay now" while the tickets are held, and each ticket with its attendee's details |
+| `/order/:token` | The buyer's order (opaque access token): lines, discount and total, payment state with "Pay now" while the tickets are held, refunds, the refund policy it was bought under with "Cancel order" while that policy allows it, and each ticket with its attendee's details |
 | `/:orgSlug/ids` | An organisation's ID programmes that are taking card requests |
 | `/:orgSlug/ids/:programmeSlug` | Member ID join form (sign-in required; only while the programme is active with requests open) and the requester's own status |
 | `/verify/:token` | Public member ID check (QR target): Valid / Expired show name, photo, programme, organisation, ID number and valid-until; Revoked shows status only; pending, rejected and unknown tokens share one "Card not found". `noindex`, `no-referrer`, rate limited per IP |

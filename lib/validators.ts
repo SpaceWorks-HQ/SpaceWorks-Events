@@ -46,7 +46,7 @@ export function isValidAttendeeName(value: string) {
   );
 }
 
-const attendeeNameSchema = z
+export const attendeeNameSchema = z
   .string()
   .trim()
   .min(1, "Name is required")
@@ -217,6 +217,7 @@ const rsvpTargetBase = z
       name: z.string().trim().max(200).optional(),
       email: z.string().trim().max(320).email("Enter a valid email for each attendee, or leave it blank.").optional().or(z.literal("")),
     }).strict()).max(19).optional(),
+    promoCode: z.string().trim().max(32).optional().or(z.literal("")),
   })
   .refine(
     (d) => Boolean(d.eventSlug?.length) !== Boolean(d.eventInstanceId?.length),

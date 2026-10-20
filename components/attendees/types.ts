@@ -11,6 +11,9 @@ export type AttendeeRow = {
   user: { id: string; name: string | null; email: string | null } | null;
   checkedInAt: string | null;
   ticketUrl: string;
+  /** Paid events: the ticket bought and the order it belongs to. */
+  ticketName?: string | null;
+  order?: AttendeeOrder | null;
   answers?: { label: string; value: string }[];
   rawAnswers?: Array<{
     fieldId: string;
@@ -20,4 +23,22 @@ export type AttendeeRow = {
     valueDate?: string | null;
   }>;
   registrationFields?: ManualRsvpField[];
+};
+
+/** A paid order as the guest list shows it; operations act on the whole order. */
+export type AttendeeOrder = {
+  id: string;
+  reference: string;
+  status: "REQUESTED" | "PENDING" | "CONFIRMED" | "EXPIRED" | "CANCELLED";
+  totalMinor: number;
+  currency: string;
+  testMode: boolean;
+  tickets: number;
+  /** How a confirmed order was settled. */
+  settlement: "online" | "offline" | "waived" | null;
+  paidMinor: number;
+  refundedMinor: number;
+  refundPendingMinor: number;
+  /** The offline payment's record, as amended. */
+  offlinePayment: { id: string; method: string | null; reference: string | null; } | null;
 };

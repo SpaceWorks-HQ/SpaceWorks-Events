@@ -6,6 +6,7 @@ import { Avatar, Callout, Chip, DateBlock } from "@/components/ui/display";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
 import type { RsvpStatus } from "@prisma/client";
 import type { PublicTicketType } from "@/lib/payments/tickets";
+import type { TicketingInfo } from "@/components/rsvp/PromoCodeField";
 import { RegistrationCard } from "./RegistrationCard";
 import { SectionNav } from "./SectionNav";
 
@@ -63,6 +64,8 @@ type Props = {
   /** Seats currently held while attendees pay. */
   heldCount?: number;
   paidSalesOpen?: boolean;
+  /** Paid tickets: whether promo codes exist, and the refund terms. */
+  ticketing?: TicketingInfo | null;
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -190,6 +193,7 @@ export function EventWebsiteShell(p: Props) {
               tickets={p.tickets ?? []}
               heldCount={p.heldCount ?? 0}
               paidSalesOpen={p.paidSalesOpen ?? false}
+              ticketing={p.ticketing ?? null}
             />
           </div>
         </aside>

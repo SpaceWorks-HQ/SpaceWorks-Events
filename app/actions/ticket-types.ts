@@ -1,6 +1,5 @@
 "use server";
 
-import { EventPrivacyType } from "@prisma/client";
 import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ActionResult } from "@/app/actions/org";
@@ -10,6 +9,8 @@ import { prisma } from "@/lib/db";
 import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { DEFAULT_CURRENCY, formatMoney, parseMoneyToMinor, providerMinimumMinor } from "@/lib/payments/money";
+import { isValidPromoCode, promoCodeDigest, promoCodeHint } from "@/lib/payments/promo";
+import { isAtLeastAsGenerous, type RefundPolicySnapshot } from "@/lib/payments/refundPolicy";
 import { configuredProvider } from "@/lib/payments/settings";
 import { EventPermission } from "@prisma/client";
 import { auth } from "@/lib/auth";
@@ -41,8 +42,9 @@ const saveSchema = z.object({
 const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict();
 
 /**
- * Ticket types, prices and the refund policy belong to the organisation's
- * owners and admins, and to collaborators granted EDIT_DETAILS on this event.
+ * Ticket types, prices, promo codes and the refund policy belong to the
+ * organisation's owners and admins, and to collaborators granted
+ * EDIT_DETAILS on this event.
  */
 async function access(input: { organisationSlug: string; eventId: string; }) {
   const session = await auth();
@@ -55,7 +57,7 @@ async function access(input: { organisationSlug: string; eventId: string; }) {
   if (await isActionRateLimited("action", userId)) return { error: "Too many ticket changes. Try again shortly." } as const;
   const event = await prisma.event.findFirst({
     where: { id: input.eventId, organisationId: organisation.id },
-    select: { id: true, slug: true, privacyType: true, currency: true },
+    select: { id: true, slug: true, currency: true },
   });
   return event ? { organisation, userId, event } : { error: "Event not found." } as const;
 }
@@ -91,7 +93,6 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
     if (!provider) return { ok: false, error: "Connect a payment account in Settings → Payments before adding a paid ticket." };
     const minimum = providerMinimumMinor(provider, currency);
     if (priceMinor < minimum) return { ok: false, error: `The smallest price ${provider === "RAZORPAY" ? "Razorpay" : "Stripe"} accepts is ${formatMoney(minimum, currency)}.` };
-    if (event.privacyType === EventPrivacyType.APPROVAL_REQUIRED) return { ok: false, error: "Paid tickets aren't available yet for events that need approval." };
   }
   if (data.maxPerOrder < data.minPerOrder) return { ok: false, error: "The most per order can't be below the fewest." };
   const salesStartAt = data.salesStartAt ? new Date(data.salesStartAt) : null;
@@ -148,6 +149,123 @@ export async function archiveTicketType(input: unknown): Promise<ActionResult> {
   });
   if (archived.count !== 1) return { ok: false, error: "That ticket no longer exists." };
   await recordAuditEvent({ action: "TICKET_TYPE_ARCHIVED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "TicketType", targetId: parsed.data.ticketTypeId });
+  revalidateEvent(context.organisation.slug, context.event);
+  return { ok: true };
+}
+
+const promoSchema = z.object({
+  ...target,
+  code: z.string().trim().min(3, "Codes are 3 to 32 letters, numbers, - or _.").max(32, "Codes are 3 to 32 letters, numbers, - or _."),
+  kind: z.enum(["PERCENT", "FIXED"]),
+  appliesPer: z.enum(["TICKET", "ORDER"]).default("TICKET"),
+  percentOff: z.number().int().min(1).max(100).nullable().optional(),
+  /** Typed amount in major units, for a fixed discount. */
+  amountOff: z.string().trim().max(20).optional(),
+  ticketTypeId: z.string().trim().min(1).max(64).nullable().optional(),
+  minQuantity: z.number().int().min(1).max(100).default(1),
+  perOrderLimit: z.number().int().min(1).max(100).nullable().optional(),
+  maxRedemptions: z.number().int().min(1).max(1_000_000).nullable().optional(),
+  validFrom: optionalDate,
+  validUntil: optionalDate,
+}).strict();
+const archivePromoSchema = z.object({ ...target, promoCodeId: z.string().trim().min(1).max(64) }).strict();
+
+/**
+ * Create a promo code. Only a digest of the code is stored, with a short
+ * hint; a code is never edited, only archived and replaced.
+ */
+export async function createPromoCode(input: unknown): Promise<ActionResult<{ id: string; }>> {
+  const parsed = promoSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the promo code." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
+  const { organisation, userId, event } = context;
+  const data = parsed.data;
+  if (!isValidPromoCode(data.code)) return { ok: false, error: "Codes are 3 to 32 letters, numbers, - or _." };
+  if (!event.currency) return { ok: false, error: "Add a paid ticket before creating promo codes." };
+  let amountOffMinor: bigint | null = null;
+  if (data.kind === "FIXED") {
+    amountOffMinor = data.amountOff ? parseMoneyToMinor(data.amountOff, event.currency) : null;
+    if (!amountOffMinor || amountOffMinor <= ZERO) return { ok: false, error: `Enter the discount in ${event.currency}, for example 100.` };
+  } else if (!data.percentOff) {
+    return { ok: false, error: "Enter a percentage from 1 to 100." };
+  }
+  if (data.ticketTypeId && !(await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, eventId: event.id, archivedAt: null }, select: { id: true } }))) {
+    return { ok: false, error: "That ticket no longer exists." };
+  }
+  const validFrom = data.validFrom ? new Date(data.validFrom) : null;
+  const validUntil = data.validUntil ? new Date(data.validUntil) : null;
+  if (validFrom && validUntil && validUntil <= validFrom) return { ok: false, error: "The code must stop working after it starts." };
+  try {
+    const created = await prisma.promoCode.create({
+      data: {
+        eventId: event.id, codeDigest: promoCodeDigest(data.code), hint: promoCodeHint(data.code), kind: data.kind, appliesPer: data.appliesPer,
+        percentOff: data.kind === "PERCENT" ? data.percentOff : null, amountOffMinor, ticketTypeId: data.ticketTypeId ?? null,
+        minQuantity: data.minQuantity, perOrderLimit: data.appliesPer === "TICKET" ? data.perOrderLimit ?? null : null, maxRedemptions: data.maxRedemptions ?? null,
+        validFrom, validUntil, createdByUserId: userId,
+      },
+      select: { id: true },
+    });
+    await recordAuditEvent({ action: "PROMO_CODE_CREATED", actorUserId: userId, organisationId: organisation.id, targetType: "PromoCode", targetId: created.id, metadata: { kind: data.kind, appliesPer: data.appliesPer } });
+    revalidateEvent(organisation.slug, event);
+    return { ok: true, data: { id: created.id } };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") return { ok: false, error: "This event already has that code." };
+    throw error;
+  }
+}
+
+/** Stops a code working. Orders that used it keep their price. */
+export async function archivePromoCode(input: unknown): Promise<ActionResult> {
+  const parsed = archivePromoSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose a promo code." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
+  const archived = await prisma.promoCode.updateMany({ where: { id: parsed.data.promoCodeId, eventId: context.event.id, archivedAt: null }, data: { archivedAt: new Date() } });
+  if (archived.count !== 1) return { ok: false, error: "That code is already off." };
+  await recordAuditEvent({ action: "PROMO_CODE_ARCHIVED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "PromoCode", targetId: parsed.data.promoCodeId });
+  revalidateEvent(context.organisation.slug, context.event);
+  return { ok: true };
+}
+
+const refundPolicySchema = z.object({
+  ...target,
+  kind: z.enum(["NONE", "FULL_UNTIL", "PERCENT_UNTIL"]),
+  hours: z.number().int().min(0).max(8760).nullable().optional(),
+  percent: z.number().int().min(1).max(99).nullable().optional(),
+  text: z.string().trim().max(1000).default(""),
+}).strict();
+
+/**
+ * Set when buyers may cancel for a refund. Each order keeps the policy it
+ * was sold under; once any paid order exists the policy may only become
+ * more generous, so what was advertised is never taken back.
+ */
+export async function saveRefundPolicy(input: unknown): Promise<ActionResult> {
+  const parsed = refundPolicySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the refund policy." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
+  const data = parsed.data;
+  const next: RefundPolicySnapshot = {
+    kind: data.kind,
+    hours: data.kind === "NONE" ? null : data.hours ?? null,
+    percent: data.kind === "PERCENT_UNTIL" ? data.percent ?? null : null,
+    text: data.text,
+  };
+  if (next.kind !== "NONE" && next.hours == null) return { ok: false, error: "Say how long before the event refunds stop." };
+  if (next.kind === "PERCENT_UNTIL" && next.percent == null) return { ok: false, error: "Enter the refund percentage, from 1 to 99." };
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${context.event.id} FOR UPDATE`;
+    const current = await tx.event.findUniqueOrThrow({ where: { id: context.event.id }, select: { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true } });
+    const sold = await tx.order.count({ where: { eventId: context.event.id, totalMinor: { gt: 0 } } });
+    const previous: RefundPolicySnapshot = { kind: current.refundPolicyKind, hours: current.refundPolicyHours, percent: current.refundPolicyPercent, text: current.refundPolicyText };
+    if (sold > 0 && !isAtLeastAsGenerous(next, previous)) return "stricter" as const;
+    await tx.event.update({ where: { id: context.event.id }, data: { refundPolicyKind: next.kind, refundPolicyHours: next.hours, refundPolicyPercent: next.percent, refundPolicyText: next.text } });
+    await recordAuditEvent({ action: "REFUND_POLICY_UPDATED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "Event", targetId: context.event.id, metadata: { kind: next.kind }, client: tx });
+    return "saved" as const;
+  });
+  if (result === "stricter") return { ok: false, error: "Tickets have been sold, so the refund policy can only become more generous." };
   revalidateEvent(context.organisation.slug, context.event);
   return { ok: true };
 }

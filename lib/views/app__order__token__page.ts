@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { OrderStatus, PaymentStatus } from "@prisma/client";
+import { OrderStatus, PaymentRefundStatus, PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { refreshOrderFromProvider } from "@/lib/payments/checkout";
+import { buyerCancellation } from "@/lib/payments/operations";
+import { asRefundPolicy, describeRefundPolicy } from "@/lib/payments/refundPolicy";
 import { formatMoney } from "@/lib/payments/money";
 import { checkoutLineName } from "@/lib/payments/pricing";
 import { toFieldDefinition } from "@/lib/registrationFields";
@@ -40,9 +42,9 @@ export async function loadOrderView({ params, searchParams }: Props) {
   const order = await prisma.order.findUniqueOrThrow({
     where: { id: found.id },
     select: {
-      reference: true, status: true, currency: true, subtotalMinor: true, discountMinor: true, totalMinor: true, testMode: true, holdExpiresAt: true, buyerName: true,
+      reference: true, status: true, currency: true, subtotalMinor: true, discountMinor: true, totalMinor: true, testMode: true, holdExpiresAt: true, buyerName: true, refundPolicy: true,
       lines: { select: { id: true, description: true, quantity: true, totalMinor: true }, orderBy: { createdAt: "asc" } },
-      payments: { where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE] } }, select: { status: true }, take: 1 },
+      payments: { where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE] } }, select: { status: true, refunds: { where: { automatic: false, status: { not: PaymentRefundStatus.FAILED } }, select: { amountMinor: true, status: true } } }, orderBy: { createdAt: "desc" } },
       event: {
         select: {
           title: true, slug: true, startDateTime: true, timezone: true,
@@ -77,6 +79,10 @@ export async function loadOrderView({ params, searchParams }: Props) {
   };
   const now = new Date();
   const holdActive = order.status === OrderStatus.PENDING && Boolean(order.holdExpiresAt && order.holdExpiresAt > now);
+  const refunds = order.payments.flatMap((payment) => payment.refunds);
+  const refundedMinor = refunds.reduce((sum, refund) => sum + refund.amountMinor, BigInt(0));
+  const cancellation = order.status === OrderStatus.CONFIRMED && order.totalMinor > BigInt(0) ? await buyerCancellation(found.id, now) : null;
+  const policy = asRefundPolicy(order.refundPolicy);
   return {
     token,
     returning,
@@ -85,8 +91,14 @@ export async function loadOrderView({ params, searchParams }: Props) {
     testMode: order.testMode,
     holdActive,
     holdExpiresAt: order.holdExpiresAt?.toISOString() ?? null,
-    canPay: holdActive && order.payments[0]?.status === PaymentStatus.PENDING,
+    canPay: holdActive && order.payments.some((payment) => payment.status === PaymentStatus.PENDING),
     total: formatMoney(order.totalMinor, order.currency),
+    subtotal: formatMoney(order.subtotalMinor, order.currency),
+    discount: order.discountMinor > BigInt(0) ? formatMoney(order.discountMinor, order.currency) : null,
+    refunded: refundedMinor > BigInt(0) ? { amount: formatMoney(refundedMinor, order.currency), pending: refunds.some((refund) => refund.status === PaymentRefundStatus.PENDING) } : null,
+    /** The policy this order was bought under, and what cancelling now returns. */
+    refundPolicy: order.totalMinor > BigInt(0) && policy ? `${describeRefundPolicy(policy)}${policy.text ? ` ${policy.text}` : ""}` : null,
+    cancellation: cancellation ? { refund: cancellation.refundMinor > BigInt(0) ? formatMoney(cancellation.refundMinor, order.currency) : null } : null,
     free: order.totalMinor === BigInt(0),
     lines: order.lines.map((line) => ({ id: line.id, label: checkoutLineName(line), amount: formatMoney(line.totalMinor, order.currency) })),
     event: order.event

@@ -12,6 +12,7 @@ import { Dialog, DialogBody, DialogContent, DialogHeader } from "@/components/ui
 import { accentStyle } from "@/lib/theme/accent";
 import { formatMoney } from "@/lib/payments/money";
 import type { PublicTicketType } from "@/lib/payments/tickets";
+import type { TicketingInfo } from "@/components/rsvp/PromoCodeField";
 
 type RegistrationState = {
   cancelled: boolean;
@@ -81,8 +82,9 @@ export function RegistrationCard(props: {
   heldCount?: number;
   /** Paid tickets can be bought right now. */
   paidSalesOpen?: boolean;
+  ticketing?: TicketingInfo | null;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null, tickets = [], heldCount = 0, paidSalesOpen = false } = props;
+  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null, tickets = [], heldCount = 0, paidSalesOpen = false, ticketing = null } = props;
   const prices = tickets.filter((ticket) => ticket.priceMinor > 0);
   const hasPaid = prices.length > 0;
   const cheapest = hasPaid ? prices.reduce((low, ticket) => (ticket.priceMinor < low.priceMinor ? ticket : low)) : null;
@@ -115,7 +117,11 @@ export function RegistrationCard(props: {
   const savedLabel = saved ? statusLabels[saved.status ?? "CONFIRMED"] ?? { chip: "Registered", tone: "neutral" as const, action: "View registration" } : null;
   const registerLabel = state.full ? "Join the waitlist" : state.approvalRequired ? "Request to join" : allFree ? "Register — it's free" : "Get tickets";
   const registerNote = !allFree
-    ? "Choose a ticket. Paid tickets are paid on the organiser's secure Razorpay or Stripe page; your seat is held for 30 minutes while you pay."
+    ? state.approvalRequired
+      ? "Choose a ticket and send your request. Nothing is charged now; if the organiser approves it, we'll email you a link to pay."
+      : state.full
+        ? "Sold out for now. Join the waitlist: nothing is charged, and if a place opens up we'll email you a link to pay."
+        : "Choose a ticket. Paid tickets are paid on the organiser's secure Razorpay or Stripe page; your seat is held for 30 minutes while you pay."
     : state.full
       ? "Free to attend. You'll join the waitlist, and we'll email you if a place opens up."
       : state.approvalRequired
@@ -195,6 +201,8 @@ export function RegistrationCard(props: {
               registrationFields={registrationFields}
               tickets={tickets}
               paidSalesOpen={paidSalesOpen}
+              ticketing={ticketing}
+              paidRequest={state.approvalRequired ? "approval" : state.full ? "waitlist" : null}
               onRsvpSaved={({ ticketToken, status }) => {
                 // Same as before: close the dialog and let the card switch to the ticket link.
                 if (ticketToken) setSaved({ token: ticketToken, status });

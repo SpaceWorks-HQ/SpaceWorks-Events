@@ -3,17 +3,14 @@ import "server-only";
 import { CheckoutAttemptStatus, OrderStatus, PaymentRefundStatus, PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { closeOpenAttempts } from "./checkout";
 import { enqueuePaymentEmail } from "./email";
-import type { OnlineProvider } from "./http";
+import { offerNextWaitlisted } from "./operations";
 import { submitPendingRefund } from "./refunds";
-import { settlePaidNotification } from "./settlement";
-import { loadPaymentAccount } from "./settings";
 
 const BATCH = 25;
 /** Refunds still pending at the provider are re-checked this long after submission. */
 const REFUND_RETRY_AFTER_MS = 2 * 60_000;
-/** A page creation that never finished (a crash mid-request) is abandoned after this. */
-const STALLED_ATTEMPT_MS = 5 * 60_000;
 
 /**
  * Release one order whose hold has ended. Every open provider page is
@@ -22,37 +19,9 @@ const STALLED_ATTEMPT_MS = 5 * 60_000;
  * first, the order is settled instead (and refunded if the seats are gone).
  */
 async function releaseOrder(orderId: string, now: Date): Promise<"expired" | "settled" | "skipped"> {
-  const attempts = await prisma.paymentCheckoutAttempt.findMany({
-    where: { status: CheckoutAttemptStatus.OPEN, payment: { orderId } },
-    select: { id: true, provider: true, externalId: true, createdAt: true, payment: { select: { organisationId: true } } },
-  });
-  for (const attempt of attempts) {
-    if (!attempt.externalId) {
-      // The provider may still have created it; its webhook would carry our attempt id.
-      if (attempt.createdAt.getTime() > now.getTime() - STALLED_ATTEMPT_MS) return "skipped";
-      continue;
-    }
-    const provider = attempt.provider as OnlineProvider;
-    const account = await loadPaymentAccount(attempt.payment.organisationId, provider);
-    // Without keys the page can't be cancelled; a later payment still arrives by
-    // webhook and is refunded if the seats are gone.
-    if (!account) continue;
-    let state;
-    try {
-      state = await account.gateway.cancelCheckout(attempt.externalId);
-    } catch {
-      return "skipped"; // Outcome unknown: keep the seats held and retry next tick.
-    }
-    if (state.state === "open") return "skipped";
-    if (state.state === "paid") {
-      const paid = state;
-      const result = await prisma.$transaction((tx) => settlePaidNotification(tx, { organisationId: attempt.payment.organisationId, provider }, {
-        checkoutId: attempt.externalId, reference: attempt.id, paymentId: paid.paymentId, amountMinor: paid.amountMinor, currency: paid.currency,
-      }, now));
-      for (const refundId of result.refundIds) await submitPendingRefund(refundId).catch(() => undefined);
-      return "settled";
-    }
-  }
+  const pages = await closeOpenAttempts(orderId, now);
+  if (pages === "open") return "skipped";
+  if (pages === "settled") return "settled";
 
   return prisma.$transaction(async (tx) => {
     const row = await tx.order.findUnique({ where: { id: orderId }, select: { eventId: true } });
@@ -92,7 +61,12 @@ export async function runPaymentMaintenance(now = new Date()) {
   });
   for (const { id } of stale) {
     const result = await releaseOrder(id, now).catch(() => "skipped" as const);
-    if (result === "expired") expired += 1;
+    if (result === "expired") {
+      expired += 1;
+      // The released seats go to whoever is next on the waitlist.
+      const order = await prisma.order.findUnique({ where: { id }, select: { eventId: true } });
+      if (order?.eventId) await offerNextWaitlisted(order.eventId, now).catch(() => undefined);
+    }
     if (result === "settled") settled += 1;
   }
   const refunds = await prisma.paymentRefund.findMany({
