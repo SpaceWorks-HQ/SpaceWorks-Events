@@ -5,7 +5,10 @@ import path from "node:path";
 import { inflateSync } from "node:zlib";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, setCharacterSpacing, type Color, type PDFFont, type PDFPage } from "pdf-lib";
-import { busiestDay, percentOf, signupTimeline } from "@/components/event-dashboard/analytics/metrics";
+import { arrivalWindows, busiestDay, percentOf, signupTimeline } from "@/components/event-dashboard/analytics/metrics";
+
+// The PDF and the Analytics tab share one implementation.
+export { arrivalWindows };
 import type { EventReportMetrics, ReportQuestion } from "@/lib/eventReport";
 import { formatDate, formatDateBlock, formatDayLong, formatTime, formatTimeRange, formatTimeZoneName } from "@/lib/format/datetime";
 import { getAccentTokens } from "@/lib/theme/accent";
@@ -179,27 +182,6 @@ function roundedRectPath(width: number, height: number, radius: number) {
 const PRIVACY: Record<string, string> = { PUBLIC: "Public", HIDDEN_LINK: "Anyone with the link", APPROVAL_REQUIRED: "Approval required", INVITE_ONLY: "Invite only" };
 
 const SPONSOR_TIERS: Record<string, string> = { PLATINUM: "Platinum", GOLD: "Gold", SILVER: "Silver", PARTNER: "Partners", COMMUNITY_PARTNER: "Community partners" };
-
-/** Groups arrival times into 15, 30 or 60 minute windows, up to 16 columns. */
-export function arrivalWindows(times: Date[], timeZone: string) {
-  if (times.length === 0) return null;
-  const sorted = [...times].sort((a, b) => a.getTime() - b.getTime());
-  const first = sorted[0]!.getTime();
-  const last = sorted[sorted.length - 1]!.getTime();
-  const minutes = [15, 30, 60, 120, 240].find((size) => (last - first) / 60_000 / size < 16) ?? 480;
-  const size = minutes * 60_000;
-  const start = Math.floor(first / size) * size;
-  const count = Math.floor((last - start) / size) + 1;
-  const columns = Array.from({ length: count }, (_, index) => ({ start: new Date(start + index * size), count: 0 }));
-  for (const time of sorted) columns[Math.floor((time.getTime() - start) / size)]!.count += 1;
-  const peak = columns.reduce((best, column) => (column.count > best.count ? column : best), columns[0]!);
-  return {
-    minutes,
-    columns: columns.map((column) => ({ label: formatTime(column.start, timeZone), count: column.count })),
-    peak: { label: formatTimeRange(peak.start, new Date(peak.start.getTime() + size), timeZone, { withZone: false }), count: peak.count },
-    first: sorted[0]!,
-  };
-}
 
 // ---------- The document ----------
 
@@ -574,6 +556,10 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
     if (busiest) registrationFacts.push(["Busiest day", `${busiest.day}, ${plural(busiest.count, "sign-up")}`]);
   }
   registrationFacts.push(["Invitations", metrics.invitationCount ? plural(metrics.invitationCount, "person", "people") + " invited by email" : "None sent"]);
+  if (metrics.waitlist && metrics.waitlist.joined > 0) {
+    registrationFacts.push(["Waitlist", `${plural(metrics.waitlist.joined, "person", "people")} joined; ${metrics.waitlist.promoted.toLocaleString("en-GB")} got a place (${percentLabel(metrics.waitlist.promoted, metrics.waitlist.joined)})`]);
+  }
+  if (metrics.shortLinkVisits != null) registrationFacts.push(["Short link", metrics.shortLinkVisits ? plural(metrics.shortLinkVisits, "visit") : "Not opened yet"]);
   facts(registrationFacts);
 
   if (timeline && timeline.columns.length > 1) {

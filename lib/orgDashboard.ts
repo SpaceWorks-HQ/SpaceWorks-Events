@@ -2,6 +2,7 @@ import "server-only";
 
 import type { EventPrivacyType, MembershipRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { returningShare } from "@/components/event-dashboard/analytics/metrics";
 import {
   countsFor,
   eventSelect,
@@ -64,7 +65,18 @@ export type OrgDashboard = {
   events: { view: OrgEventView; rows: OrgEventRow[]; total: number; hasMore: boolean; counts: { upcoming: number; draft: number; past: number; }; };
   series: { cards: OrgSeriesCard[]; total: number; };
   setup: { hasProfile: boolean; hasEvent: boolean; hasTeam: boolean; hasPublished: boolean; } | null;
+  /** Organisers only: the best-attended recent events and how many people come back. */
+  insights: OrgInsights | null;
 };
+
+export type OrgInsights = {
+  windowDays: number;
+  topEvents: Array<{ id: string; title: string; href: string; came: number; going: number }>;
+  /** Share of people who came to two or more events; withheld below 10 people. */
+  returning: { people: number; returning: number; percent: number } | null;
+};
+
+const INSIGHT_DAYS = 180;
 
 const PRIVACY_LABELS: Record<EventPrivacyType, string> = {
   PUBLIC: "Public",
@@ -320,7 +332,34 @@ export async function getOrgDashboard(input: {
     ? { hasProfile: Boolean(organisation.logoUrl && organisation.description.trim()), hasEvent: Boolean(anyEvent), hasTeam: members.total > 1, hasPublished: false }
     : null;
 
+  // Insights (organisers only): counts across finished events, never people.
+  let insights: OrgInsights | null = null;
+  if (canManage) {
+    const since = new Date(now.getTime() - INSIGHT_DAYS * DAY_MS);
+    const attended = await prisma.rSVP.findMany({
+      where: { status: "CONFIRMED", checkedInAt: { not: null }, event: { organisationId: organisation.id, endDateTime: { gte: since, lt: now } } },
+      select: { eventId: true, attendeeKey: true },
+    });
+    const byEvent = new Map<string, string[]>();
+    for (const row of attended) byEvent.set(row.eventId!, [...(byEvent.get(row.eventId!) ?? []), row.attendeeKey]);
+    const topIds = [...byEvent].sort((a, b) => b[1].length - a[1].length).slice(0, 5).map(([id]) => id);
+    const [topRows, goingRows] = topIds.length
+      ? await Promise.all([
+        prisma.event.findMany({ where: { id: { in: topIds } }, select: { id: true, title: true } }),
+        prisma.rSVP.groupBy({ by: ["eventId"], where: { eventId: { in: topIds }, status: "CONFIRMED" }, _count: { _all: true } }),
+      ])
+      : [[], []];
+    const titles = new Map(topRows.map((row) => [row.id, row.title]));
+    const goingBy = new Map(goingRows.map((row) => [row.eventId as string, row._count._all]));
+    insights = {
+      windowDays: INSIGHT_DAYS,
+      topEvents: topIds.map((id) => ({ id, title: titles.get(id) ?? "Event", href: `/dashboard/${organisation.slug}/event/${id}`, came: byEvent.get(id)!.length, going: goingBy.get(id) ?? 0 })),
+      returning: returningShare([...byEvent.values()]),
+    };
+  }
+
   return {
+    insights,
     members,
     needsYou,
     next,

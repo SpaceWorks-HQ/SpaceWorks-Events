@@ -23,7 +23,7 @@ function eventDateInput(date: Date, timeZone: string) {
 }
 
 export default async function SeriesManagePage({ params }: Props) {
-  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated } = await loadSeriesManageView({ params });
+  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup } = await loadSeriesManageView({ params });
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={series.title} description="Manage this recurring event and its upcoming occurrences." />
@@ -84,6 +84,31 @@ export default async function SeriesManagePage({ params }: Props) {
       {canDownloadReports ? (
         <section aria-labelledby="series-reports-title" className="flex flex-col gap-3">
           <h2 id="series-reports-title" className="text-h4 text-ink">Reports</h2>
+          {rollup ? (
+            <Card>
+              <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-h4 text-ink">Attendance across occurrences</h3>
+                <span className="text-caption text-ink-muted">
+                  {rollup.totalCame} check-ins{rollup.averageTurnout != null ? ` · ${rollup.averageTurnout}% average turnout` : ""}
+                </span>
+              </div>
+              <ul className="flex flex-col gap-3">
+                {rollup.rows.map((row) => (
+                  <li key={row.id} className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3">
+                    <span className="text-sm text-ink-secondary">{formatDayTime(row.start, series.timezone)}</span>
+                    <span aria-hidden className="relative block h-2.5 w-full overflow-hidden rounded-full bg-track">
+                      <span className="absolute inset-y-0 left-0 rounded-full bg-accent-soft" style={{ width: `${Math.round((row.going / Math.max(1, ...rollup.rows.map((r) => r.going))) * 100)}%` }} />
+                      <span className="absolute inset-y-0 left-0 rounded-full bg-success-solid" style={{ width: `${Math.round((row.came / Math.max(1, ...rollup.rows.map((r) => r.going))) * 100)}%` }} />
+                    </span>
+                    <span className="text-right text-sm tabular-nums text-ink">
+                      {row.came} of {row.going}
+                      {row.turnout != null ? <span className="block text-caption text-ink-muted">{row.turnout}% came</span> : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ) : null}
           <Card>
             {finishedInstances.length ? (
               <ul className="flex flex-col divide-y divide-line">
