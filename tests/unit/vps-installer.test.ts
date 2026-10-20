@@ -255,7 +255,11 @@ describe("VPS installer", () => {
   });
 
   it("encodes off-site credentials and validates backup settings", () => {
-    expect(lib("urlencode 'ab/c+d=e f'").stdout).toBe("ab%2Fc%2Bd%3De%20f");
+    // Keys go into mc's own config as JSON strings, unchanged: "/" and "+" stay as they are.
+    expect(lib(`json_string 'ab/c+d=e f'`).stdout).toBe('"ab/c+d=e f"');
+    expect(lib(`json_string 'say "hi"'`).stdout).toBe('"say \\"hi\\""');
+    const lib_ = readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8");
+    expect(lib_).not.toContain("MC_HOST_offsite");
     for (const [check, good, bad] of [
       ["is_days", "14", "0"], ["is_prefix", "spaceworks-events", "a/b"],
       ["is_https_endpoint", "https://acct.r2.cloudflarestorage.com", "http://bucket.example.com"],
