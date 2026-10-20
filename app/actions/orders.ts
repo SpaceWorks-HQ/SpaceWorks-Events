@@ -12,6 +12,7 @@ import { cancelOrderAsBuyer, PaymentOperationError } from "@/lib/payments/operat
 import { validateAndNormalizeAnswers } from "@/lib/rsvpCore";
 import { isValidAttendeeName } from "@/lib/validators";
 import { ORDER_SUBJECT_SELECT, orderSubject } from "@/lib/payments/targets";
+import { transferTicket } from "@/lib/payments/transfers";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -109,3 +110,34 @@ export async function cancelMyOrder(input: unknown): Promise<ActionResult> {
   revalidatePath(`/order/${parsed.data.orderToken}`);
   return { ok: true };
 }
+
+const transferSchema = z.object({
+  orderToken: z.string().trim().regex(/^[a-z0-9]{20,40}$/),
+  rsvpId: z.string().trim().min(1).max(64),
+  name: z.string().trim().min(1, "Enter the new holder's name.").max(200),
+  email: z.string().trim().toLowerCase().email("Enter the new holder's email.").max(320),
+}).strict();
+
+/**
+ * The buyer gives one person's ticket (every remaining date, for a pass) to
+ * someone else, where the organiser allows it. The order's access token is
+ * the proof.
+ */
+export async function transferOrderTicket(input: unknown): Promise<ActionResult> {
+  const parsed = transferSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the new holder's details." };
+  if (await isActionRateLimited("rsvp", parsed.data.orderToken)) return { ok: false, error: "Too many attempts. Try again shortly." };
+  if (!isValidAttendeeName(parsed.data.name)) return { ok: false, error: "Enter a valid name." };
+  try {
+    await transferTicket(parsed.data);
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
+      return { ok: false, error: "That person already has a ticket for this event." };
+    }
+    throw error;
+  }
+  revalidatePath(`/order/${parsed.data.orderToken}`);
+  return { ok: true };
+}
+

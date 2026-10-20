@@ -421,3 +421,38 @@ test("a guest unlocks a code-only ticket, chooses what to pay, adds an extra and
     await context.close();
   }
 });
+
+test("a guest reserves to pay at the desk, then transfers the ticket from the order page", async ({ browser }) => {
+  const event = await prisma.event.create({
+    data: {
+      organisationId, title: `Desk night ${suffix.slice(0, 6)}`, slug: `desk-${suffix}`, capacity: 20, timezone: "UTC", status: EventStatus.PUBLISHED, currency: "INR", allowTransfers: true,
+      startDateTime: new Date("2035-07-01T10:00:00.000Z"), endDateTime: new Date("2035-07-01T12:00:00.000Z"), page: { create: { isPublished: true } },
+    },
+  });
+  await prisma.ticketType.create({ data: { eventId: event.id, name: "Standard", priceMinor: BigInt(30000), payAtDesk: true } });
+  const buyerEmail = `desk-${suffix}@example.test`;
+  const friendEmail = `desk-friend-${suffix}@example.test`;
+  const context = await browser.newContext({ extraHTTPHeaders: { [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.246" } });
+  const guest = await context.newPage();
+  try {
+    await guest.goto(`/${orgSlug}/${event.slug}`, { waitUntil: "networkidle" });
+    await guest.getByRole("button", { name: "Get tickets" }).first().click();
+    const dialog = guest.getByRole("dialog");
+    await dialog.getByRole("radio", { name: "Pay at the desk" }).click();
+    await dialog.getByLabel("Name", { exact: true }).fill("Desk Guest");
+    await dialog.getByLabel("Email", { exact: true }).fill(buyerEmail);
+    await dialog.getByRole("button", { name: "Reserve, pay ₹300.00 at the desk" }).click();
+    await expect.poll(async () => (await prisma.order.findFirst({ where: { buyerEmail }, select: { status: true } }))?.status).toBe("CONFIRMED");
+    const order = await prisma.order.findFirstOrThrow({ where: { buyerEmail }, include: { payments: true } });
+    expect(order.payments).toEqual([expect.objectContaining({ status: "PENDING", provider: "OFFLINE" })]);
+
+    await guest.goto(`/order/${order.accessToken}`);
+    await guest.getByRole("button", { name: "Transfer" }).click();
+    await guest.getByLabel("Their name").fill("Desk Friend");
+    await guest.getByLabel("Their email").fill(friendEmail);
+    await guest.getByRole("button", { name: "Transfer ticket" }).click();
+    await expect.poll(async () => (await prisma.rSVP.findFirst({ where: { orderId: order.id }, select: { guestEmail: true } }))?.guestEmail).toBe(friendEmail);
+  } finally {
+    await context.close();
+  }
+});

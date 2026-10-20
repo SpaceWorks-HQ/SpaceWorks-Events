@@ -39,6 +39,8 @@ export type PublicTicketType = {
   feeMinor: number;
   /** Shown because of an access code, or to members only. */
   visibility: "PUBLIC" | "CODE" | "MEMBERS";
+  /** Can be reserved now and paid in person. */
+  payAtDesk: boolean;
 };
 
 /** Something to buy alongside tickets. */
@@ -70,7 +72,7 @@ export async function listPublicTicketTypes(scope: TicketScope, currency: string
     orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
     select: {
       id: true, kind: true, name: true, description: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true,
-      pricing: true, suggestedMinor: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, visibility: true,
+      pricing: true, suggestedMinor: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, visibility: true, payAtDesk: true,
     },
   });
   if (types.length === 0) return [];
@@ -108,6 +110,7 @@ export async function listPublicTicketTypes(scope: TicketScope, currency: string
     seatsPerTicket: type.seatsPerTicket,
     feeMinor: Number(type.feeMinor),
     visibility: type.visibility,
+    payAtDesk: type.payAtDesk,
   }));
 }
 

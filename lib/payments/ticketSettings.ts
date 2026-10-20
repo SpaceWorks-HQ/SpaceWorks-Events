@@ -49,6 +49,7 @@ export async function loadTicketSettings(params: {
   organisation: { id: string; name: string; };
   currency: string | null;
   refundPolicy: { refundPolicyKind: RefundPolicyKind; refundPolicyHours: number | null; refundPolicyPercent: number | null; refundPolicyText: string; };
+  transfers?: { allowTransfers: boolean; transferCutoffHours: number; };
   now: Date;
 }) {
   const { owner, now } = params;
@@ -58,7 +59,7 @@ export async function loadTicketSettings(params: {
       orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
       select: {
         id: true, kind: true, name: true, description: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true,
-        visibility: true, accessCodeHint: true, pricing: true, suggestedMinor: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true,
+        visibility: true, accessCodeHint: true, pricing: true, suggestedMinor: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, payAtDesk: true,
       },
     }),
     prisma.organisationPaymentSettings.findUnique({ where: { organisationId: params.organisation.id } }),
@@ -106,6 +107,7 @@ export async function loadTicketSettings(params: {
       maxPriceMinor: type.maxPriceMinor == null ? null : Number(type.maxPriceMinor),
       seatsPerTicket: type.seatsPerTicket,
       feeMinor: Number(type.feeMinor),
+      payAtDesk: type.payAtDesk,
     })),
     addOns: addOns.map((addOn, index) => ({ ...addOn, priceMinor: Number(addOn.priceMinor), sold: addOnSold[index]?._sum.quantity ?? 0 })),
     currency,
@@ -124,5 +126,6 @@ export async function loadTicketSettings(params: {
     })),
     refundPolicy: { kind: policy.refundPolicyKind, hours: policy.refundPolicyHours, percent: policy.refundPolicyPercent, text: policy.refundPolicyText },
     sold: sold > 0,
+    transfers: { allow: params.transfers?.allowTransfers ?? false, cutoffHours: params.transfers?.transferCutoffHours ?? 24 },
   };
 }

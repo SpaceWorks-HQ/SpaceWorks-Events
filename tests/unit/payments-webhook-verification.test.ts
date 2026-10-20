@@ -39,6 +39,7 @@ describe("Razorpay webhook verification", () => {
       paid: { checkoutId: "plink_123", reference: "pay_ref_1", paymentId: "pay_ABC", amountMinor: BigInt(49900), currency: "INR" },
       refunds: [],
       closedCheckoutId: null,
+      dispute: null,
     });
   });
 
@@ -89,6 +90,7 @@ describe("Stripe webhook verification", () => {
       paid: { checkoutId: "cs_test_1", reference: "pay_ref_2", paymentId: "pi_1", amountMinor: BigInt(50000), currency: "INR" },
       refunds: [],
       closedCheckoutId: null,
+      dispute: null,
     });
   });
 

@@ -126,3 +126,14 @@ export function signedPaidWebhook(page: { provider: "razorpay" | "stripe"; id: s
   const timestamp = Math.floor(Date.now() / 1000);
   return new Request(`http://localhost${path}`, { method: "POST", body: raw, headers: { "stripe-signature": `t=${timestamp},v1=${crypto.createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}` } });
 }
+
+/** Any webhook body, signed as each provider signs it. */
+export function signedWebhook(provider: "razorpay" | "stripe", body: Record<string, unknown>, secret: string, path: string, eventId: string) {
+  if (provider === "razorpay") {
+    const raw = JSON.stringify(body);
+    return new Request(`http://localhost${path}`, { method: "POST", body: raw, headers: { "x-razorpay-signature": crypto.createHmac("sha256", secret).update(raw).digest("hex"), "x-razorpay-event-id": eventId } });
+  }
+  const raw = JSON.stringify({ id: eventId, ...body });
+  const timestamp = Math.floor(Date.now() / 1000);
+  return new Request(`http://localhost${path}`, { method: "POST", body: raw, headers: { "stripe-signature": `t=${timestamp},v1=${crypto.createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}` } });
+}

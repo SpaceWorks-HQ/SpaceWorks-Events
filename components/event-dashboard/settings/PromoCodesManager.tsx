@@ -3,11 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { archivePromoCode, createPromoCode, saveRefundPolicy } from "@/app/actions/ticket-types";
+import { archivePromoCode, createPromoCode, saveRefundPolicy, saveTransferPolicy } from "@/app/actions/ticket-types";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { Button } from "@/components/ui/button";
-import { Radio, RadioGroup } from "@/components/ui/choice";
+import { CheckboxField, Radio, RadioGroup } from "@/components/ui/choice";
 import { Callout, Card, CardHeader } from "@/components/ui/display";
 import { Dropdown, Field, Input, Textarea } from "@/components/ui/field";
 import type { TicketTarget } from "@/components/event-dashboard/settings/TicketTypesManager";
@@ -277,3 +277,45 @@ export function RefundPolicyControl({ organisationSlug, target, policy, sold }: 
     </Card>
   );
 }
+
+/** Whether holders may give their tickets to someone else, and until when. */
+export function TransfersControl({ organisationSlug, target, transfers }: {
+  organisationSlug: string;
+  target: TicketTarget;
+  transfers: { allow: boolean; cutoffHours: number; };
+}) {
+  const router = useRouter();
+  const { showToast } = useToast();
+  const [allow, setAllow] = useState(transfers.allow);
+  const [hours, setHours] = useState(String(transfers.cutoffHours));
+  const [pending, startTransition] = useTransition();
+  return (
+    <Card as="section" className="rounded-xl" aria-labelledby="transfers-title">
+      <CardHeader
+        title={<span id="transfers-title">Ticket transfers</span>}
+        description="Let buyers give a ticket to someone else from their order. The ticket gets a new link and the new holder is emailed it; the old link stops working."
+      />
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          startTransition(async () => {
+            const result = await saveTransferPolicy({ organisationSlug, ...target, allowTransfers: allow, cutoffHours: Number(hours) || 0 });
+            if (!result.ok) return showToast(result.error, "error");
+            showToast("Transfer setting saved.", "success");
+            router.refresh();
+          });
+        }}
+      >
+        <CheckboxField checked={allow} onCheckedChange={(checked) => setAllow(checked === true)} label="Allow transfers" />
+        {allow ? (
+          <Field label="Until this many hours before the start" helperText="For a series, before each date's start.">
+            <Input type="number" min={0} max={8760} value={hours} onChange={(event) => setHours(event.target.value)} />
+          </Field>
+        ) : null}
+        <div><Button type="submit" loading={pending} loadingLabel="Saving…">Save</Button></div>
+      </form>
+    </Card>
+  );
+}
+

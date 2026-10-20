@@ -67,6 +67,8 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   promoCode?: string;
   /** Unlocks tickets hidden behind an access code. */
   accessCode?: string;
+  /** Reserve now and pay in person (every chosen ticket must allow it). */
+  payAtDesk?: boolean;
   addOns?: AddOnItem[];
   /** Set when an organiser adds the guest by hand. */
   manual?: ManualPayment;
@@ -83,7 +85,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
     where: { ...sellable.owner, kind: sellable.typeKind, archivedAt: null },
     select: {
       id: true, name: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true,
-      pricing: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, visibility: true, accessCodeDigest: true,
+      pricing: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, visibility: true, accessCodeDigest: true, payAtDesk: true,
     },
   });
   // Hidden tickets need their access code; members-only ones a signed-in
@@ -180,6 +182,10 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   const paid = totalMinor > ZERO;
   const currency = sellable.currency ?? DEFAULT_CURRENCY;
   const manual = params.manual;
+  const atDesk = Boolean(params.payAtDesk && paid && !manual);
+  if (atDesk && ticketLines.some((line) => !types.find((type) => type.id === line.ticketTypeId)!.payAtDesk)) {
+    throw new OrderError("Some of these tickets must be paid online.");
+  }
   const settledByHand = paid && manual && manual.mode !== "link";
   let status: RsvpStatus;
   let orderStatus: OrderStatus;
@@ -197,13 +203,16 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       // Sign up first; pay after approval, through a payment link.
       status = RsvpStatus.PENDING_APPROVAL;
       orderStatus = OrderStatus.REQUESTED;
+    } else if (!fits && atDesk) {
+      throw new OrderError("There's no free place right now, so it can't be reserved to pay at the desk.");
     } else if (!fits) {
       // Money taken by hand needs a place now; it can't wait on the list.
       if (settledByHand) throw new OrderError("There's no free place for this guest. Free one first, or send them a payment link to join the waitlist.");
       // The waitlist: pay only if a place is offered.
       status = RsvpStatus.WAITLISTED;
       orderStatus = OrderStatus.REQUESTED;
-    } else if (settledByHand) {
+    } else if (settledByHand || atDesk) {
+      // Reserved to pay at the desk: confirmed now, with the payment owed.
       status = RsvpStatus.CONFIRMED;
       orderStatus = OrderStatus.CONFIRMED;
     } else {
@@ -278,6 +287,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       select: { id: true },
     })).id;
     if (orderStatus === OrderStatus.PENDING) await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "pending" });
+    else if (atDesk) await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "desk" });
     else if (manual?.mode === "offline") await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "paid" });
   }
   if (orderStatus !== OrderStatus.PENDING) {

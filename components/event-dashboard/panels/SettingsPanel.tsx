@@ -5,7 +5,7 @@ import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePa
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
 import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
 import { AddOnsManager } from "@/components/event-dashboard/settings/AddOnsManager";
-import { PromoCodesManager, RefundPolicyControl } from "@/components/event-dashboard/settings/PromoCodesManager";
+import { PromoCodesManager, RefundPolicyControl, TransfersControl } from "@/components/event-dashboard/settings/PromoCodesManager";
 import { NoPermission } from "./shared";
 
 export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
@@ -28,6 +28,9 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
       ) : null}
       {tickets ? (
         <PromoCodesManager organisationSlug={organisation.slug} target={{ eventId: event.id }} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
+      ) : null}
+      {tickets && tickets.tickets.length > 0 ? (
+        <TransfersControl organisationSlug={organisation.slug} target={{ eventId: event.id }} transfers={tickets.transfers} />
       ) : null}
       {tickets && tickets.tickets.some((ticket) => ticket.priceMinor > 0) ? (
         <RefundPolicyControl organisationSlug={organisation.slug} target={{ eventId: event.id }} policy={tickets.refundPolicy} sold={tickets.sold} />

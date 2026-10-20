@@ -5,8 +5,8 @@ import { loadTicketSettings } from "@/lib/payments/ticketSettings";
 /** Ticket types are an organisation owner/admin concern, like the actions that change them. */
 async function loadTickets(ctx: EventDashboardContext) {
   if (!ctx.permissions.canEditTickets) return null;
-  const policy = await prisma.event.findUniqueOrThrow({ where: { id: ctx.event.id }, select: { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true } });
-  return loadTicketSettings({ owner: { eventId: ctx.event.id }, organisation: ctx.organisation, currency: ctx.event.currency, refundPolicy: policy, now: ctx.now });
+  const policy = await prisma.event.findUniqueOrThrow({ where: { id: ctx.event.id }, select: { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true, allowTransfers: true, transferCutoffHours: true } });
+  return loadTicketSettings({ owner: { eventId: ctx.event.id }, organisation: ctx.organisation, currency: ctx.event.currency, refundPolicy: policy, transfers: policy, now: ctx.now });
 }
 
 export async function loadSettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {

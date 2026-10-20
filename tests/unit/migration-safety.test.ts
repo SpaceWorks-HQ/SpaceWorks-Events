@@ -121,4 +121,11 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain(`"visibility" "TicketVisibility" NOT NULL DEFAULT 'PUBLIC'`);
     expect(sql).toContain('"seatsPerTicket" INTEGER NOT NULL DEFAULT 1');
   });
+
+  it("adds disputes, reminders, transfers and pay-at-the-desk with safe defaults and no rewrites", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261028000000_after_purchase/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain('"allowTransfers" BOOLEAN NOT NULL DEFAULT false');
+    expect(sql).toContain('"payAtDesk" BOOLEAN NOT NULL DEFAULT false');
+  });
 });

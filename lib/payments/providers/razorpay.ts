@@ -11,6 +11,7 @@ import {
   type CheckoutRequest,
   type CheckoutResult,
   type CheckoutStatus,
+  type DisputeNotification,
   type PaymentGateway,
   type RefundNotification,
   type RefundRequest,
@@ -215,7 +216,24 @@ export function verifyRazorpayWebhook(secret: string, rawBody: Buffer, headers: 
 
   const closedCheckoutId = (eventType === "payment_link.expired" || eventType === "payment_link.cancelled") && isProviderId(link.id) ? link.id : null;
 
-  return { eventId, eventType: eventType.slice(0, 80), paid, refunds, closedCheckoutId };
+  // payment.dispute.created / under_review / action_required / won / lost / closed
+  const disputeEntity = record(record(payload.dispute).entity);
+  let dispute: DisputeNotification | null = null;
+  if (eventType.startsWith("payment.dispute.") && isProviderId(disputeEntity.id) && isProviderId(disputeEntity.payment_id)) {
+    const status = String(disputeEntity.status ?? eventType.slice("payment.dispute.".length));
+    const respondBy = typeof disputeEntity.respond_by === "number" ? new Date(disputeEntity.respond_by * 1000) : null;
+    dispute = {
+      disputeId: disputeEntity.id,
+      paymentId: disputeEntity.payment_id,
+      status: status === "won" ? "WON" : status === "lost" ? "LOST" : status === "closed" ? "CLOSED" : status === "under_review" ? "UNDER_REVIEW" : "OPEN",
+      amountMinor: parseMinorAmount(disputeEntity.amount),
+      currency: upperCurrency(disputeEntity.currency),
+      reason: text(disputeEntity.reason_code) ?? text(disputeEntity.reason_description),
+      respondBy: respondBy && !Number.isNaN(respondBy.getTime()) ? respondBy : null,
+    };
+  }
+
+  return { eventId, eventType: eventType.slice(0, 80), paid, refunds, closedCheckoutId, dispute };
 }
 
 /** Razorpay key ids are public; their prefix says whether the account is in test mode. */

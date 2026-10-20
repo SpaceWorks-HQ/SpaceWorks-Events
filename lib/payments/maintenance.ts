@@ -47,6 +47,41 @@ async function releaseOrder(orderId: string, now: Date): Promise<"expired" | "se
   });
 }
 
+/** How long before a long hold ends its one reminder goes out. */
+const REMINDER_BEFORE_MS = 3 * 60 * 60_000;
+/** Only holds placed this long ago are long ones (a payment link's day, not checkout's half hour). */
+const LONG_HOLD_MS = 6 * 60 * 60_000;
+
+/**
+ * Remind each buyer once, a few hours before a day-long payment link runs
+ * out (after approval, a waitlist place, or a link the organiser sent).
+ * Claiming the order first means a reminder is never sent twice.
+ */
+async function sendPaymentReminders(now: Date) {
+  const due = await prisma.order.findMany({
+    where: {
+      status: OrderStatus.PENDING, paymentReminderSentAt: null,
+      holdExpiresAt: { gt: now, lte: new Date(now.getTime() + REMINDER_BEFORE_MS) },
+      createdAt: { lte: new Date(now.getTime() - LONG_HOLD_MS) },
+    },
+    select: { id: true, buyerEmail: true, payments: { where: { status: PaymentStatus.PENDING }, select: { id: true } } },
+    take: BATCH,
+  });
+  let sent = 0;
+  for (const order of due) {
+    const payment = order.payments[0];
+    if (!payment) continue;
+    await prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({ where: { id: order.id, paymentReminderSentAt: null }, data: { paymentReminderSentAt: now } });
+      if (claimed.count === 1) {
+        await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "reminder" });
+        sent += 1;
+      }
+    });
+  }
+  return sent;
+}
+
 /**
  * One pass of payment housekeeping, run by the one-minute outbox scheduler:
  * release ended holds, and submit or re-check refunds left pending.
@@ -73,6 +108,7 @@ export async function runPaymentMaintenance(now = new Date()) {
     }
     if (result === "settled") settled += 1;
   }
+  const reminded = await sendPaymentReminders(now);
   const refunds = await prisma.paymentRefund.findMany({
     where: {
       status: PaymentRefundStatus.PENDING,
@@ -88,5 +124,5 @@ export async function runPaymentMaintenance(now = new Date()) {
   for (const { id } of refunds) {
     if ((await submitPendingRefund(id).catch(() => "skipped" as const)) === "submitted") refundsSubmitted += 1;
   }
-  return { expired, settled, refundsSubmitted };
+  return { expired, settled, refundsSubmitted, reminded };
 }

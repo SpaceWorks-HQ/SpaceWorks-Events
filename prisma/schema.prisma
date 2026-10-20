@@ -119,6 +119,15 @@ enum OrderStatus {
   CANCELLED
 }
 
+/** A chargeback, as the payment provider reports it. */
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  WON
+  LOST
+  CLOSED
+}
+
 /** Who can see and buy a ticket type. */
 enum TicketVisibility {
   PUBLIC
@@ -300,6 +309,7 @@ model Organisation {
   processedWebhookEvents ProcessedWebhookEvent[]
   orders            Order[]
   payments          Payment[]
+  paymentDisputes   PaymentDispute[]
 }
 
 /// The organisation's own payment provider account. Money goes straight to
@@ -469,6 +479,9 @@ model Event {
   refundPolicyHours     Int?
   refundPolicyPercent   Int?
   refundPolicyText      String           @default("")
+  /// Ticket holders may pass their ticket to someone else until this many hours before the start.
+  allowTransfers        Boolean          @default(false)
+  transferCutoffHours   Int              @default(24)
   /// Optional 7-character share code served at /{shortCode}. Always contains
   /// an uppercase letter so it can never equal a (lowercase) organisation slug.
   shortCode             String?          @unique
@@ -526,6 +539,8 @@ model TicketType {
   seatsPerTicket Int @default(1)
   /// Booking fee per ticket, paid by the buyer on top of the price.
   feeMinor     BigInt @default(0)
+  /// Buyers may reserve and pay at the desk instead of online.
+  payAtDesk    Boolean @default(false)
   name         String
   description  String    @default("")
   /// Tax-inclusive price in integer minor units of the event's currency.
@@ -582,6 +597,8 @@ model Order {
   promoCodeId    String?
   /// The event's refund policy when the order was placed: { kind, hours, percent, text }.
   refundPolicy   Json?
+  /// A day-long payment link's reminder was emailed (once).
+  paymentReminderSentAt DateTime?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
@@ -665,6 +682,7 @@ model Payment {
   attempts     PaymentCheckoutAttempt[]
   refunds      PaymentRefund[]
   amendments   PaymentAmendment[]
+  disputes     PaymentDispute[]
   settledBy    User?                    @relation("PaymentSettledBy", fields: [settledByUserId], references: [id], onDelete: SetNull)
 
   @@unique([provider, externalPaymentId])
@@ -838,6 +856,8 @@ model EventSeries {
   refundPolicyHours  Int?
   refundPolicyPercent Int?
   refundPolicyText   String           @default("")
+  allowTransfers     Boolean          @default(false)
+  transferCutoffHours Int             @default(24)
   createdAt          DateTime         @default(now())
 
   organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
@@ -1626,4 +1646,29 @@ model AddOn {
 
   @@index([eventId, sortOrder])
   @@index([eventSeriesId, sortOrder])
+}
+
+/// A dispute (chargeback) on a captured payment, from the provider's
+/// webhooks. Nothing is cancelled automatically; the owner is emailed.
+model PaymentDispute {
+  id                String          @id @default(cuid())
+  organisationId    String
+  paymentId         String
+  provider          PaymentProvider
+  externalDisputeId String
+  status            DisputeStatus
+  amountMinor       BigInt
+  currency          String
+  reason            String          @default("")
+  /// The provider's deadline for evidence.
+  respondBy         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payment      Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalDisputeId])
+  @@index([paymentId])
+  @@index([organisationId, status])
 }

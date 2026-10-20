@@ -30,6 +30,8 @@ describe("event browser DTO", () => {
       refundPolicyHours: null,
       refundPolicyPercent: null,
       refundPolicyText: "",
+      allowTransfers: false,
+      transferCutoffHours: 24,
       shortCode: null,
       checkInStationPinHash: "bcrypt-secret",
       checkInStationPinEncrypted: "encrypted-secret",

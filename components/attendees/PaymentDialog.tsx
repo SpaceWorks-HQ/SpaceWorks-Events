@@ -32,6 +32,8 @@ export function orderPaymentChip(order: AttendeeOrder | null | undefined): { lab
     case "EXPIRED": return { label: "Payment expired", tone: "neutral" };
     case "CANCELLED": return { label: "Cancelled", tone: "neutral" };
     case "CONFIRMED":
+      if (order.dispute && (order.dispute.status === "OPEN" || order.dispute.status === "UNDER_REVIEW")) return { label: `Disputed${test}`, tone: "danger" };
+      if (order.settlement === "desk") return { label: `To pay ${total} at the desk${test}`, tone: "warning" };
       if (order.settlement === "waived") return { label: "Complimentary", tone: "neutral" };
       if (order.paidMinor > 0 && order.refundedMinor >= order.paidMinor) return { label: `Refunded${test}`, tone: "neutral" };
       if (order.refundedMinor + order.refundPendingMinor > 0) return { label: `Paid ${total}, part refunded${test}`, tone: "info" };
@@ -158,12 +160,22 @@ export function PaymentDialog({ organisationSlug, target, guest, onClose, onDone
             </form>
           ) : null}
 
-          {order.status === "PENDING" ? (
+          {order.dispute ? (
+            <Callout tone={order.dispute.status === "OPEN" || order.dispute.status === "UNDER_REVIEW" ? "danger" : "info"} title={`Chargeback ${order.dispute.status === "UNDER_REVIEW" ? "under review" : order.dispute.status.toLowerCase()}`}>
+              {order.dispute.status === "OPEN" || order.dispute.status === "UNDER_REVIEW"
+                ? `Answer it in the payment provider's dashboard${order.dispute.respondBy ? ` by ${new Date(order.dispute.respondBy).toLocaleString()}` : ""}. The tickets stay as they are.`
+                : "The provider has decided it. The tickets stay as they are."}
+            </Callout>
+          ) : null}
+
+          {order.status === "PENDING" || order.settlement === "desk" ? (
             <form className="flex flex-col gap-3" onSubmit={(event) => {
               event.preventDefault();
               run(() => settlePaidOrder({ ...scope, mode: "offline", method, reference }), "Marked as paid. Each guest gets their ticket by email.");
             }}>
-              <p className="text-body-ui text-ink-secondary">Took the money another way? Record it and the tickets are confirmed. The online payment page is closed first.</p>
+              <p className="text-body-ui text-ink-secondary">
+                {order.settlement === "desk" ? "Collected at the desk? Record it and the buyer gets a receipt." : "Took the money another way? Record it and the tickets are confirmed. The online payment page is closed first."}
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {methodField}
                 <Field label="Reference" optional><Input value={reference} maxLength={120} onChange={(event) => setReference(event.target.value)} placeholder="Receipt or UPI id" /></Field>

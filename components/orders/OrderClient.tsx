@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, UserPen } from "lucide-react";
-import { cancelMyOrder, updateOrderAttendee } from "@/app/actions/orders";
+import { cancelMyOrder, transferOrderTicket, updateOrderAttendee } from "@/app/actions/orders";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { RegistrationQuestions, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
@@ -172,3 +172,43 @@ export function CancelOrderButton({ orderToken, refund }: { orderToken: string; 
     </div>
   );
 }
+
+/** Give a ticket to someone else: it gets a new link, and the new holder is emailed it. */
+export function TransferTicketForm({ orderToken, rsvpId, label, until }: { orderToken: string; rsvpId: string; label: string; until: string; }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  if (!open) return <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>Transfer</Button>;
+  return (
+    <form
+      className="flex w-full flex-col gap-3 rounded-lg bg-subtle p-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setError(null);
+        startTransition(async () => {
+          const result = await transferOrderTicket({ orderToken, rsvpId, name, email });
+          if (!result.ok) return setError(result.error);
+          setOpen(false);
+          router.refresh();
+        });
+      }}
+    >
+      <p className="text-body-ui text-ink-secondary">
+        Give {label} to someone else. They get a new ticket by email and the current one stops working. Possible until {new Date(until).toLocaleString()}.
+      </p>
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Their name" required><Input value={name} maxLength={200} onChange={(event) => setName(event.target.value)} /></Field>
+        <Field label="Their email" required><Input type="email" value={email} maxLength={320} onChange={(event) => setEmail(event.target.value)} /></Field>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" size="sm" loading={pending} loadingLabel="Transferring…">Transfer ticket</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      </div>
+    </form>
+  );
+}
+

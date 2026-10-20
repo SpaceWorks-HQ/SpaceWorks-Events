@@ -154,10 +154,24 @@ export async function settleOrderByHand(params: {
       where: { id: owned.id },
       select: {
         id: true, status: true, buyerEmail: true, ...ORDER_SUBJECT_SELECT,
-        payments: { where: { status: PaymentStatus.PENDING }, select: { id: true } },
+        payments: { where: { status: PaymentStatus.PENDING }, select: { id: true, provider: true } },
         rsvps: { select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
       },
     });
+    // Reserved to pay at the desk: the places are already confirmed; record the money.
+    const desk = order.status === OrderStatus.CONFIRMED ? order.payments.find((payment) => payment.provider === "OFFLINE") : undefined;
+    if (desk) {
+      await tx.$queryRaw`SELECT "id" FROM "Payment" WHERE "id" = ${desk.id} FOR UPDATE`;
+      await tx.payment.update({
+        where: { id: desk.id },
+        data: params.mode === "offline"
+          ? { status: PaymentStatus.PAID_OFFLINE, paidAt: now, offlineMethod: params.method ?? OfflinePaymentMethod.OTHER, offlineReference: params.reference?.trim().slice(0, 120) || null, settledByUserId: params.actorUserId }
+          : { status: PaymentStatus.WAIVED, settledByUserId: params.actorUserId },
+      });
+      if (params.mode === "offline") await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: desk.id, notice: "paid" });
+      await recordAuditEvent({ action: params.mode === "offline" ? "PAYMENT_COLLECTED_AT_DESK" : "PAYMENT_WAIVED", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Payment", targetId: desk.id, client: tx });
+      return "confirmed" as const;
+    }
     if (order.status === OrderStatus.CONFIRMED) return "already-paid" as const;
     const payment = order.payments[0];
     if (order.status !== OrderStatus.PENDING || !payment) throw new PaymentOperationError("Only orders waiting for payment can be settled by hand.");
@@ -300,10 +314,14 @@ export async function refundOrder(params: {
     }
     if (params.cancelTickets) {
       await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CANCELLED } });
+      // A reservation to be paid at the desk is no longer owed.
+      await tx.payment.updateMany({ where: { orderId: order.id, status: PaymentStatus.PENDING }, data: { status: PaymentStatus.CANCELED } });
       // The order, its lines, payments and refunds keep the record.
       await tx.rSVP.deleteMany({ where: { orderId: order.id } });
     }
     if (refundedPaymentId) await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: refundedPaymentId, notice: "refunded" });
+    // Complimentary, unpaid or nothing left to refund: still tell the buyer.
+    else if (params.cancelTickets) await enqueueOrderEmail(tx, { to: order.buyerEmail, orderId: order.id, notice: "cancelled" });
     await recordAuditEvent({
       action: params.cancelTickets ? "ORDER_CANCELLED" : "PAYMENT_REFUNDED",
       actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Order", targetId: order.id,

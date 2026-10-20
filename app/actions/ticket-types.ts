@@ -55,6 +55,8 @@ const saveSchema = z.object({
   seatsPerTicket: z.number().int().min(1).max(20).default(1),
   /** Booking fee per ticket, paid by the buyer; blank or 0 for none. */
   fee: z.string().trim().max(20).optional(),
+  /** Buyers may reserve now and pay in person. */
+  payAtDesk: z.boolean().default(false),
 }).strict().refine(oneTarget, "Choose an event or a series.");
 const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
 
@@ -173,6 +175,7 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
     maxPriceMinor,
     seatsPerTicket: data.seatsPerTicket,
     feeMinor,
+    payAtDesk: data.payAtDesk,
   };
   const saved = await prisma.$transaction(async (tx) => {
     let id: string;
@@ -400,3 +403,24 @@ export async function archiveAddOn(input: unknown): Promise<ActionResult> {
   revalidateOwner(context);
   return { ok: true };
 }
+
+const transferSchema = z.object({
+  ...target,
+  allowTransfers: z.boolean(),
+  cutoffHours: z.number().int().min(0).max(8760).default(24),
+}).strict().refine(oneTarget, "Choose an event or a series.");
+
+/** Whether ticket holders may give their tickets to someone else, and until how long before the start. */
+export async function saveTransferPolicy(input: unknown): Promise<ActionResult> {
+  const parsed = transferSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the transfer setting." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error };
+  const data = { allowTransfers: parsed.data.allowTransfers, transferCutoffHours: parsed.data.cutoffHours };
+  if ("eventId" in context.owner) await prisma.event.update({ where: { id: context.owner.eventId }, data });
+  else await prisma.eventSeries.update({ where: { id: context.owner.eventSeriesId }, data });
+  await recordAuditEvent({ action: "TRANSFER_POLICY_UPDATED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "eventId" in context.owner ? "Event" : "EventSeries", targetId: "eventId" in context.owner ? context.owner.eventId : context.owner.eventSeriesId, metadata: data });
+  revalidateOwner(context);
+  return { ok: true };
+}
+
