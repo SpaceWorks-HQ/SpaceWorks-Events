@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: Props): Promise<Metadata> { return loadRouteMetadata({ params }); }
 
 export default async function TicketPage({ params, searchParams }: Props) {
-  const { rsvp, orgName, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, payment, hold, returningFromCheckout } = await loadTicketView({ params, searchParams });
+  const { rsvp, orgName, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, payment, hold, returningFromCheckout, otherDates } = await loadTicketView({ params, searchParams });
   const ticketMain = (
     <>
       <header className="bg-accent px-6 py-5 text-on-accent">
@@ -159,6 +159,22 @@ export default async function TicketPage({ params, searchParams }: Props) {
             </Button>
             <TicketDownloadButton downloadUrl={`/api/ticket/${rsvp.checkInToken}/download`} />
           </div>
+        ) : null}
+
+        {otherDates.length > 0 ? (
+          <section aria-labelledby="pass-dates" className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-4">
+            <h2 id="pass-dates" className="text-h4 text-ink">Your other dates</h2>
+            <ul className="flex flex-col divide-y divide-line">
+              {otherDates.map((date) => (
+                <li key={date.href} className="flex items-center justify-between gap-3 py-2 text-body-ui">
+                  <span className={date.cancelled ? "text-ink-muted line-through" : "text-ink"}>
+                    {formatDayShort(date.start, timeZone)} {formatTime(date.start, timeZone)}
+                  </span>
+                  {date.cancelled ? <Chip tone="neutral" size="sm">Cancelled</Chip> : <Link href={date.href} className="font-semibold text-ink underline underline-offset-4">Ticket</Link>}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         {/* Paid tickets are cancelled and refunded by the organiser. */}

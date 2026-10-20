@@ -2,6 +2,7 @@ import { EventStatus, Prisma, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
 import { seatTakingWhere } from "@/lib/payments/holds";
+import { lockDate } from "@/lib/payments/targets";
 
 export async function countConfirmedForEvent(eventId: string): Promise<number> {
   return prisma.rSVP.count({
@@ -41,13 +42,9 @@ export async function hasCapacityToRestoreConfirmedRsvp(
     if (!rows[0]) return false;
     capacity = rows[0].capacity;
   } else {
-    await tx.$queryRaw`SELECT "id" FROM "EventInstance" WHERE "id" = ${target.eventInstanceId} FOR UPDATE`;
-    const instance = await tx.eventInstance.findUnique({
-      where: { id: target.eventInstanceId },
-      select: { series: { select: { capacity: true } } },
-    });
-    if (!instance) return false;
-    capacity = instance.series.capacity;
+    const date = await lockDate(tx, target.eventInstanceId, new Date());
+    if (!date) return false;
+    capacity = date.capacity;
   }
   if (capacity == null) return true;
   const taken = await tx.rSVP.count({ where: { ...target, ...seatTakingWhere(new Date()) } });
@@ -77,17 +74,11 @@ export async function confirmRsvpWithinCapacity(params: {
       capacity = event.capacity;
       isOpen = event.status === EventStatus.PUBLISHED && event.endDateTime > new Date();
     } else {
-      const instances = await tx.$queryRaw<Array<{ capacity: number | null; status: EventStatus; endDateTime: Date }>>`
-        SELECT s."capacity", s."status", i."endDateTime"
-        FROM "EventSeries" s
-        INNER JOIN "EventInstance" i ON i."eventSeriesId" = s."id"
-        WHERE i."id" = ${params.eventInstanceId}
-        FOR UPDATE OF s, i
-      `;
-      const instance = instances[0];
-      if (!instance) return "changed";
-      capacity = instance.capacity;
-      isOpen = instance.status === EventStatus.PUBLISHED && instance.endDateTime > new Date();
+      // The series, then the date: the same lock order as every series path.
+      const date = await lockDate(tx, params.eventInstanceId!, new Date());
+      if (!date) return "changed";
+      capacity = date.capacity;
+      isOpen = date.open;
     }
     if (params.requireOpen && !isOpen) return "closed";
     const taken = await tx.rSVP.count({ where: { ...target, ...seatTakingWhere(new Date()) } });

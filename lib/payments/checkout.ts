@@ -9,6 +9,7 @@ import { checkoutLineName } from "./pricing";
 import { submitPendingRefund } from "./refunds";
 import { paymentReturnUrl } from "./returnLink";
 import { settlePaidNotification } from "./settlement";
+import { ORDER_SUBJECT_SELECT, orderSubject } from "./targets";
 import { loadPaymentAccount } from "./settings";
 
 function publicBaseUrl() {
@@ -38,7 +39,7 @@ export async function startCheckout(orderId: string, now = new Date()): Promise<
       where: { id: orderId },
       select: {
         id: true, organisationId: true, status: true, holdExpiresAt: true, holdCapAt: true, totalMinor: true, currency: true, buyerEmail: true,
-        event: { select: { title: true } },
+        ...ORDER_SUBJECT_SELECT,
         lines: { select: { description: true, quantity: true, totalMinor: true }, orderBy: { createdAt: "asc" } },
         payments: {
           where: { status: PaymentStatus.PENDING },
@@ -76,7 +77,7 @@ export async function startCheckout(orderId: string, now = new Date()): Promise<
         reference: attemptId,
         amountMinor: payment.amountMinor,
         currency: order.currency,
-        description: order.event?.title ?? "Event tickets",
+        description: orderSubject(order)?.title ?? "Event tickets",
         lines: order.lines.map((line) => ({ name: checkoutLineName(line), amountMinor: line.totalMinor })),
         returnUrl,
         cancelUrl: returnUrl,

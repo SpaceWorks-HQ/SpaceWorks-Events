@@ -126,7 +126,8 @@ export function GuestsPeople({
     edit: (guest) => setEditGuest(guest),
     undoCheckIn: eventId ? (guest) => setUndoGuest(guest) : undefined,
     remove: (guest) => setRemoveGuest(guest),
-    payment: eventId ? (guest) => setPaymentGuest(guest) : undefined,
+    // Orders on an event, or on a series date or pass, are refunded the same way.
+    payment: (guest) => setPaymentGuest(guest),
   };
 
   function resetPage<T>(setter: (value: T) => void) {
@@ -243,10 +244,10 @@ export function GuestsPeople({
         </>
       )}
 
-      {paymentGuest?.order && eventId ? (
+      {paymentGuest?.order ? (
         <PaymentDialog
           organisationSlug={organisationSlug}
-          eventId={eventId}
+          target={target.kind === "event" ? { eventId: target.eventId } : { seriesId: target.seriesId }}
           guest={paymentGuest}
           onClose={() => setPaymentGuest(null)}
           onDone={(message) => {

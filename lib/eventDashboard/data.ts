@@ -42,7 +42,7 @@ export const loadRegistrationFields = cache(async (eventId: string): Promise<Reg
 
 export const MAX_BROWSER_ATTENDEES = 250;
 
-const attendeeOrderSelect = {
+export const attendeeOrderSelect = {
   id: true, reference: true, status: true, totalMinor: true, currency: true, testMode: true,
   _count: { select: { rsvps: true } },
   payments: {
@@ -56,7 +56,7 @@ const attendeeOrderSelect = {
 } satisfies Prisma.OrderSelect;
 
 /** One paid order's money, summed for the guest list. Duplicate captures (refunded automatically) count too. */
-function attendeeOrder(order: Prisma.OrderGetPayload<{ select: typeof attendeeOrderSelect; }>): AttendeeOrder {
+export function attendeeOrder(order: Prisma.OrderGetPayload<{ select: typeof attendeeOrderSelect; }>): AttendeeOrder {
   const collected = order.payments.filter((payment) => payment.status !== "WAIVED");
   const sum = (values: bigint[]) => Number(values.reduce((total, value) => total + value, BigInt(0)));
   const refunds = collected.flatMap((payment) => payment.refunds);

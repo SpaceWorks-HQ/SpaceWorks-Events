@@ -167,6 +167,12 @@ enum PromoAppliesPer {
 }
 
 /// What attendees get back if they cancel a paid ticket themselves.
+/// A ticket for one event or one date of a series, or a pass for every remaining date.
+enum TicketTypeKind {
+  SINGLE
+  PASS
+}
+
 enum RefundPolicyKind {
   /// The organiser handles refunds.
   NONE
@@ -487,7 +493,11 @@ model Event {
 /// within it. Types with registrations are archived, never deleted.
 model TicketType {
   id           String    @id @default(cuid())
-  eventId      String
+  /// Exactly one of eventId and eventSeriesId (checked in the database).
+  eventId      String?
+  eventSeriesId String?
+  /// PASS only on a series: one seat on every remaining date.
+  kind         TicketTypeKind @default(SINGLE)
   name         String
   description  String    @default("")
   /// Tax-inclusive price in integer minor units of the event's currency.
@@ -502,14 +512,14 @@ model TicketType {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
   rsvps      RSVP[]
   orderLines OrderLine[]
   promoCodes PromoCode[]
 
-  /// Target of RSVP's composite key, so a ticket can never belong to another event.
-  @@unique([id, eventId])
   @@index([eventId, sortOrder])
+  @@index([eventSeriesId, sortOrder])
 }
 
 /// One purchase: its lines are priced by us, the provider only charges the
@@ -519,6 +529,9 @@ model Order {
   id             String      @id @default(cuid())
   organisationId String
   eventId        String?
+  /// A series order: a pass (no date) or one date's tickets.
+  eventSeriesId   String?
+  eventInstanceId String?
   /// Short order number shown on receipts.
   reference      String      @unique
   /// The buyer's bearer link to the order (attendee details, receipts).
@@ -546,6 +559,8 @@ model Order {
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  series       EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: SetNull)
+  instance     EventInstance? @relation(fields: [eventInstanceId], references: [id], onDelete: SetNull)
   buyer        User?        @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
   promoCode    PromoCode?   @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   lines        OrderLine[]
@@ -554,6 +569,8 @@ model Order {
 
   @@index([organisationId, createdAt])
   @@index([eventId, status])
+  @@index([eventSeriesId, status])
+  @@index([eventInstanceId])
   @@index([status, holdExpiresAt])
   @@index([buyerUserId, createdAt])
 }
@@ -698,7 +715,9 @@ model PaymentAmendment {
 /// code is stored, with a short hint so organisers can tell codes apart.
 model PromoCode {
   id              String            @id @default(cuid())
-  eventId         String
+  /// Exactly one of eventId and eventSeriesId (checked in the database).
+  eventId         String?
+  eventSeriesId   String?
   codeDigest      String
   hint            String
   kind            PromoDiscountKind
@@ -721,13 +740,16 @@ model PromoCode {
   createdByUserId String?
   createdAt       DateTime          @default(now())
 
-  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  ticketType TicketType? @relation(fields: [ticketTypeId, eventId], references: [id, eventId], onDelete: NoAction)
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: NoAction)
   createdBy  User?       @relation("PromoCodeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   orders     Order[]
 
   @@unique([eventId, codeDigest])
+  @@unique([eventSeriesId, codeDigest])
   @@index([eventId, archivedAt])
+  @@index([eventSeriesId, archivedAt])
 }
 
 /// An organiser email sent to a selected set of existing registrations.
@@ -777,11 +799,21 @@ model EventSeries {
   instanceDurationMs Int              @default(3600000)
   timezone           String
   privacyType        EventPrivacyType @default(PUBLIC)
+  /// Seats per date, unless a date sets its own.
   capacity           Int?
   status             EventStatus      @default(DRAFT)
+  /// As on Event: every ticket and order of the series, locked after the first sale.
+  currency           String?
+  refundPolicyKind   RefundPolicyKind @default(NONE)
+  refundPolicyHours  Int?
+  refundPolicyPercent Int?
+  refundPolicyText   String           @default("")
   createdAt          DateTime         @default(now())
 
   organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  ticketTypes  TicketType[]
+  promoCodes   PromoCode[]
+  orders       Order[]
   instances    EventInstance[]
   invites      SeriesInvite[]
   collaborators EventCollaborator[]
@@ -1078,10 +1110,15 @@ model EventInstance {
   eventSeriesId String
   startDateTime DateTime
   endDateTime   DateTime
+  /// This date's seats; null uses the series capacity.
+  capacity      Int?
+  /// Cancelled dates take no registrations; their paid orders are refunded.
+  cancelledAt   DateTime?
   createdAt     DateTime @default(now())
 
   series EventSeries @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
   rsvps  RSVP[]
+  orders Order[]
 
   @@index([eventSeriesId, startDateTime])
 }
@@ -1111,8 +1148,10 @@ model RSVP {
   promotedAt      DateTime?
 
   event             Event?                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  order             Order?                  @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  ticketType        TicketType?             @relation(fields: [ticketTypeId, eventId], references: [id, eventId], onDelete: NoAction)
+  /// Orders are only deleted with their organisation; their tickets go with them.
+  order             Order?                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// The ticket's event or series matches this registration's (trigger rsvp_ticket_type_target).
+  ticketType        TicketType?             @relation(fields: [ticketTypeId], references: [id], onDelete: NoAction)
   eventInstance     EventInstance?          @relation(fields: [eventInstanceId], references: [id], onDelete: Cascade)
   user              User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   answers           RsvpAnswer[]

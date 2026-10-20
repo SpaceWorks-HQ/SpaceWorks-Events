@@ -34,9 +34,10 @@ export function previewOrderTotal(tickets: PublicTicketType[], quantities: Recor
   }
 }
 
-export function PromoCodeField({ orgSlug, eventSlug, applied, onApplied, problem }: {
+export function PromoCodeField({ orgSlug, eventSlug, eventInstanceId, applied, onApplied, problem }: {
   orgSlug: string;
-  eventSlug: string;
+  eventSlug?: string;
+  eventInstanceId?: string;
   applied: AppliedPromo | null;
   onApplied: (promo: AppliedPromo | null) => void;
   /** Why the applied code doesn't discount the current choice. */
@@ -72,7 +73,7 @@ export function PromoCodeField({ orgSlug, eventSlug, applied, onApplied, problem
           loading={pending}
           disabled={!code.trim()}
           onClick={() => startTransition(async () => {
-            const result = await checkPromoCode({ orgSlug, eventSlug, code });
+            const result = await checkPromoCode({ orgSlug, ...(eventSlug ? { eventSlug } : { eventInstanceId }), code });
             if (!result.ok) {
               setError(result.error);
               return;

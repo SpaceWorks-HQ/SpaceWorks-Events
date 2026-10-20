@@ -12,6 +12,7 @@ import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { EventPrivacyType } from "@prisma/client";
 import { NOT_FROM_PAID_ORDER } from "@/lib/rsvpCapacity";
 import { offerNextWaitlisted } from "@/lib/payments/operations";
+import { lockSeriesDates, seatTargetOf } from "@/lib/payments/targets";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -48,6 +49,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
       eventInstance: {
         select: {
           id: true,
+          eventSeriesId: true,
           series: {
             select: { title: true, privacyType: true, organisation: { select: { id: true, slug: true } } },
           },
@@ -74,8 +76,8 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
   const cancellation = await prisma.$transaction(async (tx) => {
     if (rsvp.eventId) {
       await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${rsvp.eventId} FOR UPDATE`;
-    } else if (rsvp.eventInstanceId) {
-      await tx.$queryRaw`SELECT "id" FROM "EventInstance" WHERE "id" = ${rsvp.eventInstanceId} FOR UPDATE`;
+    } else if (rsvp.eventInstanceId && rsvp.eventInstance) {
+      await lockSeriesDates(tx, rsvp.eventInstance.eventSeriesId, [rsvp.eventInstanceId], new Date());
     }
     const current = await tx.rSVP.findUnique({ where: { id: rsvp.id }, include: { order: { select: { id: true, status: true, payments: { where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE"] } }, select: { id: true } } } } } });
     if (!current) return { error: "RSVP not found." };
@@ -98,8 +100,11 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     }
     await tx.rSVP.delete({ where: { id: current.id } });
     const privacyType = rsvp.event?.privacyType ?? rsvp.eventInstance?.series.privacyType;
-    // An event's freed seat is offered after commit, paid requests included.
-    if (current.status === "CONFIRMED" && current.eventId) return { error: null, freedEventId: current.eventId };
+    // A freed seat on an event, or on a date of a series that sells tickets,
+    // is offered after commit, paid requests included.
+    const sold = current.eventInstanceId ? await tx.ticketType.count({ where: { eventSeriesId: rsvp.eventInstance!.eventSeriesId } }) > 0 : true;
+    const freed = seatTargetOf(current);
+    if (current.status === "CONFIRMED" && freed && (current.eventId || sold)) return { error: null, freed };
     if (current.status === "CONFIRMED" && privacyType !== EventPrivacyType.APPROVAL_REQUIRED) {
       const target = current.eventId ? { eventId: current.eventId } : { eventInstanceId: current.eventInstanceId! };
       const nextWaitlisted = await tx.rSVP.findFirst({
@@ -127,7 +132,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     return { error: null };
   });
   if (cancellation.error) return { ok: false, error: cancellation.error };
-  if ("freedEventId" in cancellation && cancellation.freedEventId) await offerNextWaitlisted(cancellation.freedEventId).catch(() => undefined);
+  if ("freed" in cancellation && cancellation.freed) await offerNextWaitlisted(cancellation.freed).catch(() => undefined);
 
   await recordAuditEvent({
     action: "RSVP_CANCELLED",

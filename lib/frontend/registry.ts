@@ -219,14 +219,16 @@ import { revokeAllSessions as endpoint215 } from "@/app/actions/security";
 import { createEventSeries as endpoint216 } from "@/app/actions/series";
 import { updateEventSeriesMeta as endpoint217 } from "@/app/actions/series";
 import { deleteEventSeries as endpoint218 } from "@/app/actions/series";
-import { createEventShortLink as endpoint219 } from "@/app/actions/shortLink";
-import { regenerateEventShortLink as endpoint220 } from "@/app/actions/shortLink";
-import { verifySuperAdminMfa as endpoint221 } from "@/app/actions/super-admin-mfa";
-import { saveTicketType as endpoint222 } from "@/app/actions/ticket-types";
-import { archiveTicketType as endpoint223 } from "@/app/actions/ticket-types";
-import { createPromoCode as endpoint224 } from "@/app/actions/ticket-types";
-import { archivePromoCode as endpoint225 } from "@/app/actions/ticket-types";
-import { saveRefundPolicy as endpoint226 } from "@/app/actions/ticket-types";
+import { setSeriesDateCapacity as endpoint219 } from "@/app/actions/series";
+import { cancelSeriesDate as endpoint220 } from "@/app/actions/series";
+import { createEventShortLink as endpoint221 } from "@/app/actions/shortLink";
+import { regenerateEventShortLink as endpoint222 } from "@/app/actions/shortLink";
+import { verifySuperAdminMfa as endpoint223 } from "@/app/actions/super-admin-mfa";
+import { saveTicketType as endpoint224 } from "@/app/actions/ticket-types";
+import { archiveTicketType as endpoint225 } from "@/app/actions/ticket-types";
+import { createPromoCode as endpoint226 } from "@/app/actions/ticket-types";
+import { archivePromoCode as endpoint227 } from "@/app/actions/ticket-types";
+import { saveRefundPolicy as endpoint228 } from "@/app/actions/ticket-types";
 
 export const viewReaders = Object.freeze({
   "app__about__page:loadView": endpoint0,
@@ -450,12 +452,14 @@ export const backendActions = Object.freeze({
   "series:createEventSeries": endpoint216,
   "series:updateEventSeriesMeta": endpoint217,
   "series:deleteEventSeries": endpoint218,
-  "shortLink:createEventShortLink": endpoint219,
-  "shortLink:regenerateEventShortLink": endpoint220,
-  "super-admin-mfa:verifySuperAdminMfa": endpoint221,
-  "ticket-types:saveTicketType": endpoint222,
-  "ticket-types:archiveTicketType": endpoint223,
-  "ticket-types:createPromoCode": endpoint224,
-  "ticket-types:archivePromoCode": endpoint225,
-  "ticket-types:saveRefundPolicy": endpoint226,
+  "series:setSeriesDateCapacity": endpoint219,
+  "series:cancelSeriesDate": endpoint220,
+  "shortLink:createEventShortLink": endpoint221,
+  "shortLink:regenerateEventShortLink": endpoint222,
+  "super-admin-mfa:verifySuperAdminMfa": endpoint223,
+  "ticket-types:saveTicketType": endpoint224,
+  "ticket-types:archiveTicketType": endpoint225,
+  "ticket-types:createPromoCode": endpoint226,
+  "ticket-types:archivePromoCode": endpoint227,
+  "ticket-types:saveRefundPolicy": endpoint228,
 });

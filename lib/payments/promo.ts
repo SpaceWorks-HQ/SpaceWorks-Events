@@ -34,17 +34,28 @@ export function redeemingOrdersWhere(promoCodeId: string, now: Date): Prisma.Ord
   return { promoCodeId, OR: [{ status: { in: [OrderStatus.CONFIRMED, OrderStatus.REQUESTED] } }, { status: OrderStatus.PENDING, holdExpiresAt: { gt: now } }] };
 }
 
+/** A code belongs to one event, or to one series (for its dates and passes). */
+export type PromoOwner = { eventId: string; } | { eventSeriesId: string; };
+
+/** The code as typed, for this event or series; codes are stored as digests only. */
+export function findPromoCode(client: Prisma.TransactionClient, owner: PromoOwner, code: string) {
+  const codeDigest = promoCodeDigest(code);
+  return client.promoCode.findUnique({
+    where: "eventId" in owner
+      ? { eventId_codeDigest: { eventId: owner.eventId, codeDigest } }
+      : { eventSeriesId_codeDigest: { eventSeriesId: owner.eventSeriesId, codeDigest } },
+    select: { id: true, archivedAt: true },
+  });
+}
+
 /**
- * Find and lock a code for an order, under the event lock. Its redemption
+ * Find and lock a code for an order, under the event or series lock. Its redemption
  * limit therefore holds under concurrent orders. Returns the pricing rule;
  * the discount itself is applied by priceOrder.
  */
-export async function lockPromoCode(tx: Prisma.TransactionClient, params: { eventId: string; code: string; now: Date; }): Promise<{ id: string; rule: PromoRule; }> {
+export async function lockPromoCode(tx: Prisma.TransactionClient, params: { owner: PromoOwner; code: string; now: Date; }): Promise<{ id: string; rule: PromoRule; }> {
   if (!isValidPromoCode(params.code)) throw new PromoCodeError("That promo code isn't valid.");
-  const promo = await tx.promoCode.findUnique({
-    where: { eventId_codeDigest: { eventId: params.eventId, codeDigest: promoCodeDigest(params.code) } },
-    select: { id: true, archivedAt: true },
-  });
+  const promo = await findPromoCode(tx, params.owner, params.code);
   if (!promo || promo.archivedAt) throw new PromoCodeError("That promo code isn't valid.");
   await tx.$queryRaw`SELECT "id" FROM "PromoCode" WHERE "id" = ${promo.id} FOR UPDATE`;
   const locked = await tx.promoCode.findUniqueOrThrow({

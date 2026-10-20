@@ -149,13 +149,13 @@ export async function approveRsvp(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "Only pending requests can be approved." };
   }
 
-  const request = ctx.event ? await paidRequest(rsvp) : null;
-  if (request && ctx.event) {
+  const request = await paidRequest(rsvp);
+  if (request) {
     // Approval offers a paid order its seats; the tickets confirm once it's paid.
     const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
     if (!offered.ok) return offered;
     await recordAuditEvent({ action: "RSVP_APPROVED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
-    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
     return { ok: true };
   }
 
@@ -250,12 +250,12 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "This RSVP cannot be rejected." };
   }
 
-  const request = ctx.event ? await paidRequest(rsvp) : null;
-  if (request && ctx.event) {
+  const request = await paidRequest(rsvp);
+  if (request) {
     const declined = await paymentOperation(() => declineRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
     if (!declined.ok) return declined;
     await recordAuditEvent({ action: "RSVP_REJECTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
-    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
     return { ok: true };
   }
 
@@ -328,12 +328,12 @@ export async function promoteFromWaitlist(input: unknown): Promise<ActionResult>
     return { ok: false, error: "Only waitlisted attendees can be promoted." };
   }
 
-  const request = ctx.event ? await paidRequest(rsvp) : null;
-  if (request && ctx.event) {
+  const request = await paidRequest(rsvp);
+  if (request) {
     const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
     if (!offered.ok) return offered;
     await recordAuditEvent({ action: "RSVP_WAITLIST_PROMOTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
-    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
     return { ok: true };
   }
 

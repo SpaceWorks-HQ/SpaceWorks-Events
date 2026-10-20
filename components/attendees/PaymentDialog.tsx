@@ -47,15 +47,16 @@ type Tab = "refund" | "cancel" | "correct";
  * make it complimentary, correct an offline record, or email a payment link.
  * Every action applies to the whole order.
  */
-export function PaymentDialog({ organisationSlug, eventId, guest, onClose, onDone }: {
+export function PaymentDialog({ organisationSlug, target, guest, onClose, onDone }: {
   organisationSlug: string;
-  eventId: string;
+  /** The event, or the series the guest's order is for. */
+  target: { eventId: string; } | { seriesId: string; };
   guest: AttendeeRow;
   onClose: () => void;
   onDone: (message: string) => void;
 }) {
   const order = guest.order!;
-  const scope = { organisationSlug, eventId, orderId: order.id };
+  const scope = { organisationSlug, ...target, orderId: order.id };
   const refundable = order.paidMinor - order.refundedMinor - order.refundPendingMinor;
   const confirmed = order.status === "CONFIRMED";
   const [tab, setTab] = useState<Tab>(refundable > 0 ? "refund" : "cancel");
@@ -147,7 +148,7 @@ export function PaymentDialog({ organisationSlug, eventId, guest, onClose, onDon
           {confirmed && tab === "correct" && order.offlinePayment ? (
             <form className="flex flex-col gap-3" onSubmit={(event) => {
               event.preventDefault();
-              run(() => correctOfflinePayment({ organisationSlug, eventId, paymentId: order.offlinePayment!.id, method, reference, reason }), "Payment record corrected.");
+              run(() => correctOfflinePayment({ organisationSlug, ...target, paymentId: order.offlinePayment!.id, method, reference, reason }), "Payment record corrected.");
             }}>
               <p className="text-caption text-ink-muted">The original record is kept; each correction is added to its history.</p>
               {methodField}

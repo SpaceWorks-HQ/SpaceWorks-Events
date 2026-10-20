@@ -6,6 +6,7 @@ import { EMAIL_BUTTON_STYLE, EMAIL_COLORS, emailLayout } from "@/lib/email/brand
 import { assertEmailAccepted, getEmailTransport } from "@/lib/email/transporter";
 import { formatMoney } from "./money";
 import { checkoutLineName } from "./pricing";
+import { ORDER_SUBJECT_SELECT, orderSubject } from "./targets";
 
 type OutboxClient = Prisma.TransactionClient | typeof prisma;
 
@@ -75,7 +76,7 @@ const orderSelect = {
   id: true, reference: true, accessToken: true, status: true, currency: true, totalMinor: true, testMode: true, buyerName: true, holdExpiresAt: true,
   lines: { select: { description: true, quantity: true, totalMinor: true }, orderBy: { createdAt: "asc" } },
   rsvps: { select: { guestEmail: true, user: { select: { email: true } } } },
-  event: { select: { title: true, slug: true, timezone: true, organisation: { select: { name: true, slug: true } } } },
+  ...ORDER_SUBJECT_SELECT,
 } satisfies Prisma.OrderSelect;
 
 type EmailOrder = Prisma.OrderGetPayload<{ select: typeof orderSelect; }>;
@@ -121,13 +122,14 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
   // Links only with an absolute public address; never localhost in a sent email.
   const orderUrl = base ? `${base}/order/${order.accessToken}` : null;
   const receiptUrl = base ? `${base}/api/orders/${order.accessToken}/receipt` : null;
-  const eventUrl = base && order.event ? `${base}/${order.event.organisation.slug}/${order.event.slug}` : null;
-  const title = oneLine(order.event?.title ?? "your event");
+  const subject = orderSubject(order);
+  const eventUrl = base && subject?.path ? `${base}${subject.path}` : null;
+  const title = oneLine(subject?.title ?? "your event");
   const amount = formatMoney(payment?.amountMinor ?? order.totalMinor, order.currency);
   const testNote = order.testMode ? " This was a test payment, so no real money moved." : "";
   const hello = order.buyerName ? `Hello ${escapeHtml(oneLine(order.buyerName))},` : "Hello,";
   const holdEnds = order.holdExpiresAt
-    ? order.holdExpiresAt.toLocaleString("en-GB", { hour: "numeric", minute: "2-digit", day: "numeric", month: "short", timeZone: order.event?.timezone || "UTC", timeZoneName: "short" })
+    ? order.holdExpiresAt.toLocaleString("en-GB", { hour: "numeric", minute: "2-digit", day: "numeric", month: "short", timeZone: subject?.timeZone || "UTC", timeZoneName: "short" })
     : "";
 
   const refunded = formatMoney((payment?.refunds ?? []).filter((refund) => !refund.automatic && refund.status !== PaymentRefundStatus.FAILED).reduce((sum, refund) => sum + refund.amountMinor, BigInt(0)), order.currency);
@@ -176,7 +178,7 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
   };
   const notice = content[payload.notice];
   const lines = order.lines.map((line) => `${escapeHtml(oneLine(checkoutLineName(line)))}: ${escapeHtml(formatMoney(line.totalMinor, order.currency))}`).join("<br>");
-  const organisation = order.event ? escapeHtml(order.event.organisation.name) : "";
+  const organisation = subject ? escapeHtml(subject.organisation.name) : "";
   const html = emailLayout(escapeHtml(notice.subject), `
             <h2 style="${HEADING}">${notice.heading}</h2>
             <p style="${BODY}">${hello}<br><br>${notice.body}</p>

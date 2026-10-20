@@ -6,6 +6,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { closeOpenAttempts } from "./checkout";
 import { enqueuePaymentEmail } from "./email";
 import { offerNextWaitlisted } from "./operations";
+import { lockOrderTargets, seatTargetOf } from "./targets";
 import { submitPendingRefund } from "./refunds";
 
 const BATCH = 25;
@@ -24,8 +25,8 @@ async function releaseOrder(orderId: string, now: Date): Promise<"expired" | "se
   if (pages === "settled") return "settled";
 
   return prisma.$transaction(async (tx) => {
-    const row = await tx.order.findUnique({ where: { id: orderId }, select: { eventId: true } });
-    if (row?.eventId) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${row.eventId} FOR UPDATE`;
+    const row = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, eventId: true, eventSeriesId: true } });
+    if (row) await lockOrderTargets(tx, row, now);
     await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${orderId} FOR UPDATE`;
     const order = await tx.order.findUnique({
       where: { id: orderId },
@@ -64,8 +65,11 @@ export async function runPaymentMaintenance(now = new Date()) {
     if (result === "expired") {
       expired += 1;
       // The released seats go to whoever is next on the waitlist.
-      const order = await prisma.order.findUnique({ where: { id }, select: { eventId: true } });
-      if (order?.eventId) await offerNextWaitlisted(order.eventId, now).catch(() => undefined);
+      const seats = await prisma.rSVP.findMany({ where: { orderId: id }, select: { eventId: true, eventInstanceId: true }, distinct: ["eventId", "eventInstanceId"] });
+      for (const seat of seats) {
+        const target = seatTargetOf(seat);
+        if (target) await offerNextWaitlisted(target, now).catch(() => undefined);
+      }
     }
     if (result === "settled") settled += 1;
   }

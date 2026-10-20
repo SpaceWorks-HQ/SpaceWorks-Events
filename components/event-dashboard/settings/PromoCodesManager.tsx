@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Radio, RadioGroup } from "@/components/ui/choice";
 import { Callout, Card, CardHeader } from "@/components/ui/display";
 import { Dropdown, Field, Input, Textarea } from "@/components/ui/field";
+import type { TicketTarget } from "@/components/event-dashboard/settings/TicketTypesManager";
 import { formatMoney } from "@/lib/payments/money";
 import { describeRefundPolicy, type RefundPolicySnapshot } from "@/lib/payments/refundPolicy";
 
@@ -55,9 +56,10 @@ function describeDiscount(promo: ManagedPromoCode, currency: string) {
  * number of uses or a time window. A code is shown only while it's typed;
  * the server keeps a digest and its first letters.
  */
-export function PromoCodesManager({ organisationSlug, eventId, currency, promoCodes, tickets }: {
+export function PromoCodesManager({ organisationSlug, target, currency, promoCodes, tickets }: {
   organisationSlug: string;
-  eventId: string;
+  /** The event, or the series whose dates and passes these cover. */
+  target: TicketTarget;
   currency: string;
   promoCodes: ManagedPromoCode[];
   tickets: Array<{ id: string; name: string; priceMinor: number; }>;
@@ -77,7 +79,7 @@ export function PromoCodesManager({ organisationSlug, eventId, currency, promoCo
     startTransition(async () => {
       const result = await createPromoCode({
         organisationSlug,
-        eventId,
+        ...target,
         code: draft.code,
         kind: draft.kind,
         appliesPer: draft.appliesPer,
@@ -193,7 +195,7 @@ export function PromoCodesManager({ organisationSlug, eventId, currency, promoCo
         onConfirm={() => {
           if (!archiving) return;
           startTransition(async () => {
-            const result = await archivePromoCode({ organisationSlug, eventId, promoCodeId: archiving.id });
+            const result = await archivePromoCode({ organisationSlug, ...target, promoCodeId: archiving.id });
             setArchiving(null);
             if (!result.ok) return showToast(result.error, "error");
             router.refresh();
@@ -209,9 +211,10 @@ export function PromoCodesManager({ organisationSlug, eventId, currency, promoCo
  * keeps the policy it was sold under; after the first sale it can only
  * become more generous.
  */
-export function RefundPolicyControl({ organisationSlug, eventId, policy, sold }: {
+export function RefundPolicyControl({ organisationSlug, target, policy, sold }: {
   organisationSlug: string;
-  eventId: string;
+  /** The event, or the series whose dates and passes these cover. */
+  target: TicketTarget;
   policy: RefundPolicySnapshot;
   /** Paid orders exist, so the policy can only loosen. */
   sold: boolean;
@@ -236,7 +239,7 @@ export function RefundPolicyControl({ organisationSlug, eventId, policy, sold }:
           event.preventDefault();
           startTransition(async () => {
             const result = await saveRefundPolicy({
-              organisationSlug, eventId, kind, text,
+              organisationSlug, ...target, kind, text,
               hours: kind === "NONE" ? null : Number(hours),
               percent: kind === "PERCENT_UNTIL" ? Number(percent) : null,
             });

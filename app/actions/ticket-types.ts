@@ -12,7 +12,7 @@ import { DEFAULT_CURRENCY, formatMoney, parseMoneyToMinor, providerMinimumMinor 
 import { isValidPromoCode, promoCodeDigest, promoCodeHint } from "@/lib/payments/promo";
 import { isAtLeastAsGenerous, type RefundPolicySnapshot } from "@/lib/payments/refundPolicy";
 import { configuredProvider } from "@/lib/payments/settings";
-import { EventPermission } from "@prisma/client";
+import { EventPermission, type Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { canAccessEvent } from "@/lib/eventAccess";
 
@@ -21,10 +21,13 @@ const revalidatePath = trackedRevalidation(nextRevalidatePath);
 const MAX_TICKET_TYPES = 20;
 const ZERO = BigInt(0);
 
+/** An event, or a series (whose tickets, codes and policy cover its dates and passes). */
 const target = {
   organisationSlug: z.string().trim().min(1).max(120),
-  eventId: z.string().trim().min(1).max(128),
+  eventId: z.string().trim().min(1).max(128).optional(),
+  seriesId: z.string().trim().min(1).max(128).optional(),
 };
+const oneTarget = (value: { eventId?: string; seriesId?: string; }) => Boolean(value.eventId) !== Boolean(value.seriesId);
 const optionalDate = z.string().datetime().nullable().optional();
 const saveSchema = z.object({
   ...target,
@@ -38,52 +41,67 @@ const saveSchema = z.object({
   maxPerOrder: z.number().int().min(1).max(100).default(10),
   salesStartAt: optionalDate,
   salesEndAt: optionalDate,
-}).strict();
-const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict();
+  /** Series only, when creating: one date's ticket, or a pass for every remaining date. */
+  kind: z.enum(["SINGLE", "PASS"]).default("SINGLE"),
+}).strict().refine(oneTarget, "Choose an event or a series.");
+const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
 
 /**
  * Ticket types, prices, promo codes and the refund policy belong to the
  * organisation's owners and admins, and to collaborators granted
  * EDIT_DETAILS on this event.
  */
-async function access(input: { organisationSlug: string; eventId: string; }) {
+type Owner = { eventId: string; } | { eventSeriesId: string; };
+type Access = { organisation: { id: string; slug: string; }; userId: string; owner: Owner; currency: string | null; paths: string[]; };
+
+async function access(input: { organisationSlug: string; eventId?: string; seriesId?: string; }): Promise<Access | { error: string; }> {
   const session = await auth();
-  if (!session?.user?.id) return { error: "You must be signed in." } as const;
+  if (!session?.user?.id) return { error: "You must be signed in." };
   const userId = session.user.id;
   const organisation = await prisma.organisation.findUnique({ where: { slug: input.organisationSlug }, select: { id: true, slug: true } });
-  if (!organisation || !(await canAccessEvent({ userId, organisationId: organisation.id, eventId: input.eventId, permission: EventPermission.EDIT_DETAILS }))) {
-    return { error: "You don't have permission to change this event's tickets." } as const;
+  const scope = input.eventId ? { eventId: input.eventId } : { eventSeriesId: input.seriesId };
+  if (!organisation || !(await canAccessEvent({ userId, organisationId: organisation.id, ...scope, permission: EventPermission.EDIT_DETAILS }))) {
+    return { error: "You don't have permission to change this event's tickets." };
   }
-  if (await isActionRateLimited("action", userId)) return { error: "Too many ticket changes. Try again shortly." } as const;
-  const event = await prisma.event.findFirst({
-    where: { id: input.eventId, organisationId: organisation.id },
-    select: { id: true, slug: true, currency: true },
-  });
-  return event ? { organisation, userId, event } : { error: "Event not found." } as const;
+  if (await isActionRateLimited("action", userId)) return { error: "Too many ticket changes. Try again shortly." };
+  if (input.eventId) {
+    const event = await prisma.event.findFirst({ where: { id: input.eventId, organisationId: organisation.id }, select: { id: true, slug: true, currency: true } });
+    if (!event) return { error: "Event not found." };
+    return { organisation, userId, owner: { eventId: event.id }, currency: event.currency, paths: [`/${organisation.slug}/${event.slug}`, `/dashboard/${organisation.slug}/event/${event.id}`] };
+  }
+  const series = await prisma.eventSeries.findFirst({ where: { id: input.seriesId, organisationId: organisation.id }, select: { id: true, currency: true } });
+  if (!series) return { error: "Series not found." };
+  return { organisation, userId, owner: { eventSeriesId: series.id }, currency: series.currency, paths: [`/dashboard/${organisation.slug}/series/${series.id}`] };
 }
 
-function revalidateEvent(orgSlug: string, event: { id: string; slug: string; }) {
-  revalidatePath(`/${orgSlug}/${event.slug}`);
-  revalidatePath(`/dashboard/${orgSlug}/event/${event.id}`);
+function revalidateOwner(context: Access) {
+  for (const path of context.paths) revalidatePath(path);
+}
+
+/** Set the currency with the first ticket; the database locks it after that. */
+async function setOwnerCurrency(tx: Prisma.TransactionClient, owner: Owner, currency: string) {
+  if ("eventId" in owner) await tx.event.update({ where: { id: owner.eventId }, data: { currency } });
+  else await tx.eventSeries.update({ where: { id: owner.eventSeriesId }, data: { currency } });
 }
 
 export async function saveTicketType(input: unknown): Promise<ActionResult<{ id: string; }>> {
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the ticket details." };
   const context = await access(parsed.data);
-  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
-  const { organisation, userId, event } = context;
+  if ("error" in context) return { ok: false, error: context.error };
+  const { organisation, userId, owner } = context;
   const data = parsed.data;
+  if ("eventId" in owner && data.kind === "PASS") return { ok: false, error: "Passes are for series." };
 
   const existing = data.ticketTypeId
-    ? await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, eventId: event.id, archivedAt: null }, select: { id: true } })
+    ? await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, ...owner, archivedAt: null }, select: { id: true } })
     : null;
   if (data.ticketTypeId && !existing) return { ok: false, error: "That ticket no longer exists." };
 
   const settings = await prisma.organisationPaymentSettings.findUnique({ where: { organisationId: organisation.id } });
   // One currency per event: set with its first ticket and never changed after,
   // so every ticket, order and refund of the event agrees.
-  const currency = event.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
+  const currency = context.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
   const priceMinor = data.price ? parseMoneyToMinor(data.price, currency) : ZERO;
   if (priceMinor === null) return { ok: false, error: `Enter the price in ${currency}, for example 499 or 499.50.` };
 
@@ -116,10 +134,10 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
       await tx.ticketType.update({ where: { id: existing.id }, data: values });
       id = existing.id;
     } else {
-      if (await tx.ticketType.count({ where: { eventId: event.id, archivedAt: null } }) >= MAX_TICKET_TYPES) return null;
-      const last = await tx.ticketType.findFirst({ where: { eventId: event.id }, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
-      id = (await tx.ticketType.create({ data: { ...values, eventId: event.id, sortOrder: (last?.sortOrder ?? -1) + 1 }, select: { id: true } })).id;
-      if (!event.currency) await tx.event.update({ where: { id: event.id }, data: { currency } });
+      if (await tx.ticketType.count({ where: { ...owner, archivedAt: null } }) >= MAX_TICKET_TYPES) return null;
+      const last = await tx.ticketType.findFirst({ where: owner, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+      id = (await tx.ticketType.create({ data: { ...values, ...owner, kind: data.kind, sortOrder: (last?.sortOrder ?? -1) + 1 }, select: { id: true } })).id;
+      if (!context.currency) await setOwnerCurrency(tx, owner, currency);
     }
     await recordAuditEvent({
       action: existing ? "TICKET_TYPE_UPDATED" : "TICKET_TYPE_CREATED",
@@ -127,13 +145,13 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
       organisationId: organisation.id,
       targetType: "TicketType",
       targetId: id,
-      metadata: { paid: priceMinor > ZERO, limited: values.capacity != null },
+      metadata: { paid: priceMinor > ZERO, limited: values.capacity != null, pass: data.kind === "PASS" },
       client: tx,
     });
     return id;
   });
   if (!saved) return { ok: false, error: `An event can have up to ${MAX_TICKET_TYPES} tickets.` };
-  revalidateEvent(organisation.slug, event);
+  revalidateOwner(context);
   return { ok: true, data: { id: saved } };
 }
 
@@ -142,14 +160,14 @@ export async function archiveTicketType(input: unknown): Promise<ActionResult> {
   const parsed = archiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose a ticket." };
   const context = await access(parsed.data);
-  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
+  if ("error" in context) return { ok: false, error: context.error };
   const archived = await prisma.ticketType.updateMany({
-    where: { id: parsed.data.ticketTypeId, eventId: context.event.id, archivedAt: null },
+    where: { id: parsed.data.ticketTypeId, ...context.owner, archivedAt: null },
     data: { archivedAt: new Date() },
   });
   if (archived.count !== 1) return { ok: false, error: "That ticket no longer exists." };
   await recordAuditEvent({ action: "TICKET_TYPE_ARCHIVED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "TicketType", targetId: parsed.data.ticketTypeId });
-  revalidateEvent(context.organisation.slug, context.event);
+  revalidateOwner(context);
   return { ok: true };
 }
 
@@ -167,8 +185,8 @@ const promoSchema = z.object({
   maxRedemptions: z.number().int().min(1).max(1_000_000).nullable().optional(),
   validFrom: optionalDate,
   validUntil: optionalDate,
-}).strict();
-const archivePromoSchema = z.object({ ...target, promoCodeId: z.string().trim().min(1).max(64) }).strict();
+}).strict().refine(oneTarget, "Choose an event or a series.");
+const archivePromoSchema = z.object({ ...target, promoCodeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
 
 /**
  * Create a promo code. Only a digest of the code is stored, with a short
@@ -178,19 +196,19 @@ export async function createPromoCode(input: unknown): Promise<ActionResult<{ id
   const parsed = promoSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the promo code." };
   const context = await access(parsed.data);
-  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
-  const { organisation, userId, event } = context;
+  if ("error" in context) return { ok: false, error: context.error };
+  const { organisation, userId, owner, currency } = context;
   const data = parsed.data;
   if (!isValidPromoCode(data.code)) return { ok: false, error: "Codes are 3 to 32 letters, numbers, - or _." };
-  if (!event.currency) return { ok: false, error: "Add a paid ticket before creating promo codes." };
+  if (!currency) return { ok: false, error: "Add a paid ticket before creating promo codes." };
   let amountOffMinor: bigint | null = null;
   if (data.kind === "FIXED") {
-    amountOffMinor = data.amountOff ? parseMoneyToMinor(data.amountOff, event.currency) : null;
-    if (!amountOffMinor || amountOffMinor <= ZERO) return { ok: false, error: `Enter the discount in ${event.currency}, for example 100.` };
+    amountOffMinor = data.amountOff ? parseMoneyToMinor(data.amountOff, currency) : null;
+    if (!amountOffMinor || amountOffMinor <= ZERO) return { ok: false, error: `Enter the discount in ${currency}, for example 100.` };
   } else if (!data.percentOff) {
     return { ok: false, error: "Enter a percentage from 1 to 100." };
   }
-  if (data.ticketTypeId && !(await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, eventId: event.id, archivedAt: null }, select: { id: true } }))) {
+  if (data.ticketTypeId && !(await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, ...owner, archivedAt: null }, select: { id: true } }))) {
     return { ok: false, error: "That ticket no longer exists." };
   }
   const validFrom = data.validFrom ? new Date(data.validFrom) : null;
@@ -199,7 +217,7 @@ export async function createPromoCode(input: unknown): Promise<ActionResult<{ id
   try {
     const created = await prisma.promoCode.create({
       data: {
-        eventId: event.id, codeDigest: promoCodeDigest(data.code), hint: promoCodeHint(data.code), kind: data.kind, appliesPer: data.appliesPer,
+        ...owner, codeDigest: promoCodeDigest(data.code), hint: promoCodeHint(data.code), kind: data.kind, appliesPer: data.appliesPer,
         percentOff: data.kind === "PERCENT" ? data.percentOff : null, amountOffMinor, ticketTypeId: data.ticketTypeId ?? null,
         minQuantity: data.minQuantity, perOrderLimit: data.appliesPer === "TICKET" ? data.perOrderLimit ?? null : null, maxRedemptions: data.maxRedemptions ?? null,
         validFrom, validUntil, createdByUserId: userId,
@@ -207,7 +225,7 @@ export async function createPromoCode(input: unknown): Promise<ActionResult<{ id
       select: { id: true },
     });
     await recordAuditEvent({ action: "PROMO_CODE_CREATED", actorUserId: userId, organisationId: organisation.id, targetType: "PromoCode", targetId: created.id, metadata: { kind: data.kind, appliesPer: data.appliesPer } });
-    revalidateEvent(organisation.slug, event);
+    revalidateOwner(context);
     return { ok: true, data: { id: created.id } };
   } catch (error) {
     if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") return { ok: false, error: "This event already has that code." };
@@ -220,11 +238,11 @@ export async function archivePromoCode(input: unknown): Promise<ActionResult> {
   const parsed = archivePromoSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose a promo code." };
   const context = await access(parsed.data);
-  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
-  const archived = await prisma.promoCode.updateMany({ where: { id: parsed.data.promoCodeId, eventId: context.event.id, archivedAt: null }, data: { archivedAt: new Date() } });
+  if ("error" in context) return { ok: false, error: context.error };
+  const archived = await prisma.promoCode.updateMany({ where: { id: parsed.data.promoCodeId, ...context.owner, archivedAt: null }, data: { archivedAt: new Date() } });
   if (archived.count !== 1) return { ok: false, error: "That code is already off." };
   await recordAuditEvent({ action: "PROMO_CODE_ARCHIVED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "PromoCode", targetId: parsed.data.promoCodeId });
-  revalidateEvent(context.organisation.slug, context.event);
+  revalidateOwner(context);
   return { ok: true };
 }
 
@@ -234,7 +252,7 @@ const refundPolicySchema = z.object({
   hours: z.number().int().min(0).max(8760).nullable().optional(),
   percent: z.number().int().min(1).max(99).nullable().optional(),
   text: z.string().trim().max(1000).default(""),
-}).strict();
+}).strict().refine(oneTarget, "Choose an event or a series.");
 
 /**
  * Set when buyers may cancel for a refund. Each order keeps the policy it
@@ -245,7 +263,8 @@ export async function saveRefundPolicy(input: unknown): Promise<ActionResult> {
   const parsed = refundPolicySchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the refund policy." };
   const context = await access(parsed.data);
-  if ("error" in context) return { ok: false, error: context.error ?? "Event not found." };
+  if ("error" in context) return { ok: false, error: context.error };
+  const { owner } = context;
   const data = parsed.data;
   const next: RefundPolicySnapshot = {
     kind: data.kind,
@@ -256,16 +275,25 @@ export async function saveRefundPolicy(input: unknown): Promise<ActionResult> {
   if (next.kind !== "NONE" && next.hours == null) return { ok: false, error: "Say how long before the event refunds stop." };
   if (next.kind === "PERCENT_UNTIL" && next.percent == null) return { ok: false, error: "Enter the refund percentage, from 1 to 99." };
   const result = await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${context.event.id} FOR UPDATE`;
-    const current = await tx.event.findUniqueOrThrow({ where: { id: context.event.id }, select: { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true } });
-    const sold = await tx.order.count({ where: { eventId: context.event.id, totalMinor: { gt: 0 } } });
+    const policy = { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true } as const;
+    let current;
+    if ("eventId" in owner) {
+      await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${owner.eventId} FOR UPDATE`;
+      current = await tx.event.findUniqueOrThrow({ where: { id: owner.eventId }, select: policy });
+    } else {
+      await tx.$queryRaw`SELECT "id" FROM "EventSeries" WHERE "id" = ${owner.eventSeriesId} FOR UPDATE`;
+      current = await tx.eventSeries.findUniqueOrThrow({ where: { id: owner.eventSeriesId }, select: policy });
+    }
+    const sold = await tx.order.count({ where: { ...owner, totalMinor: { gt: 0 } } });
     const previous: RefundPolicySnapshot = { kind: current.refundPolicyKind, hours: current.refundPolicyHours, percent: current.refundPolicyPercent, text: current.refundPolicyText };
     if (sold > 0 && !isAtLeastAsGenerous(next, previous)) return "stricter" as const;
-    await tx.event.update({ where: { id: context.event.id }, data: { refundPolicyKind: next.kind, refundPolicyHours: next.hours, refundPolicyPercent: next.percent, refundPolicyText: next.text } });
-    await recordAuditEvent({ action: "REFUND_POLICY_UPDATED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "Event", targetId: context.event.id, metadata: { kind: next.kind }, client: tx });
+    const values = { refundPolicyKind: next.kind, refundPolicyHours: next.hours, refundPolicyPercent: next.percent, refundPolicyText: next.text };
+    if ("eventId" in owner) await tx.event.update({ where: { id: owner.eventId }, data: values });
+    else await tx.eventSeries.update({ where: { id: owner.eventSeriesId }, data: values });
+    await recordAuditEvent({ action: "REFUND_POLICY_UPDATED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "eventId" in owner ? "Event" : "EventSeries", targetId: "eventId" in owner ? owner.eventId : owner.eventSeriesId, metadata: { kind: next.kind }, client: tx });
     return "saved" as const;
   });
   if (result === "stricter") return { ok: false, error: "Tickets have been sold, so the refund policy can only become more generous." };
-  revalidateEvent(context.organisation.slug, context.event);
+  revalidateOwner(context);
   return { ok: true };
 }

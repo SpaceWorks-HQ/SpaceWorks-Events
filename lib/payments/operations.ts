@@ -1,18 +1,19 @@
 import "server-only";
 
-import { CheckoutAttemptStatus, EventPrivacyType, EventStatus, OfflinePaymentMethod, OrderStatus, PaymentRefundStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
+import { CheckoutAttemptStatus, EventPrivacyType, OfflinePaymentMethod, OrderStatus, PaymentRefundStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { enqueueRsvpConfirmation, enqueueRsvpStatusNotification } from "@/lib/outbox";
 import { closeOpenAttempts } from "./checkout";
 import { enqueueOrderEmail, enqueuePaymentEmail } from "./email";
-import { hasFreeSeats, HOLD_EXTENSION_CAP_MS, isActiveHold, PAYMENT_LINK_HOLD_MS } from "./holds";
+import { HOLD_EXTENSION_CAP_MS, isActiveHold, PAYMENT_LINK_HOLD_MS } from "./holds";
 import { formatMoney, providerMinimumMinor } from "./money";
 import { effectiveOfflineRecord } from "./offlineRecord";
 import { asRefundPolicy, policyRefundMinor } from "./refundPolicy";
 import { createPendingRefund, submitPendingRefund } from "./refunds";
 import { loadPaymentAccount } from "./settings";
+import { hasFreeSeats, lockOrderTargets, lockSeriesDates, ORDER_SUBJECT_SELECT, orderSubject, seatTargetOf, type SeatTarget } from "./targets";
 
 /** An organiser operation was refused; the message is safe to show. */
 export class PaymentOperationError extends Error {}
@@ -21,12 +22,14 @@ const ZERO = BigInt(0);
 const COLLECTED: PaymentStatus[] = [PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE];
 const COMMITTED_REFUND: PaymentRefundStatus[] = [PaymentRefundStatus.PENDING, PaymentRefundStatus.SUCCEEDED];
 
-/** Lock order everywhere: the event row, then the order. */
+/** Lock order everywhere: the event row (or the series, then its dates), then the order. */
 async function lockOrder(tx: Prisma.TransactionClient, orderId: string) {
-  const row = await tx.order.findUnique({ where: { id: orderId }, select: { eventId: true } });
-  if (row?.eventId) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${row.eventId} FOR UPDATE`;
+  const row = await tx.order.findUnique({ where: { id: orderId }, select: { id: true, eventId: true, eventSeriesId: true } });
+  if (row) await lockOrderTargets(tx, row);
   await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${orderId} FOR UPDATE`;
 }
+
+const subjectTitle = (order: Parameters<typeof orderSubject>[0]) => orderSubject(order)?.title ?? "your event";
 
 async function onlineAccount(organisationId: string) {
   if (!(await isPaidEventsEnabled())) throw new PaymentOperationError("Paid events are turned off for this installation.");
@@ -48,17 +51,18 @@ async function offerInTransaction(tx: Prisma.TransactionClient, params: { orderI
   await lockOrder(tx, params.orderId);
   const order = await tx.order.findFirst({
     where: { id: params.orderId, organisationId: params.organisationId },
-    select: { id: true, status: true, totalMinor: true, currency: true, buyerEmail: true, event: { select: { title: true, status: true, endDateTime: true } }, rsvps: { select: { id: true, eventId: true, ticketTypeId: true, status: true } } },
+    select: { id: true, status: true, totalMinor: true, currency: true, buyerEmail: true, ...ORDER_SUBJECT_SELECT, rsvps: { select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, status: true } } },
   });
   if (!order || order.status !== OrderStatus.REQUESTED || order.rsvps.length === 0) throw new PaymentOperationError("This request was changed by someone else.");
-  if (!order.event || order.event.status !== EventStatus.PUBLISHED || order.event.endDateTime <= params.now) throw new PaymentOperationError("This event is no longer open for registration.");
+  const subject = orderSubject(order);
+  if (!subject || !subject.open(params.now)) throw new PaymentOperationError("This event is no longer open for registration.");
   if (order.totalMinor < providerMinimumMinor(params.provider, order.currency)) throw new PaymentOperationError("This order is below the smallest payment the provider accepts.");
   if (!(await hasFreeSeats(tx, order.rsvps, params.now))) throw new PaymentOperationError("There aren't enough free places for this order yet.");
   const holdExpiresAt = new Date(params.now.getTime() + PAYMENT_LINK_HOLD_MS);
   await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.PENDING, holdExpiresAt, holdCapAt: new Date(holdExpiresAt.getTime() + HOLD_EXTENSION_CAP_MS), testMode: params.testMode } });
   await tx.rSVP.updateMany({ where: { orderId: order.id }, data: { status: RsvpStatus.PENDING_PAYMENT, holdExpiresAt } });
   const payment = await tx.payment.create({
-    data: { organisationId: params.organisationId, orderId: order.id, amountMinor: order.totalMinor, currency: order.currency, provider: params.provider, testMode: params.testMode, description: (order.event?.title ?? "Event tickets").slice(0, 300) },
+    data: { organisationId: params.organisationId, orderId: order.id, amountMinor: order.totalMinor, currency: order.currency, provider: params.provider, testMode: params.testMode, description: subject.title.slice(0, 300) },
     select: { id: true },
   });
   await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "pending" });
@@ -76,12 +80,12 @@ export async function declineRequestedOrder(params: { orderId: string; organisat
     await lockOrder(tx, params.orderId);
     const order = await tx.order.findFirst({
       where: { id: params.orderId, organisationId: params.organisationId },
-      select: { id: true, status: true, buyerEmail: true, buyerName: true, event: { select: { title: true } } },
+      select: { id: true, status: true, buyerEmail: true, buyerName: true, ...ORDER_SUBJECT_SELECT },
     });
     if (!order || order.status !== OrderStatus.REQUESTED) throw new PaymentOperationError("This request was changed by someone else.");
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CANCELLED } });
     await tx.rSVP.updateMany({ where: { orderId: order.id }, data: { status: RsvpStatus.REJECTED } });
-    await enqueueRsvpStatusNotification(tx, { to: order.buyerEmail, eventTitle: order.event?.title ?? "your event", approved: false, recipientName: order.buyerName || undefined });
+    await enqueueRsvpStatusNotification(tx, { to: order.buyerEmail, eventTitle: subjectTitle(order), approved: false, recipientName: order.buyerName || undefined });
     await recordAuditEvent({ action: "ORDER_DECLINED", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Order", targetId: order.id, client: tx });
   });
 }
@@ -91,26 +95,35 @@ export async function declineRequestedOrder(params: { orderId: string; organisat
  * registration is confirmed; a paid request is offered a payment link. Only
  * the first in line is tried, so nobody is skipped for a smaller order.
  */
-export async function offerNextWaitlisted(eventId: string, now = new Date()) {
-  const event = await prisma.event.findUnique({ where: { id: eventId }, select: { organisationId: true, privacyType: true, title: true } });
-  if (!event || event.privacyType === EventPrivacyType.APPROVAL_REQUIRED) return;
+export async function offerNextWaitlisted(target: SeatTarget, now = new Date()) {
+  let owner: { organisationId: string; privacyType: EventPrivacyType; title: string; seriesId: string | null; } | null = null;
+  if ("eventId" in target) {
+    const event = await prisma.event.findUnique({ where: { id: target.eventId }, select: { organisationId: true, privacyType: true, title: true } });
+    owner = event ? { ...event, seriesId: null } : null;
+  } else {
+    const date = await prisma.eventInstance.findUnique({ where: { id: target.eventInstanceId }, select: { eventSeriesId: true, series: { select: { organisationId: true, privacyType: true, title: true } } } });
+    owner = date ? { ...date.series, seriesId: date.eventSeriesId } : null;
+  }
+  if (!owner || owner.privacyType === EventPrivacyType.APPROVAL_REQUIRED) return;
+  const { seriesId } = owner;
   const next = await prisma.rSVP.findFirst({
-    where: { eventId, status: RsvpStatus.WAITLISTED },
+    where: { ...target, status: RsvpStatus.WAITLISTED },
     orderBy: { createdAt: "asc" },
-    select: { id: true, orderId: true, ticketTypeId: true, checkInToken: true, guestEmail: true, user: { select: { email: true } }, order: { select: { status: true, totalMinor: true } } },
+    select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, checkInToken: true, guestEmail: true, user: { select: { email: true } }, order: { select: { status: true, totalMinor: true } } },
   });
   if (!next) return;
   if (next.order && next.order.totalMinor > ZERO) {
     if (next.order.status !== OrderStatus.REQUESTED) return;
-    await offerRequestedOrder({ orderId: next.orderId!, organisationId: event.organisationId, actorUserId: null, now }).catch(() => undefined);
+    await offerRequestedOrder({ orderId: next.orderId!, organisationId: owner.organisationId, actorUserId: null, now }).catch(() => undefined);
     return;
   }
   await prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${eventId} FOR UPDATE`;
-    if (!(await hasFreeSeats(tx, [{ id: next.id, eventId, ticketTypeId: next.ticketTypeId }], now))) return;
+    if ("eventId" in target) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${target.eventId} FOR UPDATE`;
+    else if (seriesId) await lockSeriesDates(tx, seriesId, [target.eventInstanceId], now);
+    if (!(await hasFreeSeats(tx, [next], now))) return;
     const promoted = await tx.rSVP.updateMany({ where: { id: next.id, status: RsvpStatus.WAITLISTED }, data: { status: RsvpStatus.CONFIRMED } });
     const to = attendeeEmail(next);
-    if (promoted.count === 1 && to) await enqueueRsvpStatusNotification(tx, { to, eventTitle: event.title, approved: true, checkInToken: next.checkInToken });
+    if (promoted.count === 1 && to) await enqueueRsvpStatusNotification(tx, { to, eventTitle: owner.title, approved: true, checkInToken: next.checkInToken });
   });
 }
 
@@ -140,9 +153,9 @@ export async function settleOrderByHand(params: {
     const order = await tx.order.findUniqueOrThrow({
       where: { id: owned.id },
       select: {
-        id: true, status: true, buyerEmail: true, event: { select: { title: true } },
+        id: true, status: true, buyerEmail: true, ...ORDER_SUBJECT_SELECT,
         payments: { where: { status: PaymentStatus.PENDING }, select: { id: true } },
-        rsvps: { select: { id: true, eventId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
+        rsvps: { select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
       },
     });
     if (order.status === OrderStatus.CONFIRMED) return "already-paid" as const;
@@ -163,9 +176,13 @@ export async function settleOrderByHand(params: {
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CONFIRMED, holdExpiresAt: null, holdCapAt: null } });
     await tx.rSVP.updateMany({ where: { id: { in: held.map((rsvp) => rsvp.id) } }, data: { status: RsvpStatus.CONFIRMED, holdExpiresAt: null } });
     if (params.mode === "offline") await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "paid" });
+    // One ticket email per person (a pass's ticket page lists its other dates).
+    const emailed = new Set<string>();
     for (const rsvp of held) {
       const to = attendeeEmail(rsvp);
-      if (to) await enqueueRsvpConfirmation(tx, { to, eventTitle: order.event?.title ?? "your event", status: RsvpStatus.CONFIRMED, checkInToken: rsvp.checkInToken });
+      if (!to || emailed.has(to)) continue;
+      emailed.add(to);
+      await enqueueRsvpConfirmation(tx, { to, eventTitle: subjectTitle(order), status: RsvpStatus.CONFIRMED, checkInToken: rsvp.checkInToken });
     }
     if (held.some((rsvp) => !attendeeEmail(rsvp))) await enqueueOrderEmail(tx, { to: order.buyerEmail, orderId: order.id, notice: "attendee-details" });
     await recordAuditEvent({ action: params.mode === "offline" ? "PAYMENT_MARKED_PAID_OFFLINE" : "PAYMENT_WAIVED", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Payment", targetId: payment.id, client: tx });
@@ -200,7 +217,7 @@ export async function sendPaymentLink(params: { orderId: string; organisationId:
     await lockOrder(tx, order.id);
     const current = await tx.order.findUniqueOrThrow({
       where: { id: order.id },
-      select: { status: true, totalMinor: true, currency: true, buyerEmail: true, event: { select: { title: true } }, rsvps: { select: { id: true, eventId: true, ticketTypeId: true } } },
+      select: { status: true, totalMinor: true, currency: true, buyerEmail: true, ...ORDER_SUBJECT_SELECT, rsvps: { select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true } } },
     });
     if (current.status !== OrderStatus.EXPIRED) throw new PaymentOperationError("This order was changed by someone else.");
     if (current.rsvps.length === 0) throw new PaymentOperationError("The buyer has registered again since this order expired.");
@@ -210,7 +227,7 @@ export async function sendPaymentLink(params: { orderId: string; organisationId:
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.PENDING, holdExpiresAt, holdCapAt: new Date(holdExpiresAt.getTime() + HOLD_EXTENSION_CAP_MS), testMode: account.testMode } });
     await tx.rSVP.updateMany({ where: { orderId: order.id }, data: { status: RsvpStatus.PENDING_PAYMENT, holdExpiresAt } });
     const payment = await tx.payment.create({
-      data: { organisationId: params.organisationId, orderId: order.id, amountMinor: current.totalMinor, currency: current.currency, provider: account.provider, testMode: account.testMode, description: (current.event?.title ?? "Event tickets").slice(0, 300) },
+      data: { organisationId: params.organisationId, orderId: order.id, amountMinor: current.totalMinor, currency: current.currency, provider: account.provider, testMode: account.testMode, description: subjectTitle(current).slice(0, 300) },
       select: { id: true },
     });
     await enqueuePaymentEmail(tx, { to: current.buyerEmail, paymentId: payment.id, notice: "pending" });
@@ -249,8 +266,8 @@ export async function refundOrder(params: {
     const order = await tx.order.findFirst({
       where: { id: params.orderId, organisationId: params.organisationId },
       select: {
-        id: true, status: true, eventId: true, buyerEmail: true, currency: true,
-        rsvps: { select: { id: true, checkedInAt: true } },
+        id: true, status: true, buyerEmail: true, currency: true,
+        rsvps: { select: { id: true, checkedInAt: true, eventId: true, eventInstanceId: true } },
         payments: { where: { status: { in: COLLECTED } }, orderBy: { paidAt: "asc" }, select: { id: true, status: true, amountMinor: true } },
       },
     });
@@ -292,10 +309,11 @@ export async function refundOrder(params: {
       actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Order", targetId: order.id,
       metadata: { amountMinor: wanted.toString(), cancelled: params.cancelTickets }, client: tx,
     });
-    return { onlineRefundIds, eventId: order.eventId, refundedMinor: wanted };
+    const freed = params.cancelTickets ? [...new Map(order.rsvps.flatMap((rsvp) => { const target = seatTargetOf(rsvp); return target ? [[JSON.stringify(target), target] as const] : []; })).values()] : [];
+    return { onlineRefundIds, freed, refundedMinor: wanted };
   });
   for (const refundId of outcome.onlineRefundIds) await submitPendingRefund(refundId).catch(() => undefined);
-  if (params.cancelTickets && outcome.eventId) await offerNextWaitlisted(outcome.eventId, now).catch(() => undefined);
+  for (const target of outcome.freed) await offerNextWaitlisted(target, now).catch(() => undefined);
   return { refundedMinor: outcome.refundedMinor };
 }
 
@@ -305,15 +323,19 @@ export async function buyerCancellation(orderId: string, now = new Date()) {
     where: { id: orderId },
     select: {
       status: true, refundPolicy: true, event: { select: { startDateTime: true } },
-      rsvps: { select: { checkedInAt: true } },
+      rsvps: { select: { checkedInAt: true, eventInstance: { select: { startDateTime: true } } } },
       payments: { where: { status: { in: COLLECTED } }, select: { id: true, amountMinor: true, refunds: { select: { amountMinor: true, status: true } } } },
     },
   });
-  if (!order || order.status !== OrderStatus.CONFIRMED || !order.event || order.rsvps.some((rsvp) => rsvp.checkedInAt)) return null;
+  if (!order) return null;
+  // A series order (a date, or a pass) starts at its first date.
+  const firstDate = order.rsvps.map((rsvp) => rsvp.eventInstance?.startDateTime).filter((date): date is Date => Boolean(date)).sort((a, b) => a.getTime() - b.getTime())[0];
+  const start = order.event?.startDateTime ?? firstDate;
+  if (order.status !== OrderStatus.CONFIRMED || !start || order.rsvps.some((rsvp) => rsvp.checkedInAt)) return null;
   const available = refundable(order.payments).reduce((sum, balance) => sum + balance.remaining, ZERO);
   // Complimentary or free orders can always be given up.
   if (order.payments.length === 0) return { refundMinor: ZERO };
-  const refundMinor = policyRefundMinor(asRefundPolicy(order.refundPolicy), available, order.event.startDateTime, now);
+  const refundMinor = policyRefundMinor(asRefundPolicy(order.refundPolicy), available, start, now);
   return refundMinor == null ? null : { refundMinor };
 }
 

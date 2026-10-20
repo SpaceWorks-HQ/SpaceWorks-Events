@@ -330,3 +330,52 @@ for (const provider of ["STRIPE", "RAZORPAY"] as const) {
     expect(cancelled.payments[0]!.refunds.reduce((sum, refund) => sum + refund.amountMinor, BigInt(0))).toBe(BigInt(99800));
   });
 }
+
+test("a guest buys a series pass on a date's page, and its ticket lists every date", async ({ browser, baseURL }) => {
+  const { webhookPathId } = await prisma.organisationPaymentSettings.update({ where: { organisationId }, data: { provider: "RAZORPAY" }, select: { webhookPathId: true } });
+  const hook = await fetch(`${fakeProvider}/__control/webhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider: "razorpay", url: `${baseURL}/api/webhooks/razorpay/${webhookPathId}`, secret: webhookSecret }),
+  });
+  expect(hook.ok).toBe(true);
+  const series = await prisma.eventSeries.create({
+    data: { organisationId, title: `Pottery course ${suffix.slice(0, 6)}`, slug: `pottery-${suffix}`, recurrenceRule: "FREQ=WEEKLY;COUNT=3", timezone: "UTC", status: EventStatus.PUBLISHED, capacity: 10, currency: "INR" },
+  });
+  const dates = [];
+  for (const week of [1, 2, 3]) {
+    const start = new Date(Date.UTC(2035, 4, week * 7, 10));
+    dates.push(await prisma.eventInstance.create({ data: { eventSeriesId: series.id, startDateTime: start, endDateTime: new Date(start.getTime() + 7_200_000) } }));
+  }
+  await prisma.ticketType.create({ data: { eventSeriesId: series.id, name: "Drop-in", priceMinor: BigInt(25000) } });
+  await prisma.ticketType.create({ data: { eventSeriesId: series.id, kind: "PASS", name: "Course pass", priceMinor: BigInt(60000) } });
+
+  const buyerEmail = `pass-${suffix}@example.test`;
+  const context = await browser.newContext({ extraHTTPHeaders: { [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.244" } });
+  const guest = await context.newPage();
+  try {
+    await guest.goto(`/${orgSlug}/i/${dates[0]!.id}`, { waitUntil: "networkidle" });
+    await expect(guest.getByText("Pass for all 3 remaining dates")).toBeVisible();
+    // Choosing the pass clears the single-date ticket: an order is one or the other.
+    await guest.getByRole("button", { name: "One more Course pass" }).click();
+    await guest.getByLabel("Name", { exact: true }).fill("Pass Holder");
+    await guest.getByLabel("Email", { exact: true }).fill(buyerEmail);
+    await guest.getByRole("button", { name: "Continue to payment · ₹600.00" }).click();
+    await expect(guest).toHaveURL(new RegExp(`^${fakeProvider}/razorpay/pay/`));
+    await guest.getByRole("button", { name: "Pay now" }).click();
+
+    const order = await prisma.order.findFirstOrThrow({ where: { buyerEmail }, select: { accessToken: true } });
+    await expect(guest).toHaveURL(new RegExp(`/order/${order.accessToken}\\?payment=return$`));
+    await expect(guest.getByText("Confirmed", { exact: true })).toBeVisible();
+    await expect(guest.getByRole("heading", { name: "Passes" })).toBeVisible();
+    const settled = await prisma.order.findFirstOrThrow({ where: { buyerEmail }, include: { rsvps: true } });
+    expect(settled).toMatchObject({ status: "CONFIRMED", eventSeriesId: series.id, eventInstanceId: null, totalMinor: BigInt(60000) });
+    expect(settled.rsvps.map((rsvp) => rsvp.status)).toEqual(["CONFIRMED", "CONFIRMED", "CONFIRMED"]);
+
+    await guest.getByRole("link", { name: "View ticket" }).click();
+    const otherDates = guest.getByRole("region", { name: "Your other dates" });
+    await expect(otherDates.getByRole("link", { name: "Ticket" })).toHaveCount(2);
+  } finally {
+    await context.close();
+  }
+});

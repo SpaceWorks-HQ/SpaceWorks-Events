@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import type { OnlineProvider } from "./http";
 import { minorToDecimalString } from "./money";
 import { loadPaymentAccount } from "./settings";
+import { ORDER_SUBJECT_SELECT, orderSubject } from "./targets";
 
 const COLLECTED = [PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE];
 const OFFLINE_METHODS: Record<string, string> = { CASH: "Cash", UPI: "UPI", BANK_TRANSFER: "Bank transfer", CARD_TERMINAL: "Card terminal", OTHER: "Other" };
@@ -41,7 +42,7 @@ export async function loadReceipt(accessToken: string) {
     select: {
       reference: true, currency: true, subtotalMinor: true, discountMinor: true, totalMinor: true, testMode: true, buyerName: true, buyerEmail: true, createdAt: true,
       organisation: { select: { name: true, paymentSettings: { select: { receiptLegalName: true, receiptRegistrationNumber: true, receiptAddress: true } } } },
-      event: { select: { title: true, startDateTime: true, timezone: true } },
+      ...ORDER_SUBJECT_SELECT,
       lines: { orderBy: { createdAt: "asc" }, select: { description: true, quantity: true, unitMinor: true, totalMinor: true } },
       payments: {
         where: { status: { in: COLLECTED } },
@@ -54,6 +55,7 @@ export async function loadReceipt(accessToken: string) {
     },
   });
   const details = order.organisation.paymentSettings;
+  const subject = orderSubject(order);
   const paidMinor = order.payments.reduce((sum, payment) => sum + payment.amountMinor, BigInt(0));
   const refundedMinor = order.payments.flatMap((payment) => payment.refunds).reduce((sum, refund) => sum + refund.amountMinor, BigInt(0));
   return {
@@ -67,7 +69,7 @@ export async function loadReceipt(accessToken: string) {
       address: details?.receiptAddress ?? null,
     },
     buyer: { name: order.buyerName, email: order.buyerEmail },
-    event: order.event ? { title: order.event.title, start: order.event.startDateTime, timeZone: order.event.timezone } : null,
+    event: subject ? { title: subject.title, start: subject.start, timeZone: subject.timeZone } : null,
     lines: order.lines.map((line) => ({ label: line.description, quantity: line.quantity, unitMinor: line.unitMinor, totalMinor: line.totalMinor })),
     subtotalMinor: order.subtotalMinor,
     discountMinor: order.discountMinor,
@@ -183,7 +185,8 @@ export async function createReceiptPdf(receipt: NonNullable<Receipt>) {
     text("EVENT", { size: 8, font: bold, color: MUTED });
     y -= 15;
     for (const line of wrap(receipt.event.title, bold, 11, width)) { text(line, { font: bold, size: 11 }); y -= 14; }
-    text(when(receipt.event.start, receipt.event.timeZone), { color: MUTED });
+    if (receipt.event.start) text(when(receipt.event.start, receipt.event.timeZone), { color: MUTED });
+    else text("A pass for every remaining date of the series", { color: MUTED });
     y -= 26;
   }
 
