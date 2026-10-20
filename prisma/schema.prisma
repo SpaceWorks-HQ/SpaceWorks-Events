@@ -379,6 +379,7 @@ model Event {
   resources        EventResource[]
   broadcasts       EventBroadcast[]
   badgeDesign      EventBadgeDesign?
+  shortLinkClickDays ShortLinkClickDay[]
 
   @@unique([organisationId, slug])
   @@index([organisationId])
@@ -756,6 +757,10 @@ model RSVP {
   checkInToken    String     @unique @default(cuid(2))
   checkedInAt     DateTime?
   createdAt       DateTime   @default(now())
+  /// When the registration joined the waitlist, and when it was offered a
+  /// place. Set by the rsvp_waitlist_dates trigger, for waitlist conversion.
+  waitlistedAt    DateTime?
+  promotedAt      DateTime?
 
   event             Event?                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventInstance     EventInstance?          @relation(fields: [eventInstanceId], references: [id], onDelete: Cascade)
@@ -1161,4 +1166,16 @@ model IdMember {
   @@index([organisationId, lastEmailedAt])
   @@index([userId])
   @@index([email])
+}
+
+/// Short-link visits per event per day, in the event's timezone. Counts only:
+/// no IP address, browser, referrer or person is stored.
+model ShortLinkClickDay {
+  eventId String
+  day     DateTime @db.Date
+  count   Int      @default(0)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, day])
 }

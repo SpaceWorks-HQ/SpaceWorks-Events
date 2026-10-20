@@ -72,6 +72,10 @@ export type EventReportMetrics = ReportRsvpMetrics & {
   resourceCount?: number;
   broadcasts?: ReportBroadcast[];
   coOrganiserCount?: number;
+  /** People who joined the waitlist (and are still registered), and how many got a place. */
+  waitlist?: { joined: number; promoted: number } | null;
+  /** Short-link visits, or null when the event has no short link. */
+  shortLinkVisits?: number | null;
 };
 
 export function calculateReportRsvpMetrics(rsvps: ReportRsvp[]): ReportRsvpMetrics {
@@ -186,6 +190,8 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
           status: true,
           checkedInAt: true,
           createdAt: true,
+          waitlistedAt: true,
+          promotedAt: true,
           answers: { select: { fieldId: true, valueText: true, valueBool: true } },
           checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
         },
@@ -216,6 +222,8 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
       sponsors: { where: published, orderBy: [{ tier: "asc" }, { sortOrder: "asc" }], select: { name: true, tier: true } },
       resources: { where: published, select: { id: true } },
       broadcasts: { orderBy: { createdAt: "asc" }, select: { subject: true, createdAt: true, recipientCount: true } },
+      shortCode: true,
+      shortLinkClickDays: { select: { count: true } },
       _count: { select: { invites: true, collaborators: true } },
     },
   });
@@ -267,6 +275,8 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
     resourceCount: event.resources.length,
     broadcasts: event.broadcasts.map((broadcast) => ({ subject: broadcast.subject, sentAt: broadcast.createdAt, recipientCount: broadcast.recipientCount })),
     coOrganiserCount: event._count.collaborators,
+    waitlist: { joined: event.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: event.rsvps.filter((rsvp) => rsvp.promotedAt).length },
+    shortLinkVisits: event.shortCode ? event.shortLinkClickDays.reduce((sum, day) => sum + day.count, 0) : null,
     ...calculateReportRsvpMetrics(event.rsvps),
   };
 }
@@ -283,6 +293,8 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
           status: true,
           checkedInAt: true,
           createdAt: true,
+          waitlistedAt: true,
+          promotedAt: true,
           checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
         },
       },
@@ -322,6 +334,7 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
     checkInTimes: checkedIn.map((rsvp) => rsvp.checkedInAt!),
     checkInSources: countCheckInSources(checkedIn.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)),
     coOrganiserCount: instance.series._count.collaborators,
+    waitlist: { joined: instance.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: instance.rsvps.filter((rsvp) => rsvp.promotedAt).length },
     ...calculateReportRsvpMetrics(instance.rsvps),
   };
 }

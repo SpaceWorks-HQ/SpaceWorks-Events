@@ -2,7 +2,7 @@
  * Pure helpers for the event Analytics tab. Free of Prisma and React so they
  * can be unit-tested. Every number comes from real counts.
  */
-import { formatDate } from "@/lib/format/datetime";
+import { formatDate, formatTime, formatTimeRange } from "@/lib/format/datetime";
 
 const DAY_MS = 86_400_000;
 
@@ -153,4 +153,63 @@ export function busiestDay(dates: Date[], timeZone: string): { day: string; coun
     if (!best || entry.count > best.count || (entry.count === best.count && entry.first < best.first)) best = { day, ...entry };
   }
   return best ? { day: best.day, count: best.count } : null;
+}
+
+/** Groups arrival times into 15, 30 or 60 minute windows, up to 16 columns. */
+export function arrivalWindows(times: Date[], timeZone: string) {
+  if (times.length === 0) return null;
+  const sorted = [...times].sort((a, b) => a.getTime() - b.getTime());
+  const first = sorted[0]!.getTime();
+  const last = sorted[sorted.length - 1]!.getTime();
+  const minutes = [15, 30, 60, 120, 240].find((size) => (last - first) / 60_000 / size < 16) ?? 480;
+  const size = minutes * 60_000;
+  const start = Math.floor(first / size) * size;
+  const count = Math.floor((last - start) / size) + 1;
+  const columns = Array.from({ length: count }, (_, index) => ({ start: new Date(start + index * size), count: 0 }));
+  for (const time of sorted) columns[Math.floor((time.getTime() - start) / size)]!.count += 1;
+  const peak = columns.reduce((best, column) => (column.count > best.count ? column : best), columns[0]!);
+  return {
+    minutes,
+    columns: columns.map((column) => ({ label: formatTime(column.start, timeZone), count: column.count })),
+    peak: { label: formatTimeRange(peak.start, new Date(peak.start.getTime() + size), timeZone, { withZone: false }), count: peak.count },
+    first: sorted[0]!,
+  };
+}
+
+/** "2026-10-20" for `date` in `timeZone`: the calendar day short-link visits are counted under. */
+export function localDateKey(date: Date, timeZone: string): string {
+  return new Date(localDay(date, timeZone) * DAY_MS).toISOString().slice(0, 10);
+}
+
+export type ClickSeries = { columns: TimelineColumn[]; total: number; lastWeek: number; largest: number };
+
+/**
+ * Short-link visits per day for the `days` days up to `today` ("YYYY-MM-DD"),
+ * plus the all-time total and the last seven days. Null when nobody has used
+ * the link yet.
+ */
+export function clickSeries(rows: Array<{ day: string; count: number }>, today: string, days = 14): ClickSeries | null {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  if (total === 0) return null;
+  const end = Date.parse(`${today}T00:00:00Z`) / DAY_MS;
+  const byDay = new Map(rows.map((row) => [Date.parse(`${row.day}T00:00:00Z`) / DAY_MS, row.count]));
+  const columns = Array.from({ length: days }, (_, index) => {
+    const day = end - (days - 1) + index;
+    return { label: dayLabel(day), count: byDay.get(day) ?? 0 };
+  });
+  const lastWeek = columns.slice(-7).reduce((sum, column) => sum + column.count, 0);
+  return { columns, total, lastWeek, largest: Math.max(1, ...columns.map((column) => column.count)) };
+}
+
+/**
+ * Share of people who came to more than one event: each inner list holds the
+ * attendee keys of one event. Only the aggregate leaves this function, and it
+ * is withheld below `minimum` people so a small group can't be singled out.
+ */
+export function returningShare(attendeesPerEvent: string[][], minimum = 10): { people: number; returning: number; percent: number } | null {
+  const seen = new Map<string, number>();
+  for (const keys of attendeesPerEvent) for (const key of new Set(keys)) seen.set(key, (seen.get(key) ?? 0) + 1);
+  if (seen.size < minimum) return null;
+  const returning = [...seen.values()].filter((count) => count > 1).length;
+  return { people: seen.size, returning, percent: percentOf(returning, seen.size) ?? 0 };
 }

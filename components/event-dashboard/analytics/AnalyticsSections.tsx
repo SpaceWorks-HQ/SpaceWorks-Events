@@ -1,6 +1,7 @@
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { OpenTabButton } from "../EventDashboardTabs";
+import { formatTime } from "@/lib/format/datetime";
 import { percentOf, type FunnelStep, type SignupTimeline } from "./metrics";
 
 const card = "flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 sm:p-6";
@@ -206,6 +207,233 @@ export function TimelineCard({ timeline, busiest, lastWeek }: { timeline: Signup
           ))}
         </tbody>
       </table>
+    </section>
+  );
+}
+
+/* ---------- Shared column chart ---------- */
+
+/** Bars with exact counts on top, three axis labels and a screen-reader table. */
+function ColumnChart({ columns, largest, caption, unit, tone = "bg-accent-text" }: { columns: Array<{ label: string; count: number }>; largest: number; caption: string; unit: string; tone?: string }) {
+  const middle = Math.floor((columns.length - 1) / 2);
+  return (
+    <>
+      <div aria-hidden className="flex h-40 items-end gap-1 sm:gap-1.5">
+        {columns.map((column, index) => (
+          <span key={index} title={`${column.label}: ${column.count} ${unit}`} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1">
+            {column.count > 0 ? <span className="text-[11px] font-semibold tabular-nums text-ink-secondary">{column.count}</span> : null}
+            <span className={cn("w-full max-w-8 rounded-full", column.count > 0 ? tone : "bg-track")} style={{ height: column.count > 0 ? `max(6px, ${Math.round((column.count / Math.max(1, largest)) * 75)}%)` : 6 }} />
+          </span>
+        ))}
+      </div>
+      <div aria-hidden className="grid grid-cols-3 gap-2 text-[11px] text-ink-muted">
+        <span>{columns[0]?.label}</span>
+        <span className="text-center">{columns.length > 2 ? columns[middle]!.label : ""}</span>
+        <span className="text-right">{columns.length > 1 ? columns[columns.length - 1]!.label : ""}</span>
+      </div>
+      <table className="sr-only">
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">{unit}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {columns.map((column, index) => (
+            <tr key={index}>
+              <th scope="row">{column.label}</th>
+              <td>{column.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Stats({ items }: { items: Array<{ label: string; value: string } | null> }) {
+  const shown = items.filter((item): item is { label: string; value: string } => item != null);
+  return (
+    <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {shown.map((stat) => (
+        <div key={stat.label} className="flex flex-col-reverse gap-0.5">
+          <dt className="text-caption text-ink-muted">{stat.label}</dt>
+          <dd className="font-display text-xl font-semibold text-ink">{stat.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/* ---------- Arrivals ---------- */
+
+export type Arrivals = { minutes: number; columns: Array<{ label: string; count: number }>; peak: { label: string; count: number }; first: Date };
+
+export function ArrivalsCard({ arrivals, checkedIn, timeZone }: { arrivals: Arrivals; checkedIn: number; timeZone: string }) {
+  const largest = Math.max(...arrivals.columns.map((column) => column.count));
+  return (
+    <section aria-labelledby="analytics-arrivals-title" className={card}>
+      <div>
+        <h2 id="analytics-arrivals-title" className="text-h4 text-ink">
+          When people arrived
+        </h2>
+        <p className="text-caption text-ink-muted">Check-ins per {arrivals.minutes} minutes, in the event&apos;s timezone.</p>
+      </div>
+      <Stats
+        items={[
+          { label: "Checked in", value: String(checkedIn) },
+          { label: "First check-in", value: formatTime(arrivals.first, timeZone) },
+          arrivals.peak.count > 1 ? { label: `Busiest · ${arrivals.peak.label}`, value: String(arrivals.peak.count) } : null,
+        ]}
+      />
+      <ColumnChart columns={arrivals.columns} largest={largest} caption={`Check-ins per ${arrivals.minutes} minutes, earliest first`} unit="check-ins" tone="bg-success-solid" />
+    </section>
+  );
+}
+
+/* ---------- How people were checked in ---------- */
+
+export function CheckInMethodsCard({ sources }: { sources: { organiser: number; offline: number; station: number } }) {
+  const parts: MixPart[] = [
+    { key: "organiser", label: "Check-in desk", hint: "Scanned or searched by the team", value: sources.organiser, tone: "bg-accent-text" },
+    { key: "station", label: "Door station", hint: "The PIN-locked volunteer station", value: sources.station, tone: "bg-info-solid" },
+    { key: "offline", label: "Offline, synced later", hint: "Checked in without Wi-Fi", value: sources.offline, tone: "bg-highlight" },
+  ];
+  const total = parts.reduce((sum, part) => sum + part.value, 0);
+  return (
+    <section aria-labelledby="analytics-methods-title" className={card}>
+      <div>
+        <h2 id="analytics-methods-title" className="text-h4 text-ink">
+          How people were checked in
+        </h2>
+        <p className="text-caption text-ink-muted">Each guest counts once, by the device that last checked them in.</p>
+      </div>
+      <span aria-hidden className="flex h-3.5 w-full gap-[3px] overflow-hidden rounded-full">
+        {parts
+          .filter((part) => part.value > 0)
+          .map((part) => (
+            <span key={part.key} className={cn("h-full first:rounded-l-full last:rounded-r-full", part.tone)} style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }} />
+          ))}
+      </span>
+      <ul className="flex flex-col divide-y divide-line">
+        {parts.map((part) => (
+          <li key={part.key} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 py-2.5 first:pt-0 last:pb-0">
+            <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", part.tone)} />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-ink">{part.label}</span>
+              <span className="text-caption text-ink-muted">{part.hint}</span>
+            </span>
+            <span className="text-right">
+              <strong className="text-ink">{part.value}</strong>
+              <span className="block text-caption text-ink-muted">{percentOf(part.value, total) ?? 0}%</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ---------- Waitlist ---------- */
+
+export function WaitlistCard({ waitlist }: { waitlist: { joined: number; promoted: number; waiting: number; percent: number | null } }) {
+  return (
+    <section aria-labelledby="analytics-waitlist-title" className={card}>
+      <div>
+        <h2 id="analytics-waitlist-title" className="text-h4 text-ink">
+          Waitlist
+        </h2>
+        <p className="text-caption text-ink-muted">Everyone who joined the waitlist and is still registered.</p>
+      </div>
+      <Stats
+        items={[
+          { label: "Joined the waitlist", value: String(waitlist.joined) },
+          { label: "Got a place", value: String(waitlist.promoted) },
+          { label: "Still waiting", value: String(waitlist.waiting) },
+        ]}
+      />
+      <div className="flex flex-col gap-1.5">
+        <Bar share={waitlist.joined ? waitlist.promoted / waitlist.joined : 0} tone="bg-info-solid" />
+        <span className="text-caption text-ink-muted">{waitlist.percent ?? 0}% of the waitlist got a place</span>
+      </div>
+    </section>
+  );
+}
+
+/* ---------- Short link ---------- */
+
+export function ShortLinkCard({ code, series }: { code: string; series: { columns: Array<{ label: string; count: number }>; total: number; lastWeek: number; largest: number } | null }) {
+  return (
+    <section aria-labelledby="analytics-shortlink-title" className={card}>
+      <div>
+        <h2 id="analytics-shortlink-title" className="text-h4 text-ink">
+          Short link visits
+        </h2>
+        <p className="text-caption text-ink-muted">
+          Opens of /{code}, counted per day. Only a number is kept: no addresses, browsers or names. Link previews in chat apps are not counted.
+        </p>
+      </div>
+      {series ? (
+        <>
+          <Stats
+            items={[
+              { label: "All visits", value: String(series.total) },
+              { label: "Last 7 days", value: String(series.lastWeek) },
+            ]}
+          />
+          <ColumnChart columns={series.columns} largest={series.largest} caption="Short link visits per day, last 14 days" unit="visits" tone="bg-highlight" />
+        </>
+      ) : (
+        <p className="text-body-ui text-ink-muted">Nobody has opened the short link yet.</p>
+      )}
+    </section>
+  );
+}
+
+/* ---------- Registration questions ---------- */
+
+type Question = { label: string; type: string; answered: number; choices: Array<{ label: string; count: number }> | null };
+
+export function QuestionsCard({ questions, going }: { questions: Question[]; going: number }) {
+  return (
+    <section aria-labelledby="analytics-questions-title" className={card}>
+      <div>
+        <h2 id="analytics-questions-title" className="text-h4 text-ink">
+          Answers to your registration questions
+        </h2>
+        <p className="text-caption text-ink-muted">From the {going} people going. Choice questions are charted; written answers are only counted here, never shown.</p>
+      </div>
+      <ul className="grid gap-6 lg:grid-cols-2">
+        {questions.map((question, index) => {
+          const largest = Math.max(1, ...(question.choices ?? []).map((choice) => choice.count));
+          return (
+            <li key={index} className="flex flex-col gap-3">
+              <span className="flex flex-col">
+                <span className="font-semibold text-ink [overflow-wrap:anywhere]">{question.label}</span>
+                <span className="text-caption text-ink-muted">
+                  {question.answered} of {going} answered
+                </span>
+              </span>
+              {question.choices ? (
+                <ul className="flex flex-col gap-2">
+                  {question.choices.map((choice) => (
+                    <li key={choice.label} className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)_auto] items-center gap-3">
+                      <span className="truncate text-sm text-ink-secondary" title={choice.label}>
+                        {choice.label}
+                      </span>
+                      <Bar share={choice.count / largest} tone="bg-accent-text" />
+                      <span className="text-right text-sm tabular-nums text-ink">
+                        {choice.count} <span className="text-caption text-ink-muted">· {percentOf(choice.count, question.answered) ?? 0}%</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

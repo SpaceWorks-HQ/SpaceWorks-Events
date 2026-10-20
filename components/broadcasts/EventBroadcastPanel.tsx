@@ -41,7 +41,22 @@ export type BroadcastHistoryRow = {
   /** Pre-formatted on the server in the event timezone ("3 days ago", "13 Oct 2026"). */
   sentLabel: string;
   createdByName: string | null;
+  /** Outbox delivery counts; `expired` once the outbox has purged them. */
+  delivery: { sent: number; waiting: number; failed: number; skipped: number; expired: boolean } | null;
 };
+
+/** "38 delivered · 2 waiting · 1 failed" for a sent broadcast. */
+function deliverySummary(delivery: BroadcastHistoryRow["delivery"]): string | null {
+  if (!delivery) return null;
+  if (delivery.expired) return "Delivery details are no longer kept";
+  const parts = [
+    `${delivery.sent} delivered`,
+    delivery.waiting ? `${delivery.waiting} waiting` : null,
+    delivery.failed ? `${delivery.failed} failed` : null,
+    delivery.skipped ? `${delivery.skipped} skipped (no longer in the audience)` : null,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
 
 const SUBJECT_PLACEHOLDERS = BROADCAST_PLACEHOLDERS.filter((placeholder) => ["{{name}}", "{{event}}", "{{eventDate}}", "{{organisation}}"].includes(placeholder.token));
 
@@ -420,6 +435,9 @@ export function EventBroadcastPanel(props: {
                         {row.createdByName ? ` · by ${row.createdByName}` : ""}
                       </p>
                       <p className="text-[13px] text-ink-muted">{describeBroadcastAudience(row.statuses, row.attendance)}</p>
+                      {deliverySummary(row.delivery) ? (
+                        <p className={cn("text-[13px]", row.delivery && !row.delivery.expired && row.delivery.failed ? "font-semibold text-danger-fg" : "text-ink-muted")}>{deliverySummary(row.delivery)}</p>
+                      ) : null}
                       <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[13px] text-ink-secondary">{broadcastHtmlToText(row.body)}</p>
                     </div>
                     <Button size="sm" variant="quiet" className="shrink-0 font-semibold text-ink" onClick={() => loadFromHistory(row)} disabled={pending} aria-label={`Reuse “${row.subject}”`}>
