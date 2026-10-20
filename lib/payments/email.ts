@@ -120,6 +120,7 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
   const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "";
   // Links only with an absolute public address; never localhost in a sent email.
   const orderUrl = base ? `${base}/order/${order.accessToken}` : null;
+  const receiptUrl = base ? `${base}/api/orders/${order.accessToken}/receipt` : null;
   const eventUrl = base && order.event ? `${base}/${order.event.organisation.slug}/${order.event.slug}` : null;
   const title = oneLine(order.event?.title ?? "your event");
   const amount = formatMoney(payment?.amountMinor ?? order.totalMinor, order.currency);
@@ -141,7 +142,7 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
     paid: {
       subject: `Receipt ${order.reference}: ${title}`,
       heading: "Payment received",
-      body: `We received ${escapeHtml(amount)} for <strong>${escapeHtml(title)}</strong>, and your tickets are confirmed. Each attendee with an email address gets their own ticket. Keep this email as your receipt.${testNote}`,
+      body: `We received ${escapeHtml(amount)} for <strong>${escapeHtml(title)}</strong>, and your tickets are confirmed. Each attendee with an email address gets their own ticket.${receiptUrl ? ` Your receipt, with the payment details, is a PDF you can <a href="${escapeHtml(receiptUrl)}">download</a> at any time from your order.` : ""}${testNote}`,
       button: { label: "View your order", href: orderUrl },
     },
     expired: {
@@ -190,6 +191,7 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
     ...order.lines.map((line) => `${checkoutLineName(line)}: ${formatMoney(line.totalMinor, order.currency)}`),
     `Total: ${formatMoney(order.totalMinor, order.currency)}${order.testMode ? " (test)" : ""}`,
     notice.button?.href ? `${notice.button.label}: ${notice.button.href}` : "",
+    payload.notice === "paid" && receiptUrl ? `Receipt (PDF): ${receiptUrl}` : "",
   ].filter((line, index) => line || index === 1).join("\n");
 
   const { transporter, from } = await getEmailTransport();

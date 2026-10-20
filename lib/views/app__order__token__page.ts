@@ -92,6 +92,8 @@ export async function loadOrderView({ params, searchParams }: Props) {
     holdActive,
     holdExpiresAt: order.holdExpiresAt?.toISOString() ?? null,
     canPay: holdActive && order.payments.some((payment) => payment.status === PaymentStatus.PENDING),
+    /** Proof of payment once money has been collected, refunded or not. */
+    receiptHref: order.payments.some((payment) => payment.status !== PaymentStatus.PENDING) ? `/api/orders/${token}/receipt` : null,
     total: formatMoney(order.totalMinor, order.currency),
     subtotal: formatMoney(order.subtotalMinor, order.currency),
     discount: order.discountMinor > BigInt(0) ? formatMoney(order.discountMinor, order.currency) : null,

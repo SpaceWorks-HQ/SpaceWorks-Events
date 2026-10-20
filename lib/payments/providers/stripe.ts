@@ -2,6 +2,7 @@ import "server-only";
 
 import { PaymentsUnavailable, providerRequest } from "@/lib/payments/http";
 import { parseMinorAmount } from "@/lib/payments/money";
+import { describePaymentMethod } from "@/lib/payments/paymentMethod";
 import { hmacSha256Hex, safeEqualHex } from "./signature";
 import {
   assertCheckoutWindow,
@@ -144,6 +145,15 @@ export class StripeGateway implements PaymentGateway {
     }, request.idempotencyKey);
     if (!isProviderId(refund.id)) throw new PaymentsUnavailable("Stripe did not return a refund id.");
     return { refundId: refund.id, state: REFUND_STATES[String(refund.status)] ?? "PENDING" };
+  }
+
+  async getPaymentMethod(paymentId: string) {
+    if (!isProviderId(paymentId)) throw new PaymentsUnavailable("Invalid Stripe PaymentIntent id.");
+    const intent = await this.call("GET", `/v1/payment_intents/${paymentId}?expand[]=latest_charge`);
+    const details = record(record(intent.latest_charge).payment_method_details);
+    const type = details.type;
+    const specific = typeof type === "string" ? record(details[type]) : {};
+    return describePaymentMethod({ type, brand: specific.brand, last4: specific.last4, vpa: specific.vpa, bank: specific.bank_name ?? specific.bank, wallet: record(specific.wallet).type });
   }
 
   async findRefund(paymentId: string, reference: string): Promise<RefundResult | null> {

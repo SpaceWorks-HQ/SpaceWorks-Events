@@ -32,6 +32,8 @@ export function createFakeProvider() {
     }
     if (provider === "razorpay") {
       if (method === "GET" && path === "/v1/payments") return json(200, { items: [] });
+      const paid = path.match(/^\/v1\/payments\/(\w+)$/);
+      if (method === "GET" && paid) return json(200, { id: paid[1], method: "card", card: { network: "Visa", last4: "4242" } });
       if (method === "POST" && path === "/v1/payment_links") {
         const data = JSON.parse(body);
         const page: Page = { provider, id: id("plink"), reference: data.reference_id, amount: data.amount, currency: data.currency, status: "open", expiresAt: data.expire_by, lines: [data.description] };
@@ -78,6 +80,8 @@ export function createFakeProvider() {
         }
         return json(200, { id: page.id, status: page.status === "open" ? "open" : page.status === "paid" ? "complete" : "expired", payment_status: page.status === "paid" ? "paid" : "unpaid", payment_intent: page.paymentId ?? null, amount_total: page.amount, currency: page.currency });
       }
+      const intent = path.match(/^\/v1\/payment_intents\/(\w+)$/);
+      if (method === "GET" && intent) return json(200, { id: intent[1], latest_charge: { payment_method_details: { type: "upi", upi: { vpa: "buyer@okicici" } } } });
       if (method === "POST" && path === "/v1/refunds") {
         const created = { id: id("re"), paymentId: form.get("payment_intent")!, amount: Number(form.get("amount")), reference: form.get("metadata[refund_id]")! };
         refunds.push(created);

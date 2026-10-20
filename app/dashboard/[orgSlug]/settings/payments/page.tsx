@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { PaymentSettingsForm } from "@/components/payments/PaymentSettingsForm";
+import { ReceiptDetailsForm } from "@/components/payments/ReceiptDetailsForm";
 import { Callout, PageHeader } from "@/components/ui/display";
 import { loadPaymentSettingsView } from "@/lib/views/app__dashboard__orgSlug__settings__payments__page";
 
 export const metadata: Metadata = { title: "Payments", description: "Connect your organisation's own payment account." };
 
 export default async function PaymentSettingsPage({ params }: { params: Promise<{ orgSlug: string; }>; }) {
-  const { organisation, status, webhookUrls, paidEventsEnabled } = await loadPaymentSettingsView({ params });
+  const { organisation, status, webhookUrls, paidEventsEnabled, receipt } = await loadPaymentSettingsView({ params });
   return (
     <div className="flex flex-col gap-6 pb-6">
       <PageHeader
@@ -19,6 +20,7 @@ export default async function PaymentSettingsPage({ params }: { params: Promise<
         </Callout>
       )}
       <PaymentSettingsForm organisationSlug={organisation.slug} initial={status} webhookUrls={webhookUrls} />
+      <ReceiptDetailsForm organisationSlug={organisation.slug} organisationName={organisation.name} initial={receipt} />
     </div>
   );
 }

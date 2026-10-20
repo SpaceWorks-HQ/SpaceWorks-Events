@@ -2,6 +2,7 @@ import "server-only";
 
 import { PaymentsUnavailable, providerRequest } from "@/lib/payments/http";
 import { parseMinorAmount } from "@/lib/payments/money";
+import { describePaymentMethod } from "@/lib/payments/paymentMethod";
 import { hmacSha256Hex, safeEqualHex } from "./signature";
 import {
   assertCheckoutWindow,
@@ -142,6 +143,13 @@ export class RazorpayGateway implements PaymentGateway {
     });
     if (!isProviderId(result.id)) throw new PaymentsUnavailable("Razorpay did not return a refund id.");
     return { refundId: result.id, state: REFUND_STATES[String(result.status)] ?? "PENDING" };
+  }
+
+  async getPaymentMethod(paymentId: string) {
+    if (!isProviderId(paymentId)) throw new PaymentsUnavailable("Invalid Razorpay payment id.");
+    const payment = await this.call("GET", `/v1/payments/${paymentId}?expand[]=card`);
+    const card = record(payment.card);
+    return describePaymentMethod({ type: payment.method, brand: card.network, last4: card.last4, vpa: payment.vpa, bank: payment.bank, wallet: payment.wallet });
   }
 
   async findRefund(paymentId: string, reference: string): Promise<RefundResult | null> {

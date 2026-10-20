@@ -15,5 +15,6 @@ export async function loadPaymentSettingsView({ params }: { params: Promise<{ or
   const webhookUrls = row
     ? { razorpay: await webhookUrl("RAZORPAY", row.webhookPathId), stripe: await webhookUrl("STRIPE", row.webhookPathId) }
     : null;
-  return { organisation, status: { ...status, webhookPathId: null }, webhookUrls, paidEventsEnabled };
+  const receipt = { legalName: row?.receiptLegalName ?? "", registrationNumber: row?.receiptRegistrationNumber ?? "", address: row?.receiptAddress ?? "" };
+  return { organisation, status: { ...status, webhookPathId: null }, webhookUrls, paidEventsEnabled, receipt };
 }

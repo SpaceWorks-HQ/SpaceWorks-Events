@@ -1,3 +1,4 @@
+import type { PaymentMethodDetails } from "@/lib/payments/paymentMethod";
 /**
  * The payment provider seam. Razorpay (Payment Links) and Stripe (Checkout
  * Sessions) sit behind it; event, ticket and refund code never learns which
@@ -82,6 +83,8 @@ export interface PaymentGateway {
    * an unknown outcome checks this first so money is never returned twice.
    */
   findRefund(paymentId: string, reference: string): Promise<RefundResult | null>;
+  /** How a captured payment was made, for the receipt; null when the provider doesn't say. */
+  getPaymentMethod(paymentId: string): Promise<PaymentMethodDetails | null>;
 }
 
 /** Refuse an expiry outside the provider's window rather than let it be clamped silently. */
