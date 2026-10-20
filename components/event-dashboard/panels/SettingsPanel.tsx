@@ -3,12 +3,23 @@ import { toEventClientDto } from "@/lib/eventDto";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePanel";
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
+import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
 import { NoPermission } from "./shared";
 
 export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
-  const { permissions, organisation, event, collaborators, pending } = await loadSettingsPanel({ ctx });
+  const { permissions, organisation, event, collaborators, pending, tickets } = await loadSettingsPanel({ ctx });
   return (
     <div className="flex flex-col gap-5">
+      {tickets ? (
+        <TicketTypesManager
+          organisationSlug={organisation.slug}
+          eventId={event.id}
+          tickets={tickets.tickets}
+          currency={tickets.currency}
+          paidAllowed={tickets.paidAllowed}
+          paidBlockedReason={tickets.paidBlockedReason}
+        />
+      ) : null}
       {permissions.canManageCollaborators ? (
         <CollaboratorInvitePanel
           organisationSlug={organisation.slug}

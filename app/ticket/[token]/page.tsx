@@ -14,17 +14,19 @@ import { accentStyle } from "@/lib/theme/accent";
 import { formatDayShort, formatTime, formatTimeZoneName } from "@/lib/format/datetime";
 import { Button } from "@/components/ui/button";
 import { Callout, Chip } from "@/components/ui/display";
+import { ConfirmingPayment, PayNowButton } from "@/components/orders/OrderClient";
 
 type Props = {
   params: Promise<{ token: string; }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> { return loadRouteMetadata({ params }); }
 
-export default async function TicketPage({ params }: Props) {
-  const { rsvp, orgName, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref } = await loadTicketView({ params });
+export default async function TicketPage({ params, searchParams }: Props) {
+  const { rsvp, orgName, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, payment, hold, returningFromCheckout } = await loadTicketView({ params, searchParams });
   const ticketMain = (
     <>
       <header className="bg-accent px-6 py-5 text-on-accent">
@@ -65,6 +67,12 @@ export default async function TicketPage({ params }: Props) {
           <dt className="text-overline text-ink-muted">Guest</dt>
           <dd className="break-words text-[15px] font-bold text-ink">{name}</dd>
         </div>
+        {payment ? (
+          <div className="col-span-2">
+            <dt className="text-overline text-ink-muted">{payment.ticketName ?? "Ticket"}</dt>
+            <dd className="text-[15px] font-bold text-ink">{payment.status === "WAIVED" ? "Complimentary" : `${payment.amount}${payment.paid ? ", paid" : ""}`}{payment.testMode ? " (test payment)" : ""}</dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );
@@ -93,6 +101,13 @@ export default async function TicketPage({ params }: Props) {
             <MoodTile mood="cheering" size={64} />
             <p className="text-display-m break-words text-ink">You&apos;re in, {name}!</p>
           </div>
+        ) : hold ? (
+          <div className="flex items-center gap-4">
+            <MoodTile mood="waiting" size={64} />
+            <p className="text-display-m break-words text-ink">
+              {hold.active ? `Almost there, ${name}.` : `Your held seat was released, ${name}.`}
+            </p>
+          </div>
         ) : rsvp.status === "WAITLISTED" || rsvp.status === "PENDING_APPROVAL" ? (
           <div className="flex items-center gap-4">
             <MoodTile mood="waiting" size={64} />
@@ -109,11 +124,27 @@ export default async function TicketPage({ params }: Props) {
           <article className="overflow-hidden rounded-xl border border-line bg-panel">
             {ticketMain}
             <div className="px-6 pb-6">
-              <Callout tone={rsvp.status === "REJECTED" ? "danger" : "info"}>
-                {rsvp.status === "REJECTED"
-                  ? "This registration wasn't approved, so there is no ticket."
-                  : "A scannable ticket will be available after this registration is confirmed."}
-              </Callout>
+              {hold ? (
+                hold.active ? (
+                  <div className="flex flex-col gap-3">
+                    {returningFromCheckout ? <ConfirmingPayment /> : null}
+                    <Callout tone="info">
+                      Your seat is held until <HoldTime iso={hold.expiresAt} timeZone={timeZone} />. Your ticket is confirmed as soon as the order is paid.
+                    </Callout>
+                    {hold.canPay ? <PayNowButton endpoint={`/api/ticket/${rsvp.checkInToken}/checkout`} /> : null}
+                  </div>
+                ) : (
+                  <Callout tone="warning">
+                    The time to pay ran out, so the seat went back on sale and nothing was charged. <Link href={eventPageHref} className="font-semibold underline underline-offset-4">Register again</Link> if seats are left.
+                  </Callout>
+                )
+              ) : (
+                <Callout tone={rsvp.status === "REJECTED" ? "danger" : "info"}>
+                  {rsvp.status === "REJECTED"
+                    ? "This registration wasn't approved, so there is no ticket."
+                    : "A scannable ticket will be available after this registration is confirmed."}
+                </Callout>
+              )}
             </div>
           </article>
         )}
@@ -130,7 +161,8 @@ export default async function TicketPage({ params }: Props) {
           </div>
         ) : null}
 
-        {!isCheckedIn && rsvp.status !== "REJECTED" ? (
+        {/* Paid tickets are cancelled and refunded by the organiser. */}
+        {!isCheckedIn && rsvp.status !== "REJECTED" && !payment?.paid ? (
           <HideAfterLiveCheckIn>
             <CancelRsvpButton checkInToken={rsvp.checkInToken} eventPageHref={eventPageHref} />
           </HideAfterLiveCheckIn>
@@ -138,4 +170,10 @@ export default async function TicketPage({ params }: Props) {
       </div>
     </LiveTicketProvider>
   );
+}
+
+function HoldTime({ iso, timeZone }: { iso: string | null; timeZone: string; }) {
+  if (!iso) return <>the hold ends</>;
+  const date = new Date(iso);
+  return <time dateTime={iso}>{formatTime(date, timeZone)} {formatTimeZoneName(date, timeZone)}</time>;
 }

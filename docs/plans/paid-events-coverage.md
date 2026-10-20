@@ -55,6 +55,33 @@ Sources are listed at the end.
 | Invite only | Invitees skip approval but still pay. |
 | Waitlist | Promotion leads to a lazy payment link with a 24-hour hold. |
 
+### Every event setting in this app
+
+| Event setting | Paid behaviour |
+| --- | --- |
+| Public (`PUBLIC`) | Anyone can buy, within sales windows and capacity. |
+| Unlisted (`HIDDEN_LINK`) | Same as public for anyone with the link. The page and checkout are never listed or indexed. |
+| Approval required (`APPROVAL_REQUIRED`) | Sign up first, pay after approval (lazy link, 24-hour hold). Rejected requests are never charged. |
+| Invite only (`INVITE_ONLY`) | Only invitees can buy, and they still pay unless the organiser issues a complimentary ticket. Invite links stay private and are never logged. |
+| Draft or hidden (`DRAFT`, `HIDDEN`) | No sales. Unpublishing stops new holds and leaves existing orders alone. |
+| Cancelled (`CANCELLED`) | Cancelling with sales asks for confirmation, then starts the automatic full refunds in §4. |
+| Online or in-person (`isOnline`) | Same checkout. GST place of supply follows §4. |
+| Multi-day | One ticket covers every day. |
+| Registration cut-off (`registrationClosesAt`, `registrationLeadMinutes`) | Also ends sales. Holds already taken can still be paid until they expire. |
+| **Embedded event widget** (`app/embed`) | Checkout opens in a new top-level tab (`target="_blank"`, `rel="noopener"`): the providers' pages must not run inside a frame. The widget then shows "Finish paying in the new tab", and the ticket page confirms. |
+| **Conference sessions and tracks** (`EventSession`) | Sessions stay free inside a paid event by default. A session that needs its own seat or fee (a hands-on workshop) is sold as an add-on linked to `EventSession`, with its own capacity. |
+| Series and occurrences | §2: per-occurrence tickets and series passes. |
+| Organiser "Add guest" | Paid types offer three choices: complimentary, mark paid offline, or send a payment link. |
+| Check-in desk, door station, ID badges, certificates | Only `CONFIRMED` (paid or free) is admitted. A pending ticket shows "Payment pending" with "Collect payment". Badges and certificates are issued only to paid or complimentary attendees. |
+
+**Who can do what with payments:**
+- **Organisation owners:** payment settings, as already planned.
+- **Organisation admins, and collaborators with `MANAGE_REGISTRATIONS`:** refunds, waivers, offline payments, ticket changes and payment links.
+- **Collaborators with `EDIT_DETAILS`:** ticket types, prices, add-ons and promo codes.
+- **`CHECK_IN` volunteers:** only collect payment at the desk (recorded as offline).
+
+Every action is audited.
+
 ## 3. Pricing
 
 | Need | Design |

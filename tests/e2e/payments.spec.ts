@@ -1,6 +1,6 @@
 import crypto, { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import { MembershipRole, PrismaClient } from "@prisma/client";
+import { EventStatus, MembershipRole, PrismaClient } from "@prisma/client";
 import { expect as baseExpect, test, type Page } from "@playwright/test";
 
 // Dev servers compile each route on first visit, which can take a while.
@@ -23,7 +23,12 @@ const adminEmail = `pay-admin-${suffix}@example.test`;
 const keySecret = `KeySecret${suffix.slice(0, 12)}`;
 const webhookSecret = `webhook-${suffix}`;
 let organisationId = "";
+let eventId = "";
+const eventSlug = `paid-event-${suffix}`;
+const stripeSecret = `whsec_${suffix}`;
 const userIds: string[] = [];
+const fakeProvider = `http://127.0.0.1:${process.env.FAKE_PROVIDER_PORT || 4010}`;
+let previousPaidEvents: boolean | null = null;
 
 test.beforeAll(async () => {
   // A development server compiles each route on first visit and reloads open
@@ -41,9 +46,20 @@ test.beforeAll(async () => {
     });
     userIds.push(user.id);
   }
+  eventId = (await prisma.event.create({
+    data: {
+      organisationId, title: `Paid meetup ${suffix.slice(0, 6)}`, slug: eventSlug, capacity: 20, timezone: "UTC", status: EventStatus.PUBLISHED,
+      startDateTime: new Date("2035-03-01T10:00:00.000Z"), endDateTime: new Date("2035-03-01T12:00:00.000Z"), page: { create: { isPublished: true } },
+    },
+  })).id;
+  const settings = await prisma.instanceSetting.findUnique({ where: { id: "global" } });
+  previousPaidEvents = settings?.paidEventsEnabled ?? null;
+  await prisma.instanceSetting.upsert({ where: { id: "global" }, create: { id: "global", paidEventsEnabled: true }, update: { paidEventsEnabled: true } });
 });
 
 test.afterAll(async () => {
+  if (previousPaidEvents === null) await prisma.instanceSetting.updateMany({ where: { id: "global" }, data: { paidEventsEnabled: false } });
+  else await prisma.instanceSetting.update({ where: { id: "global" }, data: { paidEventsEnabled: previousPaidEvents } });
   if (organisationId) await prisma.organisation.delete({ where: { id: organisationId } });
   if (userIds.length) await prisma.user.deleteMany({ where: { id: { in: userIds } } });
   await prisma.$disconnect();
@@ -54,7 +70,7 @@ async function signIn(page: Page, email: string, ip: string) {
   await page.request.get("/api/auth/csrf");
   // A dev server may reload the page while it compiles a route; retry the form then.
   for (let attempt = 1; ; attempt += 1) {
-    await page.goto("/login?callbackUrl=%2Fdashboard", { waitUntil: "networkidle" });
+    await page.goto("/login?callbackUrl=%2Fdashboard", { waitUntil: "load" });
     await page.getByRole("textbox", { name: /^Email/ }).fill(email);
     await page.locator('input[type="password"]:visible').fill(password);
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -135,7 +151,6 @@ test("webhooks are verified with the organisation's secret and recorded once", a
 });
 
 test("the owner connects Stripe too, and Stripe webhooks are verified the same way", async ({ page, request }) => {
-  const stripeSecret = `whsec_${suffix}`;
   await signIn(page, ownerEmail, "192.0.2.236");
   await page.goto(`/dashboard/${orgSlug}/settings/payments`);
   await page.getByLabel(/^Secret key/).fill(`sk_test_${suffix}`);
@@ -159,3 +174,62 @@ test("the owner connects Stripe too, and Stripe webhooks are verified the same w
   expect((await request.post(url, { data: raw, headers: { "content-type": "application/json", "stripe-signature": sign(stripeSecret) } })).status()).toBe(200);
   expect(await prisma.processedWebhookEvent.count({ where: { organisationId, provider: "STRIPE" } })).toBe(1);
 });
+
+test("the owner adds a paid ticket", async ({ page }) => {
+  await signIn(page, ownerEmail, "192.0.2.237");
+  await page.goto(`/dashboard/${orgSlug}/event/${eventId}?tab=settings`);
+  const tickets = page.getByRole("region", { name: "Tickets" });
+  await tickets.getByRole("button", { name: "Add ticket" }).click();
+  await tickets.getByLabel("Ticket name").fill("Standard");
+  await tickets.getByLabel(/^Price \(INR\)/).fill("499");
+  await tickets.getByRole("button", { name: "Add ticket" }).click();
+  await expect(tickets.getByText("₹499.00")).toBeVisible();
+  expect((await prisma.ticketType.findFirstOrThrow({ where: { eventId } })).priceMinor).toBe(BigInt(49900));
+  expect((await prisma.event.findUniqueOrThrow({ where: { id: eventId } })).currency).toBe("INR");
+});
+
+for (const provider of ["STRIPE", "RAZORPAY"] as const) {
+  test(`a guest buys two tickets through ${provider === "STRIPE" ? "Stripe" : "Razorpay"}'s hosted page`, async ({ browser, baseURL }) => {
+    const { webhookPathId } = await prisma.organisationPaymentSettings.update({ where: { organisationId }, data: { provider }, select: { webhookPathId: true } });
+    // The fake provider delivers signed webhooks to this organisation's address.
+    const hook = await fetch(`${fakeProvider}/__control/webhook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: provider.toLowerCase(), url: `${baseURL}/api/webhooks/${provider.toLowerCase()}/${webhookPathId}`, secret: provider === "STRIPE" ? stripeSecret : webhookSecret }),
+    });
+    expect(hook.ok).toBe(true);
+
+    const buyerEmail = `buyer-${provider.toLowerCase()}-${suffix}@example.test`;
+    const context = await browser.newContext({ extraHTTPHeaders: { [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: provider === "STRIPE" ? "192.0.2.238" : "192.0.2.239" } });
+    const guest = await context.newPage();
+    try {
+      await guest.goto(`/${orgSlug}/${eventSlug}`, { waitUntil: "networkidle" });
+      await guest.getByRole("button", { name: "Get tickets" }).first().click();
+      const dialog = guest.getByRole("dialog");
+      await dialog.getByRole("button", { name: "One more Standard" }).click();
+      await dialog.getByLabel("Ticket 2: name", { exact: false }).fill("Second Guest");
+      await dialog.getByLabel("Name", { exact: true }).fill("Paying Guest");
+      await dialog.getByLabel("Email", { exact: true }).fill(buyerEmail);
+      await dialog.getByRole("button", { name: "Continue to payment · ₹998.00" }).click();
+
+      // The provider's hosted page: the app never sees card or UPI details.
+      await expect(guest).toHaveURL(new RegExp(`^${fakeProvider}/${provider.toLowerCase()}/pay/`));
+      const order = await prisma.order.findFirstOrThrow({ where: { eventId, buyerEmail }, include: { rsvps: true } });
+      expect(order).toMatchObject({ status: "PENDING", totalMinor: BigInt(99800) });
+      expect(order.rsvps.map((rsvp) => rsvp.status)).toEqual(["PENDING_PAYMENT", "PENDING_PAYMENT"]);
+      await guest.getByRole("button", { name: "Pay now" }).click();
+
+      // Back on the order page, confirmed by the signed webhook.
+      await expect(guest).toHaveURL(new RegExp(`/order/${order.accessToken}\\?payment=return$`));
+      await expect(guest.getByText("Confirmed", { exact: true })).toBeVisible();
+      await expect(guest.getByRole("link", { name: "View ticket" })).toHaveCount(2);
+      const settled = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { payments: { include: { attempts: true } }, rsvps: true } });
+      expect(settled.status).toBe("CONFIRMED");
+      expect(settled.payments[0]).toMatchObject({ status: "PAID_ONLINE", provider, testMode: true });
+      expect(settled.payments[0]!.attempts[0]!.status).toBe("PAID");
+      expect(settled.rsvps.map((rsvp) => rsvp.status)).toEqual(["CONFIRMED", "CONFIRMED"]);
+    } finally {
+      await context.close();
+    }
+  });
+}

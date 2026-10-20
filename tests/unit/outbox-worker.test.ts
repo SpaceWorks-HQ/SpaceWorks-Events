@@ -6,9 +6,11 @@ const mocks = vi.hoisted(() => ({
   started: vi.fn(),
   success: vi.fn(),
   failure: vi.fn(),
+  payments: vi.fn(),
 }));
 vi.mock("@/lib/outbox", () => ({ deliverOutboxBatch: mocks.deliver }));
 vi.mock("@/lib/retention", () => ({ purgeExpiredOperationalData: mocks.purge }));
+vi.mock("@/lib/payments/maintenance", () => ({ runPaymentMaintenance: mocks.payments }));
 vi.mock("@/lib/backupAlerts", () => ({ alertOnBackupProblems: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/operationalHeartbeat", () => ({
   recordOutboxSchedulerStarted: mocks.started,
@@ -26,6 +28,7 @@ describe("outbox scheduler", () => {
     mocks.failure.mockResolvedValue(undefined);
     mocks.deliver.mockResolvedValue({ sent: 2, failed: 0 });
     mocks.purge.mockResolvedValue({ verificationTokens: 1 });
+    mocks.payments.mockResolvedValue({ expired: 1, settled: 0, refundsSubmitted: 0 });
   });
 
   it("does not make heartbeat observability a delivery dependency", async () => {
@@ -42,5 +45,12 @@ describe("outbox scheduler", () => {
     await expect(runOutboxScheduler()).rejects.toBe(error);
     expect(mocks.failure).toHaveBeenCalledWith(error);
     expect(mocks.purge).not.toHaveBeenCalled();
+  });
+
+  it("runs payment housekeeping first, and never lets it stop email delivery", async () => {
+    await expect(runOutboxScheduler()).resolves.toMatchObject({ payments: { expired: 1 } });
+    expect(mocks.payments.mock.invocationCallOrder[0]).toBeLessThan(mocks.deliver.mock.invocationCallOrder[0]!);
+    mocks.payments.mockRejectedValue(new Error("provider down"));
+    await expect(runOutboxScheduler()).resolves.toMatchObject({ sent: 2, payments: null });
   });
 });

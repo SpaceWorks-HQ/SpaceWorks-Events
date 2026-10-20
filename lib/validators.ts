@@ -209,6 +209,14 @@ const rsvpTargetBase = z
     orgSlug: z.string().trim().min(1),
     eventSlug: z.string().trim().optional(),
     eventInstanceId: z.string().trim().optional(),
+    /** Events that sell ticket types: what to buy. `ticketTypeId` is shorthand for one ticket. */
+    ticketTypeId: z.string().trim().min(1).max(64).optional(),
+    items: z.array(z.object({ ticketTypeId: z.string().trim().min(1).max(64), quantity: z.number().int().min(0).max(20) }).strict()).max(20).optional(),
+    /** Optional details for the second and later tickets. */
+    attendees: z.array(z.object({
+      name: z.string().trim().max(200).optional(),
+      email: z.string().trim().max(320).email("Enter a valid email for each attendee, or leave it blank.").optional().or(z.literal("")),
+    }).strict()).max(19).optional(),
   })
   .refine(
     (d) => Boolean(d.eventSlug?.length) !== Boolean(d.eventInstanceId?.length),

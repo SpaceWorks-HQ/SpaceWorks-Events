@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Callout, Chip, OrgLogo, ProgressBar } from "@/components/ui/display";
 import { Dialog, DialogBody, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { accentStyle } from "@/lib/theme/accent";
+import { formatMoney } from "@/lib/payments/money";
+import type { PublicTicketType } from "@/lib/payments/tickets";
 
 type RegistrationState = {
   cancelled: boolean;
@@ -23,6 +25,7 @@ const statusLabels: Partial<Record<RsvpStatus, { chip: string; tone: "success" |
   CONFIRMED: { chip: "You're in", tone: "success", action: "View your ticket" },
   WAITLISTED: { chip: "On the waitlist", tone: "warning", action: "View waitlist status" },
   PENDING_APPROVAL: { chip: "Waiting for approval", tone: "warning", action: "View approval status" },
+  PENDING_PAYMENT: { chip: "Payment pending", tone: "warning", action: "Pay and get your ticket" },
 };
 
 function useSavedRsvp(storageKey: string, viewerRsvp: { token: string; status: RsvpStatus } | null) {
@@ -72,8 +75,18 @@ export function RegistrationCard(props: {
   accentColor?: string | null;
   /** The signed-in viewer's own registration from the server. */
   viewerRsvp?: { token: string; status: RsvpStatus } | null;
+  /** Ticket types; empty for an event without them (free registration). */
+  tickets?: PublicTicketType[];
+  /** Seats held while attendees pay; they count as taken. */
+  heldCount?: number;
+  /** Paid tickets can be bought right now. */
+  paidSalesOpen?: boolean;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null } = props;
+  const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null, tickets = [], heldCount = 0, paidSalesOpen = false } = props;
+  const prices = tickets.filter((ticket) => ticket.priceMinor > 0);
+  const hasPaid = prices.length > 0;
+  const cheapest = hasPaid ? prices.reduce((low, ticket) => (ticket.priceMinor < low.priceMinor ? ticket : low)) : null;
+  const allFree = !hasPaid;
   const storageKey = eventInstanceId ? `swe:rsvp:${orgSlug}:i:${eventInstanceId}` : `swe:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
   const [saved, setSaved] = useSavedRsvp(storageKey, viewerRsvp);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -100,13 +113,15 @@ export function RegistrationCard(props: {
   };
 
   const savedLabel = saved ? statusLabels[saved.status ?? "CONFIRMED"] ?? { chip: "Registered", tone: "neutral" as const, action: "View registration" } : null;
-  const registerLabel = state.full ? "Join the waitlist" : state.approvalRequired ? "Request to join" : "Register — it's free";
-  const registerNote = state.full
-    ? "Free to attend. You'll join the waitlist, and we'll email you if a place opens up."
-    : state.approvalRequired
-      ? "Free to attend. The organiser approves each request; we'll email your ticket once you're in."
-      : "Free to attend. We'll email your ticket.";
-  const spotsLeft = capacity != null && confirmedCount != null ? Math.max(0, capacity - confirmedCount) : null;
+  const registerLabel = state.full ? "Join the waitlist" : state.approvalRequired ? "Request to join" : allFree ? "Register — it's free" : "Get tickets";
+  const registerNote = !allFree
+    ? "Choose a ticket. Paid tickets are paid on the organiser's secure Razorpay or Stripe page; your seat is held for 30 minutes while you pay."
+    : state.full
+      ? "Free to attend. You'll join the waitlist, and we'll email you if a place opens up."
+      : state.approvalRequired
+        ? "Free to attend. The organiser approves each request; we'll email your ticket once you're in."
+        : "Free to attend. We'll email your ticket.";
+  const spotsLeft = capacity != null && confirmedCount != null ? Math.max(0, capacity - confirmedCount - heldCount) : null;
 
   const primaryAction = state.cancelled ? null : saved && savedLabel ? (
     <Button asChild variant="accent" size="lg" fullWidth>
@@ -138,6 +153,13 @@ export function RegistrationCard(props: {
             {capacity != null ? <ProgressBar value={confirmedCount} max={capacity} label="Places taken" /> : null}
           </div>
         ) : null}
+        {cheapest ? (
+          <p className="text-[15px] font-semibold text-ink">
+            {prices.length === tickets.length && prices.length === 1 ? formatMoney(cheapest.priceMinor, cheapest.currency) : `From ${formatMoney(cheapest.priceMinor, cheapest.currency)}`}
+            <span className="ml-1.5 text-caption font-normal text-ink-muted">incl. taxes</span>
+          </p>
+        ) : null}
+        {heldCount > 0 ? <p className="-mt-2 text-caption text-ink-muted">{heldCount} {heldCount === 1 ? "seat is" : "seats are"} being held while people pay.</p> : null}
         {state.cancelled ? <Callout tone="danger" title="Event cancelled" /> : null}
         {primaryAction}
         {!state.cancelled && !state.open && !saved ? <p className="-mt-2 text-caption text-ink-muted">Registration is closed.</p> : null}
@@ -171,6 +193,8 @@ export function RegistrationCard(props: {
               eventSlug={eventSlug}
               eventInstanceId={eventInstanceId}
               registrationFields={registrationFields}
+              tickets={tickets}
+              paidSalesOpen={paidSalesOpen}
               onRsvpSaved={({ ticketToken, status }) => {
                 // Same as before: close the dialog and let the card switch to the ticket link.
                 if (ticketToken) setSaved({ token: ticketToken, status });

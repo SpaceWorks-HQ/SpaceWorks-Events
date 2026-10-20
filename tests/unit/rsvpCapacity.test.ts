@@ -19,6 +19,14 @@ const tx = {
   eventInstance: { findUnique: vi.fn() },
 };
 
+// Confirmed registrations and unexpired paid holds both take a seat.
+const seatsTaken = {
+  OR: [
+    { status: RsvpStatus.CONFIRMED },
+    { status: RsvpStatus.PENDING_PAYMENT, holdExpiresAt: { gt: expect.any(Date) } },
+  ],
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   prismaMock.$transaction.mockImplementation(async (callback: (client: typeof tx) => Promise<unknown>) => callback(tx));
@@ -31,7 +39,7 @@ describe("RSVP restore capacity", () => {
     tx.rSVP.count.mockResolvedValue(1);
     await expect(hasCapacityToRestoreConfirmedRsvp(tx as never, { eventId: "event_1" })).resolves.toBe(false);
     expect(tx.$queryRaw).toHaveBeenCalledOnce();
-    expect(tx.rSVP.count).toHaveBeenCalledWith({ where: { eventId: "event_1", status: RsvpStatus.CONFIRMED } });
+    expect(tx.rSVP.count).toHaveBeenCalledWith({ where: { eventId: "event_1", ...seatsTaken } });
   });
 
   it("keeps event-instance capacity isolated from sibling occurrences", async () => {
@@ -39,7 +47,7 @@ describe("RSVP restore capacity", () => {
     tx.eventInstance.findUnique.mockResolvedValue({ series: { capacity: 2 } });
     tx.rSVP.count.mockResolvedValue(1);
     await expect(hasCapacityToRestoreConfirmedRsvp(tx as never, { eventInstanceId: "instance_1" })).resolves.toBe(true);
-    expect(tx.rSVP.count).toHaveBeenCalledWith({ where: { eventInstanceId: "instance_1", status: RsvpStatus.CONFIRMED } });
+    expect(tx.rSVP.count).toHaveBeenCalledWith({ where: { eventInstanceId: "instance_1", ...seatsTaken } });
   });
 });
 
@@ -57,7 +65,8 @@ describe("confirmRsvpWithinCapacity", () => {
     await expect(confirmRsvpWithinCapacity(params)).resolves.toBe("confirmed");
     expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
     expect(tx.rSVP.updateMany).toHaveBeenCalledWith({
-      where: { id: "rsvp_1", eventId: "event_1", status: { in: [RsvpStatus.WAITLISTED] } },
+      // Paid tickets are confirmed only by their payment.
+      where: { id: "rsvp_1", eventId: "event_1", status: { in: [RsvpStatus.WAITLISTED] }, OR: [{ orderId: null }, { order: { totalMinor: 0 } }] },
       data: { status: RsvpStatus.CONFIRMED },
     });
   });

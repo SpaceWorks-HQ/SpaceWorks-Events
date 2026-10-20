@@ -8,6 +8,7 @@ import {
   recordOutboxSchedulerSuccess,
 } from "@/lib/operationalHeartbeat";
 import { purgeExpiredOperationalData } from "@/lib/retention";
+import { runPaymentMaintenance } from "@/lib/payments/maintenance";
 
 const OUTBOX_WORKER_INTERVAL_MS = 60_000;
 
@@ -27,12 +28,17 @@ export async function runOutboxScheduler() {
   // A heartbeat-table issue must not stop otherwise healthy queue processing.
   await recordOutboxSchedulerStarted().catch(() => undefined);
   try {
+    // Payment housekeeping runs first so expiry and refund emails go out in this pass.
+    const payments = await runPaymentMaintenance().catch(() => {
+      console.error("[payments] maintenance pass failed");
+      return null;
+    });
     const result = await deliverOutboxBatch();
     const purged = await purgeExpiredOperationalData();
     // Observability, like the heartbeat: never let it stop mail delivery.
     await alertOnBackupProblems().catch(() => undefined);
     await recordOutboxSchedulerSuccess(result).catch(() => undefined);
-    return { ...result, purged };
+    return { ...result, purged, payments };
   } catch (error) {
     await recordOutboxSchedulerFailure(error).catch(() => undefined);
     throw error;

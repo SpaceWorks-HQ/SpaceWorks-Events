@@ -26,7 +26,9 @@ export type Bucket =
   | "ticketEvents"
   | "shortLink"
   | "paymentWebhook"
-  | "paymentSettings";
+  | "paymentSettings"
+  | "paymentStatus"
+  | "ticketCheckout";
 
 const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   global: { max: 300, windowMs: 60_000 },
@@ -62,6 +64,10 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   paymentWebhook: { max: 600, windowMs: 60_000 },
   // Saving keys and "Test connection" call the provider with the owner's keys.
   paymentSettings: { max: 30, windowMs: 60 * 60_000 },
+  // Return-page status reads, per order: the webhook is the authority.
+  paymentStatus: { max: 6, windowMs: 60_000 },
+  // "Pay now" on a pending order or ticket, per IP.
+  ticketCheckout: { max: 20, windowMs: 60_000 },
 };
 
 // Local fallback store
