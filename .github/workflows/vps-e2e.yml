@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.9.3-fix-offsite-backups.23.2deff0561a55
+  RELEASE: v0.9.3-fix-offsite-backups.24.8d9b02afa935
   SILO: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
 
 jobs:
