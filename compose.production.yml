@@ -180,9 +180,13 @@ services:
     restart: unless-stopped
     env_file: ${SWE_CONFIG_DIR}/scheduler.env
     command: ["node", "docker/vps/scheduler.mjs"]
-    # The image's health check probes the web server, which this role does not run.
+    # The image's own health check probes a web server this role does not run;
+    # the scheduler is healthy when it can reach the app it calls.
     healthcheck:
-      disable: true
+      test: ["CMD", "node", "-e", "fetch('http://app:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       app: { condition: service_healthy }
     networks: [edge]
