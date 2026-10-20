@@ -19,6 +19,7 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
           currency={tickets.currency}
           paidAllowed={tickets.paidAllowed}
           paidBlockedReason={tickets.paidBlockedReason}
+          payee={tickets.payee}
         />
       ) : null}
       {tickets ? (

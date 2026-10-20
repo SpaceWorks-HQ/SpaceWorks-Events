@@ -96,6 +96,12 @@ export default async function OrderPage({ params, searchParams }: Props) {
             <dt className="text-ink">Total</dt>
             <dd className="tabular-nums text-ink">{order.free ? "Free" : order.total}</dd>
           </div>
+          {!order.free && order.event ? (
+            <div className="flex justify-between gap-3 text-body-ui">
+              <dt className="text-ink-secondary">Paid to</dt>
+              <dd className="text-right text-ink">{order.event.organisation}</dd>
+            </div>
+          ) : null}
         </dl>
         {order.refundPolicy ? <p className="mt-3 text-caption text-ink-muted">{order.refundPolicy}</p> : null}
       </section>
