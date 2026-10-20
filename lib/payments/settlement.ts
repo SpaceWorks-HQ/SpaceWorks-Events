@@ -4,7 +4,7 @@ import { CheckoutAttemptStatus, OrderStatus, PaymentStatus, RsvpStatus, type Pri
 import { recordAuditEvent } from "@/lib/audit";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
 import { enqueueOrderEmail, enqueuePaymentEmail, organisationOwnerEmails } from "./email";
-import { hasFreeSeats } from "./holds";
+import { hasFreeSeats, lockOrderTargets, ORDER_SUBJECT_SELECT, orderSubject } from "./targets";
 import type { OnlineProvider } from "./http";
 import type { PaidNotification } from "./providers/types";
 import { createPendingRefund } from "./refunds";
@@ -63,10 +63,10 @@ export async function settlePaidNotification(
   }
   const found = await findPayment(tx, context, paid);
   if (!found) return { outcome: "unmatched", refundIds: [] };
-  const located = await tx.payment.findUniqueOrThrow({ where: { id: found.paymentId }, select: { externalPaymentId: true, orderId: true, order: { select: { eventId: true } } } });
+  const located = await tx.payment.findUniqueOrThrow({ where: { id: found.paymentId }, select: { externalPaymentId: true, orderId: true, order: { select: { id: true, eventId: true, eventSeriesId: true } } } });
   if (located.externalPaymentId === paid.paymentId) return { outcome: "already-settled", refundIds: [] };
 
-  if (located.order.eventId) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${located.order.eventId} FOR UPDATE`;
+  await lockOrderTargets(tx, located.order, now);
   await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${located.orderId} FOR UPDATE`;
   await tx.$queryRaw`SELECT "id" FROM "Payment" WHERE "id" = ${found.paymentId} FOR UPDATE`;
   const payment = await tx.payment.findUniqueOrThrow({
@@ -75,8 +75,8 @@ export async function settlePaidNotification(
       id: true, organisationId: true, status: true, amountMinor: true, currency: true, testMode: true, description: true, externalPaymentId: true,
       order: {
         select: {
-          id: true, status: true, holdExpiresAt: true, buyerEmail: true, eventId: true, event: { select: { title: true } },
-          rsvps: { select: { id: true, eventId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
+          id: true, status: true, holdExpiresAt: true, buyerEmail: true, ...ORDER_SUBJECT_SELECT,
+          rsvps: { select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
         },
       },
     },
@@ -113,10 +113,14 @@ export async function settlePaidNotification(
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CONFIRMED, holdExpiresAt: null, holdCapAt: null } });
     await tx.rSVP.updateMany({ where: { id: { in: held.map((rsvp) => rsvp.id) } }, data: { status: RsvpStatus.CONFIRMED, holdExpiresAt: null } });
     await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "paid" });
-    // Each attendee with an address gets their own ticket.
+    // Each attendee with an address gets their own ticket, once (a pass's
+    // ticket page lists its other dates).
+    const emailed = new Set<string>();
     for (const rsvp of held) {
       const to = rsvp.user?.email?.trim() || rsvp.guestEmail;
-      if (to) await enqueueRsvpConfirmation(tx, { to, eventTitle: order.event?.title ?? payment.description, status: RsvpStatus.CONFIRMED, checkInToken: rsvp.checkInToken });
+      if (!to || emailed.has(to)) continue;
+      emailed.add(to);
+      await enqueueRsvpConfirmation(tx, { to, eventTitle: orderSubject(order)?.title ?? payment.description, status: RsvpStatus.CONFIRMED, checkInToken: rsvp.checkInToken });
     }
     if (held.some((rsvp) => !(rsvp.user?.email || rsvp.guestEmail))) await enqueueOrderEmail(tx, { to: order.buyerEmail, orderId: order.id, notice: "attendee-details" });
     await recordAuditEvent({ action: "PAYMENT_SETTLED", organisationId: payment.organisationId, targetType: "Payment", targetId: payment.id, metadata: { testMode: payment.testMode, tickets: held.length }, client: tx });

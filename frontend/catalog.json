@@ -1098,6 +1098,16 @@
       "id": "series:deleteEventSeries"
     },
     {
+      "module": "app/actions/series",
+      "name": "setSeriesDateCapacity",
+      "id": "series:setSeriesDateCapacity"
+    },
+    {
+      "module": "app/actions/series",
+      "name": "cancelSeriesDate",
+      "id": "series:cancelSeriesDate"
+    },
+    {
       "module": "app/actions/shortLink",
       "name": "createEventShortLink",
       "id": "shortLink:createEventShortLink"

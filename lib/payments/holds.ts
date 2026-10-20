@@ -47,23 +47,3 @@ export function nextAttemptWindow(provider: keyof typeof CHECKOUT_WINDOWS, hold:
   if (pageEnd < needed) return null;
   return { holdExpiresAt: new Date(holdEnd), attemptExpiresAt: new Date(pageEnd) };
 }
-
-/**
- * Whether released seats are free again for these registrations (the event
- * row already locked): the event capacity and each ticket type's limit.
- */
-export async function hasFreeSeats(tx: Prisma.TransactionClient, rsvps: Array<{ id: string; eventId: string | null; ticketTypeId: string | null; }>, now: Date) {
-  const eventId = rsvps[0]?.eventId;
-  if (!eventId || rsvps.some((rsvp) => rsvp.eventId !== eventId)) return false;
-  const others = { id: { notIn: rsvps.map((rsvp) => rsvp.id) }, ...seatTakingWhere(now) };
-  const event = await tx.event.findUnique({ where: { id: eventId }, select: { capacity: true } });
-  if (!event) return false;
-  if (event.capacity != null && await tx.rSVP.count({ where: { eventId, ...others } }) + rsvps.length > event.capacity) return false;
-  const byType = new Map<string, number>();
-  for (const rsvp of rsvps) if (rsvp.ticketTypeId) byType.set(rsvp.ticketTypeId, (byType.get(rsvp.ticketTypeId) ?? 0) + 1);
-  for (const [ticketTypeId, wanted] of byType) {
-    const type = await tx.ticketType.findUnique({ where: { id: ticketTypeId }, select: { capacity: true } });
-    if (type?.capacity != null && await tx.rSVP.count({ where: { ticketTypeId, ...others } }) + wanted > type.capacity) return false;
-  }
-  return true;
-}

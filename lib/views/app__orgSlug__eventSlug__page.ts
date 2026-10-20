@@ -141,7 +141,7 @@ export async function loadEventView({ params }: Props) {
         : null,
     ),
     countHeldForEvent(event.id),
-    listPublicTicketTypes(event.id, event.currency ?? DEFAULT_CURRENCY),
+    listPublicTicketTypes({ eventId: event.id }, event.currency ?? DEFAULT_CURRENCY),
   ]);
   // Paid tickets are on sale only while the installation allows it and the
   // organisation's account is fully connected.

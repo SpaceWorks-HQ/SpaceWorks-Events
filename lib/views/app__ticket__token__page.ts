@@ -182,7 +182,16 @@ export async function loadTicketView({ params, searchParams }: Props) {
 
   const confirmed = rsvp.status === "CONFIRMED";
   const name = displayName(rsvp);
-  const eventPageHref = eventSlug ? `/${orgSlug}/${eventSlug}` : `/${orgSlug}`;
+  const eventPageHref = eventSlug ? `/${orgSlug}/${eventSlug}` : rsvp.eventInstanceId ? `/${orgSlug}/i/${rsvp.eventInstanceId}` : `/${orgSlug}`;
+  // A pass seats its holder on every date: this ticket links to the others,
+  // which belong to the same person in the same order.
+  const otherDates = rsvp.orderId && rsvp.eventInstanceId
+    ? (await prisma.rSVP.findMany({
+      where: { orderId: rsvp.orderId, attendeeKey: rsvp.attendeeKey, id: { not: rsvp.id }, eventInstanceId: { not: null } },
+      select: { checkInToken: true, status: true, eventInstance: { select: { startDateTime: true, cancelledAt: true } } },
+      orderBy: { eventInstance: { startDateTime: "asc" } },
+    })).map((other) => ({ href: `/ticket/${other.checkInToken}`, start: other.eventInstance!.startDateTime, cancelled: Boolean(other.eventInstance!.cancelledAt) }))
+    : [];
 
 
   // Amounts and hold times only; provider ids and links stay on the server.
@@ -201,5 +210,5 @@ export async function loadTicketView({ params, searchParams }: Props) {
     ? { active: isActiveHold(rsvp), expiresAt: rsvp.holdExpiresAt?.toISOString() ?? null, canPay: isActiveHold(rsvp) && payment?.status === PaymentStatus.PENDING }
     : null;
 
-  return { rsvp: { checkInToken: rsvp.checkInToken, checkedInAt: rsvp.checkedInAt, status: rsvp.status }, orgName, orgSlug, eventSlug, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, safeToken, payment: paymentView, hold, returningFromCheckout };
+  return { rsvp: { checkInToken: rsvp.checkInToken, checkedInAt: rsvp.checkedInAt, status: rsvp.status }, orgName, orgSlug, eventSlug, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, safeToken, payment: paymentView, hold, returningFromCheckout, otherDates };
 }

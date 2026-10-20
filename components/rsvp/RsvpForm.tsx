@@ -284,8 +284,8 @@ export function RsvpForm(props: {
           ))}
         </div>
       ) : null}
-      {ticketing?.promoCodes && eventSlug ? (
-        <PromoCodeField orgSlug={orgSlug} eventSlug={eventSlug} applied={promo} onApplied={setPromo} problem={promoProblem} />
+      {ticketing?.promoCodes && (eventSlug || eventInstanceId) ? (
+        <PromoCodeField orgSlug={orgSlug} eventSlug={eventSlug} eventInstanceId={eventInstanceId} applied={promo} onApplied={setPromo} problem={promoProblem} />
       ) : null}
       {discountMinor > 0 ? (
         <p className="text-body-ui text-ink">Discount: −{formatMoney(discountMinor, currency)} · Total {formatMoney(totalMinor, currency)}</p>

@@ -29,7 +29,7 @@ export default async function OrderPage({ params, searchParams }: Props) {
   const status = STATUS[order.status] ?? STATUS.PENDING!;
   return (
     <div className="mx-auto flex w-full max-w-[560px] flex-col gap-5 py-2 sm:py-6">
-      {order.event ? (
+      {order.event?.href ? (
         <Link href={order.event.href} className="inline-flex min-h-10 items-center gap-1.5 text-[15px] font-semibold text-ink-secondary hover:text-ink">
           <ArrowLeft aria-hidden className="size-4" />
           Event page
@@ -43,7 +43,8 @@ export default async function OrderPage({ params, searchParams }: Props) {
         <h1 className="text-display-m break-words text-ink">{order.event?.title ?? "Your order"}</h1>
         <p className="text-body-ui text-ink-muted">
           Order {order.reference}
-          {order.event ? ` · ${formatDayShort(new Date(order.event.start), order.event.timeZone)} ${formatTime(new Date(order.event.start), order.event.timeZone)} · ${order.event.organisation}` : ""}
+          {order.event?.start ? ` · ${formatDayShort(new Date(order.event.start), order.event.timeZone)} ${formatTime(new Date(order.event.start), order.event.timeZone)}` : ""}
+          {order.event ? ` · ${order.event.organisation}` : ""}
         </p>
       </header>
 
@@ -57,7 +58,7 @@ export default async function OrderPage({ params, searchParams }: Props) {
       {order.status === "EXPIRED" || (order.status === "PENDING" && !order.holdActive) ? (
         <Callout tone="warning">
           The time to pay ran out, so these tickets went back on sale and nothing was charged.{" "}
-          {order.event ? <Link href={order.event.href} className="font-semibold underline underline-offset-4">Order again</Link> : null}
+          {order.event?.href ? <Link href={order.event.href} className="font-semibold underline underline-offset-4">Order again</Link> : null}
         </Callout>
       ) : null}
 
@@ -117,7 +118,8 @@ export default async function OrderPage({ params, searchParams }: Props) {
       </section>
 
       <section aria-labelledby="order-tickets" className="flex flex-col gap-3">
-        <h2 id="order-tickets" className="text-h4 text-ink">Tickets</h2>
+        <h2 id="order-tickets" className="text-h4 text-ink">{order.pass ? "Passes" : "Tickets"}</h2>
+        {order.pass ? <p className="text-body-ui text-ink-secondary">Each pass is a ticket for every remaining date. Its ticket page lists them all.</p> : null}
         {order.tickets.some((ticket) => ticket.needsDetails) ? (
           <Callout tone="info">Add each attendee&apos;s name and email so they get their own ticket.</Callout>
         ) : null}

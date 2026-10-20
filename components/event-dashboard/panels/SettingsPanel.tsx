@@ -14,7 +14,7 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
       {tickets ? (
         <TicketTypesManager
           organisationSlug={organisation.slug}
-          eventId={event.id}
+          target={{ eventId: event.id }}
           tickets={tickets.tickets}
           currency={tickets.currency}
           paidAllowed={tickets.paidAllowed}
@@ -23,10 +23,10 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
         />
       ) : null}
       {tickets ? (
-        <PromoCodesManager organisationSlug={organisation.slug} eventId={event.id} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
+        <PromoCodesManager organisationSlug={organisation.slug} target={{ eventId: event.id }} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
       ) : null}
       {tickets && tickets.tickets.some((ticket) => ticket.priceMinor > 0) ? (
-        <RefundPolicyControl organisationSlug={organisation.slug} eventId={event.id} policy={tickets.refundPolicy} sold={tickets.sold} />
+        <RefundPolicyControl organisationSlug={organisation.slug} target={{ eventId: event.id }} policy={tickets.refundPolicy} sold={tickets.sold} />
       ) : null}
       {permissions.canManageCollaborators ? (
         <CollaboratorInvitePanel

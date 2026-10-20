@@ -40,7 +40,9 @@ export function TicketPicker({ tickets, quantities, onChange, error, paidSalesOp
   const errorId = useId();
   const set = (ticket: PublicTicketType, quantity: number) => {
     const next = quantity <= 0 ? 0 : Math.max(ticket.minPerOrder, Math.min(quantity, ticketLimit(ticket)));
-    onChange({ ...quantities, [ticket.id]: next });
+    // One order is a pass or tickets for this date, never both.
+    const kept = next > 0 ? Object.fromEntries(Object.entries(quantities).filter(([id]) => tickets.find((other) => other.id === id)?.pass === ticket.pass)) : quantities;
+    onChange({ ...kept, [ticket.id]: next });
   };
   return (
     <fieldset className="flex flex-col gap-2.5" aria-describedby={error ? errorId : undefined}>
@@ -58,6 +60,7 @@ export function TicketPicker({ tickets, quantities, onChange, error, paidSalesOp
                   <span className="font-semibold">{ticket.name}</span>
                   <span>{price}</span>
                 </p>
+                {ticket.pass ? <p className="text-caption font-semibold text-ink-secondary">Pass for all {ticket.passDates ?? "remaining"} remaining {ticket.passDates === 1 ? "date" : "dates"}</p> : null}
                 {ticket.description || note ? <p className="text-caption text-ink-muted">{[ticket.description, note].filter(Boolean).join(" · ")}</p> : null}
               </div>
               <div className="flex items-center gap-2" role="group" aria-label={`${ticket.name} quantity`}>

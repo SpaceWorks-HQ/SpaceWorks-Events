@@ -8,11 +8,17 @@ import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Callout, Card, CardHeader, Chip } from "@/components/ui/display";
+import { Radio, RadioGroup } from "@/components/ui/choice";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { formatMoney, minorToDecimalString, parseMoneyToMinor, UPI_TYPICAL_LIMIT_MINOR } from "@/lib/payments/money";
 
+/** Tickets for an event, or for a series (one date's tickets, and passes). */
+export type TicketTarget = { eventId: string; } | { seriesId: string; };
+
 export type ManagedTicketType = {
   id: string;
+  /** PASS: one seat on every remaining date of a series. */
+  kind: "SINGLE" | "PASS";
   name: string;
   description: string;
   priceMinor: number;
@@ -26,9 +32,9 @@ export type ManagedTicketType = {
   held: number;
 };
 
-type Draft = { id?: string; name: string; description: string; price: string; capacity: string; minPerOrder: string; maxPerOrder: string; salesStartAt: string; salesEndAt: string; };
+type Draft = { id?: string; kind: "SINGLE" | "PASS"; name: string; description: string; price: string; capacity: string; minPerOrder: string; maxPerOrder: string; salesStartAt: string; salesEndAt: string; };
 
-const EMPTY: Draft = { name: "", description: "", price: "", capacity: "", minPerOrder: "1", maxPerOrder: "10", salesStartAt: "", salesEndAt: "" };
+const EMPTY: Draft = { kind: "SINGLE", name: "", description: "", price: "", capacity: "", minPerOrder: "1", maxPerOrder: "10", salesStartAt: "", salesEndAt: "" };
 
 /** "2026-10-20T09:30" in the browser's zone, for datetime-local inputs. */
 function toLocalInput(iso: string | null) {
@@ -46,11 +52,12 @@ function fromLocalInput(value: string) {
  * Ticket types for a standalone event: free or paid, with an optional limit
  * and sales window. Archiving takes a ticket off sale; registrations keep it.
  */
-export function TicketTypesManager({ organisationSlug, eventId, tickets, currency, paidAllowed, paidBlockedReason, payee = null }: {
+export function TicketTypesManager({ organisationSlug, target, tickets, currency, paidAllowed, paidBlockedReason, payee = null }: {
   /** Who receives payment for paid tickets: always this event's organisation. */
   payee?: { organisationName: string; provider: string; testMode: boolean } | null;
   organisationSlug: string;
-  eventId: string;
+  /** The event, or the series whose dates and passes these cover. */
+  target: TicketTarget;
   tickets: ManagedTicketType[];
   /** The event's currency (every ticket uses it). */
   currency: string;
@@ -73,8 +80,8 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
     startTransition(async () => {
       const result = await saveTicketType({
         organisationSlug,
-        eventId,
-        ...(draft.id ? { ticketTypeId: draft.id } : {}),
+        ...target,
+        ...(draft.id ? { ticketTypeId: draft.id } : { kind: draft.kind }),
         name: draft.name,
         description: draft.description,
         price: draft.price,
@@ -96,7 +103,7 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
 
   function archive(ticket: ManagedTicketType) {
     startTransition(async () => {
-      const result = await archiveTicketType({ organisationSlug, eventId, ticketTypeId: ticket.id });
+      const result = await archiveTicketType({ organisationSlug, ...target, ticketTypeId: ticket.id });
       setArchiving(null);
       if (!result.ok) return showToast(result.error, "error");
       showToast("Ticket taken off sale.", "success");
@@ -104,13 +111,16 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
     });
   }
 
+  const series = "seriesId" in target;
   const set = (key: keyof Draft, value: string) => setDraft((current) => (current ? { ...current, [key]: value } : current));
 
   return (
     <Card as="section" className="rounded-xl" aria-labelledby="tickets-title">
       <CardHeader
         title={<span id="tickets-title">Tickets</span>}
-        description="Without tickets, registration is free as before. Add tickets to offer free and paid options, each with its own limit and sales window. The event's capacity stays the overall limit."
+        description={series
+          ? "Without tickets, registration for each date is free. Add tickets for single dates, and passes that seat a guest on every remaining date. Each date's capacity stays the overall limit."
+          : "Without tickets, registration is free as before. Add tickets to offer free and paid options, each with its own limit and sales window. The event's capacity stays the overall limit."}
         action={draft ? null : (
           <Button variant="secondary" onClick={() => { setError(null); setDraft({ ...EMPTY }); }}>
             <Plus aria-hidden className="size-4" />
@@ -142,6 +152,7 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {ticket.kind === "PASS" ? <Chip tone="ink" size="sm">Pass</Chip> : null}
                   {ticket.priceMinor > 0 ? <Chip tone="accent" size="sm">Paid</Chip> : null}
                   <Button
                     variant="ghost"
@@ -151,6 +162,7 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
                       setError(null);
                       setDraft({
                         id: ticket.id,
+                        kind: ticket.kind,
                         name: ticket.name,
                         description: ticket.description,
                         price: ticket.priceMinor > 0 ? minorToDecimalString(ticket.priceMinor, ticket.currency) : "",
@@ -181,6 +193,12 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
             }}
           >
             {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+            {series && !draft.id ? (
+              <RadioGroup value={draft.kind} onValueChange={(value) => set("kind", value)} aria-label="What the ticket is for">
+                <Radio value="SINGLE" label="One date" description="Guests choose a date and buy a ticket for it." />
+                <Radio value="PASS" label="Pass for every remaining date" description="One purchase seats the guest on every date that hasn't ended. Its limit is the number of passes." />
+              </RadioGroup>
+            ) : null}
             <Field label="Ticket name" required>
               <Input value={draft.name} maxLength={80} onChange={(event) => set("name", event.target.value)} placeholder="General admission" />
             </Field>

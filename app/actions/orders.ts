@@ -11,6 +11,7 @@ import { enqueueRsvpConfirmation } from "@/lib/outbox";
 import { cancelOrderAsBuyer, PaymentOperationError } from "@/lib/payments/operations";
 import { validateAndNormalizeAnswers } from "@/lib/rsvpCore";
 import { isValidAttendeeName } from "@/lib/validators";
+import { ORDER_SUBJECT_SELECT, orderSubject } from "@/lib/payments/targets";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -35,12 +36,12 @@ export async function updateOrderAttendee(input: unknown): Promise<ActionResult>
   if (!isValidAttendeeName(parsed.data.name)) return { ok: false, error: "Enter a valid name." };
   const order = await prisma.order.findUnique({
     where: { accessToken: parsed.data.orderToken },
-    select: { id: true, organisationId: true, status: true, eventId: true, event: { select: { title: true } } },
+    select: { id: true, organisationId: true, status: true, eventId: true, ...ORDER_SUBJECT_SELECT },
   });
   if (!order) return { ok: false, error: "Order not found." };
   const rsvp = await prisma.rSVP.findFirst({
     where: { id: parsed.data.rsvpId, orderId: order.id },
-    select: { id: true, userId: true, guestEmail: true, checkedInAt: true, checkInToken: true, status: true },
+    select: { id: true, userId: true, guestEmail: true, checkedInAt: true, checkInToken: true, status: true, attendeeKey: true },
   });
   if (!rsvp) return { ok: false, error: "Ticket not found." };
   if (rsvp.checkedInAt) return { ok: false, error: "This ticket has already been used to check in." };
@@ -58,10 +59,13 @@ export async function updateOrderAttendee(input: unknown): Promise<ActionResult>
   const newEmail = !rsvp.userId && !rsvp.guestEmail && email ? email : null;
   try {
     await prisma.$transaction(async (tx) => {
-      await tx.rSVP.update({
-        where: { id: rsvp.id },
-        data: rsvp.userId ? {} : { guestName: parsed.data.name, ...(newEmail ? { guestEmail: newEmail, attendeeKey: `guest:${newEmail}` } : {}) },
-      });
+      // The same person on every date of a pass.
+      if (!rsvp.userId) {
+        await tx.rSVP.updateMany({
+          where: { orderId: order.id, attendeeKey: rsvp.attendeeKey, checkedInAt: null },
+          data: { guestName: parsed.data.name, ...(newEmail ? { guestEmail: newEmail, attendeeKey: `guest:${newEmail}` } : {}) },
+        });
+      }
       await tx.rsvpAnswer.deleteMany({ where: { rsvpId: rsvp.id } });
       if (validated.rows.length > 0) {
         await tx.rsvpAnswer.createMany({
@@ -70,7 +74,7 @@ export async function updateOrderAttendee(input: unknown): Promise<ActionResult>
       }
       // A confirmed ticket that just got its holder's address is sent to them.
       if (newEmail && rsvp.status === "CONFIRMED") {
-        await enqueueRsvpConfirmation(tx, { to: newEmail, eventTitle: order.event?.title ?? "Your event", status: "CONFIRMED", checkInToken: rsvp.checkInToken });
+        await enqueueRsvpConfirmation(tx, { to: newEmail, eventTitle: orderSubject(order)?.title ?? "Your event", status: "CONFIRMED", checkInToken: rsvp.checkInToken });
       }
       await recordAuditEvent({ action: "ORDER_ATTENDEE_UPDATED", organisationId: order.organisationId, targetType: "RSVP", targetId: rsvp.id, metadata: { emailAdded: Boolean(newEmail) }, client: tx });
     });

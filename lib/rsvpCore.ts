@@ -5,6 +5,7 @@ import {
   Prisma,
   RegistrationFieldType,
   RsvpStatus,
+  TicketTypeKind,
 } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { DEFAULT_MAX_LENGTH, OTHER_MAX_LENGTH, parseFieldSettings, visibleFieldKeys } from "@/lib/registrationFields";
@@ -21,7 +22,9 @@ import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { recordAuditEvent } from "@/lib/audit";
 import { startCheckout } from "@/lib/payments/checkout";
+import { seatTakingWhere } from "@/lib/payments/holds";
 import { OrderError, reserveOrder, type OrderAttendee, type PaymentContext } from "@/lib/payments/orders";
+import { lockSeriesDates, type OrderTarget } from "@/lib/payments/targets";
 import { loadPaymentAccount } from "@/lib/payments/settings";
 import {
   isValidInternationalPhone,
@@ -53,22 +56,24 @@ function requestedItems(request: OrderRequest) {
  * organisation's connected account, while paid events are on for this
  * installation. Undefined otherwise; the reservation then refuses a paid order.
  */
-async function paymentContextFor(event: { id: string; organisationId: string; }, items: Array<{ ticketTypeId: string; }>): Promise<PaymentContext | undefined> {
+async function paymentContextFor(organisationId: string, items: Array<{ ticketTypeId: string; }>): Promise<PaymentContext | undefined> {
   if (items.length === 0) return undefined;
-  const paidTypes = await prisma.ticketType.count({ where: { eventId: event.id, id: { in: items.map((item) => item.ticketTypeId) }, priceMinor: { gt: 0 } } });
+  const paidTypes = await prisma.ticketType.count({ where: { id: { in: items.map((item) => item.ticketTypeId) }, priceMinor: { gt: 0 } } });
   if (paidTypes === 0 || !(await isPaidEventsEnabled())) return undefined;
-  const account = await loadPaymentAccount(event.organisationId);
-  return account ? { organisationId: event.organisationId, provider: account.provider, testMode: account.testMode } : undefined;
+  const account = await loadPaymentAccount(organisationId);
+  return account ? { organisationId, provider: account.provider, testMode: account.testMode } : undefined;
 }
 
 /**
- * Registration for an event that sells ticket types: one order, one
- * registration per ticket, priced and seated under the event lock. The
- * buyer's answers go on their own (first) ticket. A paid order then opens the
- * provider's checkout, outside the transaction.
+ * Registration for an event or series that sells ticket types: one order,
+ * one registration per ticket (per date, for a pass), priced and seated
+ * under the event's or series's locks. The buyer's answers go on their own
+ * (first) ticket. A paid order then opens the provider's checkout, outside
+ * the transaction.
  */
 async function submitTicketOrder(params: {
-  event: { id: string; organisationId: string; };
+  target: OrderTarget;
+  organisationId: string;
   request: OrderRequest;
   buyer: { userId: string | null; email: string; name: string; attendeeKey: string; };
   answers: AnswerRow[];
@@ -77,10 +82,10 @@ async function submitTicketOrder(params: {
   const items = requestedItems(params.request);
   if (items.length === 0) return { ok: false, error: "Choose a ticket." };
   try {
-    const payment = await paymentContextFor(params.event, items);
+    const payment = await paymentContextFor(params.organisationId, items);
     const order = await prisma.$transaction(async (tx) => {
       const reserved = await reserveOrder(tx, {
-        eventId: params.event.id,
+        target: params.target,
         items,
         buyer: params.buyer,
         attendees: params.request.attendees ?? [],
@@ -117,9 +122,20 @@ async function submitTicketOrder(params: {
   }
 }
 
-/** Events with active ticket types register through orders. */
-async function sellsTickets(eventId: string) {
-  return (await prisma.ticketType.count({ where: { eventId, archivedAt: null } })) > 0;
+/** Events and series with active ticket types register through orders. */
+async function sellsTickets(owner: { eventId: string; } | { eventSeriesId: string; }) {
+  return (await prisma.ticketType.count({ where: { ...owner, archivedAt: null } })) > 0;
+}
+
+/**
+ * A series order is for one date or for passes, never both: the chosen
+ * ticket types decide which.
+ */
+async function seriesOrderTarget(seriesId: string, eventInstanceId: string, items: Array<{ ticketTypeId: string; }>): Promise<OrderTarget | { error: string; }> {
+  const passes = await prisma.ticketType.count({ where: { eventSeriesId: seriesId, id: { in: items.map((item) => item.ticketTypeId) }, kind: TicketTypeKind.PASS } });
+  if (passes === 0) return { eventInstanceId };
+  if (passes < new Set(items.map((item) => item.ticketTypeId)).size) return { error: "Buy passes and single dates in separate orders." };
+  return { passSeriesId: seriesId };
 }
 
 export function decideRsvpStatus(params: {
@@ -169,23 +185,22 @@ async function reserveRsvp(params: {
       capacity = current.capacity;
       privacyType = current.privacyType;
     } else {
-      await tx.$queryRaw`
-        SELECT i."id" FROM "EventSeries" s
-        INNER JOIN "EventInstance" i ON i."eventSeriesId" = s."id"
-        WHERE i."id" = ${params.target.eventInstanceId}
-        FOR UPDATE OF s, i
-      `;
-      const current = await tx.eventInstance.findUnique({ where: { id: params.target.eventInstanceId }, select: { endDateTime: true, series: { select: { capacity: true, privacyType: true, status: true } } } });
+      // The series row, then the date: the same order every series path locks in.
+      const date = await tx.eventInstance.findUnique({ where: { id: params.target.eventInstanceId }, select: { eventSeriesId: true } });
+      if (!date) throw new RsvpTargetClosedError();
+      await lockSeriesDates(tx, date.eventSeriesId, [params.target.eventInstanceId], new Date());
+      const current = await tx.eventInstance.findUnique({ where: { id: params.target.eventInstanceId }, select: { endDateTime: true, capacity: true, cancelledAt: true, series: { select: { capacity: true, privacyType: true, status: true } } } });
       if (!current) throw new RsvpTargetClosedError();
-      if (params.enforceOpen !== false && (current.series.status !== EventStatus.PUBLISHED || current.endDateTime <= new Date())) throw new RsvpTargetClosedError();
-      capacity = current.series.capacity;
+      if (params.enforceOpen !== false && (current.series.status !== EventStatus.PUBLISHED || current.endDateTime <= new Date() || current.cancelledAt)) throw new RsvpTargetClosedError();
+      capacity = current.capacity ?? current.series.capacity;
       privacyType = current.series.privacyType;
     }
 
+    // Paid tickets still being paid for hold their seats too.
     const confirmedCount = await tx.rSVP.count({
       where: {
         ...params.target,
-        status: RsvpStatus.CONFIRMED,
+        ...seatTakingWhere(new Date()),
       },
     });
     const status = decideRsvpStatus({
@@ -439,13 +454,13 @@ export async function submitRsvpCore(
     if (!org) return { ok: false, error: "Event not found." };
 
     if (eventInstanceId) {
-      if (requestedItems(parsed.data).length > 0) return { ok: false, error: "Tickets aren't sold for series dates yet." };
       return submitInstanceRsvp({
         org,
         eventInstanceId,
         userId,
         guestEmail: null,
         name: parsed.data.name ?? null,
+        request: parsed.data,
       });
     }
 
@@ -524,9 +539,10 @@ export async function submitRsvpCore(
       });
       if ("error" in validated) return { ok: false, error: validated.error };
 
-      if (await sellsTickets(event.id)) {
+      if (await sellsTickets({ eventId: event.id })) {
         return submitTicketOrder({
-          event,
+          target: { eventId: event.id },
+          organisationId: event.organisationId,
           request: parsed.data,
           buyer: { userId, email: emailRes.email, name: submittedName || existingName, attendeeKey },
           answers: validated.rows,
@@ -604,13 +620,13 @@ export async function submitRsvpCore(
   if (!org) return { ok: false, error: "Event not found." };
 
   if (eventInstanceId) {
-    if (requestedItems(parsed.data).length > 0) return { ok: false, error: "Tickets aren't sold for series dates yet." };
     return submitInstanceRsvp({
       org,
       eventInstanceId,
       userId: null,
       guestEmail: emailNorm,
       guestName: parsed.data.name,
+      request: parsed.data,
     });
   }
 
@@ -664,9 +680,10 @@ export async function submitRsvpCore(
     });
     if ("error" in validated) return { ok: false, error: validated.error };
 
-    if (await sellsTickets(event.id)) {
+    if (await sellsTickets({ eventId: event.id })) {
       return submitTicketOrder({
-        event,
+        target: { eventId: event.id },
+        organisationId: event.organisationId,
         request: parsed.data,
         buyer: { userId: null, email: emailNorm, name: parsed.data.name.trim(), attendeeKey },
         answers: validated.rows,
@@ -748,7 +765,7 @@ export async function submitManualGuestRsvpCore(
   if (!event) return { ok: false, error: "Event not found." };
 
   // Events that sell tickets add guests with a ticket (addTicketGuest).
-  if (await sellsTickets(event.id)) return { ok: false, error: "Choose a ticket for this guest." };
+  if (await sellsTickets({ eventId: event.id })) return { ok: false, error: "Choose a ticket for this guest." };
 
   const email = normalizeGuestEmail(parsed.data.guestEmail);
   const form = await prisma.eventRegistrationForm.findUnique({
@@ -843,14 +860,14 @@ export async function submitManualTicketOrderCore(
   });
   if ("error" in validated) return { ok: false, error: validated.error };
   const items = [{ ticketTypeId: input.ticketTypeId, quantity: 1 }];
-  let payment = await paymentContextFor(event, items);
+  let payment = await paymentContextFor(event.organisationId, items);
   if (!payment && input.payment !== "link" && await isPaidEventsEnabled()) {
     payment = { organisationId: event.organisationId, provider: "OFFLINE", testMode: false };
   }
   try {
     const order = await prisma.$transaction(async (tx) => {
       const reserved = await reserveOrder(tx, {
-        eventId: event.id,
+        target: { eventId: event.id },
         items,
         buyer: { userId: null, email, name: input.name.trim(), attendeeKey: `guest:${email}` },
         attendees: [],
@@ -884,7 +901,8 @@ async function submitInstanceRsvp(params: {
   guestEmail: string | null;
   guestName?: string | null;
   name?: string | null;
-}): Promise<ActionResult<{ count: number; status: RsvpStatus; ticketToken: string }>> {
+  request: OrderRequest;
+}): Promise<ActionResult<{ count: number; status: RsvpStatus; ticketToken: string; orderToken?: string; checkoutUrl?: string | null }>> {
   const { org, eventInstanceId, userId } = params;
 
   const instance = await prisma.eventInstance.findFirst({
@@ -899,7 +917,8 @@ async function submitInstanceRsvp(params: {
 
   if (
     instance.series.status !== EventStatus.PUBLISHED ||
-    instance.endDateTime <= new Date()
+    instance.endDateTime <= new Date() ||
+    instance.cancelledAt
   ) {
     return { ok: false, error: "This event is not open for RSVP." };
   }
@@ -935,6 +954,32 @@ async function submitInstanceRsvp(params: {
     ? `user:${userId}`
     : `guest:${emailRes.email}`;
 
+  // A series that sells tickets registers through orders, for one date or a pass.
+  const items = requestedItems(params.request);
+  if (items.length > 0 || await sellsTickets({ eventSeriesId: series.id })) {
+    if (items.length === 0) return { ok: false, error: "Choose a ticket." };
+    const target = await seriesOrderTarget(series.id, instance.id, items);
+    if ("error" in target) return { ok: false, error: target.error };
+    let name = params.guestName?.trim() ?? "";
+    let setUserName: string | null = null;
+    if (userId) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      const existingName = user?.name?.trim() ?? "";
+      name = params.name?.trim() || existingName;
+      if (!existingName && name) setUserName = name;
+    }
+    if (!name) return { ok: false, error: "Name is required." };
+    if (!isValidAttendeeName(name)) return { ok: false, error: "Enter a valid name." };
+    return submitTicketOrder({
+      target,
+      organisationId: series.organisationId,
+      request: params.request,
+      buyer: { userId, email: emailRes.email, name, attendeeKey },
+      answers: [],
+      setUserName,
+    });
+  }
+
   try {
     let reservation: Awaited<ReturnType<typeof reserveRsvp>>;
     if (userId) {
@@ -953,7 +998,7 @@ async function submitInstanceRsvp(params: {
 
       reservation = await reserveRsvp({
         target: { eventInstanceId: instance.id },
-        capacity: series.capacity,
+        capacity: instance.capacity ?? series.capacity,
         privacyType: series.privacyType,
         notification: { to: emailRes.email, eventTitle: series.title },
         data: {
@@ -979,7 +1024,7 @@ async function submitInstanceRsvp(params: {
       }
       reservation = await reserveRsvp({
         target: { eventInstanceId: instance.id },
-        capacity: series.capacity,
+        capacity: instance.capacity ?? series.capacity,
         privacyType: series.privacyType,
         notification: { to: emailRes.email, eventTitle: series.title },
         data: {

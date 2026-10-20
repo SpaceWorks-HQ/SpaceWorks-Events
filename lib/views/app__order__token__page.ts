@@ -7,6 +7,7 @@ import { buyerCancellation } from "@/lib/payments/operations";
 import { asRefundPolicy, describeRefundPolicy } from "@/lib/payments/refundPolicy";
 import { formatMoney } from "@/lib/payments/money";
 import { checkoutLineName } from "@/lib/payments/pricing";
+import { ORDER_SUBJECT_SELECT, orderSubject } from "@/lib/payments/targets";
 import { toFieldDefinition } from "@/lib/registrationFields";
 import { safeTimeZone } from "@/lib/timeZone";
 
@@ -45,17 +46,12 @@ export async function loadOrderView({ params, searchParams }: Props) {
       reference: true, status: true, currency: true, subtotalMinor: true, discountMinor: true, totalMinor: true, testMode: true, holdExpiresAt: true, buyerName: true, refundPolicy: true,
       lines: { select: { id: true, description: true, quantity: true, totalMinor: true }, orderBy: { createdAt: "asc" } },
       payments: { where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE] } }, select: { status: true, refunds: { where: { automatic: false, status: { not: PaymentRefundStatus.FAILED } }, select: { amountMinor: true, status: true } } }, orderBy: { createdAt: "desc" } },
-      event: {
-        select: {
-          title: true, slug: true, startDateTime: true, timezone: true,
-          organisation: { select: { name: true, slug: true } },
-          registrationForm: { select: { fields: { orderBy: { sortOrder: "asc" } } } },
-        },
-      },
+      ...ORDER_SUBJECT_SELECT,
+      eventId: true,
       rsvps: {
         orderBy: { createdAt: "asc" },
         select: {
-          id: true, status: true, checkInToken: true, guestName: true, guestEmail: true, checkedInAt: true,
+          id: true, status: true, checkInToken: true, guestName: true, guestEmail: true, checkedInAt: true, attendeeKey: true,
           user: { select: { name: true, email: true } },
           ticketType: { select: { name: true } },
           answers: { select: { fieldId: true, valueText: true, valueBool: true, valueNumber: true, valueDate: true } },
@@ -63,7 +59,12 @@ export async function loadOrderView({ params, searchParams }: Props) {
       },
     },
   });
-  const formFields = order.event?.registrationForm?.fields ?? [];
+  // Registration questions belong to events; series ask none.
+  const formFields = order.eventId ? (await prisma.eventRegistrationForm.findUnique({ where: { eventId: order.eventId }, select: { fields: { orderBy: { sortOrder: "asc" } } } }))?.fields ?? [] : [];
+  const subject = orderSubject(order);
+  // A pass seats each person on every date: show each person once (their
+  // first date's ticket, whose page lists the rest).
+  const people = subject?.pass ? order.rsvps.filter((rsvp, index) => order.rsvps.findIndex((other) => other.attendeeKey === rsvp.attendeeKey) === index) : order.rsvps;
   /** Saved answers as the form's initial values, keyed by question. */
   const initialAnswers = (answers: (typeof order.rsvps)[number]["answers"]) => {
     const values: Record<string, unknown> = {};
@@ -103,11 +104,12 @@ export async function loadOrderView({ params, searchParams }: Props) {
     cancellation: cancellation ? { refund: cancellation.refundMinor > BigInt(0) ? formatMoney(cancellation.refundMinor, order.currency) : null } : null,
     free: order.totalMinor === BigInt(0),
     lines: order.lines.map((line) => ({ id: line.id, label: checkoutLineName(line), amount: formatMoney(line.totalMinor, order.currency) })),
-    event: order.event
-      ? { title: order.event.title, href: `/${order.event.organisation.slug}/${order.event.slug}`, organisation: order.event.organisation.name, start: order.event.startDateTime.toISOString(), timeZone: safeTimeZone(order.event.timezone) }
+    event: subject
+      ? { title: subject.title, href: subject.path, organisation: subject.organisation.name, start: subject.start?.toISOString() ?? null, timeZone: safeTimeZone(subject.timeZone) }
       : null,
+    pass: subject?.pass ?? false,
     fields: formFields.map(toFieldDefinition),
-    tickets: order.rsvps.map((rsvp, index) => ({
+    tickets: people.map((rsvp, index) => ({
       id: rsvp.id,
       label: `${rsvp.ticketType?.name ?? "Ticket"} ${index + 1}`,
       name: rsvp.user?.name ?? rsvp.guestName ?? "",

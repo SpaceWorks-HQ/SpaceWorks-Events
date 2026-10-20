@@ -1,13 +1,13 @@
 import { loadSeriesManageView } from "@/lib/views/app__dashboard__orgSlug__series__seriesId__page";
-import Link from "next/link";
 import { EditSeriesForm } from "@/components/series/EditSeriesForm";
 import { SeriesInvitePanel } from "@/components/invites/SeriesInvitePanel";
 import { GuestsPeople } from "@/components/event-dashboard/panels/GuestsPeople";
 import { ScheduleManager } from "@/components/schedule/ScheduleManager";
+import { SeriesDatesManager } from "@/components/series/SeriesDatesManager";
+import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
+import { PromoCodesManager, RefundPolicyControl } from "@/components/event-dashboard/settings/PromoCodesManager";
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
-import { ArrowUpRight } from "lucide-react";
 import { Card, PageHeader } from "@/components/ui/display";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { formatDayTime } from "@/lib/format/datetime";
 import type { Metadata } from "next";
 
@@ -23,7 +23,7 @@ function eventDateInput(date: Date, timeZone: string) {
 }
 
 export default async function SeriesManagePage({ params }: Props) {
-  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup } = await loadSeriesManageView({ params });
+  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup, dates, tickets } = await loadSeriesManageView({ params });
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={series.title} description="Manage this recurring event and its upcoming occurrences." />
@@ -57,29 +57,27 @@ export default async function SeriesManagePage({ params }: Props) {
       {canManageSchedule ? <ScheduleManager organisationSlug={organisation.slug} eventSeriesId={series.id} items={series.scheduleItems.map((item) => ({ ...item, startDateTime: item.startDateTime.toISOString(), endDateTime: item.endDateTime.toISOString() }))} defaultDate={series.instances[0] ? eventDateInput(series.instances[0].startDateTime, series.timezone) : ""} /> : null}
 
       <section aria-labelledby="series-instances-title" className="flex flex-col gap-3">
-        <h2 id="series-instances-title" className="text-h4 text-ink">Upcoming instances</h2>
-        <Table label="Upcoming instances">
-          <THead>
-            <tr>
-              <TH>Start</TH>
-              <TH className="text-right">Event page</TH>
-            </tr>
-          </THead>
-          <TBody>
-            {series.instances.map((inst) => (
-              <TR key={inst.id}>
-                <TD className="font-semibold">{formatDayTime(inst.startDateTime, series.timezone)}</TD>
-                <TD className="text-right">
-                  <Link href={`/${organisation.slug}/i/${inst.id}`} className="inline-flex items-center gap-1 text-sm font-semibold text-ink underline underline-offset-4">
-                    View event
-                    <ArrowUpRight aria-hidden className="size-3.5" />
-                  </Link>
-                </TD>
-              </TR>
-            ))}
-          </TBody>
-        </Table>
+        <h2 id="series-instances-title" className="text-h4 text-ink">Upcoming dates</h2>
+        <SeriesDatesManager organisationSlug={organisation.slug} seriesId={series.id} seriesCapacity={series.capacity} timeZone={series.timezone} dates={dates} canManage={isAdmin} />
       </section>
+
+      {tickets ? (
+        <section aria-label="Tickets and passes" className="flex flex-col gap-5">
+          <TicketTypesManager
+            organisationSlug={organisation.slug}
+            target={{ seriesId: series.id }}
+            tickets={tickets.tickets}
+            currency={tickets.currency}
+            paidAllowed={tickets.paidAllowed}
+            paidBlockedReason={tickets.paidBlockedReason}
+            payee={tickets.payee}
+          />
+          <PromoCodesManager organisationSlug={organisation.slug} target={{ seriesId: series.id }} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
+          {tickets.tickets.some((ticket) => ticket.priceMinor > 0) ? (
+            <RefundPolicyControl organisationSlug={organisation.slug} target={{ seriesId: series.id }} policy={tickets.refundPolicy} sold={tickets.sold} />
+          ) : null}
+        </section>
+      ) : null}
 
       {canDownloadReports ? (
         <section aria-labelledby="series-reports-title" className="flex flex-col gap-3">
@@ -127,11 +125,11 @@ export default async function SeriesManagePage({ params }: Props) {
       ) : null}
 
       {firstInstanceId && canManageRegistrations ? (
-        <section aria-label="Attendees (first upcoming occurrence)" className="min-w-0">
+        <section aria-label="Attendees (next date)" className="min-w-0">
           <GuestsPeople
             organisationSlug={organisation.slug}
             target={{ kind: "instance", instanceId: firstInstanceId, seriesId: series.id }}
-            title="Attendees (first upcoming occurrence)"
+            title="Attendees (next date)"
             timeZone={series.timezone}
             now={now.toISOString()}
             attendees={attendees}

@@ -2,6 +2,7 @@
 
 import { EventStatus, RsvpStatus } from "@prisma/client";
 import { revalidatePath as nextRevalidatePath } from "next/cache";
+import { z } from "zod";
 import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -17,6 +18,8 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+import { cancelOccurrence, setOccurrenceCapacity } from "@/lib/payments/occurrences";
+import { PaymentOperationError } from "@/lib/payments/operations";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -189,7 +192,8 @@ export async function updateEventSeriesMeta(
     if (data.capacity != null) {
       const counts = await tx.rSVP.groupBy({
         by: ["eventInstanceId"],
-        where: { eventInstance: { eventSeriesId: series.id }, status: RsvpStatus.CONFIRMED },
+        // Dates with their own capacity aren't bound by the series one.
+        where: { eventInstance: { eventSeriesId: series.id, capacity: null }, status: RsvpStatus.CONFIRMED },
         _count: { _all: true },
       });
       if (counts.some((row) => row._count._all > data.capacity!)) return false;
@@ -262,6 +266,12 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
   });
   if (!series) return { ok: false, error: "Series not found." };
 
+  // Deleting would erase the tickets of people who paid: cancel dates instead,
+  // which refunds them.
+  if (await prisma.order.count({ where: { eventSeriesId: series.id, totalMinor: { gt: 0 }, status: { in: ["CONFIRMED", "PENDING", "REQUESTED"] } } }) > 0) {
+    return { ok: false, error: "People have paid for this series. Cancel its dates instead, which refunds them." };
+  }
+
   const instances = await prisma.eventInstance.findMany({
     where: { eventSeriesId: series.id },
     select: { id: true },
@@ -283,4 +293,55 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
     revalidatePath(`/${org.slug}/i/${i.id}`);
   }
   return { ok: true };
+}
+
+const dateSchema = z.object({
+  organisationSlug: z.string().trim().min(1).max(120),
+  eventSeriesId: z.string().trim().min(1).max(128),
+  instanceId: z.string().trim().min(1).max(128),
+});
+const capacitySchema = dateSchema.extend({ capacity: z.number().int().min(1).max(1_000_000).nullable() }).strict();
+const cancelDateSchema = dateSchema.extend({ reason: z.string().trim().max(500).default("") }).strict();
+
+/** Owners and admins manage a series' dates, as they edit the series. */
+async function dateAccess(organisationSlug: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "You must be signed in." } as const;
+  if (await isActionRateLimited("action", session.user.id)) return { error: "Too many updates. Please try again later." } as const;
+  const org = await prisma.organisation.findUnique({ where: { slug: organisationSlug }, select: { id: true, slug: true } });
+  if (!org) return { error: "Organisation not found." } as const;
+  if (!canManageEvents(await getMembership(session.user.id, org.id))) return { error: "You do not have permission to change this series." } as const;
+  return { org, userId: session.user.id };
+}
+
+/** One date's own capacity, or null to use the series capacity. */
+export async function setSeriesDateCapacity(input: unknown): Promise<ActionResult> {
+  const parsed = capacitySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a capacity of at least 1, or leave it blank." };
+  const access = await dateAccess(parsed.data.organisationSlug);
+  if ("error" in access) return { ok: false, error: access.error ?? "Organisation not found." };
+  try {
+    await setOccurrenceCapacity({ organisationId: access.org.id, seriesId: parsed.data.eventSeriesId, instanceId: parsed.data.instanceId, capacity: parsed.data.capacity, actorUserId: access.userId });
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    throw error;
+  }
+  revalidateAllSeriesPaths(access.org.slug, parsed.data.eventSeriesId, [parsed.data.instanceId]);
+  return { ok: true };
+}
+
+/** Cancel one date: its orders are refunded (a pass, its share) and everyone on it is emailed. */
+export async function cancelSeriesDate(input: unknown): Promise<ActionResult<{ refunded: number; failed: number; notified: number; }>> {
+  const parsed = cancelDateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose a date to cancel." };
+  const access = await dateAccess(parsed.data.organisationSlug);
+  if ("error" in access) return { ok: false, error: access.error ?? "Organisation not found." };
+  try {
+    const result = await cancelOccurrence({ organisationId: access.org.id, seriesId: parsed.data.eventSeriesId, instanceId: parsed.data.instanceId, actorUserId: access.userId, reason: parsed.data.reason });
+    revalidateAllSeriesPaths(access.org.slug, parsed.data.eventSeriesId, [parsed.data.instanceId]);
+    return { ok: true, data: { refunded: result.refunded, failed: result.failed, notified: result.notified } };
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    throw error;
+  }
 }

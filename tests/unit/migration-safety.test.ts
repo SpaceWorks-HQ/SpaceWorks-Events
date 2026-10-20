@@ -103,4 +103,15 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('CREATE TRIGGER "event_currency_lock"');
     expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
   });
+
+  it("opens tickets to series by replacing constraints only, never rows or columns", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261026000000_paid_series/migration.sql"), "utf8");
+    // The only drops are constraints and one index, each replaced in the same migration.
+    const drops = sql.match(/^.*\bDROP\b.*$/gim) ?? [];
+    expect(drops.every((line) => /DROP CONSTRAINT|DROP INDEX|DROP NOT NULL/.test(line))).toBe(true);
+    expect(sql).not.toMatch(/DROP (TABLE|COLUMN|TYPE)|^\s*(UPDATE|DELETE)\b/im);
+    for (const trigger of ["ticket_type_target_fixed", "rsvp_ticket_type_target", "promo_code_ticket_type_target", "series_currency_lock"]) {
+      expect(sql).toContain(`CREATE TRIGGER "${trigger}"`);
+    }
+  });
 });

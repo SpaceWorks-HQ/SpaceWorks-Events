@@ -5,13 +5,15 @@ import { z } from "zod";
 import type { ActionResult } from "@/app/actions/org";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { prisma } from "@/lib/db";
-import { isValidPromoCode, promoCodeDigest, redeemingOrdersWhere } from "@/lib/payments/promo";
+import { findPromoCode, isValidPromoCode, redeemingOrdersWhere } from "@/lib/payments/promo";
 
 const schema = z.object({
   orgSlug: z.string().trim().min(1).max(120),
-  eventSlug: z.string().trim().min(1).max(200),
+  /** An event, or a date of a series (whose codes cover its dates and passes). */
+  eventSlug: z.string().trim().min(1).max(200).optional(),
+  eventInstanceId: z.string().trim().min(1).max(128).optional(),
   code: z.string().trim().min(1).max(32),
-}).strict();
+}).strict().refine((value) => Boolean(value.eventSlug) !== Boolean(value.eventInstanceId));
 
 /** A code's rule for the browser's price preview; amounts are strings because they are BigInt on the server. */
 export type PromoPreview = {
@@ -33,14 +35,20 @@ export async function checkPromoCode(input: unknown): Promise<ActionResult<Promo
   const parsed = schema.safeParse(input);
   if (!parsed.success || !isValidPromoCode(parsed.data.code)) return { ok: false, error: "That promo code isn't valid." };
   if (await isActionRateLimited("rsvp")) return { ok: false, error: "Too many attempts. Try again shortly." };
-  const event = await prisma.event.findFirst({
-    where: { slug: parsed.data.eventSlug, organisation: { slug: parsed.data.orgSlug }, status: EventStatus.PUBLISHED, page: { isPublished: true } },
-    select: { id: true },
-  });
-  if (!event) return { ok: false, error: "That promo code isn't valid." };
+  const owner = parsed.data.eventSlug
+    ? await prisma.event.findFirst({
+      where: { slug: parsed.data.eventSlug, organisation: { slug: parsed.data.orgSlug }, status: EventStatus.PUBLISHED, page: { isPublished: true } },
+      select: { id: true },
+    }).then((event) => (event ? { eventId: event.id } : null))
+    : await prisma.eventInstance.findFirst({
+      where: { id: parsed.data.eventInstanceId, cancelledAt: null, series: { organisation: { slug: parsed.data.orgSlug }, status: EventStatus.PUBLISHED } },
+      select: { eventSeriesId: true },
+    }).then((date) => (date ? { eventSeriesId: date.eventSeriesId } : null));
+  if (!owner) return { ok: false, error: "That promo code isn't valid." };
   const now = new Date();
-  const promo = await prisma.promoCode.findUnique({
-    where: { eventId_codeDigest: { eventId: event.id, codeDigest: promoCodeDigest(parsed.data.code) } },
+  const found = await findPromoCode(prisma, owner, parsed.data.code);
+  const promo = found && await prisma.promoCode.findUnique({
+    where: { id: found.id },
     select: { id: true, archivedAt: true, kind: true, appliesPer: true, percentOff: true, amountOffMinor: true, ticketTypeId: true, minQuantity: true, perOrderLimit: true, maxRedemptions: true, validFrom: true, validUntil: true },
   });
   if (!promo || promo.archivedAt) return { ok: false, error: "That promo code isn't valid." };
