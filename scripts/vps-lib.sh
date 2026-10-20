@@ -345,7 +345,7 @@ run_mc() {
   if [[ -n "$(conf_get "$file" OFFSITE_CA)" ]]; then
     ca=(--volume "$SWE_CONFIG_DIR/$(conf_get "$file" OFFSITE_CA):/offsite-ca.crt:ro" --env SSL_CERT_FILE=/offsite-ca.crt)
   fi
-  docker run --rm --env HOME=/mc-home --volume "$home:/mc-home" "${ca[@]}" --entrypoint mc "$@" || status=$?
+  docker run --rm --env HOME=/mc-home --env MC_CONFIG_DIR=/mc-home/.mc --volume "$home:/mc-home" "${ca[@]}" --entrypoint mc "$@" || status=$?
   rm -rf -- "$home"
   return "$status"
 }

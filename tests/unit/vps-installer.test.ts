@@ -260,6 +260,8 @@ describe("VPS installer", () => {
     expect(lib(`json_string 'say "hi"'`).stdout).toBe('"say \\"hi\\""');
     const lib_ = readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8");
     expect(lib_).not.toContain("MC_HOST_offsite");
+    // The Silo image sets MC_CONFIG_DIR itself, so HOME alone would hide the alias.
+    expect(lib_).toContain("--env MC_CONFIG_DIR=/mc-home/.mc");
     for (const [check, good, bad] of [
       ["is_days", "14", "0"], ["is_prefix", "spaceworks-events", "a/b"],
       ["is_https_endpoint", "https://acct.r2.cloudflarestorage.com", "http://bucket.example.com"],
