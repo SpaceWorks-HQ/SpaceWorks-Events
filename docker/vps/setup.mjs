@@ -1,7 +1,7 @@
 // Run only in the operator container with an empty, owner-only /config mount.
-import { randomBytes } from "node:crypto";
+import { randomBytes, X509Certificate } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "node:fs";
 
 process.umask(0o077);
 const dir = process.env.SWE_SETUP_CONFIG_DIR || "/config";
@@ -21,6 +21,16 @@ if (!renew && (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/
 }
 if (!renew && ["compose.env", "app.env", "actions-key"].some((name) => existsSync(`${dir}/${name}`))) throw new Error("Configuration exists; refusing to replace secrets. Use renew-certificates only for TLS renewal.");
 if (renew && !existsSync(`${dir}/tls/ca.key`)) throw new Error("Existing CA required for certificate renewal.");
+// renew-certificates --if-due: renew only within 60 days of the first expiry;
+// exit 10 when nothing was due, so the caller can skip restarting services.
+if (renew && process.argv.includes("--if-due")) {
+  const expiries = ["postgres", "redis", "storage"].map((service) => Date.parse(new X509Certificate(readFileSync(`${dir}/tls/${service}/public.crt`)).validTo));
+  const daysLeft = Math.floor((Math.min(...expiries) - Date.now()) / 86_400_000);
+  if (daysLeft > 60) {
+    console.log(`Internal certificates are valid for ${daysLeft} more days; renewal is not due.`);
+    process.exit(10);
+  }
+}
 const write = (name, value) => writeFileSync(`${dir}/${name}`, value, { mode: 0o600 });
 const openssl = (...args) => execFileSync("openssl", args, { stdio: "ignore" });
 mkdirSync(`${dir}/tls`, { recursive: true });

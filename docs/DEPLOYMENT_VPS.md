@@ -3,10 +3,12 @@
 [Documentation index](README.md) · [Docker image details](DEPLOYMENT_DOCKER.md)
 
 Run Space Works Events on one Linux VPS with Docker Engine and Docker Compose.
-The production stack includes the Next.js application (UI and backend), PostgreSQL
-16, Redis, private Silo S3-compatible storage, Caddy HTTPS, a separate one-shot
-migration service and an independent email-outbox recovery scheduler. Node.js,
-PostgreSQL and Redis do not need to be installed on the host.
+The production stack uses two images of its own: the **backend** (the API, the
+one-shot migrations, the email outbox worker and its recovery scheduler, live
+check-in and the operator tools) and the **frontend** (the website). PostgreSQL
+16, Redis 7, private Silo S3-compatible storage and Caddy HTTPS run from their
+standard images in the same Compose file. Node.js, PostgreSQL and Redis do not
+need to be installed on the host.
 
 This follows the service separation used by [SpaceWorks](https://github.com/SpaceWorks-HQ/SpaceWorks),
 with the transport and privacy requirements of this Events application. Use
@@ -51,9 +53,11 @@ temporary storage. The release's `scripts/setup-vps.sh` then checks disk space
 and the Docker Compose version (2.24.4 or newer, if Docker is already
 installed) and asks every question first: the hosting layout (below),
 hostnames, super-admin email, HTTPS, file storage, verified sender, SMTP relay
-(password hidden; Brevo is prefilled on port 2525) and automatic deploys. It
-then checks that the ports it needs are free (80/443 for Caddy; 8080 and 8081
-behind an existing proxy).
+(password hidden; Brevo is prefilled on port 2525), automatic deploys, backups
+(nightly schedule, encryption, off-site copies; see
+[Backups and recovery](#backups-and-recovery)) and optional
+[server hardening](#server-security). It then checks that the ports it needs are
+free (80/443 for Caddy; 8080 and 8081 behind an existing proxy).
 Invalid answers are asked again. When memory is short it offers a 4 GB swap file.
 It reports what the hostname resolves to and shows one summary of every answer
 and host change. **Nothing changes before you confirm.**
@@ -185,8 +189,9 @@ fork, which needs its own published release (or `--ref`). Pass options as
 `curl … | bash -s -- --dir /srv/spaceworks-events`. To keep secrets somewhere
 other than `/etc/spaceworks-events`, set the variable on the `bash` side of the
 pipe: `curl … | SWE_CONFIG_DIR=/srv/events-config bash`. Running `curl … | sudo bash`
-as root works too. DNS, firewall policy, SMTP provisioning and off-server backups
-remain operator tasks.
+as root works too. DNS and SMTP provisioning remain operator tasks. On a fresh
+install without `--repo`, the installer asks once which repository to install
+from (Enter keeps the official one).
 
 Answers are stored in single-quoted env files, so the sender, SMTP login and
 password cannot contain `'` or `\`; the installer asks again if they do.
@@ -378,12 +383,26 @@ The services keep running. The script writes `/etc/spaceworks-events/backups/<UT
 with a consistent `database.dump` (checked with `pg_restore --list`), `config.tar.gz`
 (every secret, including `MFA_ENCRYPTION_KEY` and the CA) and `objects/` (every
 uploaded file, mirrored from Silo). `--no-objects` skips the files; updates and
-restores use it. It keeps the newest seven full and seven database-only backups
-(`SWE_BACKUP_KEEP` changes that), and never removes the backup being restored.
-Schedule it, for example with a root cron entry
-`30 3 * * * bash /opt/spaceworks-events/current/scripts/vps-backup.sh`, and copy each
-backup off this server, encrypted, the same day. A backup on the same VPS is not a
-backup of the VPS.
+restores use it. A backup stays on the server for `BACKUP_KEEP_DAYS` (default 14),
+but the newest three full and three database-only backups always stay, and the
+backup being restored is never removed.
+
+Run the installer again and choose **Backups** to change the settings, which are
+saved in `/etc/spaceworks-events/backup.env`. Setup asks about the first three:
+
+| Setting | What it does |
+| --- | --- |
+| **Nightly backups** | A systemd timer (`swevents-backup.timer`) runs a full backup at about 02:30 UTC. |
+| **Encryption** | Every backup becomes `backup.tar.age`, encrypted with [age](https://age-encryption.org) to a public key. The private key (`AGE-SECRET-KEY-…`) is shown **once** and is not stored on the server: keep it in your password manager. Only `version` and `kind` stay readable. |
+| **Off-site copies** | After each backup, an encrypted copy goes to an S3-compatible bucket at another provider (R2, B2, S3…), kept for its own number of days (default 90). Only encrypted backups are sent. |
+| **Retention** | Days a backup stays on this server. |
+
+Each run writes `/etc/spaceworks-events/status/backup.json` (no secrets), which the
+app reads read-only. **Super admin → Operations** shows the newest backup, schedule,
+encryption and off-site state. If a backup fails, or scheduled backups are more than
+36 hours old, the super admin is emailed once per failure (once a day while stale).
+A backup on the same VPS is not a backup of the VPS: turn on off-site copies, or copy
+backups away yourself.
 
 To restore on the same installation:
 
@@ -391,6 +410,9 @@ To restore on the same installation:
 sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh /etc/spaceworks-events/backups/<time>
 ```
 
+For an encrypted backup it asks you to paste the key (or pass `--identity FILE`).
+`vps-restore.sh offsite:<time>` first downloads that backup from the off-site
+bucket; the installer menu's **Backups → List off-site backups** shows the names.
 It shows what will be replaced and asks you to type `RESTORE`. It backs up the
 current database first, stops the app, Caddy and the scheduler, and replaces the
 database in one transaction. It then copies the backup's files back into Silo
@@ -400,7 +422,10 @@ starts everything and runs the VPS checks.
 On a **new server**, restore the configuration before anything else, because the
 database holds data encrypted with its keys. Do not run a fresh install: it would
 generate different keys. Copy the backup directory to the server (here
-`/root/<time>`). Then, as root, unpack the release named in its `version` file and
+`/root/<time>`). If it is encrypted (`backup.tar.age`), install `age` and decrypt it
+in place first, with the key saved in `key.txt`:
+`age --decrypt --identity key.txt /root/<time>/backup.tar.age | tar -xf - -C /root/<time>`.
+Then, as root, unpack the release named in its `version` file and
 record it as an unfinished installation:
 
 ```bash
@@ -424,36 +449,86 @@ Run the one-liner and choose **Resume**. It downloads (or, for a `vps-` version,
 builds) and starts that release with the restored keys. Then run `vps-restore.sh "$backup"` and point DNS at the new
 server. Later updates work as usual.
 
-For the production recovery baseline, also configure encrypted off-server
-retention, backup-failure alerts, PostgreSQL WAL archiving/PITR or
-provider-managed recovery, and regular restore drills on an isolated host; this
-Compose file does not configure those. Super-admin backup settings describe
-posture and do not create backups. Never run `scripts/vps-compose.sh down --volumes`
+Nightly, encrypted, off-site backups with alerts cover a day's data loss at most.
+For tighter recovery points, add PostgreSQL WAL archiving/PITR yourself, and run
+regular restore drills on an isolated host (record them with **Record restore
+drill** on the Operations page). The Instance settings backup fields describe a
+provider's backups for other deployments and do not create backups. Never run `scripts/vps-compose.sh down --volumes`
 on an installation you want to retain. See [Production operations](production-operations.md)
 for incident and retention requirements.
 
 ## Certificate renewal and monitoring
 
 Caddy renews public HTTPS certificates automatically while DNS and ports remain
-reachable. Internal service certificates last **one year**. Schedule renewal
-well before expiry with the operator tools of the running release (the backend
-image's `ops` role). As root:
+reachable. Internal service certificates (PostgreSQL, Redis, Silo) last **one
+year**. On installations made by the installer, a weekly systemd timer
+(`swevents-certificates.timer`) renews them once they are within 60 days of
+expiry, restarts the services and runs the checks; updates add it to older
+installations. To renew now, as root:
 
 ```bash
-cd /opt/spaceworks-events/current   # or your checkout
-export SWE_CONFIG_DIR=/etc/spaceworks-events
-scripts/vps-compose.sh run --rm --no-deps --volume "$SWE_CONFIG_DIR:/config" \
-  ops node docker/vps/setup.mjs renew-certificates
-scripts/vps-compose.sh up -d --force-recreate
-scripts/vps-compose.sh run --rm --no-deps ops node docker/vps/check.mjs
+sudo bash /opt/spaceworks-events/current/scripts/vps-renew-certs.sh
 ```
 
+From a checkout without the timer, run the same script there (with
+`SWE_CONFIG_DIR` set) at least once a year; `--if-due` renews only when due.
 Renewal retains the existing CA and all credentials; expect a short interruption
 while services restart. The CA itself lasts ten years and needs a planned trust
 rotation before expiry. Monitor disk space, certificate expiry, HTTPS, authenticated
 readiness, Redis availability, database connections, outbox failures and fresh
 backups. Container restart policies do not restart a process merely because its
 healthcheck becomes unhealthy; alert and investigate.
+
+## Changing settings later
+
+Run the installer again and choose **Change settings**:
+
+- **Hostnames.** New website and API hostnames (one hostname in the single layout).
+  Point DNS first. Everyone is signed out, and links already sent keep the old
+  hostname. On Netlify, set the new values there too.
+- **Outgoing email.** New sender, relay, login and password. The installer logs in
+  to the relay (`check.mjs smtp`) before keeping the change.
+- **Bucket credentials.** A new access key for an external bucket.
+
+Each change backs up the database and configuration, recreates the services and
+runs the checks. If anything fails, the previous settings are put back. Moving
+between bundled Silo and an external bucket is a data migration, not a setting:
+copy the objects with `mc mirror`, then reinstall with the restored configuration.
+Email settings saved in **Super admin → Settings** override the installer's; use
+**Send test email** on the Operations page to check what is in effect.
+
+## Server security
+
+Setup offers it, and the menu's **Server security** runs it again. Each part is optional:
+
+- **Firewall:** ufw on Debian/Ubuntu, or firewalld where it runs. It allows only
+  SSH (every port sshd listens on), HTTP and HTTPS. If the SSH port cannot be
+  found, the firewall is left alone so you are not locked out. Docker publishes
+  ports past ufw; this stack publishes only 80 and 443, or `127.0.0.1` ports
+  behind your own proxy.
+- **Automatic security updates:** unattended-upgrades or dnf-automatic, security
+  fixes only.
+- **fail2ban:** bans an address for an hour after five failed SSH logins.
+
+## Super-admin recovery
+
+If the super admin loses their authenticator or password, someone with root on
+the server chooses **Recover super-admin access**. It removes that account's
+authenticator and recovery codes, signs it out everywhere, records an audit event
+and prints a password-reset link valid for one hour. Open it, set a password, sign
+in, then set up an authenticator again.
+
+## Support bundle and uninstall
+
+**Support bundle** collects the release, settings without secrets, service state,
+the checks, disk and memory, and the last 500 log lines of each service into
+`/opt/spaceworks-events/support/`. Credentials, tokens and keys are redacted, but
+logs can hold email and IP addresses, so read it before sharing.
+
+**Uninstall** removes the containers, timers, runner, images and
+`/opt/spaceworks-events`. The database and uploads (Docker volumes) and
+`/etc/spaceworks-events` (secrets and backups) are kept unless you type
+`DELETE DATA`. Docker, swap and any hardening stay in place.
 
 ## A separate frontend on Netlify
 

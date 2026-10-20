@@ -91,6 +91,8 @@ cp -p "$compose_env" "$compose_env.previous"
 conf_set "$compose_env" SWE_VERSION "$version"
 set_image_settings "$compose_env" "$version" "$repository"
 say 'Fetching the new images. The site keeps running meanwhile.'
+# The app reads backup status from here (0.9.3 and later).
+install -d -m 0755 "$(status_dir)"
 compose config --quiet
 fetch_images "$version" "$(conf_get "$compose_env" SWE_LAYOUT)"
 compose run --rm --no-deps ops node docker/vps/check.mjs preflight
@@ -104,6 +106,11 @@ rm -f "$compose_env.previous"
 if [[ $managed = 1 ]]; then
   activate_release "$SWE_REPO_DIR"
   conf_set "$(install_conf)" SWE_RELEASE "$revision"
+  # Installations from before 0.9.3 get the weekly certificate check.
+  if has_systemd && ! timer_enabled certificates; then
+    install_certificate_timer
+    say 'Added a weekly check that renews the internal certificates before they expire.'
+  fi
   # Keep the three newest releases (and their images) for manual rollback.
   count=0
   while IFS= read -r dir; do

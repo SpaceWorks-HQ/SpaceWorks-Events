@@ -1,5 +1,6 @@
 import "server-only";
 
+import { alertOnBackupProblems } from "@/lib/backupAlerts";
 import { deliverOutboxBatch } from "@/lib/outbox";
 import {
   recordOutboxSchedulerFailure,
@@ -28,6 +29,8 @@ export async function runOutboxScheduler() {
   try {
     const result = await deliverOutboxBatch();
     const purged = await purgeExpiredOperationalData();
+    // Observability, like the heartbeat: never let it stop mail delivery.
+    await alertOnBackupProblems().catch(() => undefined);
     await recordOutboxSchedulerSuccess(result).catch(() => undefined);
     return { ...result, purged };
   } catch (error) {

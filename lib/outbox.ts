@@ -8,6 +8,7 @@ import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, broadcastFe
 import { isBroadcastDesign } from "@/lib/email/broadcastDesigns";
 import { sendPasswordResetEmail } from "@/lib/email/passwordReset";
 import { sendEmailVerificationEmail } from "@/lib/email/emailVerification";
+import { sendOperatorNotice } from "@/lib/email/operatorNotice";
 import { describeOperationalError } from "@/lib/redactSensitiveText";
 import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 
@@ -54,6 +55,13 @@ type CollaboratorInvitePayload = { to: string; eventTitle: string; inviteUrl: st
 type EventBroadcastPayload = { to: string; broadcastId: string; rsvpId: string };
 
 type EventBroadcastTestPayload = { to: string; eventId: string; subject: string; body: string; design?: string; recipientName?: string };
+
+/** A short plain message to a super admin: the test email and backup alerts. It never carries links or secrets. */
+export type OperatorNoticePayload = { to: string; subject: string; lines: string[] };
+
+export async function enqueueOperatorNotice(client: OutboxClient, payload: OperatorNoticePayload) {
+  return client.outboxMessage.create({ data: { kind: "operator-notice", payload: payload as Prisma.InputJsonValue } });
+}
 
 export async function enqueueEventBroadcastRecipients(client: OutboxClient, recipients: EventBroadcastPayload[]) {
   if (recipients.length === 0) return { count: 0 };
@@ -324,6 +332,14 @@ function broadcastVariablesFor(event: BroadcastEvent, recipient: { name?: string
 
 function asCollaboratorInvitePayload(value: Prisma.JsonValue): CollaboratorInvitePayload | null { if (!value || typeof value !== "object" || Array.isArray(value)) return null; const p = value as Record<string, unknown>; return isEmail(p.to) && isBoundedString(p.eventTitle, 200) && isSafeMessageUrl(p.inviteUrl) && (p.expiresAt === undefined || isIsoDate(p.expiresAt)) ? p as CollaboratorInvitePayload : null; }
 
+function asOperatorNoticePayload(value: Prisma.JsonValue): OperatorNoticePayload | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const p = value as Record<string, unknown>;
+  return isEmail(p.to) && isBoundedString(p.subject, 200) && Array.isArray(p.lines) && p.lines.length <= 10 && p.lines.every((line) => isBoundedString(line, 1000))
+    ? p as OperatorNoticePayload
+    : null;
+}
+
 /** Deliver a small batch. Run this from a protected scheduler, never a request path. */
 export async function deliverOutboxBatch(limit = 20) {
   // A worker may be interrupted after claiming a message. Return a stale claim
@@ -498,6 +514,10 @@ export async function deliverOutboxBatch(limit = 20) {
           brand: broadcastBrandFor(event),
           messageId: stableMessageId,
         });
+      } else if (message.kind === "operator-notice") {
+        const payload = asOperatorNoticePayload(message.payload);
+        if (!payload) throw new PermanentOutboxError();
+        await sendOperatorNotice({ ...payload, messageId: stableMessageId });
       } else if (message.kind === MEMBER_ID_EMAIL_KIND) {
         const payload = asMemberIdEmailPayload(message.payload);
         if (!payload) throw new PermanentOutboxError();

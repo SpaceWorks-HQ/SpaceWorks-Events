@@ -714,6 +714,11 @@
     },
     {
       "module": "app/actions/instance",
+      "name": "sendInstanceTestEmail",
+      "id": "instance:sendInstanceTestEmail"
+    },
+    {
+      "module": "app/actions/instance",
       "name": "purgeExpiredVerificationTokens",
       "id": "instance:purgeExpiredVerificationTokens"
     },

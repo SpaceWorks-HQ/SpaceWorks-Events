@@ -168,11 +168,26 @@ Run the same command again. An existing installation shows a menu:
    downloads the new images while the site keeps running, migrates and restarts. If
    the new release is not healthy, the previous one is restored automatically.
 2. **Back up now** — database, configuration and uploaded files, into
-   `/etc/spaceworks-events/backups/`. Copy backups off the server; they hold every secret.
+   `/etc/spaceworks-events/backups/`.
 3. **Check status and health** — services, disk, newest backup and live checks.
-4. **Automatic deploys** — install (or remove) a GitHub Actions runner so every
+4. **Backups** — nightly schedule, retention, encryption to a key you keep off the
+   server (`age`), and copies to an off-site S3 bucket. Failures and stale backups
+   show on Super admin → Operations and are emailed to the super admin.
+5. **Change settings** — hostnames, outgoing email (SMTP) or bucket credentials;
+   rolled back automatically if the checks fail.
+6. **Server security** — a firewall allowing only SSH, HTTP and HTTPS, automatic
+   security updates and fail2ban.
+7. **Automatic deploys** — install (or remove) a GitHub Actions runner so every
    published release updates the server by itself, as in SpaceWorks.
-5. **Cancel** (the default).
+8. **Recover super-admin access** — for a lost authenticator or password: resets
+   MFA and prints a one-hour reset link.
+9. **Support bundle** — checks and recent logs with secrets redacted.
+10. **Uninstall** — keeps the data, secrets and backups unless you type `DELETE DATA`.
+
+`0` (the default) cancels without changing anything.
+
+The internal service certificates renew themselves before they expire (a weekly
+systemd check), and setup asks about backups and hardening up front.
 
 Releases live in `/opt/spaceworks-events/releases/<commit>` with `current` pointing
 at the running one; secrets stay in `/etc/spaceworks-events`. Options: `--release`
@@ -182,8 +197,8 @@ to skip the menu; `bash install.sh --help` lists them. A new release is publishe
 by the first `main` build of each new `VERSION`. A restore is a
 deliberate step: `sudo bash /opt/spaceworks-events/current/scripts/vps-restore.sh <backup>`.
 
-The installer does not change DNS or firewall rules, provision SMTP or copy backups
-off the server. The **[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers manual
+The installer does not change DNS or provision SMTP. The
+**[complete VPS guide](docs/DEPLOYMENT_VPS.md)** covers manual
 installation from a checkout, updates, rollback, backups and restores, internal
 certificate renewal and monitoring. Use `compose.production.yml`; the development
 and staging Compose files are not production setups.
