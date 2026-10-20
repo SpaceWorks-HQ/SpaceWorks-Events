@@ -263,6 +263,16 @@ describe("VPS installer", () => {
       expect(lib(`${check} '${good}'`).status).toBe(0);
       expect(lib(`${check} '${bad}'`).status).not.toBe(0);
     }
+    // A private off-site endpoint's CA: a readable PEM file, or "none" for public certificates.
+    const pem = path.join(mkdtempSync(path.join(tmpdir(), "swe-ca-")), "ca.crt");
+    writeFileSync(pem, "-----BEGIN CERTIFICATE-----
+MIIB
+-----END CERTIFICATE-----
+");
+    expect(lib(`is_ca_file none`).status).toBe(0);
+    expect(lib(`is_ca_file '${pem.replaceAll("\\", "/")}'`).status).toBe(0);
+    expect(lib(`is_ca_file /no/such/ca.crt`).status).not.toBe(0);
+    expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).toContain("--env SSL_CERT_FILE=/offsite-ca.crt");
     const backup = readFileSync(path.join(root, "scripts/vps-backup.sh"), "utf8");
     // Encrypted backups keep only the version and kind readable, and only encrypted ones leave the server.
     expect(backup).toContain('age --encrypt --recipient "$recipient"');

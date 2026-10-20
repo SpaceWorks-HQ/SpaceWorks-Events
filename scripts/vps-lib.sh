@@ -337,12 +337,16 @@ urlencode() {
 # bucket as alias `offsite`. The credentials travel in the environment, never
 # on a command line.
 run_mc() {
-  local file endpoint
+  local file endpoint ca=()
   file=$(backup_env)
   endpoint=$(conf_get "$file" OFFSITE_ENDPOINT)
   endpoint=${endpoint#https://}
+  # A private endpoint's own CA (OFFSITE_CA names a file in the configuration directory).
+  if [[ -n "$(conf_get "$file" OFFSITE_CA)" ]]; then
+    ca=(--volume "$SWE_CONFIG_DIR/$(conf_get "$file" OFFSITE_CA):/offsite-ca.crt:ro" --env SSL_CERT_FILE=/offsite-ca.crt)
+  fi
   MC_HOST_offsite="https://$(urlencode "$(conf_get "$file" OFFSITE_ACCESS_KEY_ID)"):$(urlencode "$(conf_get "$file" OFFSITE_SECRET_ACCESS_KEY)")@${endpoint%/}" \
-    docker run --rm --env MC_HOST_offsite --entrypoint mc "$@"
+    docker run --rm --env MC_HOST_offsite "${ca[@]}" --entrypoint mc "$@"
 }
 offsite_path() {
   local file
@@ -359,6 +363,9 @@ Backblaze B2, Amazon S3...). Create a private bucket and a key limited to it.
 EOF
   ask offsite_endpoint 'Off-site S3 endpoint' '' is_https_endpoint 'Enter the HTTPS endpoint, such as https://<account>.r2.cloudflarestorage.com.'
   offsite_endpoint=${offsite_endpoint%/}
+  # Your own MinIO, Silo or Garage may use a private CA; cloud providers do not.
+  ask offsite_ca 'CA certificate file, only for a private endpoint (none if it has a public certificate)' none is_ca_file 'Enter the path of a PEM certificate file, or none.'
+  [[ "$offsite_ca" != none ]] || offsite_ca=''
   ask offsite_bucket 'Off-site bucket' '' is_bucket 'Enter a bucket name: lowercase letters, digits, dots and hyphens.'
   ask offsite_prefix 'Folder in the bucket' spaceworks-events is_prefix 'Use letters, digits, dots, hyphens and underscores.'
   ask offsite_key 'Access key ID' '' is_env_value "Enter the access key, without ' or \\ characters."
@@ -366,9 +373,18 @@ EOF
   ask offsite_days 'Days to keep off-site copies' 90 is_days 'Enter a number of days.'
 }
 
+is_ca_file() { [[ "$1" = none ]] || { is_safe_path "$1" && [[ -f "$1" && -r "$1" ]] && grep -q 'BEGIN CERTIFICATE' "$1"; }; }
+
 # shellcheck disable=SC2154 # ask_offsite assigns these by name
 save_offsite() {
   local file=${1:-$(backup_env)}
+  # The CA is copied beside the settings (owner-only), so it is kept with the configuration.
+  if [[ -n "${offsite_ca:-}" ]]; then
+    install -m 0600 "$offsite_ca" "$(dirname "$file")/offsite-ca.crt"
+    conf_set "$file" OFFSITE_CA offsite-ca.crt
+  else
+    conf_unset "$file" OFFSITE_CA
+  fi
   conf_set "$file" OFFSITE_ENDPOINT "$offsite_endpoint"
   conf_set "$file" OFFSITE_BUCKET "$offsite_bucket"
   conf_set "$file" OFFSITE_PREFIX "$offsite_prefix"
@@ -379,9 +395,10 @@ save_offsite() {
 
 clear_offsite() {
   local name
-  for name in OFFSITE_ENDPOINT OFFSITE_BUCKET OFFSITE_PREFIX OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_KEEP_DAYS; do
+  for name in OFFSITE_ENDPOINT OFFSITE_BUCKET OFFSITE_PREFIX OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_KEEP_DAYS OFFSITE_CA; do
     conf_unset "$(backup_env)" "$name"
   done
+  rm -f "$SWE_CONFIG_DIR/offsite-ca.crt"
 }
 
 # The age tool encrypts backups to a public key; only its private key, kept
