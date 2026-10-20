@@ -90,6 +90,8 @@ async function razorpay(request, response, path) {
   if (!authorised("razorpay", request.headers.authorization)) return send(response, 401, { error: { code: "BAD_REQUEST_ERROR" } });
   const body = request.method === "POST" ? JSON.parse((await readBody(request)) || "{}") : {};
   if (request.method === "GET" && path === "/v1/payments") return send(response, 200, { entity: "collection", count: 0, items: [] });
+  const paymentMatch = path.match(/^\/v1\/payments\/([A-Za-z0-9_]+)$/);
+  if (request.method === "GET" && paymentMatch) return send(response, 200, { id: paymentMatch[1], entity: "payment", method: "card", card: { network: "Visa", last4: "4242" } });
   if (request.method === "POST" && path === "/v1/payment_links") {
     const id = nextId("plink");
     links.set(id, { ...body, status: "created", payments: [] });
@@ -174,6 +176,8 @@ async function stripe(request, response, path) {
     }
     return send(response, 200, { ...session, id: sessionMatch[1] });
   }
+  const intentMatch = path.match(/^\/v1\/payment_intents\/([A-Za-z0-9_]+)$/);
+  if (request.method === "GET" && intentMatch) return send(response, 200, { id: intentMatch[1], object: "payment_intent", latest_charge: { payment_method_details: { type: "card", card: { brand: "mastercard", last4: "4444" } } } });
   if (request.method === "GET" && path === "/v1/refunds") {
     const intent = new URL(request.url, origin).searchParams.get("payment_intent");
     return send(response, 200, { object: "list", data: [...refunds.values()].filter((refund) => refund.payment_intent === intent) });

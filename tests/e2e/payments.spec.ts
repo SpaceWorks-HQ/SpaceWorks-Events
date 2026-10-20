@@ -278,6 +278,15 @@ for (const provider of ["STRIPE", "RAZORPAY"] as const) {
       expect(settled.payments[0]).toMatchObject({ status: "PAID_ONLINE", provider, testMode: true });
       expect(settled.payments[0]!.attempts[0]!.status).toBe("PAID");
       expect(settled.rsvps.map((rsvp) => rsvp.status)).toEqual(["CONFIRMED", "CONFIRMED"]);
+
+      // The receipt is the proof of payment, with the provider's payment details.
+      const receiptLink = guest.getByRole("link", { name: "Download receipt (PDF)" });
+      await expect(receiptLink).toHaveAttribute("href", `/api/orders/${order.accessToken}/receipt`);
+      const receipt = await guest.request.get(`/api/orders/${order.accessToken}/receipt`);
+      expect(receipt.status()).toBe(200);
+      expect(receipt.headers()["content-type"]).toBe("application/pdf");
+      expect((await receipt.body()).subarray(0, 5).toString()).toBe("%PDF-");
+      expect(await prisma.payment.findUniqueOrThrow({ where: { id: settled.payments[0]!.id }, select: { methodSummary: true } })).toEqual({ methodSummary: provider === "STRIPE" ? "Mastercard •••• 4444" : "Visa •••• 4242" });
     } finally {
       await context.close();
     }
