@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/outbox", () => ({ deliverOutboxBatch: mocks.deliver }));
 vi.mock("@/lib/retention", () => ({ purgeExpiredOperationalData: mocks.purge }));
+vi.mock("@/lib/backupAlerts", () => ({ alertOnBackupProblems: vi.fn().mockResolvedValue(undefined) }));
 vi.mock("@/lib/operationalHeartbeat", () => ({
   recordOutboxSchedulerStarted: mocks.started,
   recordOutboxSchedulerSuccess: mocks.success,

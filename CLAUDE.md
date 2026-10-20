@@ -22,7 +22,10 @@ image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`;
 server-generated ID cards (`lib/badge/`, org-isolated, storage-key-only
 images); the one-line curl VPS installer (`install.sh`, `scripts/*vps*`: asks
 everything before changing the host, never regenerates secrets, rolls back failed
-updates or auto-deploys via a self-hosted runner; HTTPS by Caddy, its LAN CA or an existing proxy;
+updates or auto-deploys via a self-hosted runner; nightly age-encrypted backups with
+off-site copies and a status file the app reads read-only (`/status`, never the
+backups themselves); operator tools for settings changes, super-admin recovery,
+support bundles and uninstall; HTTPS by Caddy, its LAN CA or an existing proxy;
 bundled PostgreSQL, Redis and Silo or an external S3 bucket; `split` layout by default,
 website and API containers on two hostnames); public release images
 (`.github/workflows/release.yml`: `spaceworks-events-backend`, which also runs

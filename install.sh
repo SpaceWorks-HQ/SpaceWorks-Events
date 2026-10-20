@@ -28,10 +28,13 @@ What it does
   1. Checks this server and downloads the latest release into temporary storage.
   2. Asks every question, shows a summary and waits for your confirmation.
   3. Installs to /opt/spaceworks-events with secrets in /etc/spaceworks-events,
-     downloads the release's images from GitHub Packages and starts the app,
-     PostgreSQL, Redis, Silo object storage, Caddy HTTPS, migrations and the
-     email scheduler.
-  Run the same command later to update, back up or check the installation.
+     downloads the release's backend and frontend images from GitHub Packages
+     and starts them with PostgreSQL, Redis, Silo object storage and Caddy
+     HTTPS. The backend image also runs the migrations and the scheduler.
+  4. Optionally: nightly encrypted backups with off-site copies, a firewall,
+     automatic security updates and automatic deploys of new releases.
+  Run the same command later to update, back up, check, change settings,
+  recover super-admin access, collect a support bundle or uninstall.
 
 Options
   --release TAG install or update to this release (default: the latest release)
@@ -57,6 +60,16 @@ prompt() {
 }
 conf_get() {
   as_root sed -n "s/^$2=//p" "$1/install.conf" 2>/dev/null | tail -n 1 | tr -d "'\r" || true
+}
+# run_tool SCRIPT [ARGS...]: a menu entry, run from the installed release, then exit.
+run_tool() {
+  as_root test -f "$INSTALL_DIR/current/scripts/$1" \
+    || die "This release predates that option. Update first (option 1), then run the installer again."
+  local status=0
+  run_root bash "$INSTALL_DIR/current/scripts/$1" "${@:2}" || status=$?
+  # 2 is a cancellation at a prompt; it already said so.
+  [[ $status = 0 || $status = 2 ]] || exit "$status"
+  exit 0
 }
 github() { curl --fail --silent --show-error --location --proto '=https' "$@"; }
 commit_of() {
@@ -90,6 +103,7 @@ main() {
   install_dir=${install_dir%/}
   [[ "$install_dir" = /* && -n "${install_dir#/}" && "$install_dir" != *[[:space:]:\'\"]* ]] \
     || die 'Use an absolute installation directory without spaces, quotes or colons.'
+  INSTALL_DIR=$install_dir
   if [[ -n "${SWE_CONFIG_DIR:-}" ]]; then
     [[ "$SWE_CONFIG_DIR" = /* && "$SWE_CONFIG_DIR" != / && "$SWE_CONFIG_DIR" != *[[:space:]:\'\"]* ]] \
       || die 'SWE_CONFIG_DIR must be an absolute path without spaces, quotes or colons.'
@@ -122,6 +136,12 @@ main() {
   fi
   if as_root test -f "$install_dir/install.conf"; then pending=$(conf_get "$install_dir" SWE_PENDING_RELEASE); fi
   repository=${repository:-$(conf_get "$install_dir" SWE_REPOSITORY)}
+  # A fresh install asks once, so a fork installs without knowing --repo.
+  if [[ -z "$repository" && -z "$installed" && -z "$pending" && "$action" != update ]]; then
+    repository=$(prompt "
+Install from which GitHub repository? Press Enter for the official one.
+Repository [SpaceWorks-HQ/SpaceWorks-Events]: ")
+  fi
   repository=${repository:-SpaceWorks-HQ/SpaceWorks-Events}
   [[ "$repository" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$ && "$repository" != */. && "$repository" != */.. ]] \
     || die 'The repository must be a GitHub owner/name.'
@@ -138,24 +158,33 @@ What do you want to do?
   1) Update to the latest release - backs up the database first, keeps your settings and data
   2) Back up now - database, configuration and uploads
   3) Check status and health
-  4) Automatic deploys - install or remove the GitHub Actions runner
-  5) Cancel - change nothing
-Choose 1-5 [5]: ")
-      case "${choice:-5}" in
+  4) Backups - nightly schedule, encryption and off-site copies
+  5) Change settings - hostnames, outgoing email or bucket credentials
+  6) Server security - firewall, automatic security updates and fail2ban
+  7) Automatic deploys - install or remove the GitHub Actions runner
+  8) Recover super-admin access - lost authenticator or password
+  9) Support bundle - collect checks and logs for troubleshooting
+  10) Uninstall
+  0) Cancel - change nothing
+Choose 0-10 [0]: ")
+      case "${choice:-0}" in
         1) action=update ;;
-        2) run_root bash "$install_dir/current/scripts/vps-backup.sh"; exit 0 ;;
-        3) run_root bash "$install_dir/current/scripts/vps-status.sh"; exit 0 ;;
-        4)
-          as_root test -f "$install_dir/current/scripts/install-runner.sh" \
-            || die 'This release predates automatic deploys. Update first (option 1), then rerun.'
+        2) run_tool vps-backup.sh ;;
+        3) run_tool vps-status.sh ;;
+        4) run_tool vps-backup-settings.sh ;;
+        5) run_tool vps-reconfigure.sh ;;
+        6) run_tool vps-harden.sh ;;
+        7)
           choice=$(prompt "Install or re-register the runner (i), or remove it (r)? [i]: ")
           case "${choice:-i}" in
-            i|I) run_root bash "$install_dir/current/scripts/install-runner.sh" ;;
-            r|R) run_root bash "$install_dir/current/scripts/install-runner.sh" --remove ;;
+            i|I) run_tool install-runner.sh ;;
+            r|R) run_tool install-runner.sh --remove ;;
             *) die 'Invalid choice. Nothing was changed.' ;;
-          esac
-          exit 0 ;;
-        5) say 'Cancelled. Nothing was changed.'; exit 0 ;;
+          esac ;;
+        8) run_tool vps-recover.sh ;;
+        9) run_tool vps-support.sh ;;
+        10) run_tool vps-uninstall.sh ;;
+        0) say 'Cancelled. Nothing was changed.'; exit 0 ;;
         *) die 'Invalid choice. Nothing was changed.' ;;
       esac
     fi

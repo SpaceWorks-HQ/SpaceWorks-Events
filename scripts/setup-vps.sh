@@ -63,7 +63,9 @@ Next steps
   1. Open $origin/login and sign up with the super-admin email, verify it,
      enable authenticator MFA, then open /super-admin.
   2. Send a test email, upload an event cover and register for a private test event.
-  3. Back up: sudo bash $scripts_dir/vps-backup.sh, then copy the backup off this server.
+  3. Check backups: run the installer again and choose Backups (schedule,
+     encryption, off-site copies), or back up now with
+     sudo bash $scripts_dir/vps-backup.sh
 EOF
   if [[ $layout = netlify ]]; then
     cat <<EOF
@@ -73,6 +75,31 @@ EOF
   fi
   if [[ $managed = 1 ]]; then
     printf '\nRun the installer again at any time to update, back up or check this installation.\n'
+  fi
+}
+
+# Timers (nightly backups if chosen, certificate renewal) and the encryption key
+# chosen during setup. The key is shown once; a resumed setup that already made
+# one keeps it.
+finish_backups() {
+  local file
+  file=$(backup_env)
+  install -d -m 0755 "$(status_dir)"
+  if [[ $managed = 1 ]] && has_systemd; then
+    install_certificate_timer
+    [[ "$(conf_get "$file" BACKUP_SCHEDULE)" != nightly ]] || install_backup_timer
+  fi
+  if [[ "$(conf_get "$file" BACKUP_ENCRYPTION)" = requested ]]; then
+    if ensure_age; then
+      new_backup_key
+      conf_unset "$file" BACKUP_ENCRYPTION
+    else
+      warn 'age could not be installed, so backups are not encrypted. Install the "age" package, then turn on encryption in the installer menu (Backups).'
+    fi
+  fi
+  if [[ -n "$(conf_get "$file" OFFSITE_BUCKET)" ]]; then
+    run_mc "$(silo_image)" ls "offsite/$(conf_get "$file" OFFSITE_BUCKET)" > /dev/null \
+      || warn 'The off-site bucket could not be reached with that key; check it in the installer menu (Backups).'
   fi
 }
 
@@ -88,6 +115,7 @@ if [[ $resume = 1 ]]; then
   SWE_REPO_DIR=$source_dir
   start_stack
   finish
+  finish_backups
   exit 0
 fi
 
@@ -211,6 +239,19 @@ install_runner=0
 if [[ $managed = 1 ]] && command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
   confirm 'Install a GitHub Actions runner on this server for automatic deploys of new releases?' N && install_runner=1
 fi
+schedule_backups=0 encrypt_backups=0 offsite=0 harden=0
+printf '\nBackups (database, configuration and uploads; change them later from the installer menu)\n' >/dev/tty
+# Timers point at the installer's current release, so only managed installs get them.
+if [[ $managed = 1 ]] && has_systemd; then
+  confirm 'Back up every night?' Y && schedule_backups=1
+fi
+confirm 'Encrypt backups with a key you keep off this server (shown once at the end)?' Y && encrypt_backups=1
+if [[ $encrypt_backups = 1 ]] && confirm 'Also copy each backup to an off-site S3 bucket?' N; then
+  ask_offsite
+  offsite=1
+fi
+printf '\n' >/dev/tty
+confirm 'Harden this server: a firewall allowing only SSH, HTTP and HTTPS, automatic security updates and fail2ban?' N && harden=1
 make_swap=0
 if [[ $offer_swap = 1 ]] && confirm "This server has $memory MB of memory; Space Works Events needs about $(( (needed_mb + 999) / 1000 )) GB. Create a 4 GB swap file at /swapfile?" Y; then
   make_swap=1
@@ -259,11 +300,20 @@ install_path=$source_dir
   printf '                   one-shot migrations and an email-outbox scheduler (Docker Compose project swevents)\n'
   [[ $storage_mode = 1 ]] || printf '  File storage:    bucket %s at %s (region %s)\n' "$S3_BUCKET" "$S3_ENDPOINT" "$S3_REGION"
   [[ $install_runner = 0 ]] || printf '  Auto-deploy:     GitHub Actions runner (asks for a registration token at the end)\n'
+  if [[ $schedule_backups = 1 ]]; then backup_line='nightly at about 02:30 UTC, kept 14 days'; else backup_line='when you run them (installer menu)'; fi
+  [[ $encrypt_backups = 0 ]] || backup_line+=', encrypted (key shown once at the end)'
+  [[ $offsite = 0 ]] || backup_line+=", copied to $offsite_bucket"
+  printf '  Backups:         %s\n' "$backup_line"
   printf '  DNS:             %s\n' "${dns:-$public_host does not resolve yet; HTTPS starts working once it points here}"
   [[ $layout != split ]] || printf '                   %s\n' "${site_dns:-$frontend_host does not resolve yet}"
   printf 'Host changes\n'
   [[ $make_swap = 0 ]] || printf '  - create and enable a 4 GB swap file at /swapfile\n'
   [[ $has_docker = 1 ]] || printf '  - install Docker Engine and Docker Compose from the official repositories\n'
+  [[ $encrypt_backups = 0 ]] || command -v age >/dev/null || printf '  - install age (backup encryption) from the distribution packages\n'
+  if [[ $managed = 1 ]] && has_systemd; then
+    printf '  - add systemd timers: %sweekly renewal of internal certificates when due\n' "$([[ $schedule_backups = 0 ]] || echo 'nightly backups, ')"
+  fi
+  [[ $harden = 0 ]] || printf '  - turn on a firewall (SSH, HTTP, HTTPS), automatic security updates and fail2ban\n'
   printf '  - generate secrets and private TLS certificates in %s\n' "$SWE_CONFIG_DIR"
   if [[ $published = 1 ]]; then fetch=download; else fetch=build; fi
   printf '  - %s images, create volumes, apply database migrations and start the services\n\n' "$fetch"
@@ -325,10 +375,21 @@ docker run --rm --user 0:0 --volume "$staging_config:/config" \
   --env EMAIL_FROM --env SMTP_HOST --env SMTP_PORT --env SMTP_SECURE --env SMTP_USER --env SMTP_PASSWORD \
   "$ops_image" node docker/vps/configure-smtp.mjs
 unset SMTP_PASSWORD SMTP_USER
+# Backup choices are saved now, so a resumed setup finishes them too.
+conf_set "$staging_config/backup.env" BACKUP_KEEP_DAYS 14
+[[ $schedule_backups = 0 ]] || conf_set "$staging_config/backup.env" BACKUP_SCHEDULE nightly
+[[ $encrypt_backups = 0 ]] || conf_set "$staging_config/backup.env" BACKUP_ENCRYPTION requested
+[[ $offsite = 0 ]] || save_offsite "$staging_config/backup.env"
+unset offsite_secret
 rmdir "$SWE_CONFIG_DIR" 2>/dev/null || true
 mv -T "$staging_config" "$SWE_CONFIG_DIR"
+install -d -m 0755 "$(status_dir)"
 start_stack
 finish
+finish_backups
+if [[ $harden = 1 ]]; then
+  bash "$SWE_REPO_DIR/scripts/vps-harden.sh" --all || warn 'Hardening did not finish. Run it again from the installer menu (Server security).'
+fi
 if [[ $install_runner = 1 ]]; then
   bash "$SWE_REPO_DIR/scripts/install-runner.sh" \
     || warn 'The runner was not installed. Run the installer again and choose the auto-deploy option.'
