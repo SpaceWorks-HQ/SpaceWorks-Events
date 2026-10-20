@@ -14,6 +14,7 @@ const CHIP_TONES: Record<AttendeeRow["status"], ChipTone> = {
   WAITLISTED: "warning",
   PENDING_APPROVAL: "warning",
   REJECTED: "danger",
+  PENDING_PAYMENT: "warning",
 };
 
 const AVATAR_TONES: Record<AttendeeRow["status"], "success" | "warning" | "neutral"> = {
@@ -21,6 +22,7 @@ const AVATAR_TONES: Record<AttendeeRow["status"], "success" | "warning" | "neutr
   WAITLISTED: "neutral",
   PENDING_APPROVAL: "warning",
   REJECTED: "neutral",
+  PENDING_PAYMENT: "warning",
 };
 
 export type GuestRowActions = {

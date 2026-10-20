@@ -25,7 +25,7 @@ function stripeRequest(body: unknown, options: { secret?: string; timestamp?: nu
 const linkPaid = {
   event: "payment_link.paid",
   payload: {
-    payment_link: { entity: { id: "plink_123", reference_id: "pay_ref_1", notes: { payment_id: "pay_ref_1" } } },
+    payment_link: { entity: { id: "plink_123", reference_id: "pay_ref_1", notes: { attempt_id: "pay_ref_1" } } },
     payment: { entity: { id: "pay_ABC", amount: 49900, currency: "INR", status: "captured" } },
   },
 };
@@ -38,7 +38,13 @@ describe("Razorpay webhook verification", () => {
       eventType: "payment_link.paid",
       paid: { checkoutId: "plink_123", reference: "pay_ref_1", paymentId: "pay_ABC", amountMinor: BigInt(49900), currency: "INR" },
       refunds: [],
+      closedCheckoutId: null,
     });
+  });
+
+  it("reports an expired or cancelled link", () => {
+    const { raw, headers } = razorpayRequest({ event: "payment_link.expired", payload: { payment_link: { entity: { id: "plink_9", status: "expired" } } } });
+    expect(verifyRazorpayWebhook(RAZORPAY_SECRET, raw, headers)).toMatchObject({ paid: null, closedCheckoutId: "plink_9" });
   });
 
   it("rejects a wrong secret, a missing signature, and a tampered body", () => {
@@ -82,7 +88,13 @@ describe("Stripe webhook verification", () => {
       eventType: "checkout.session.completed",
       paid: { checkoutId: "cs_test_1", reference: "pay_ref_2", paymentId: "pi_1", amountMinor: BigInt(50000), currency: "INR" },
       refunds: [],
+      closedCheckoutId: null,
     });
+  });
+
+  it("reports an expired Checkout Session", () => {
+    const { raw, headers } = stripeRequest({ id: "evt_x", type: "checkout.session.expired", data: { object: { id: "cs_test_9", status: "expired" } } });
+    expect(verifyStripeWebhook(STRIPE_SECRET, raw, headers)).toMatchObject({ paid: null, closedCheckoutId: "cs_test_9" });
   });
 
   it("does not count a completed but unpaid session", () => {

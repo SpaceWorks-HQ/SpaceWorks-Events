@@ -4,6 +4,7 @@ import { PaymentsUnavailable, providerRequest } from "@/lib/payments/http";
 import { parseMinorAmount } from "@/lib/payments/money";
 import { hmacSha256Hex, safeEqualHex } from "./signature";
 import {
+  assertCheckoutWindow,
   isProviderId,
   WebhookVerificationError,
   type CheckoutRequest,
@@ -33,9 +34,6 @@ const REFUND_STATES: Record<string, RefundState> = {
   created: "PENDING",
   failed: "FAILED",
 };
-
-// Razorpay rejects a link that expires sooner than 15 minutes from now.
-const MIN_LINK_LIFETIME_MS = 16 * 60_000;
 
 type Entity = Record<string, unknown>;
 
@@ -71,19 +69,22 @@ export class RazorpayGateway implements PaymentGateway {
   }
 
   async createCheckout(request: CheckoutRequest): Promise<CheckoutResult> {
-    const expireBy = Math.max(request.expiresAt.getTime(), Date.now() + MIN_LINK_LIFETIME_MS);
+    if (!assertCheckoutWindow("RAZORPAY", request.expiresAt)) throw new PaymentsUnavailable("The payment link expiry is outside Razorpay's window.");
+    // Razorpay charges one total; the order's lines are named in the description.
+    const lines = request.lines.length > 1 ? `: ${request.lines.map((line) => line.name).join(", ")}` : "";
     const result = await this.call("POST", "/v1/payment_links", {
       amount: Number(request.amountMinor),
       currency: request.currency,
       accept_partial: false,
-      expire_by: Math.ceil(expireBy / 1000),
+      expire_by: Math.ceil(request.expiresAt.getTime() / 1000),
+      // Unique per link, as Razorpay requires: our checkout attempt id.
       reference_id: request.reference,
-      description: request.description.slice(0, 2048),
+      description: `${request.description}${lines}`.slice(0, 2048),
       ...(request.customerEmail ? { customer: { email: request.customerEmail } } : {}),
       // Space Works Events sends its own receipts and reminders.
       notify: { sms: false, email: false },
       reminder_enable: false,
-      notes: { payment_id: request.reference },
+      notes: { attempt_id: request.reference },
       callback_url: request.returnUrl,
       callback_method: "get",
     });
@@ -142,6 +143,14 @@ export class RazorpayGateway implements PaymentGateway {
     if (!isProviderId(result.id)) throw new PaymentsUnavailable("Razorpay did not return a refund id.");
     return { refundId: result.id, state: REFUND_STATES[String(result.status)] ?? "PENDING" };
   }
+
+  async findRefund(paymentId: string, reference: string): Promise<RefundResult | null> {
+    if (!isProviderId(paymentId)) throw new PaymentsUnavailable("Invalid Razorpay payment id.");
+    const list = await this.call("GET", `/v1/payments/${paymentId}/refunds?count=100`);
+    const items = Array.isArray(list.items) ? list.items.map(record) : [];
+    const match = items.find((item) => record(item.notes).refund_id === reference && isProviderId(item.id));
+    return match ? { refundId: match.id as string, state: REFUND_STATES[String(match.status)] ?? "PENDING" } : null;
+  }
 }
 
 /**
@@ -178,7 +187,7 @@ export function verifyRazorpayWebhook(secret: string, rawBody: Buffer, headers: 
     const linkNotes = record(link.notes);
     paid = {
       checkoutId: isProviderId(link.id) ? link.id : null,
-      reference: text(link.reference_id) ?? text(linkNotes.payment_id) ?? text(notes.payment_id) ?? text(record(order.notes).payment_id),
+      reference: text(link.reference_id) ?? text(linkNotes.attempt_id) ?? text(notes.attempt_id) ?? text(record(order.notes).attempt_id),
       paymentId: payment.id,
       amountMinor: parseMinorAmount(payment.amount),
       currency: upperCurrency(payment.currency),
@@ -196,7 +205,9 @@ export function verifyRazorpayWebhook(secret: string, rawBody: Buffer, headers: 
     });
   }
 
-  return { eventId, eventType: eventType.slice(0, 80), paid, refunds };
+  const closedCheckoutId = (eventType === "payment_link.expired" || eventType === "payment_link.cancelled") && isProviderId(link.id) ? link.id : null;
+
+  return { eventId, eventType: eventType.slice(0, 80), paid, refunds, closedCheckoutId };
 }
 
 /** Razorpay key ids are public; their prefix says whether the account is in test mode. */

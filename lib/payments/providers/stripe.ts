@@ -4,6 +4,7 @@ import { PaymentsUnavailable, providerRequest } from "@/lib/payments/http";
 import { parseMinorAmount } from "@/lib/payments/money";
 import { hmacSha256Hex, safeEqualHex } from "./signature";
 import {
+  assertCheckoutWindow,
   isProviderId,
   WebhookVerificationError,
   type CheckoutRequest,
@@ -29,9 +30,6 @@ const REFUND_STATES: Record<string, RefundState> = {
   canceled: "FAILED",
 };
 
-// Stripe Checkout sessions must live at least 30 minutes and at most 24 hours.
-const MIN_SESSION_LIFETIME_MS = 31 * 60_000;
-const MAX_SESSION_LIFETIME_MS = 23 * 60 * 60_000;
 const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 type Entity = Record<string, unknown>;
@@ -81,20 +79,28 @@ export class StripeGateway implements PaymentGateway {
   }
 
   async createCheckout(request: CheckoutRequest): Promise<CheckoutResult> {
-    const now = Date.now();
-    const expiresAt = Math.min(Math.max(request.expiresAt.getTime(), now + MIN_SESSION_LIFETIME_MS), now + MAX_SESSION_LIFETIME_MS);
+    if (!assertCheckoutWindow("STRIPE", request.expiresAt)) throw new PaymentsUnavailable("The checkout expiry is outside Stripe's window.");
+    const total = request.lines.reduce((sum, line) => sum + line.amountMinor, BigInt(0));
+    if (request.lines.length === 0 || total !== request.amountMinor) throw new PaymentsUnavailable("Checkout lines must add up to the total.");
+    // Each order line is one item (quantity 1 at its line total), so discounts
+    // that don't divide evenly per ticket still add up to the exact total.
+    const lines: Record<string, string | number> = {};
+    request.lines.slice(0, 100).forEach((line, index) => {
+      lines[`line_items[${index}][quantity]`] = 1;
+      lines[`line_items[${index}][price_data][currency]`] = request.currency.toLowerCase();
+      lines[`line_items[${index}][price_data][unit_amount]`] = line.amountMinor.toString();
+      lines[`line_items[${index}][price_data][product_data][name]`] = line.name.slice(0, 250);
+    });
     const session = await this.call("POST", "/v1/checkout/sessions", {
       mode: "payment",
       client_reference_id: request.reference,
       success_url: request.returnUrl,
       cancel_url: request.cancelUrl,
-      expires_at: Math.floor(expiresAt / 1000),
-      "line_items[0][quantity]": 1,
-      "line_items[0][price_data][currency]": request.currency.toLowerCase(),
-      "line_items[0][price_data][unit_amount]": request.amountMinor.toString(),
-      "line_items[0][price_data][product_data][name]": request.description.slice(0, 250),
-      "metadata[payment_id]": request.reference,
-      "payment_intent_data[metadata][payment_id]": request.reference,
+      expires_at: Math.floor(request.expiresAt.getTime() / 1000),
+      ...lines,
+      "metadata[attempt_id]": request.reference,
+      "payment_intent_data[metadata][attempt_id]": request.reference,
+      "payment_intent_data[description]": request.description.slice(0, 500),
       ...(request.customerEmail ? { customer_email: request.customerEmail } : {}),
     }, request.idempotencyKey);
     if (!isProviderId(session.id) || typeof session.url !== "string" || !/^https?:\/\//.test(session.url)) {
@@ -138,6 +144,14 @@ export class StripeGateway implements PaymentGateway {
     }, request.idempotencyKey);
     if (!isProviderId(refund.id)) throw new PaymentsUnavailable("Stripe did not return a refund id.");
     return { refundId: refund.id, state: REFUND_STATES[String(refund.status)] ?? "PENDING" };
+  }
+
+  async findRefund(paymentId: string, reference: string): Promise<RefundResult | null> {
+    if (!isProviderId(paymentId)) throw new PaymentsUnavailable("Invalid Stripe PaymentIntent id.");
+    const list = await this.call("GET", `/v1/refunds?payment_intent=${paymentId}&limit=100`);
+    const items = Array.isArray(list.data) ? list.data.map(record) : [];
+    const match = items.find((item) => record(item.metadata).refund_id === reference && isProviderId(item.id));
+    return match ? { refundId: match.id as string, state: REFUND_STATES[String(match.status)] ?? "PENDING" } : null;
   }
 }
 
@@ -191,7 +205,7 @@ export function verifyStripeWebhook(secret: string, rawBody: Buffer, headers: He
   if (isPaid && paymentId) {
     paid = {
       checkoutId: isProviderId(object.id) ? object.id : null,
-      reference: text(object.client_reference_id) ?? text(record(object.metadata).payment_id),
+      reference: text(object.client_reference_id) ?? text(record(object.metadata).attempt_id),
       paymentId,
       amountMinor: parseMinorAmount(object.amount_total),
       currency: upperCurrency(object.currency),
@@ -210,7 +224,9 @@ export function verifyStripeWebhook(secret: string, rawBody: Buffer, headers: He
     }
   }
 
-  return { eventId, eventType, paid, refunds };
+  const closedCheckoutId = eventType === "checkout.session.expired" && isProviderId(object.id) ? object.id : null;
+
+  return { eventId, eventType, paid, refunds, closedCheckoutId };
 }
 
 /** Stripe secret and restricted keys say whether they are test keys. */

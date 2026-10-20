@@ -56,6 +56,7 @@ const STATUS_PILL_LABEL: Record<RsvpStatus, string> = {
   WAITLISTED: "Waitlist",
   PENDING_APPROVAL: "To approve",
   REJECTED: "Declined",
+  PENDING_PAYMENT: "Unpaid",
 };
 
 const ATTENDANCE_OPTIONS: ReadonlyArray<{ value: BroadcastAttendanceFilter; label: string; ariaLabel: string }> = [

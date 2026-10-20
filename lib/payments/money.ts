@@ -96,3 +96,25 @@ export function parseMinorAmount(value: unknown): bigint | null {
   if (typeof value === "string" && /^\d{1,13}$/.test(value)) return parseMinorAmount(BigInt(value));
   return null;
 }
+
+/**
+ * The smallest non-zero total each provider accepts: Razorpay takes ₹1 (100
+ * paise, and 100 minor units of other enabled currencies); Stripe's minimum
+ * is about US$0.50 in each currency. A non-zero order below it is refused
+ * before any checkout is opened.
+ */
+const STRIPE_MINIMUMS: Record<string, number> = {
+  USD: 50, EUR: 50, INR: 50, AUD: 50, CAD: 50, NZD: 50, SGD: 50, CHF: 50, GBP: 30, HKD: 400, JPY: 50,
+  AED: 200, MYR: 200, THB: 1000, BRL: 50, MXN: 1000, DKK: 250, NOK: 300, SEK: 300, PLN: 200, CZK: 1500,
+};
+
+export function providerMinimumMinor(provider: "RAZORPAY" | "STRIPE", currency: string): bigint {
+  if (provider === "RAZORPAY") return BigInt(100);
+  const known = STRIPE_MINIMUMS[currency.toUpperCase()];
+  if (known !== undefined) return BigInt(known);
+  // Unknown currencies: half a major unit, or 50 units without minor digits.
+  return currencyExponent(currency) === 0 ? BigInt(50) : scale(currencyExponent(currency)) / BigInt(2);
+}
+
+/** UPI generally stops at ₹1 lakh per payment; organisers are warned above it. */
+export const UPI_TYPICAL_LIMIT_MINOR = BigInt(10_000_000);

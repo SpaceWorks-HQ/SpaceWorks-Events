@@ -26,6 +26,7 @@ const rsvpStatusLabels: Record<RsvpStatus, string> = {
   WAITLISTED: "Waitlisted",
   PENDING_APPROVAL: "Waiting for approval",
   REJECTED: "Rejected",
+  PENDING_PAYMENT: "Awaiting payment",
 };
 
 export default async function SuperAdminActivityPage() {

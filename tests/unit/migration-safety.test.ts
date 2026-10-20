@@ -66,4 +66,19 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain(`CHECK ("provider" IS NULL OR "provider" <> 'OFFLINE')`);
     expect(sql).toContain('REFERENCES "Organisation"("id") ON DELETE CASCADE');
   });
+
+  it("adds the PENDING_PAYMENT value in its own migration, before anything uses it", () => {
+    const value = readFileSync(resolve(root, "prisma/migrations/20261022000100_rsvp_pending_payment/migration.sql"), "utf8");
+    expect(value.replace(/^--.*$/gm, "").trim()).toBe(`ALTER TYPE "RsvpStatus" ADD VALUE 'PENDING_PAYMENT';`);
+  });
+
+  it("adds the payment ledger without rewriting or dropping existing data", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261022000200_payment_ledger/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*DELETE\b/im);
+    expect(sql).not.toMatch(/^UPDATE /m);
+    expect(sql).not.toMatch(/ADD COLUMN\s+"\w+" [^,;]*NOT NULL(?! DEFAULT)/);
+    for (const trigger of ["payment_ledger_guard", "payment_refund_guard", "checkout_attempt_guard"]) expect(sql).toContain(`CREATE TRIGGER "${trigger}"`);
+    expect(sql).toContain('REFERENCES "TicketType"("id", "eventId") ON DELETE NO ACTION');
+    expect(sql).toContain('CREATE UNIQUE INDEX "Payment_one_pending_per_order"');
+  });
 });
