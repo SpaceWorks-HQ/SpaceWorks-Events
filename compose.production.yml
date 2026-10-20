@@ -3,6 +3,9 @@
 #   split    website (frontend) and API (backend) containers on this VPS, two hostnames
 #   single   one app container serves the website and the API, one hostname
 #   netlify  the website runs on Netlify; this VPS serves the API
+# Two images: the backend runs the API, migrations (migrator), the outbox
+# worker, the scheduler, live check-in and the operator tools; the frontend runs
+# the website. PostgreSQL, Redis, Silo and Caddy use their own standard images.
 # Published releases set SWE_BACKEND_IMAGE / SWE_FRONTEND_IMAGE to
 # ghcr.io/<owner>/spaceworks-events-backend|frontend; otherwise the images are
 # built here under the local names below. Both carry placeholder public
@@ -114,9 +117,16 @@ services:
     logging: *logging
 
   # The backend: the whole application in the single layout, the API otherwise.
+  # It also runs the outbox worker and live check-in, and reads the installer's
+  # backup status (no secrets) for the super-admin Operations page.
   app:
     <<: *backend
     restart: unless-stopped
+    environment:
+      SWE_STATUS_DIR: /status
+    volumes:
+      - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
+      - ${SWE_CONFIG_DIR}/status:/status:ro
     build:
       <<: *build
       target: runner
@@ -163,14 +173,13 @@ services:
         aliases: ["${PUBLIC_HOST}"]
     logging: *logging
 
+  # The backend image's scheduler role: it only calls the app's outbox endpoint
+  # every minute, with the scheduler secret and no other credentials.
   scheduler:
-    image: node:22-alpine
+    image: ${SWE_BACKEND_IMAGE:-swevents-backend}:${SWE_VERSION}
     restart: unless-stopped
-    user: "1000:1000"
     env_file: ${SWE_CONFIG_DIR}/scheduler.env
-    command: ["node", "/scheduler.mjs"]
-    volumes:
-      - ./docker/vps/scheduler.mjs:/scheduler.mjs:ro
+    command: ["node", "docker/vps/scheduler.mjs"]
     depends_on:
       app: { condition: service_healthy }
     networks: [edge]

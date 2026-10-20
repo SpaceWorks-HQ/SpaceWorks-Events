@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 const root = path.resolve(import.meta.dirname, "../..");
 const scripts = [
   "install.sh", "scripts/vps-lib.sh", "scripts/setup-vps.sh", "scripts/update-vps.sh", "scripts/vps-backup.sh",
-  "scripts/vps-restore.sh", "scripts/vps-status.sh", "scripts/install-docker.sh",
+  "scripts/vps-restore.sh", "scripts/vps-status.sh", "scripts/install-docker.sh", "scripts/vps-backup-settings.sh",
+  "scripts/vps-reconfigure.sh", "scripts/vps-harden.sh", "scripts/vps-recover.sh", "scripts/vps-renew-certs.sh",
+  "scripts/vps-support.sh", "scripts/vps-uninstall.sh",
 ];
 // Run a snippet with the shared VPS helpers loaded; prints whatever the snippet echoes.
 const lib = (snippet: string) =>
@@ -239,5 +241,60 @@ describe("VPS installer", () => {
     const deploy = readFileSync(path.join(root, "scripts/vps-deploy.sh"), "utf8");
     expect(deploy).toContain('"prerelease"[[:space:]]*:[[:space:]]*false');
     expect(deploy).toContain("compare/main...$revision");
+  });
+  it("offers every operator tool from the installer menu, each shipped with the release", () => {
+    const installer = readFileSync(path.join(root, "install.sh"), "utf8");
+    expect(installer).toContain("Choose 0-10 [0]");
+    for (const script of ["vps-backup.sh", "vps-status.sh", "vps-backup-settings.sh", "vps-reconfigure.sh", "vps-harden.sh",
+      "install-runner.sh", "vps-recover.sh", "vps-support.sh", "vps-uninstall.sh"]) {
+      expect(installer).toContain(`run_tool ${script}`);
+      expect(statSync(path.join(root, "scripts", script)).isFile()).toBe(true);
+    }
+    // A fork installs by answering one question instead of passing --repo.
+    expect(installer).toContain("Install from which GitHub repository?");
+  });
+
+  it("encodes off-site credentials and validates backup settings", () => {
+    expect(lib("urlencode 'ab/c+d=e f'").stdout).toBe("ab%2Fc%2Bd%3De%20f");
+    for (const [check, good, bad] of [
+      ["is_days", "14", "0"], ["is_prefix", "spaceworks-events", "a/b"],
+      ["is_https_endpoint", "https://acct.r2.cloudflarestorage.com", "http://bucket.example.com"],
+    ] as const) {
+      expect(lib(`${check} '${good}'`).status).toBe(0);
+      expect(lib(`${check} '${bad}'`).status).not.toBe(0);
+    }
+    const backup = readFileSync(path.join(root, "scripts/vps-backup.sh"), "utf8");
+    // Encrypted backups keep only the version and kind readable, and only encrypted ones leave the server.
+    expect(backup).toContain('age --encrypt --recipient "$recipient"');
+    expect(backup).toContain("Off-site copies need encrypted backups");
+    expect(backup).toContain('"lastFullSuccessAt"');
+    const restore = readFileSync(path.join(root, "scripts/vps-restore.sh"), "utf8");
+    expect(restore).toContain('mktemp -d "$SWE_CONFIG_DIR/backups/.restore.XXXXXX"');
+    expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).not.toMatch(/AGE-SECRET-KEY.*>\s*"?\$/m);
+  });
+
+  it("renews internal certificates only when they are due", { timeout: 30_000 }, () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "swe-renew-"));
+    try {
+      const run = (...args: string[]) => spawnSync(process.execPath, ["docker/vps/setup.mjs", ...args], { cwd: root, env: { ...process.env, SWE_SETUP_CONFIG_DIR: directory }, encoding: "utf8" });
+      expect(run("events.example.com", "admin@example.com", "vps-0123456789ab").status).toBe(0);
+      const before = readFileSync(path.join(directory, "tls/postgres/public.crt"), "utf8");
+      const due = run("renew-certificates", "--if-due");
+      expect(due.status).toBe(10);
+      expect(due.stdout).toContain("renewal is not due");
+      expect(readFileSync(path.join(directory, "tls/postgres/public.crt"), "utf8")).toBe(before);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+    expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).toContain("vps-renew-certs.sh --if-due");
+  });
+
+  it("runs the scheduler from the backend image and shows the app only the backup status", () => {
+    const compose = readFileSync(path.join(root, "compose.production.yml"), "utf8");
+    expect(compose).not.toContain("node:22-alpine");
+    expect(compose).toMatch(/ {2}scheduler:\n {4}image: \$\{SWE_BACKEND_IMAGE:-swevents-backend\}/);
+    expect(compose).toContain('command: ["node", "docker/vps/scheduler.mjs"]');
+    expect(compose).toContain("${SWE_CONFIG_DIR}/status:/status:ro");
+    expect(compose).not.toMatch(/\$\{SWE_CONFIG_DIR\}\/backups:\/[a-z]+:ro/);
   });
 });
