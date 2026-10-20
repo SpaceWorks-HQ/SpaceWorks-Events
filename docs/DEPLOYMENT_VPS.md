@@ -394,7 +394,7 @@ saved in `/etc/spaceworks-events/backup.env`. Setup asks about the first three:
 | --- | --- |
 | **Nightly backups** | A systemd timer (`swevents-backup.timer`) runs a full backup at about 02:30 UTC. |
 | **Encryption** | Every backup becomes `backup.tar.age`, encrypted with [age](https://age-encryption.org) to a public key. The private key (`AGE-SECRET-KEY-…`) is shown **once** and is not stored on the server: keep it in your password manager. Only `version` and `kind` stay readable. |
-| **Off-site copies** | After each backup, an encrypted copy goes to an S3-compatible bucket at another provider (R2, B2, S3…), kept for its own number of days (default 90). Only encrypted backups are sent. |
+| **Off-site copies** | After each backup, an encrypted copy goes to an S3-compatible bucket at another provider (R2, B2, S3…), kept for its own number of days (default 90). Only encrypted backups are sent. A private endpoint (for example your own Silo or MinIO) can use its own certificate authority: give the CA file when asked, and the installer keeps a copy beside `backup.env`. Keys may contain any characters, including `/` and `+`. |
 | **Retention** | Days a backup stays on this server. |
 
 Each run writes `/etc/spaceworks-events/status/backup.json` (no secrets), which the
