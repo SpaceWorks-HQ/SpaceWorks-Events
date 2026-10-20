@@ -57,7 +57,9 @@ export function PromoCodeField({ orgSlug, eventSlug, applied, onApplied, problem
   return (
     <Field label="Promo code" optional error={error}>
       <div className="flex gap-2">
+        {/* Field labels its direct child, which here is the row, so the input names itself. */}
         <Input
+          aria-label="Promo code"
           value={code}
           maxLength={32}
           autoComplete="off"
