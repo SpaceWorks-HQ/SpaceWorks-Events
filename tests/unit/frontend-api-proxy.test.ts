@@ -7,7 +7,7 @@ beforeEach(() => { vi.stubEnv("NEXT_PUBLIC_BASE_URL", "https://events.example.te
 
 describe("frontend API proxy", () => {
   it("never gives browser calls access to private peer or operational endpoints", async () => {
-    for (const path of ["frontend/view/private", "%66rontend/action/private", "%2566rontend/action/private", "FRONTEND/action/private", "internal/outbox", "health/db", "x%2f..%2ffrontend/view/private"]) {
+    for (const path of ["frontend/view/private", "%66rontend/action/private", "%2566rontend/action/private", "FRONTEND/action/private", "internal/outbox", "health/db", "webhooks/razorpay/abcdefghijklmnopqrstuvwx", "Webhooks/stripe/abcdefghijklmnopqrstuvwx", "x%2f..%2ffrontend/view/private"]) {
       expect((await proxyBackendApi(new Request(`https://events.example.test/api/${path}`))).status).toBe(404);
     }
     expect(mocks.headers).not.toHaveBeenCalled();

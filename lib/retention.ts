@@ -4,6 +4,7 @@ import { OutboxStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const WEBHOOK_EVENT_RETENTION_DAYS = 90;
 
 /** Remove expired operational records without deleting business/audit data. */
 export async function purgeExpiredOperationalData(now = new Date()) {
@@ -12,7 +13,7 @@ export async function purgeExpiredOperationalData(now = new Date()) {
     365,
   );
   const sentBefore = new Date(now.getTime() - outboxRetentionDays * DAY_MS);
-  const [tokens, sessions, organisationInvites, collaboratorInvites, undoSnapshots, sentMessages, failedMessages] = await prisma.$transaction([
+  const [tokens, sessions, organisationInvites, collaboratorInvites, undoSnapshots, sentMessages, failedMessages, webhookEvents] = await prisma.$transaction([
     prisma.verificationToken.deleteMany({ where: { expires: { lt: now } } }),
     prisma.session.deleteMany({ where: { expires: { lt: now } } }),
     prisma.organisationInvite.deleteMany({ where: { usedAt: null, expiresAt: { lt: now } } }),
@@ -24,6 +25,10 @@ export async function purgeExpiredOperationalData(now = new Date()) {
     prisma.outboxMessage.deleteMany({
       where: { status: OutboxStatus.FAILED, createdAt: { lt: sentBefore } },
     }),
+    // Providers stop redelivering after a few days, so old idempotency keys are inert.
+    prisma.processedWebhookEvent.deleteMany({
+      where: { processedAt: { lt: new Date(now.getTime() - WEBHOOK_EVENT_RETENTION_DAYS * DAY_MS) } },
+    }),
   ]);
   return {
     verificationTokens: tokens.count,
@@ -33,5 +38,6 @@ export async function purgeExpiredOperationalData(now = new Date()) {
     undoSnapshots: undoSnapshots.count,
     sentOutboxMessages: sentMessages.count,
     failedOutboxMessages: failedMessages.count,
+    processedWebhookEvents: webhookEvents.count,
   };
 }

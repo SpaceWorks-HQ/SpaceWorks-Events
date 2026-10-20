@@ -57,4 +57,13 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('REFERENCES "Event"("id") ON DELETE CASCADE');
     expect(sql).toContain('REFERENCES "User"("id") ON DELETE SET NULL');
   });
+
+  it("adds paid-event settings without touching existing data", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261022000000_payments_core/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/(DROP|DELETE|UPDATE)/i);
+    expect(sql).not.toMatch(/ALTER TABLE "(?!InstanceSetting"|OrganisationPaymentSettings"|ProcessedWebhookEvent")/);
+    expect(sql).toContain('ADD COLUMN "paidEventsEnabled" BOOLEAN NOT NULL DEFAULT false');
+    expect(sql).toContain(`CHECK ("provider" IS NULL OR "provider" <> 'OFFLINE')`);
+    expect(sql).toContain('REFERENCES "Organisation"("id") ON DELETE CASCADE');
+  });
 });

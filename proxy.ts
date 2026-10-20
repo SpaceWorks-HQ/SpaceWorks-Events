@@ -45,7 +45,11 @@ export async function proxy(request: NextRequest) {
 
   // Liveness must not depend on Redis. Readiness remains protected because a
   // failed distributed limiter means the application is not fully ready.
-  if (pathname.startsWith("/api") && pathname !== "/api/health") {
+  // Payment provider webhooks have their own bucket instead of the global one.
+  const isPaymentWebhook = pathname.startsWith("/api/webhooks/");
+  if (isPaymentWebhook) {
+    if (!(await checkRateLimit(request, "paymentWebhook"))) return tooMany();
+  } else if (pathname.startsWith("/api") && pathname !== "/api/health") {
     if (!(await checkRateLimit(request, "global"))) {
       return tooMany(pathname.startsWith("/api/v1"));
     }

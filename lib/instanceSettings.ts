@@ -47,3 +47,12 @@ export async function getEmailSettings() {
     allowUnauthenticated: configured ? settings!.smtpAllowUnauthenticated : process.env.SMTP_ALLOW_UNAUTHENTICATED === "1",
   };
 }
+
+/** Paid events stay off until a super admin turns them on for the installation. */
+export async function isPaidEventsEnabled(): Promise<boolean> {
+  const settings = await prisma.instanceSetting.findUnique({
+    where: { id: INSTANCE_SETTINGS_ID },
+    select: { paidEventsEnabled: true },
+  });
+  return settings?.paidEventsEnabled ?? false;
+}

@@ -104,6 +104,14 @@ enum BroadcastAttendanceFilter {
   NOT_CHECKED_IN
 }
 
+/// Who collected a payment. Organisations connect RAZORPAY or STRIPE; OFFLINE
+/// marks money an organiser recorded by hand and is never a settings choice.
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+  OFFLINE
+}
+
 model User {
   id                 String    @id @default(cuid())
   name               String?
@@ -190,6 +198,52 @@ model Organisation {
   rsvpDeletionUndos RsvpDeletionUndo[]
   apiClients        ApiClient[]
   idProgrammes      IdProgramme[]
+  paymentSettings   OrganisationPaymentSettings?
+  processedWebhookEvents ProcessedWebhookEvent[]
+}
+
+/// The organisation's own payment provider account. Money goes straight to
+/// the organiser; the platform never holds it. Secrets are AES-256-GCM
+/// ciphertext (lib/payments/secrets.ts), write-only, and never leave the
+/// server. Only the owner may view or change this row.
+model OrganisationPaymentSettings {
+  organisationId                 String           @id
+  /// The provider new checkouts use. Never OFFLINE.
+  provider                       PaymentProvider?
+  /// Uppercase ISO 4217 code for new ticket types.
+  currency                       String           @default("INR")
+  /// Razorpay's public key id (rzp_test_… or rzp_live_…).
+  razorpayKeyId                  String?
+  razorpayKeySecretEncrypted     String?
+  razorpayWebhookSecretEncrypted String?
+  stripeSecretKeyEncrypted       String?
+  stripeWebhookSecretEncrypted   String?
+  /// Derived from the Stripe key prefix when it is saved (sk_test_/rk_test_).
+  stripeTestMode                 Boolean          @default(false)
+  /// Random path segment that addresses webhooks without revealing the slug.
+  webhookPathId                  String           @unique
+  /// Last successful "Test connection" for the selected provider.
+  verifiedAt                     DateTime?
+  createdAt                      DateTime         @default(now())
+  updatedAt                      DateTime         @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+/// Idempotency record for verified provider webhooks. The raw payload is never
+/// stored. Rows older than the retention window are purged.
+model ProcessedWebhookEvent {
+  id             String          @id @default(cuid())
+  organisationId String
+  provider       PaymentProvider
+  eventId        String
+  eventType      String
+  processedAt    DateTime        @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, provider, eventId])
+  @@index([processedAt])
 }
 
 /// A tenant-bound machine identity. It never authenticates through Auth.js.
@@ -960,6 +1014,8 @@ model InstanceSetting {
   backupProvider        String?
   backupLastSuccessAt   DateTime?
   backupRetentionDays   Int?
+  /// Organisations may sell tickets only while this is on.
+  paidEventsEnabled     Boolean  @default(false)
   updatedAt             DateTime @updatedAt
 }
 

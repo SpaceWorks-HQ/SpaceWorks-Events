@@ -2,9 +2,16 @@ import { defineConfig, devices } from "@playwright/test";
 
 const testPort = Number(process.env.PLAYWRIGHT_PORT || 3000);
 const testBaseUrl = `http://127.0.0.1:${testPort}`;
-const defaultServerCommand = process.env.PLAYWRIGHT_PRODUCTION_SERVER === "1"
+const productionServer = process.env.PLAYWRIGHT_PRODUCTION_SERVER === "1";
+const defaultServerCommand = productionServer
   ? `PORT=${testPort} node .next/standalone/server.js`
   : `PORT=${testPort} npm run dev`;
+// The payment specs drive a local fake Razorpay/Stripe. The app refuses that
+// override in production, so it is strictly opt-in for development servers
+// (PLAYWRIGHT_FAKE_PAYMENTS=1); every other run skips those specs.
+const fakePayments = process.env.PLAYWRIGHT_FAKE_PAYMENTS === "1" && !productionServer;
+const fakeProviderPort = Number(process.env.FAKE_PROVIDER_PORT || 4010);
+const fakeProviderUrl = `http://127.0.0.1:${fakeProviderPort}`;
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -19,10 +26,20 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
-  webServer: {
-    command: process.env.PLAYWRIGHT_SERVER_COMMAND || defaultServerCommand,
-    url: `${testBaseUrl}/api/health`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: process.env.PLAYWRIGHT_SERVER_COMMAND || defaultServerCommand,
+      url: `${testBaseUrl}/api/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: fakePayments ? { PAYMENTS_FAKE_PROVIDER_URL: fakeProviderUrl } : {},
+    },
+    ...(!fakePayments ? [] : [{
+      command: `node tests/e2e/fake-payment-provider.mjs`,
+      url: `${fakeProviderUrl}/health`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      env: { FAKE_PROVIDER_PORT: String(fakeProviderPort) },
+    }]),
+  ],
 });

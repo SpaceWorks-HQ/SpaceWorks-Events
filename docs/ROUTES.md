@@ -43,6 +43,7 @@ Dynamic segments are shown as `:name` for readability.
 | `/dashboard/org/new` | Create an organisation |
 | `/dashboard/:orgSlug` | Organisation events and series |
 | `/dashboard/:orgSlug/settings` | Organisation settings |
+| `/dashboard/:orgSlug/settings/payments` | Owner only: connect the organisation's own Razorpay or Stripe account (write-only, encrypted keys), copy webhook addresses, test the connection |
 | `/dashboard/:orgSlug/members` | Members, roles, and invitations |
 | `/dashboard/:orgSlug/ids` | Member ID programmes (all members read; owners/admins create) |
 | `/dashboard/:orgSlug/ids/:programmeId` | Programme members (approve, reject, revoke, renew, email, download), import (CSV or public Google Sheet with column mapping), front/back card designer and settings; owners/admins only except the read-only member list |
@@ -55,7 +56,7 @@ Dashboard pages require authentication and enforce membership/role permissions o
 
 ## Super-admin pages
 
-The `/super-admin` area includes overview, activity, audit log, auth, email, events, invites, monitoring, operations, organisations (with a detail page per organisation), security, settings, storage, and users (with a detail page per user at `/super-admin/users/:userId`). The Auth page includes the instance-wide new-account creation control. `/super-admin/settings` manages SMTP, Google SSO, and displayed backup posture; secrets entered there are write-only. Access requires the authenticated email configured in `SUPER_ADMIN_EMAIL`; other users receive a not-found response.
+The `/super-admin` area includes overview, activity, audit log, auth, email, events, invites, monitoring, operations, organisations (with a detail page per organisation), security, settings, storage, and users (with a detail page per user at `/super-admin/users/:userId`). The Auth page includes the instance-wide new-account creation control. `/super-admin/settings` manages SMTP, Google SSO, the paid events switch (off by default), and displayed backup posture; secrets entered there are write-only. Access requires the authenticated email configured in `SUPER_ADMIN_EMAIL`; other users receive a not-found response.
 
 Every super-admin page additionally requires a current TOTP verification, and each `page.tsx` calls `requireSuperAdminMfa()` itself because layout checks do not re-run on client navigation (`tests/unit/super-admin-page-guards.test.ts` enforces this). Users without a valid 10-minute step-up proof are sent to `/super-admin-mfa`; authenticator MFA must be enrolled first from `/account/security`.
 
@@ -91,6 +92,15 @@ Opaque ticket and certificate URLs are bearer capabilities. Do not log them or p
 | `GET /api/health` | Public | Process liveness without database or Redis dependency |
 | `GET /api/health/db` | `Authorization: Bearer $HEALTHCHECK_SECRET` | Database readiness check |
 | `POST /api/internal/outbox` | `Authorization: Bearer $CRON_SECRET` | Deliver queued email and purge expired operational data |
+
+## Payment webhooks
+
+| Method and route | Protection | Purpose |
+| --- | --- | --- |
+| `POST /api/webhooks/razorpay/:webhookPathId` | `X-Razorpay-Signature` HMAC over the raw body with the addressed organisation's own webhook secret; `paymentWebhook` bucket (600/min per IP) instead of the global one | Razorpay settlement and refund notifications |
+| `POST /api/webhooks/stripe/:webhookPathId` | `Stripe-Signature` (`t`, `v1`) over `t.rawBody` with the organisation's signing secret, 5-minute tolerance; `paymentWebhook` bucket | Stripe settlement and refund notifications |
+
+The random `webhookPathId` only addresses the organisation; it is not a credential. Bodies over 256 KB get 413, unknown addresses 404, and failed verification an empty 400. Verified events are recorded once per organisation, provider and event id (`ProcessedWebhookEvent`, kept 90 days) and replays get 200. These routes live on the backend API host: in the split layout providers must point at `BACKEND_ORIGIN`, because the website's proxy refuses `/api/webhooks/*`.
 
 Self-hosted Node.js instances run the outbox worker every minute. The endpoint remains available for an independent scheduler or manual recovery. Protected operational endpoints return a generic not-found response when authorization fails.
 
