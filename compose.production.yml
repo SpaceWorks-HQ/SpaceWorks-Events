@@ -180,6 +180,9 @@ services:
     restart: unless-stopped
     env_file: ${SWE_CONFIG_DIR}/scheduler.env
     command: ["node", "docker/vps/scheduler.mjs"]
+    # The image's health check probes the web server, which this role does not run.
+    healthcheck:
+      disable: true
     depends_on:
       app: { condition: service_healthy }
     networks: [edge]

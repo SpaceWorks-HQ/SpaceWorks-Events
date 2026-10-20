@@ -294,6 +294,8 @@ describe("VPS installer", () => {
     expect(compose).not.toContain("node:22-alpine");
     expect(compose).toMatch(/ {2}scheduler:\n {4}image: \$\{SWE_BACKEND_IMAGE:-swevents-backend\}/);
     expect(compose).toContain('command: ["node", "docker/vps/scheduler.mjs"]');
+    // The backend image's web health check would mark the scheduler unhealthy and fail `up --wait`.
+    expect(compose).toMatch(/scheduler\.mjs"\]\n(?: +#.*\n)? +healthcheck:\n +disable: true/);
     expect(compose).toContain("${SWE_CONFIG_DIR}/status:/status:ro");
     expect(compose).not.toMatch(/\$\{SWE_CONFIG_DIR\}\/backups:\/[a-z]+:ro/);
   });
