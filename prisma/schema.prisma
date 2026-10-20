@@ -429,6 +429,7 @@ model Event {
   badgeDesign      EventBadgeDesign?
   ticketTypes      TicketType[]
   orders           Order[]
+  shortLinkClickDays ShortLinkClickDay[]
 
   @@unique([organisationId, slug])
   @@index([organisationId])
@@ -990,6 +991,10 @@ model RSVP {
   ticketTypeId    String?
   /// PENDING_PAYMENT only: mirrors the order's hold; the seat counts until then.
   holdExpiresAt   DateTime?
+  /// When the registration joined the waitlist, and when it was offered a
+  /// place. Set by the rsvp_waitlist_dates trigger, for waitlist conversion.
+  waitlistedAt    DateTime?
+  promotedAt      DateTime?
 
   event             Event?                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
   order             Order?                  @relation(fields: [orderId], references: [id], onDelete: SetNull)
@@ -1400,4 +1405,16 @@ model IdMember {
   @@index([organisationId, lastEmailedAt])
   @@index([userId])
   @@index([email])
+}
+
+/// Short-link visits per event per day, in the event's timezone. Counts only:
+/// no IP address, browser, referrer or person is stored.
+model ShortLinkClickDay {
+  eventId String
+  day     DateTime @db.Date
+  count   Int      @default(0)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, day])
 }

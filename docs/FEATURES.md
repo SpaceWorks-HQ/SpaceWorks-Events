@@ -96,6 +96,14 @@ Only eligible confirmed attendees receive a scannable ticket by default. Organis
 ## Event analytics
 
 - The event dashboard's analytics include a registration funnel. Each step has a plain-language hint, a bar sized as a share of everyone who responded, and a percentage of the previous step, never over 100%.
+- Alongside the funnel: key numbers, where every response stands, and sign-ups over time. Arrivals by time window (15 minutes to 8 hours, sized to the door's busy period) and how people were checked in (desk, door station, offline) use the same calculations as the PDF report.
+- Answers to registration questions: choice and yes/no questions are charted as counts from the people going; written answers are only counted, never shown.
+- Waitlist conversion: who joined the waitlist and how many got a place, from `RSVP.waitlistedAt` and `promotedAt`, which a database trigger sets whichever code path changes the status.
+- Short link visits: a daily count per event (in its timezone) and the last 14 days. Only the number is stored, in `ShortLinkClickDay`: no IP address, browser, referrer or person. Prefetches and link-preview bots are not counted.
+- Email delivery per broadcast in the "Sent before" list: delivered, waiting, failed and skipped, from the outbox, until the outbox retention period removes the rows.
+- Recurring series: attendance across finished occurrences (came of going, and average turnout).
+- Organisation dashboard (organisers only): the most-attended events of the last six months and the share of people who came back for another event, withheld below 10 people.
+- The PDF report adds waitlist conversion and short-link visits. Page views, referrers and email-open tracking are deliberately not collected.
 
 ## Discovery and public pages
 

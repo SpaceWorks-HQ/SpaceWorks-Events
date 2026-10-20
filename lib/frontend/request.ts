@@ -20,6 +20,11 @@ export async function backendHeaders(incoming?: Headers) {
   });
   const cookie = source.get("cookie");
   if (cookie) outgoing.set("cookie", cookie);
+  // Lets the backend tell a person from a link preview or a prefetch (short-link visit counts).
+  for (const name of ["user-agent", "sec-purpose", "purpose", "next-router-prefetch"]) {
+    const value = source.get(name);
+    if (value) outgoing.set(name, value);
+  }
   return outgoing;
 }
 

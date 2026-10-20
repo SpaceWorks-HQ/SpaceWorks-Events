@@ -2,14 +2,15 @@ import { loadAnalyticsPanel } from "@/lib/views/components__event-dashboard__pan
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
 import { EmptyState } from "@/components/ui/display";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { FunnelCard, KeyNumbers, StatusMixCard, TimelineCard } from "../analytics/AnalyticsSections";
+import { ArrivalsCard, CheckInMethodsCard, FunnelCard, KeyNumbers, QuestionsCard, ShortLinkCard, StatusMixCard, TimelineCard, WaitlistCard } from "../analytics/AnalyticsSections";
 import { NoPermission } from "./shared";
 
 /** Analytics tab: registration numbers are organisation-admin only, like the RSVP actions and the PDF report. */
 export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext; }) {
   const { permissions } = ctx;
   if (!permissions.canManageRegistrations) return <NoPermission>You do not have permission to see registration numbers for this event.</NoPermission>;
-  const { event, counts, ended, steps, summary, parts, keyNumbers, timeline, busiest, lastWeek } = await loadAnalyticsPanel({ ctx });
+  const { event, counts, ended, steps, summary, parts, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks } = await loadAnalyticsPanel({ ctx });
+  const charted = questions.filter((question) => question.answered > 0);
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -27,6 +28,19 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext; }) {
             <StatusMixCard parts={parts} />
             {timeline ? <TimelineCard timeline={timeline} busiest={busiest} lastWeek={lastWeek} /> : null}
           </div>
+          {arrivals || sources ? (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {arrivals ? <ArrivalsCard arrivals={arrivals} checkedIn={counts.checkedIn} timeZone={event.timezone} /> : null}
+              {sources ? <CheckInMethodsCard sources={sources} /> : null}
+            </div>
+          ) : null}
+          {waitlist || clicks ? (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {waitlist ? <WaitlistCard waitlist={waitlist} /> : null}
+              {clicks ? <ShortLinkCard code={clicks.code} series={clicks.series} /> : null}
+            </div>
+          ) : null}
+          {charted.length ? <QuestionsCard questions={charted} going={counts.confirmed} /> : null}
         </>
       )}
     </div>

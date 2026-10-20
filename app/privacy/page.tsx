@@ -67,6 +67,7 @@ const sections: LegalSection[] = [
       "We use only the cookies needed to run the service: a sign-in cookie, security cookies that protect forms, a short-lived cookie for administrator verification, and a cookie that keeps a door station unlocked until shortly after the event. We also remember your light or dark theme and sidebar preference for up to a year.",
       "After you register, your browser remembers your ticket for that event so the page can show it again. Cancelling removes it. If an organiser downloads a guest list for offline check-in, it is kept on their device for up to 24 hours and then deleted.",
       "We do not use advertising or cross-site tracking cookies.",
+      "When someone opens an event's short link, we add one to that event's count for the day. Only the number is kept: not your IP address, browser, the page you came from or who you are. Link previews in chat apps are not counted.",
     ],
   },
   {
