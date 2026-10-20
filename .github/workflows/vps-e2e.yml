@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.9.3-feat-installer-0-9-3.17.4fcabc901b41
+  RELEASE: v0.9.3-feat-installer-0-9-3.18.abfa64b60138
   OLD_RELEASE: v0.9.1-main.11.f2e7307410ee
   SILO: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
 
