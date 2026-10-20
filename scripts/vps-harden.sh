@@ -84,8 +84,11 @@ maxretry = 5
 bantime = 1h
 EOF
     systemctl enable fail2ban >/dev/null 2>&1 || true
-    systemctl restart fail2ban
-    say 'fail2ban bans an address for an hour after five failed SSH logins.'
+    if systemctl restart fail2ban; then
+      say 'fail2ban bans an address for an hour after five failed SSH logins.'
+    else
+      warn 'fail2ban did not start; see journalctl -u fail2ban.'
+    fi
   else
     warn 'fail2ban is not available from this distribution'"'"'s packages (RHEL family: enable EPEL first).'
   fi
