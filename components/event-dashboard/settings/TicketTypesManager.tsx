@@ -46,7 +46,9 @@ function fromLocalInput(value: string) {
  * Ticket types for a standalone event: free or paid, with an optional limit
  * and sales window. Archiving takes a ticket off sale; registrations keep it.
  */
-export function TicketTypesManager({ organisationSlug, eventId, tickets, currency, paidAllowed, paidBlockedReason }: {
+export function TicketTypesManager({ organisationSlug, eventId, tickets, currency, paidAllowed, paidBlockedReason, payee = null }: {
+  /** Who receives payment for paid tickets: always this event's organisation. */
+  payee?: { organisationName: string; provider: string; testMode: boolean } | null;
   organisationSlug: string;
   eventId: string;
   tickets: ManagedTicketType[];
@@ -118,6 +120,12 @@ export function TicketTypesManager({ organisationSlug, eventId, tickets, currenc
       />
       <div className="flex flex-col gap-4">
         {paidBlockedReason ? <Callout tone="info">{paidBlockedReason}</Callout> : null}
+        {payee ? (
+          <p className="text-body-ui text-ink-secondary">
+            Payments go to <strong className="text-ink">{payee.organisationName}</strong> through its {payee.provider} account
+            {payee.testMode ? " (test mode: no real money moves)" : ""}. Co-organisers can manage tickets but never where the money goes.
+          </p>
+        ) : null}
         {tickets.length === 0 && !draft ? <p className="text-body-ui text-ink-muted">No tickets yet: anyone can register for free.</p> : null}
         {tickets.length > 0 ? (
           <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">

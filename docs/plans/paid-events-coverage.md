@@ -74,6 +74,16 @@ Sources are listed at the end.
 | Organiser "Add guest" | Paid types offer three choices: complimentary, mark paid offline, or send a payment link. |
 | Check-in desk, door station, ID badges, certificates | Only `CONFIRMED` (paid or free) is admitted. A pending ticket shows "Payment pending" with "Collect payment". Badges and certificates are issued only to paid or complimentary attendees. |
 
+**Which organisation receives the money:**
+
+- **The host decides.** Every event and series belongs to one host organisation. Every payment for it goes to that organisation's own connected Razorpay or Stripe account, and refunds come out of the same account.
+- **Collaborators never change this.** Co-organisers are people, sometimes from another organisation, with permissions on one event. None of their permissions can connect keys, choose an account or redirect payment. The host's owner manages payment settings.
+- **Paid events need a connected host account.** A paid ticket type can be published only when the host organisation's account is connected and `paidEventsEnabled` is on. Free ticket types and free events work exactly as before.
+- **Buyers see who they pay.** The event's ticket settings show "Payments go to <host organisation> (Razorpay/Stripe, test or live)". Checkout and receipts name the host organisation as the seller.
+- **Paying a partner instead.** To have a partner organisation receive the money, create the event under that organisation and add the other team as collaborators. Splitting revenue between organisations is out of scope; it would need Razorpay Route or Stripe Connect.
+
+**Every audience, free or paid:** public, unlisted, approval-required and invite-only events each work with free tickets, paid tickets or a mix, on single events and series, as the table above sets out.
+
 **Who can do what with payments:**
 - **Organisation owners:** payment settings, as already planned.
 - **Organisation admins, and collaborators with `MANAGE_REGISTRATIONS`:** refunds, waivers, offline payments, ticket changes and payment links.

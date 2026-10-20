@@ -3,7 +3,7 @@ import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { DEFAULT_CURRENCY } from "@/lib/payments/money";
 import { redeemingOrdersWhere } from "@/lib/payments/promo";
-import { configuredProvider } from "@/lib/payments/settings";
+import { configuredProvider, isProviderTestMode } from "@/lib/payments/settings";
 import { ticketTypeUsage } from "@/lib/payments/tickets";
 
 /** Ticket types are an organisation owner/admin concern, like the actions that change them. */
@@ -27,7 +27,8 @@ async function loadTickets(ctx: EventDashboardContext) {
     prisma.event.findUniqueOrThrow({ where: { id: ctx.event.id }, select: { refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true } }),
   ]);
   const uses = await Promise.all(promoCodes.map((promo) => prisma.order.count({ where: redeemingOrdersWhere(promo.id, ctx.now) })));
-  const connected = configuredProvider(settings) !== null;
+  const provider = configuredProvider(settings);
+  const connected = provider !== null;
   const paidBlockedReason = !paidEnabled
     ? "Paid tickets are turned off on this installation, so tickets are free."
     : !connected
@@ -51,6 +52,10 @@ async function loadTickets(ctx: EventDashboardContext) {
     currency: ctx.event.currency ?? settings?.currency ?? DEFAULT_CURRENCY,
     paidAllowed: paidBlockedReason === null,
     paidBlockedReason,
+    // Money always goes to the event's own organisation; co-organisers can't change it.
+    payee: paidBlockedReason === null && provider && settings
+      ? { organisationName: ctx.organisation.name, provider: provider === "RAZORPAY" ? "Razorpay" : "Stripe", testMode: isProviderTestMode(settings, provider) }
+      : null,
     promoCodes: promoCodes.map((promo, index) => ({
       ...promo,
       amountOffMinor: promo.amountOffMinor == null ? null : Number(promo.amountOffMinor),
