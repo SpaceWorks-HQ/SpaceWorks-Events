@@ -24,10 +24,11 @@ const checkout = {
   reference: "payref1",
   amountMinor: BigInt(49900),
   currency: "INR",
-  description: "Space Works Meetup: General admission",
+  description: "Space Works Meetup",
+  lines: [{ name: "General admission × 1", amountMinor: BigInt(49900) }],
   returnUrl: "https://events.example/ticket/token?payment=return",
   cancelUrl: "https://events.example/ticket/token?payment=cancelled",
-  expiresAt: new Date(Date.now() + 30 * 60_000),
+  expiresAt: new Date(Date.now() + 32 * 60_000),
   customerEmail: "guest@example.test",
   idempotencyKey: "checkout:payref1:1",
 };
@@ -65,9 +66,20 @@ describe("Razorpay gateway", () => {
     expect(url).toBe("https://api.razorpay.com/v1/payment_links");
     expect(init.headers.Authorization).toBe(`Basic ${Buffer.from("rzp_test_abcdef:secretvalue").toString("base64")}`);
     const body = JSON.parse(init.body);
-    expect(body).toMatchObject({ amount: 49900, currency: "INR", reference_id: "payref1", accept_partial: false, notify: { sms: false, email: false }, reminder_enable: false, callback_method: "get" });
+    expect(body).toMatchObject({ amount: 49900, currency: "INR", reference_id: "payref1", accept_partial: false, notify: { sms: false, email: false }, reminder_enable: false, callback_method: "get", notes: { attempt_id: "payref1" } });
     expect(Number.isInteger(body.amount)).toBe(true);
-    expect(body.expire_by).toBeGreaterThanOrEqual(Math.floor((Date.now() + 15 * 60_000) / 1000));
+    expect(body.expire_by).toBe(Math.ceil(checkout.expiresAt.getTime() / 1000));
+  });
+
+  it("refuses a link that would expire sooner than Razorpay allows", async () => {
+    await expect(gateway.createCheckout({ ...checkout, expiresAt: new Date(Date.now() + 5 * 60_000) })).rejects.toBeInstanceOf(PaymentsUnavailable);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("finds a refund it already made by our reference", async () => {
+    fetchMock.mockResolvedValue(reply(200, { items: [{ id: "rfnd_other", notes: { refund_id: "x" }, status: "processed" }, { id: "rfnd_ours", notes: { refund_id: "refund1" }, status: "pending" }] }));
+    await expect(gateway.findRefund("pay_1", "refund1")).resolves.toEqual({ refundId: "rfnd_ours", state: "PENDING" });
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://api.razorpay.com/v1/payments/pay_1/refunds?count=100");
   });
 
   it("reports a paid link when cancelling finds the attendee already paid", async () => {
@@ -111,10 +123,25 @@ describe("Stripe gateway", () => {
     const form = new URLSearchParams(init.body);
     expect(form.get("line_items[0][price_data][unit_amount]")).toBe("49900");
     expect(form.get("line_items[0][price_data][currency]")).toBe("inr");
+    expect(form.get("line_items[0][price_data][product_data][name]")).toBe("General admission × 1");
     expect(form.get("client_reference_id")).toBe("payref1");
-    expect(form.get("metadata[payment_id]")).toBe("payref1");
-    // Stripe requires at least 30 minutes; a 30-minute hold is stretched, not rejected.
-    expect(Number(form.get("expires_at"))).toBeGreaterThanOrEqual(Math.floor((Date.now() + 30 * 60_000) / 1000));
+    expect(form.get("metadata[attempt_id]")).toBe("payref1");
+    expect(Number(form.get("expires_at"))).toBe(Math.floor(checkout.expiresAt.getTime() / 1000));
+  });
+
+  it("sends one item per order line and refuses lines that don't add up to the total", async () => {
+    fetchMock.mockResolvedValue(reply(200, { id: "cs_test_2", url: "https://checkout.stripe.com/c/pay/cs_test_2" }));
+    await gateway.createCheckout({ ...checkout, amountMinor: BigInt(129900), lines: [{ name: "General × 2", amountMinor: BigInt(99800) }, { name: "Workshop kit", amountMinor: BigInt(30100) }] });
+    const form = new URLSearchParams(fetchMock.mock.calls[0]![1].body);
+    expect(form.get("line_items[1][price_data][unit_amount]")).toBe("30100");
+    expect(form.get("line_items[1][quantity]")).toBe("1");
+    await expect(gateway.createCheckout({ ...checkout, amountMinor: BigInt(1) })).rejects.toBeInstanceOf(PaymentsUnavailable);
+  });
+
+  it("refuses an expiry outside Stripe's 30-minute to 24-hour window", async () => {
+    await expect(gateway.createCheckout({ ...checkout, expiresAt: new Date(Date.now() + 20 * 60_000) })).rejects.toBeInstanceOf(PaymentsUnavailable);
+    await expect(gateway.createCheckout({ ...checkout, expiresAt: new Date(Date.now() + 25 * 3600_000) })).rejects.toBeInstanceOf(PaymentsUnavailable);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("treats only a complete and paid session as paid", async () => {

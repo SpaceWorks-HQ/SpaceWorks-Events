@@ -4,6 +4,7 @@ import {
   formatMoney,
   isValidCurrency,
   MAX_AMOUNT_MINOR,
+  providerMinimumMinor,
   minorToDecimalString,
   parseMinorAmount,
   parseMoneyToMinor,
@@ -64,5 +65,12 @@ describe("payment money helpers", () => {
     expect(parseMinorAmount(-1)).toBeNull();
     expect(parseMinorAmount("1e5")).toBeNull();
     expect(parseMinorAmount(null)).toBeNull();
+  });
+
+  it("knows each provider's smallest charge", () => {
+    expect(providerMinimumMinor("RAZORPAY", "INR")).toBe(BigInt(100));
+    expect(providerMinimumMinor("STRIPE", "INR")).toBe(BigInt(50));
+    expect(providerMinimumMinor("STRIPE", "GBP")).toBe(BigInt(30));
+    expect(providerMinimumMinor("STRIPE", "KWD")).toBe(BigInt(500));
   });
 });

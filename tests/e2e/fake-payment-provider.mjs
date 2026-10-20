@@ -89,7 +89,7 @@ async function razorpay(request, response, path) {
   }
   if (!authorised("razorpay", request.headers.authorization)) return send(response, 401, { error: { code: "BAD_REQUEST_ERROR" } });
   const body = request.method === "POST" ? JSON.parse((await readBody(request)) || "{}") : {};
-  if (request.method === "GET" && path.startsWith("/v1/payments")) return send(response, 200, { entity: "collection", count: 0, items: [] });
+  if (request.method === "GET" && path === "/v1/payments") return send(response, 200, { entity: "collection", count: 0, items: [] });
   if (request.method === "POST" && path === "/v1/payment_links") {
     const id = nextId("plink");
     links.set(id, { ...body, status: "created", payments: [] });
@@ -105,10 +105,15 @@ async function razorpay(request, response, path) {
     }
     return send(response, 200, { id: linkMatch[1], status: link.status, currency: link.currency, amount: link.amount, payments: link.payments });
   }
+  const refundListMatch = path.match(/^\/v1\/payments\/([A-Za-z0-9_]+)\/refunds$/);
+  if (refundListMatch && request.method === "GET") {
+    const items = [...refunds].filter(([, refund]) => refund.paymentId === refundListMatch[1]).map(([id, refund]) => ({ id, amount: refund.amount, status: "processed", notes: refund.notes }));
+    return send(response, 200, { entity: "collection", count: items.length, items });
+  }
   const refundMatch = path.match(/^\/v1\/payments\/([A-Za-z0-9_]+)\/refund$/);
   if (refundMatch && request.method === "POST") {
     const id = nextId("rfnd");
-    refunds.set(id, { paymentId: refundMatch[1], amount: body.amount });
+    refunds.set(id, { paymentId: refundMatch[1], amount: body.amount, notes: body.notes });
     setTimeout(() => {
       deliver("razorpay", {
         event: "refund.processed",
@@ -149,8 +154,9 @@ async function stripe(request, response, path) {
       status: "open",
       payment_status: "unpaid",
       client_reference_id: form.get("client_reference_id"),
-      metadata: { payment_id: form.get("metadata[payment_id]") },
-      amount_total: Number(form.get("line_items[0][price_data][unit_amount]")),
+      metadata: { attempt_id: form.get("metadata[attempt_id]") },
+      // Stripe totals the line items it was sent.
+      amount_total: [...form.keys()].filter((key) => /^line_items\[\d+\]\[price_data\]\[unit_amount\]$/.test(key)).reduce((sum, key) => sum + Number(form.get(key)), 0),
       currency: form.get("line_items[0][price_data][currency]"),
       success_url: form.get("success_url"),
       cancel_url: form.get("cancel_url"),
@@ -167,6 +173,10 @@ async function stripe(request, response, path) {
       session.status = "expired";
     }
     return send(response, 200, { ...session, id: sessionMatch[1] });
+  }
+  if (request.method === "GET" && path === "/v1/refunds") {
+    const intent = new URL(request.url, origin).searchParams.get("payment_intent");
+    return send(response, 200, { object: "list", data: [...refunds.values()].filter((refund) => refund.payment_intent === intent) });
   }
   if (request.method === "POST" && path === "/v1/refunds") {
     const id = nextId("re");

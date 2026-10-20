@@ -11,18 +11,36 @@
 
 export type RefundState = "PENDING" | "SUCCEEDED" | "FAILED";
 
+/**
+ * How long a hosted page may live. Stripe Checkout needs 30 minutes to 24
+ * hours; a Razorpay link needs at least 15 minutes. Callers choose an expiry
+ * inside the window; clients refuse anything outside it.
+ */
+export const CHECKOUT_WINDOWS = {
+  RAZORPAY: { minMs: 15 * 60_000, maxMs: 180 * 24 * 60 * 60_000 },
+  STRIPE: { minMs: 30 * 60_000, maxMs: 24 * 60 * 60_000 },
+} as const;
+
+export type CheckoutLine = { name: string; amountMinor: bigint; };
+
 export type CheckoutRequest = {
-  /** Our Payment id, echoed back so settlement never trusts payer input. */
+  /** Our checkout attempt id: unique per page (Razorpay requires a unique
+   * reference_id per link) and echoed back so settlement never trusts payer input. */
   reference: string;
   amountMinor: bigint;
   currency: string;
   /** Event and ticket names only; no attendee details. */
   description: string;
+  /**
+   * The order's priced lines, shown to the buyer. Stripe lists them; Razorpay
+   * charges the total and names them in the description. They sum to amountMinor.
+   */
+  lines: CheckoutLine[];
   /** Where the provider sends the attendee after paying. */
   returnUrl: string;
   /** Where the provider sends the attendee if they leave the page (Stripe). */
   cancelUrl: string;
-  /** When the seat hold ends; the provider page expires no earlier than its minimum. */
+  /** When the page stops accepting payment; inside the provider's CHECKOUT_WINDOWS. */
   expiresAt: Date;
   customerEmail?: string;
   idempotencyKey: string;
@@ -59,10 +77,23 @@ export interface PaymentGateway {
    */
   cancelCheckout(checkoutId: string): Promise<CheckoutStatus>;
   createRefund(request: RefundRequest): Promise<RefundResult>;
+  /**
+   * The provider's refund carrying our reference, if one exists. A retry after
+   * an unknown outcome checks this first so money is never returned twice.
+   */
+  findRefund(paymentId: string, reference: string): Promise<RefundResult | null>;
+}
+
+/** Refuse an expiry outside the provider's window rather than let it be clamped silently. */
+export function assertCheckoutWindow(provider: keyof typeof CHECKOUT_WINDOWS, expiresAt: Date, now = Date.now()) {
+  const window = CHECKOUT_WINDOWS[provider];
+  const lifetime = expiresAt.getTime() - now;
+  return lifetime >= window.minMs - 60_000 && lifetime <= window.maxMs;
 }
 
 export type PaidNotification = {
   checkoutId: string | null;
+  /** Our checkout attempt id, echoed by the provider. */
   reference: string | null;
   paymentId: string;
   amountMinor: bigint | null;
@@ -83,6 +114,8 @@ export type VerifiedWebhookEvent = {
   eventType: string;
   paid: PaidNotification | null;
   refunds: RefundNotification[];
+  /** A hosted page that expired or was cancelled unpaid. */
+  closedCheckoutId: string | null;
 };
 
 /** The request did not carry a signature this provider accepts. Never settle it. */

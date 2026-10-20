@@ -12,7 +12,7 @@ import { toFieldDefinition, type FieldSettings } from "@/lib/registrationFields"
  * (see EventDashboardContext.permissions) before calling the guest-level ones.
  */
 
-export type RsvpStatusCounts = { total: number; confirmed: number; waitlisted: number; pendingApproval: number; rejected: number; checkedIn: number };
+export type RsvpStatusCounts = { total: number; confirmed: number; waitlisted: number; pendingApproval: number; rejected: number; pendingPayment: number; checkedIn: number };
 
 export const loadRsvpStatusCounts = cache(async (eventId: string): Promise<RsvpStatusCounts> => {
   const [groups, checkedIn] = await Promise.all([
@@ -26,6 +26,7 @@ export const loadRsvpStatusCounts = cache(async (eventId: string): Promise<RsvpS
     waitlisted: of("WAITLISTED"),
     pendingApproval: of("PENDING_APPROVAL"),
     rejected: of("REJECTED"),
+    pendingPayment: of("PENDING_PAYMENT"),
     checkedIn,
   };
 });

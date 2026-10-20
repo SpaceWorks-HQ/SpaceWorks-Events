@@ -26,6 +26,12 @@ let organisationId = "";
 const userIds: string[] = [];
 
 test.beforeAll(async () => {
+  // A development server compiles each route on first visit and reloads open
+  // pages while it does; compile the pages this spec visits up front.
+  const base = `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || 3000}`;
+  for (const path of ["/login", "/dashboard", "/api/auth/csrf", "/api/auth/session"]) {
+    await fetch(`${base}${path}`, { redirect: "manual" }).catch(() => undefined);
+  }
   const organisation = await prisma.organisation.create({ data: { name: `Payments ${suffix}`, slug: orgSlug } });
   organisationId = organisation.id;
   const passwordHash = await bcrypt.hash(password, 12);
@@ -126,4 +132,30 @@ test("webhooks are verified with the organisation's secret and recorded once", a
   expect((await request.post(url, signed)).status()).toBe(200);
   expect((await request.post(url, signed)).status()).toBe(200);
   expect(await prisma.processedWebhookEvent.count({ where: { organisationId } })).toBe(1);
+});
+
+test("the owner connects Stripe too, and Stripe webhooks are verified the same way", async ({ page, request }) => {
+  const stripeSecret = `whsec_${suffix}`;
+  await signIn(page, ownerEmail, "192.0.2.236");
+  await page.goto(`/dashboard/${orgSlug}/settings/payments`);
+  await page.getByLabel(/^Secret key/).fill(`sk_test_${suffix}`);
+  await page.getByLabel(/^Signing secret/).fill(stripeSecret);
+  await page.getByRole("radio", { name: /^Stripe/ }).click();
+  await page.getByRole("button", { name: "Save payment settings" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Payment settings saved." })).toBeVisible();
+  await expect(page.getByText("Ready: Stripe")).toBeVisible();
+  await page.getByRole("button", { name: "Test connection" }).nth(1).click();
+  await expect(page.getByRole("status").filter({ hasText: "Connected. These are test keys" })).toBeVisible();
+  expect(await page.content()).not.toContain(stripeSecret);
+
+  const { webhookPathId } = await prisma.organisationPaymentSettings.findUniqueOrThrow({ where: { organisationId } });
+  const raw = JSON.stringify({ id: `evt_${suffix}`, type: "checkout.session.expired", data: { object: { id: "cs_test_e2e" } } });
+  const sign = (secret: string) => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    return `t=${timestamp},v1=${crypto.createHmac("sha256", secret).update(`${timestamp}.${raw}`).digest("hex")}`;
+  };
+  const url = `/api/webhooks/stripe/${webhookPathId}`;
+  expect((await request.post(url, { data: raw, headers: { "content-type": "application/json", "stripe-signature": sign("whsec_forged_secret_value") } })).status()).toBe(400);
+  expect((await request.post(url, { data: raw, headers: { "content-type": "application/json", "stripe-signature": sign(stripeSecret) } })).status()).toBe(200);
+  expect(await prisma.processedWebhookEvent.count({ where: { organisationId, provider: "STRIPE" } })).toBe(1);
 });

@@ -28,6 +28,8 @@ export function registrationStatus(status: RsvpStatus, checkedInAt: Date | null)
       return { label: "Waiting for approval", tone: "warning" };
     case RsvpStatus.REJECTED:
       return { label: "Declined", tone: "danger" };
+    case RsvpStatus.PENDING_PAYMENT:
+      return { label: "Payment pending", tone: "warning" };
     default:
       return { label: "Registered", tone: "neutral" };
   }

@@ -56,6 +56,12 @@ This page documents implemented controls and security boundaries. It is not a su
 - Webhooks are served only by the backend API host; the split frontend proxy refuses `/api/webhooks/*`.
 - `PAYMENTS_FAKE_PROVIDER_URL` (tests only) is refused in production.
 
+## Payment ledger
+
+- Money is integer minor units (`BigInt`) with an uppercase ISO 4217 code; each event has one currency, locked after its first sale. An order's lines and totals are priced by the application, and the provider only charges the order total, so behaviour is identical on Razorpay and Stripe.
+- Each hosted page is a `PaymentCheckoutAttempt` whose id is the reference sent to the provider (Razorpay `reference_id` must be unique per link), so retries never reuse a reference. Expiries stay inside each provider's window (Stripe Checkout 30 minutes to 24 hours, Razorpay links at least 15 minutes), and non-zero totals below the provider minimum (Razorpay ₹1, Stripe about US$0.50) are refused.
+- Database triggers keep settled payments' amount, currency, provider and status immutable, never replace a recorded provider payment id or checkout page, never reopen a finished checkout attempt, and keep pending plus succeeded refunds within the amount paid.
+
 ## Abuse protection
 
 - Password login applies account and IP limits inside the credential verifier, in addition to proxy limits. Missing and OAuth-only identities perform dummy bcrypt work; signup returns the same response for existing and newly created accounts. Auth.js errors are logged without exception payloads.

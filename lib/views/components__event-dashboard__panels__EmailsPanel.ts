@@ -23,6 +23,7 @@ export async function loadEmailsPanel({ ctx }: { ctx: EventDashboardContext; }) 
     WAITLISTED: counts.waitlisted,
     PENDING_APPROVAL: counts.pendingApproval,
     REJECTED: counts.rejected,
+    PENDING_PAYMENT: counts.pendingPayment,
   };
 
   // Delivery per broadcast, from the outbox: status counts only, never recipients.
