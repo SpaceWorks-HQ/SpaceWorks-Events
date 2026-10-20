@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { OUTBOX_SCHEDULER_HEARTBEAT_KEY } from "@/lib/operationalHeartbeat";
 import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
+import { backupProblem, readVpsBackupStatus } from "@/lib/vpsBackupStatus";
 export async function loadSuperAdminOperationsView() {
   await requireSuperAdminMfa();
   const now = new Date();
@@ -52,5 +53,8 @@ export async function loadSuperAdminOperationsView() {
     && now.getTime() - schedulerHeartbeat.lastSucceededAt.getTime() < 3 * 60_000;
   const failedCount = outbox.get(OutboxStatus.FAILED) ?? 0;
   const prerequisites = { redis: Boolean(env?.REDIS_URL), scheduler: Boolean(process.env.CRON_SECRET), readiness: Boolean(process.env.HEALTHCHECK_SECRET), smtp: Boolean(instanceSettings?.smtpHost || instanceSettings?.smtpService || env?.SMTP_HOST || env?.SMTP_SERVICE) };
-  return { prerequisites, backupProvider, backupFresh, backupRetentionDays, reportedBackupAt, lastRestoreDrill, outbox, failedCount, expiredTokens, schedulerFresh, schedulerHeartbeat, oldestPending, failedMessages };
+  // The VPS installer's own backups, when this runs from it (null elsewhere).
+  const serverBackup = await readVpsBackupStatus();
+  const serverBackupProblem = backupProblem(serverBackup, now);
+  return { prerequisites, backupProvider, backupFresh, backupRetentionDays, reportedBackupAt, lastRestoreDrill, outbox, failedCount, expiredTokens, schedulerFresh, schedulerHeartbeat, oldestPending, failedMessages, serverBackup, serverBackupProblem };
 }

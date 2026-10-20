@@ -1,0 +1,55 @@
+# Weekly check of Yuyu (https://github.com/twilighty-abhi/yuyu), the project
+# Space Works Events is derived from. When any upstream branch has commits that
+# dev does not contain, it opens (or updates) one issue listing them, so fixes,
+# security patches especially, can be ported. Porting stays a reviewed, manual
+# step: see "Syncing from Yuyu" in CONTRIBUTING.md.
+name: Yuyu upstream check
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Compare with Yuyu and report new commits
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          git remote add upstream https://github.com/twilighty-abhi/yuyu.git
+          git fetch --quiet --no-tags upstream '+refs/heads/*:refs/remotes/upstream/*'
+          report=''
+          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/upstream); do
+            count=$(git rev-list --count "HEAD..$ref")
+            [ "$count" = 0 ] && continue
+            report+=$'\n'"### \`${ref#upstream/}\`: $count new commit(s)"$'\n\n'
+            report+=$(git log --no-merges --date=short --format='- [`%h`](https://github.com/twilighty-abhi/yuyu/commit/%H) %ad %s' "HEAD..$ref" | head -n 50)
+            report+=$'\n'
+          done
+          title='Yuyu upstream has commits to review'
+          existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -z "$report" ]; then
+            echo 'dev contains every Yuyu commit.'
+            [ -z "$existing" ] || gh issue close "$existing" --comment 'dev now contains every Yuyu commit.'
+            exit 0
+          fi
+          body="Yuyu has commits that \`dev\` does not contain. Review them and port what applies, starting with security and bug fixes, on a \`fix/yuyu-sync-<date>\` branch (see \"Syncing from Yuyu\" in CONTRIBUTING.md).
+          $report
+          _Updated by the weekly Yuyu upstream check._"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

@@ -9,6 +9,24 @@ for (const key of ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"]) {
     process.exit(1);
   }
 }
+// `check.mjs smtp`: log in to the SMTP relay that app.env names, without
+// sending anything. (Email settings saved in Super admin override these.)
+if (process.argv[2] === "smtp") {
+  const { default: nodemailer } = await import("nodemailer");
+  const port = Number(process.env.SMTP_PORT);
+  const transport = nodemailer.createTransport({
+    host: process.env.SMTP_HOST, port, secure: process.env.SMTP_SECURE === "true", requireTLS: process.env.SMTP_SECURE !== "true",
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }, connectionTimeout: 15_000, greetingTimeout: 15_000,
+  });
+  try {
+    await transport.verify();
+    console.log(`SMTP check passed: signed in to ${process.env.SMTP_HOST}:${port} over TLS.`);
+  } catch {
+    console.error(`SMTP check failed: could not sign in to ${process.env.SMTP_HOST}:${port}. Check the host, port, login and password; no credentials were logged.`);
+    process.exitCode = 1;
+  }
+  process.exit();
+}
 await import("../../scripts/check-production-env.mjs");
 if (process.argv[2] === "preflight") process.exit(0);
 

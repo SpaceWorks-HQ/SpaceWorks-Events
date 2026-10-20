@@ -247,6 +247,177 @@ install_packages() {
     esac ) || die "Could not install $*; install it with your package manager, then rerun."
 }
 
+has_systemd() { command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; }
+
+# Backup settings (schedule, retention, encryption recipient, off-site bucket):
+# owner-only, beside the other configuration, parsed with conf_get.
+backup_env() { printf '%s/backup.env' "$SWE_CONFIG_DIR"; }
+# Non-secret status the app reads (mounted read-only at /status).
+status_dir() { printf '%s/status' "$SWE_CONFIG_DIR"; }
+
+# install_timer NAME "Description" ONCALENDAR SCRIPT [ARGS...]: a systemd timer
+# that runs a script of the current release as root. The unit names the
+# current symlink, so updates never need to rewrite it.
+install_timer() {
+  local name=$1 description=$2 calendar=$3 script=$4 arg command
+  shift 4
+  command="/bin/bash $SWE_DIR/current/scripts/$script"
+  for arg in "$@"; do command+=" $arg"; done
+  cat > "/etc/systemd/system/swevents-$name.service" <<EOF
+[Unit]
+Description=Space Works Events: $description
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+Environment=SWE_DIR=$SWE_DIR
+ExecStart=$command
+EOF
+  cat > "/etc/systemd/system/swevents-$name.timer" <<EOF
+[Unit]
+Description=Space Works Events: $description
+
+[Timer]
+OnCalendar=$calendar
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now "swevents-$name.timer" >/dev/null 2>&1
+}
+
+remove_timer() {
+  has_systemd || return 0
+  systemctl disable --now "swevents-$1.timer" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/swevents-$1.timer" "/etc/systemd/system/swevents-$1.service"
+  systemctl daemon-reload
+}
+
+timer_enabled() { has_systemd && systemctl is-enabled --quiet "swevents-$1.timer" 2>/dev/null; }
+
+# Nightly backups (02:30 UTC plus up to 30 minutes) and a weekly check that
+# renews the internal service certificates two months before they expire.
+install_backup_timer() { install_timer backup 'nightly backup' '*-*-* 02:30:00 UTC' vps-backup.sh; }
+install_certificate_timer() { install_timer certificates 'internal certificate renewal' 'Mon *-*-* 04:00:00 UTC' vps-renew-certs.sh --if-due; }
+
+# The backend image of the installed release, which carries the operator tools.
+backend_image() {
+  local image
+  image=$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_BACKEND_IMAGE)
+  printf '%s:%s' "${image:-swevents-backend}" "$(conf_get "$SWE_CONFIG_DIR/compose.env" SWE_VERSION)"
+}
+
+# The Silo image from the compose file: its `mc` client copies backups to and
+# from S3 buckets without installing anything on the host.
+silo_image() { sed -n 's/^[[:space:]]*image:[[:space:]]*\(pgsty\/silo:[^[:space:]]*\)[[:space:]]*$/\1/p' "$SWE_REPO_DIR/compose.production.yml" | head -n 1; }
+
+is_https_endpoint() { [[ "$1" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$ ]]; }
+is_bucket() { [[ "$1" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; }
+is_region() { [[ "$1" =~ ^[a-z0-9-]{1,32}$ ]]; }
+is_days() { [[ "$1" =~ ^[1-9][0-9]{0,3}$ ]]; }
+is_prefix() { [[ "$1" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; }
+
+urlencode() {
+  local value=$1 out='' char i
+  for ((i = 0; i < ${#value}; i++)); do
+    char=${value:i:1}
+    case $char in
+      [A-Za-z0-9._~-]) out+=$char ;;
+      *) printf -v char '%%%02X' "'$char"; out+=$char ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
+# run_mc [DOCKER OPTIONS...] IMAGE MC-ARGS...: the mc client with the off-site
+# bucket as alias `offsite`. The credentials travel in the environment, never
+# on a command line.
+run_mc() {
+  local file endpoint
+  file=$(backup_env)
+  endpoint=$(conf_get "$file" OFFSITE_ENDPOINT)
+  endpoint=${endpoint#https://}
+  MC_HOST_offsite="https://$(urlencode "$(conf_get "$file" OFFSITE_ACCESS_KEY_ID)"):$(urlencode "$(conf_get "$file" OFFSITE_SECRET_ACCESS_KEY)")@${endpoint%/}" \
+    docker run --rm --env MC_HOST_offsite --entrypoint mc "$@"
+}
+offsite_path() {
+  local file
+  file=$(backup_env)
+  printf 'offsite/%s/%s' "$(conf_get "$file" OFFSITE_BUCKET)" "$(conf_get "$file" OFFSITE_PREFIX)"
+}
+
+# ask_offsite: the off-site bucket questions (answers in offsite_* variables).
+ask_offsite() {
+  cat >/dev/tty <<'EOF'
+
+Off-site copies go to an S3-compatible bucket at another provider (Cloudflare R2,
+Backblaze B2, Amazon S3...). Create a private bucket and a key limited to it.
+EOF
+  ask offsite_endpoint 'Off-site S3 endpoint' '' is_https_endpoint 'Enter the HTTPS endpoint, such as https://<account>.r2.cloudflarestorage.com.'
+  offsite_endpoint=${offsite_endpoint%/}
+  ask offsite_bucket 'Off-site bucket' '' is_bucket 'Enter a bucket name: lowercase letters, digits, dots and hyphens.'
+  ask offsite_prefix 'Folder in the bucket' spaceworks-events is_prefix 'Use letters, digits, dots, hyphens and underscores.'
+  ask offsite_key 'Access key ID' '' is_env_value "Enter the access key, without ' or \\ characters."
+  ask_secret offsite_secret 'Secret access key (hidden)'
+  ask offsite_days 'Days to keep off-site copies' 90 is_days 'Enter a number of days.'
+}
+
+# shellcheck disable=SC2154 # ask_offsite assigns these by name
+save_offsite() {
+  local file=${1:-$(backup_env)}
+  conf_set "$file" OFFSITE_ENDPOINT "$offsite_endpoint"
+  conf_set "$file" OFFSITE_BUCKET "$offsite_bucket"
+  conf_set "$file" OFFSITE_PREFIX "$offsite_prefix"
+  conf_set "$file" OFFSITE_ACCESS_KEY_ID "$offsite_key"
+  conf_set "$file" OFFSITE_SECRET_ACCESS_KEY "$offsite_secret"
+  conf_set "$file" OFFSITE_KEEP_DAYS "$offsite_days"
+}
+
+clear_offsite() {
+  local name
+  for name in OFFSITE_ENDPOINT OFFSITE_BUCKET OFFSITE_PREFIX OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_KEEP_DAYS; do
+    conf_unset "$(backup_env)" "$name"
+  done
+}
+
+# The age tool encrypts backups to a public key; only its private key, kept
+# off this server, can decrypt them.
+ensure_age() {
+  command -v age >/dev/null && command -v age-keygen >/dev/null && return 0
+  say 'Installing age (backup encryption) from the distribution packages.'
+  ( install_packages age ) >/dev/null 2>&1 || true
+  command -v age >/dev/null && command -v age-keygen >/dev/null
+}
+
+# new_backup_key: create an age key pair, save the public recipient and show
+# the private key once. It is never written to this server.
+new_backup_key() {
+  local identity recipient answer
+  identity=$(age-keygen 2>/dev/null)
+  recipient=$(printf '%s\n' "$identity" | age-keygen -y)
+  [[ "$recipient" =~ ^age1[a-z0-9]{58}$ ]] || die 'age-keygen did not produce a key.'
+  conf_set "$(backup_env)" BACKUP_AGE_RECIPIENT "$recipient"
+  cat >/dev/tty <<EOF
+
+Backup encryption key. Store it now in your password manager or another
+safe place OFF this server. It is shown only this once and is not saved here.
+Without it, encrypted backups cannot be restored.
+
+$(printf '%s\n' "$identity" | grep '^AGE-SECRET-KEY-')
+
+EOF
+  while true; do
+    printf 'Type SAVED once the key is stored safely: ' >/dev/tty
+    IFS= read -r answer </dev/tty || die 'No terminal input.'
+    [[ "${answer%$'\r'}" != SAVED ]] || break
+  done
+  printf '\033[2J\033[H' >/dev/tty
+}
+
 # These scripts never attach a terminal to a container: the installer runs them
 # with stdin from /dev/null, and Compose refuses a TTY without one.
 compose() {

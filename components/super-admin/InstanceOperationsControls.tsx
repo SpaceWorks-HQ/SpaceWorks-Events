@@ -9,9 +9,10 @@ import {
   purgeExpiredVerificationTokens,
   recordBackupRestoreVerification,
   retryFailedOutboxMessages,
+  sendInstanceTestEmail,
 } from "@/app/actions/instance";
 
-type OperationData = { sent?: number; failed?: number; deleted?: number; retried?: number };
+type OperationData = { sent?: number; failed?: number; deleted?: number; retried?: number; to?: string };
 type OperationResult = { ok: boolean; error?: string; data?: OperationData | void };
 
 export function InstanceOperationsControls() {
@@ -35,6 +36,9 @@ export function InstanceOperationsControls() {
     <div className="flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
       <Button disabled={pending} variant="primary" onClick={() => run(deliverInstanceOutbox, (data) => `Outbox processed: ${data?.sent ?? 0} sent, ${data?.failed ?? 0} failed.`)}>
         Deliver queued email
+      </Button>
+      <Button disabled={pending} variant="secondary" onClick={() => run(sendInstanceTestEmail, (data) => data?.failed ? `Test email to ${data.to} did not send yet; see Failed email deliveries below.` : `Test email sent to ${data?.to}. Check your inbox.`)}>
+        Send test email
       </Button>
       <Button disabled={pending} variant="secondary" onClick={() => run(retryFailedOutboxMessages, (data) => `${data?.retried ?? 0} failed message(s) requeued.`)}>
         Retry failed email
