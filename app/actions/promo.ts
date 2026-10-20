@@ -5,7 +5,9 @@ import { z } from "zod";
 import type { ActionResult } from "@/app/actions/org";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { prisma } from "@/lib/db";
+import { DEFAULT_CURRENCY } from "@/lib/payments/money";
 import { findPromoCode, isValidPromoCode, redeemingOrdersWhere } from "@/lib/payments/promo";
+import { listPublicTicketTypes, type PublicTicketType, type TicketScope } from "@/lib/payments/tickets";
 
 const schema = z.object({
   orgSlug: z.string().trim().min(1).max(120),
@@ -63,4 +65,36 @@ export async function checkPromoCode(input: unknown): Promise<ActionResult<Promo
       ticketTypeId: promo.ticketTypeId, minQuantity: promo.minQuantity, perOrderLimit: promo.perOrderLimit,
     },
   };
+}
+
+const unlockSchema = z.object({
+  orgSlug: z.string().trim().min(1).max(120),
+  eventSlug: z.string().trim().min(1).max(200).optional(),
+  eventInstanceId: z.string().trim().min(1).max(128).optional(),
+  code: z.string().trim().min(1).max(32),
+}).strict().refine((value) => Boolean(value.eventSlug) !== Boolean(value.eventInstanceId));
+
+/**
+ * The tickets an access code reveals on this event or series date. The
+ * code is checked again when the order is placed. Rate limited, since it
+ * confirms whether a code exists.
+ */
+export async function unlockTickets(input: unknown): Promise<ActionResult<PublicTicketType[]>> {
+  const parsed = unlockSchema.safeParse(input);
+  if (!parsed.success || !isValidPromoCode(parsed.data.code)) return { ok: false, error: "That access code isn't valid." };
+  if (await isActionRateLimited("rsvp")) return { ok: false, error: "Too many attempts. Try again shortly." };
+  const scope = parsed.data.eventSlug
+    ? await prisma.event.findFirst({
+      where: { slug: parsed.data.eventSlug, organisation: { slug: parsed.data.orgSlug }, status: EventStatus.PUBLISHED, page: { isPublished: true } },
+      select: { id: true, currency: true },
+    }).then((event) => (event ? { scope: { eventId: event.id } as TicketScope, currency: event.currency } : null))
+    : await prisma.eventInstance.findFirst({
+      where: { id: parsed.data.eventInstanceId, cancelledAt: null, series: { organisation: { slug: parsed.data.orgSlug }, status: EventStatus.PUBLISHED } },
+      select: { id: true, eventSeriesId: true, series: { select: { currency: true } } },
+    }).then((date) => (date ? { scope: { eventSeriesId: date.eventSeriesId, eventInstanceId: date.id } as TicketScope, currency: date.series.currency } : null));
+  if (!scope) return { ok: false, error: "That access code isn't valid." };
+  const tickets = (await listPublicTicketTypes(scope.scope, scope.currency ?? DEFAULT_CURRENCY, new Date(), { accessCode: parsed.data.code }))
+    .filter((ticket) => ticket.visibility === "CODE");
+  if (tickets.length === 0) return { ok: false, error: "That access code isn't valid." };
+  return { ok: true, data: tickets };
 }

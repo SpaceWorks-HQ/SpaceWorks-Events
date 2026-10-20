@@ -993,6 +993,11 @@
       "id": "promo:checkPromoCode"
     },
     {
+      "module": "app/actions/promo",
+      "name": "unlockTickets",
+      "id": "promo:unlockTickets"
+    },
+    {
       "module": "app/actions/registration-form",
       "name": "upsertEventRegistrationField",
       "id": "registration-form:upsertEventRegistrationField"
@@ -1146,6 +1151,16 @@
       "module": "app/actions/ticket-types",
       "name": "saveRefundPolicy",
       "id": "ticket-types:saveRefundPolicy"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveAddOn",
+      "id": "ticket-types:saveAddOn"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "archiveAddOn",
+      "id": "ticket-types:archiveAddOn"
     }
   ]
 }

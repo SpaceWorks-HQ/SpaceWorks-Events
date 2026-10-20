@@ -114,4 +114,11 @@ describe("production migration safety contracts", () => {
       expect(sql).toContain(`CREATE TRIGGER "${trigger}"`);
     }
   });
+
+  it("adds ticketing extras with columns that default to today's behaviour and no rewrites", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261027000000_ticketing_extras/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain(`"visibility" "TicketVisibility" NOT NULL DEFAULT 'PUBLIC'`);
+    expect(sql).toContain('"seatsPerTicket" INTEGER NOT NULL DEFAULT 1');
+  });
 });

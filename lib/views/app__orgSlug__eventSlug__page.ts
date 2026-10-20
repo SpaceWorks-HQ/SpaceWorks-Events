@@ -10,7 +10,7 @@ import { countConfirmedForEvent, countHeldForEvent } from "@/lib/rsvpCapacity";
 import { listPublicTicketTypes } from "@/lib/payments/tickets";
 import { DEFAULT_CURRENCY } from "@/lib/payments/money";
 import { canAcceptOnlinePayments } from "@/lib/payments/settings";
-import { describeRefundPolicy } from "@/lib/payments/refundPolicy";
+import { ticketingInfo, viewerIsMember } from "@/lib/payments/ticketing";
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string; }>; };
 export async function loadRouteMetadata({ params }: Props): Promise<Metadata> {
   const { orgSlug, eventSlug } = await params;
@@ -141,19 +141,13 @@ export async function loadEventView({ params }: Props) {
         : null,
     ),
     countHeldForEvent(event.id),
-    listPublicTicketTypes({ eventId: event.id }, event.currency ?? DEFAULT_CURRENCY),
+    // Members also see members-only tickets.
+    viewerIsMember(org.id).then((member) => listPublicTicketTypes({ eventId: event.id }, event.currency ?? DEFAULT_CURRENCY, new Date(), { member })),
   ]);
+  // What the form needs beyond the tickets: codes, add-ons, the refund terms.
+  const ticketing = await ticketingInfo({ eventId: event.id }, tickets, event.currency ?? DEFAULT_CURRENCY, event);
   // Paid tickets are on sale only while the installation allows it and the
   // organisation's account is fully connected.
-  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0);
-  const paidSalesOpen = sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
-  // What the form needs to sell paid tickets: whether codes exist, and the refund terms.
-  const ticketing = sellsPaid
-    ? {
-      promoCodes: (await prisma.promoCode.count({ where: { eventId: event.id, archivedAt: null } })) > 0,
-      refundPolicy: describeRefundPolicy({ kind: event.refundPolicyKind, hours: event.refundPolicyHours, percent: event.refundPolicyPercent, text: event.refundPolicyText }),
-      refundPolicyText: event.refundPolicyText,
-    }
-    : null;
+  const paidSalesOpen = ticketing?.sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
   return { org, preview, event: eventForView(event), page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp, held, tickets, paidSalesOpen, ticketing };
 }

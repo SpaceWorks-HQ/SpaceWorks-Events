@@ -4,6 +4,7 @@ import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePanel";
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
 import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
+import { AddOnsManager } from "@/components/event-dashboard/settings/AddOnsManager";
 import { PromoCodesManager, RefundPolicyControl } from "@/components/event-dashboard/settings/PromoCodesManager";
 import { NoPermission } from "./shared";
 
@@ -21,6 +22,9 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
           paidBlockedReason={tickets.paidBlockedReason}
           payee={tickets.payee}
         />
+      ) : null}
+      {tickets ? (
+        <AddOnsManager organisationSlug={organisation.slug} target={{ eventId: event.id }} currency={tickets.currency} addOns={tickets.addOns} paidAllowed={tickets.paidAllowed} />
       ) : null}
       {tickets ? (
         <PromoCodesManager organisationSlug={organisation.slug} target={{ eventId: event.id }} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />

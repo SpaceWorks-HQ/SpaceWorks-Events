@@ -43,6 +43,18 @@ const saveSchema = z.object({
   salesEndAt: optionalDate,
   /** Series only, when creating: one date's ticket, or a pass for every remaining date. */
   kind: z.enum(["SINGLE", "PASS"]).default("SINGLE"),
+  /** Everyone; only with an access code; or only the organisation's members. */
+  visibility: z.enum(["PUBLIC", "CODE", "MEMBERS"]).default("PUBLIC"),
+  /** CODE: the access code; blank keeps the current one. Stored as a digest only. */
+  accessCode: z.string().trim().max(32).optional(),
+  /** FLEXIBLE: pay what you want, from the price (the minimum) upwards. */
+  pricing: z.enum(["FIXED", "FLEXIBLE"]).default("FIXED"),
+  suggested: z.string().trim().max(20).optional(),
+  maxPrice: z.string().trim().max(20).optional(),
+  /** A group ticket seats this many people. */
+  seatsPerTicket: z.number().int().min(1).max(20).default(1),
+  /** Booking fee per ticket, paid by the buyer; blank or 0 for none. */
+  fee: z.string().trim().max(20).optional(),
 }).strict().refine(oneTarget, "Choose an event or a series.");
 const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
 
@@ -94,7 +106,7 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
   if ("eventId" in owner && data.kind === "PASS") return { ok: false, error: "Passes are for series." };
 
   const existing = data.ticketTypeId
-    ? await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, ...owner, archivedAt: null }, select: { id: true } })
+    ? await prisma.ticketType.findFirst({ where: { id: data.ticketTypeId, ...owner, archivedAt: null }, select: { id: true, accessCodeDigest: true, accessCodeHint: true } })
     : null;
   if (data.ticketTypeId && !existing) return { ok: false, error: "That ticket no longer exists." };
 
@@ -104,13 +116,40 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
   const currency = context.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
   const priceMinor = data.price ? parseMoneyToMinor(data.price, currency) : ZERO;
   if (priceMinor === null) return { ok: false, error: `Enter the price in ${currency}, for example 499 or 499.50.` };
+  const money = (value: string | undefined) => (value ? parseMoneyToMinor(value, currency) : null);
+  const flexible = data.pricing === "FLEXIBLE";
+  const suggestedMinor = flexible ? money(data.suggested) : null;
+  const maxPriceMinor = flexible ? money(data.maxPrice) : null;
+  const feeMinor = money(data.fee) ?? ZERO;
+  if ((flexible && data.suggested && suggestedMinor === null) || (flexible && data.maxPrice && maxPriceMinor === null) || (data.fee && money(data.fee) === null)) {
+    return { ok: false, error: `Enter amounts in ${currency}, for example 499 or 499.50.` };
+  }
+  if (suggestedMinor != null && suggestedMinor < priceMinor) return { ok: false, error: "The suggested price can't be below the minimum." };
+  if (maxPriceMinor != null && maxPriceMinor < (suggestedMinor ?? priceMinor)) return { ok: false, error: "The most a buyer may pay can't be below the minimum or the suggestion." };
 
-  if (priceMinor > ZERO) {
+  // Access codes are stored as a digest: a new code replaces the old one.
+  let accessCodeDigest: string | null = null;
+  let accessCodeHint: string | null = null;
+  if (data.visibility === "CODE") {
+    if (data.accessCode) {
+      if (!isValidPromoCode(data.accessCode)) return { ok: false, error: "Access codes are 3 to 32 letters, numbers, - or _." };
+      accessCodeDigest = promoCodeDigest(data.accessCode);
+      accessCodeHint = promoCodeHint(data.accessCode);
+    } else if (existing?.accessCodeDigest) {
+      accessCodeDigest = existing.accessCodeDigest;
+      accessCodeHint = existing.accessCodeHint;
+    } else {
+      return { ok: false, error: "Enter the access code buyers will use." };
+    }
+  }
+
+  // Anything that can take money needs paid events on and a connected account.
+  if (priceMinor > ZERO || flexible || feeMinor > ZERO) {
     if (!(await isPaidEventsEnabled())) return { ok: false, error: "Paid tickets are turned off on this installation." };
     const provider = configuredProvider(settings);
     if (!provider) return { ok: false, error: "Connect a payment account in Settings → Payments before adding a paid ticket." };
     const minimum = providerMinimumMinor(provider, currency);
-    if (priceMinor < minimum) return { ok: false, error: `The smallest price ${provider === "RAZORPAY" ? "Razorpay" : "Stripe"} accepts is ${formatMoney(minimum, currency)}.` };
+    if (priceMinor > ZERO && priceMinor < minimum) return { ok: false, error: `The smallest price ${provider === "RAZORPAY" ? "Razorpay" : "Stripe"} accepts is ${formatMoney(minimum, currency)}.` };
   }
   if (data.maxPerOrder < data.minPerOrder) return { ok: false, error: "The most per order can't be below the fewest." };
   const salesStartAt = data.salesStartAt ? new Date(data.salesStartAt) : null;
@@ -126,6 +165,14 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
     maxPerOrder: data.maxPerOrder,
     salesStartAt,
     salesEndAt,
+    visibility: data.visibility,
+    accessCodeDigest,
+    accessCodeHint,
+    pricing: data.pricing,
+    suggestedMinor,
+    maxPriceMinor,
+    seatsPerTicket: data.seatsPerTicket,
+    feeMinor,
   };
   const saved = await prisma.$transaction(async (tx) => {
     let id: string;
@@ -145,7 +192,7 @@ export async function saveTicketType(input: unknown): Promise<ActionResult<{ id:
       organisationId: organisation.id,
       targetType: "TicketType",
       targetId: id,
-      metadata: { paid: priceMinor > ZERO, limited: values.capacity != null, pass: data.kind === "PASS" },
+      metadata: { paid: priceMinor > ZERO, limited: values.capacity != null, pass: data.kind === "PASS", visibility: data.visibility, flexible, group: data.seatsPerTicket > 1, fee: feeMinor > ZERO },
       client: tx,
     });
     return id;
@@ -294,6 +341,62 @@ export async function saveRefundPolicy(input: unknown): Promise<ActionResult> {
     return "saved" as const;
   });
   if (result === "stricter") return { ok: false, error: "Tickets have been sold, so the refund policy can only become more generous." };
+  revalidateOwner(context);
+  return { ok: true };
+}
+
+const addOnSchema = z.object({
+  ...target,
+  addOnId: z.string().trim().min(1).max(64).optional(),
+  name: z.string().trim().min(1, "Give the extra a name.").max(80),
+  description: z.string().trim().max(300).default(""),
+  /** Typed price in major units; blank or 0 is free. */
+  price: z.string().trim().max(20).default(""),
+  capacity: z.number().int().min(1).max(1_000_000).nullable().optional(),
+  maxPerOrder: z.number().int().min(1).max(100).default(10),
+}).strict().refine(oneTarget, "Choose an event or a series.");
+const archiveAddOnSchema = z.object({ ...target, addOnId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
+
+/** Add or change an extra sold alongside tickets (a T-shirt, lunch, a donation). It takes no seat. */
+export async function saveAddOn(input: unknown): Promise<ActionResult<{ id: string; }>> {
+  const parsed = addOnSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Check the extra." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error };
+  const { organisation, userId, owner } = context;
+  const data = parsed.data;
+  const settings = await prisma.organisationPaymentSettings.findUnique({ where: { organisationId: organisation.id } });
+  const currency = context.currency ?? settings?.currency ?? DEFAULT_CURRENCY;
+  const priceMinor = data.price ? parseMoneyToMinor(data.price, currency) : ZERO;
+  if (priceMinor === null) return { ok: false, error: `Enter the price in ${currency}, for example 299.` };
+  if (priceMinor > ZERO && (!(await isPaidEventsEnabled()) || !configuredProvider(settings))) return { ok: false, error: "Connect a payment account in Settings → Payments before selling paid extras." };
+  const values = { name: data.name, description: data.description, priceMinor, capacity: data.capacity ?? null, maxPerOrder: data.maxPerOrder };
+  const saved = await prisma.$transaction(async (tx) => {
+    if (data.addOnId) {
+      const updated = await tx.addOn.updateMany({ where: { id: data.addOnId, ...owner, archivedAt: null }, data: values });
+      if (updated.count !== 1) return null;
+      return data.addOnId;
+    }
+    const last = await tx.addOn.findFirst({ where: owner, orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+    const created = await tx.addOn.create({ data: { ...values, ...owner, sortOrder: (last?.sortOrder ?? -1) + 1 }, select: { id: true } });
+    if (!context.currency) await setOwnerCurrency(tx, owner, currency);
+    return created.id;
+  });
+  if (!saved) return { ok: false, error: "That extra no longer exists." };
+  await recordAuditEvent({ action: data.addOnId ? "ADD_ON_UPDATED" : "ADD_ON_CREATED", actorUserId: userId, organisationId: organisation.id, targetType: "AddOn", targetId: saved, metadata: { paid: priceMinor > ZERO } });
+  revalidateOwner(context);
+  return { ok: true, data: { id: saved } };
+}
+
+/** Stop selling an extra. Orders keep what they bought. */
+export async function archiveAddOn(input: unknown): Promise<ActionResult> {
+  const parsed = archiveAddOnSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose an extra." };
+  const context = await access(parsed.data);
+  if ("error" in context) return { ok: false, error: context.error };
+  const archived = await prisma.addOn.updateMany({ where: { id: parsed.data.addOnId, ...context.owner, archivedAt: null }, data: { archivedAt: new Date() } });
+  if (archived.count !== 1) return { ok: false, error: "That extra is already off sale." };
+  await recordAuditEvent({ action: "ADD_ON_ARCHIVED", actorUserId: context.userId, organisationId: context.organisation.id, targetType: "AddOn", targetId: parsed.data.addOnId });
   revalidateOwner(context);
   return { ok: true };
 }

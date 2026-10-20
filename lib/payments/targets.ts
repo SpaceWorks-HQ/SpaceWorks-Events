@@ -184,7 +184,7 @@ export async function hasFreeSeats(tx: Prisma.TransactionClient, rsvps: Array<{ 
   }
   const typeIds = [...new Set(rsvps.flatMap((rsvp) => (rsvp.ticketTypeId ? [rsvp.ticketTypeId] : [])))];
   for (const ticketTypeId of typeIds) {
-    const type = await tx.ticketType.findUnique({ where: { id: ticketTypeId }, select: { capacity: true, kind: true } });
+    const type = await tx.ticketType.findUnique({ where: { id: ticketTypeId }, select: { capacity: true, kind: true, seatsPerTicket: true } });
     if (type?.capacity == null) continue;
     if (type.kind === TicketTypeKind.PASS) {
       const ofType = rsvps.filter((rsvp) => rsvp.ticketTypeId === ticketTypeId);
@@ -193,8 +193,10 @@ export async function hasFreeSeats(tx: Prisma.TransactionClient, rsvps: Array<{ 
       continue;
     }
     for (const { target, rsvps: seats } of groups.values()) {
-      const wanted = seats.filter((rsvp) => rsvp.ticketTypeId === ticketTypeId).length;
-      if (wanted > 0 && await tx.rSVP.count({ where: { ticketTypeId, ...target, ...others } }) + wanted > type.capacity) return false;
+      // Limits count tickets: a group ticket is one ticket for several people.
+      const wanted = Math.ceil(seats.filter((rsvp) => rsvp.ticketTypeId === ticketTypeId).length / type.seatsPerTicket);
+      const taken = Math.ceil(await tx.rSVP.count({ where: { ticketTypeId, ...target, ...others } }) / type.seatsPerTicket);
+      if (wanted > 0 && taken + wanted > type.capacity) return false;
     }
   }
   return true;
