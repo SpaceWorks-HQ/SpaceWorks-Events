@@ -81,3 +81,12 @@ jobs:
           docker rm -f swevents-ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:production
+      # The payment flows drive a local fake Razorpay/Stripe, which the app
+      # refuses in production builds, so they run against a dev server.
+      - name: Payment browser flows against the fake provider
+        run: npx playwright test tests/e2e/payments.spec.ts
+        env:
+          PLAYWRIGHT_PORT: "3100"
+          PLAYWRIGHT_SERVER_COMMAND: npx next dev --port 3100 --hostname 127.0.0.1
+          AUTH_URL: http://127.0.0.1:3100
+          NEXT_PUBLIC_BASE_URL: http://127.0.0.1:3100
