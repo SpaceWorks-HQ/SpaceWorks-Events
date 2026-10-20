@@ -16,6 +16,7 @@ import { AddOnPicker, TicketPicker, ticketAvailable } from "@/components/rsvp/Ti
 import { AccessCodeField, PromoCodeField, previewOrderTotal, type AppliedPromo, type TicketingInfo } from "@/components/rsvp/PromoCodeField";
 import { formatMoney } from "@/lib/payments/money";
 import type { PublicAddOn, PublicTicketType } from "@/lib/payments/tickets";
+import { Radio, RadioGroup } from "@/components/ui/choice";
 
 async function postRsvp(body: unknown) {
   const res = await fetch("/api/rsvp", {
@@ -104,6 +105,7 @@ export function RsvpForm(props: {
   const sellsTicketTypes = tickets.length > 0 || Boolean(ticketing?.accessCodes);
   const [amounts, setAmounts] = useState<Record<string, number>>({});
   const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>({});
+  const [payAtDesk, setPayAtDesk] = useState(false);
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     // Start with one of the first ticket that can be bought.
     const first = tickets.find((ticket) => ticketAvailable(ticket, paidSalesOpen));
@@ -117,6 +119,10 @@ export function RsvpForm(props: {
   const seats = Object.entries(quantities).reduce((sum, [id, quantity]) => sum + quantity * (tickets.find((ticket) => ticket.id === id)?.seatsPerTicket ?? 1), 0);
   const [promo, setPromo] = useState<AppliedPromo | null>(null);
   const { totalMinor, discountMinor, feeMinor, promoProblem, priceProblem } = previewOrderTotal(tickets, quantities, promo, { amounts, addOns: addOnQuantities, addOnTypes: addOns });
+  // Paying at the desk is offered when every chosen ticket allows it.
+  const chosen = tickets.filter((ticket) => (quantities[ticket.id] ?? 0) > 0);
+  const deskOffered = totalMinor > 0 && !paidRequest && chosen.length > 0 && chosen.every((ticket) => ticket.payAtDesk);
+  const atDesk = deskOffered && payAtDesk;
   const currency = tickets[0]?.currency ?? addOns[0]?.currency ?? "INR";
   const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0 || ticket.flexible || ticket.feeMinor > 0) || addOns.some((addOn) => addOn.priceMinor > 0);
   const { data: session, status } = useSession();
@@ -178,6 +184,7 @@ export function RsvpForm(props: {
           attendees: attendees.slice(0, Math.min(19, Math.max(0, seats - 1))).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
           ...(promo ? { promoCode: promo.code } : {}),
           ...(accessCode ? { accessCode } : {}),
+          ...(atDesk ? { payAtDesk: true } : {}),
           ...(Object.values(addOnQuantities).some((quantity) => quantity > 0) ? { addOns: Object.entries(addOnQuantities).filter(([, quantity]) => quantity > 0).map(([addOnId, quantity]) => ({ addOnId, quantity })) } : {}),
         } : {}),
         name,
@@ -322,6 +329,12 @@ export function RsvpForm(props: {
         <p className="text-body-ui text-ink">Discount: −{formatMoney(discountMinor, currency)} · Total {formatMoney(totalMinor, currency)}</p>
       ) : null}
       {feeMinor > 0 ? <p className="text-caption text-ink-muted">Includes {formatMoney(feeMinor, currency)} in booking fees.</p> : null}
+      {deskOffered ? (
+        <RadioGroup value={payAtDesk ? "desk" : "online"} onValueChange={(value) => setPayAtDesk(value === "desk")} aria-label="How you'll pay">
+          <Radio value="online" label="Pay online now" />
+          <Radio value="desk" label="Pay at the desk" description="Your places are reserved now; pay when you arrive." />
+        </RadioGroup>
+      ) : null}
       {sellsPaid && ticketing ? (
         <p className="text-caption text-ink-muted">
           {ticketing.refundPolicy}{ticketing.refundPolicyText ? ` ${ticketing.refundPolicyText}` : ""}
@@ -331,6 +344,8 @@ export function RsvpForm(props: {
   ) : null;
   const submitLabel = totalMinor <= 0
     ? "Register"
+    : atDesk
+      ? `Reserve, pay ${formatMoney(totalMinor, currency)} at the desk`
     : paidRequest === "approval"
       ? `Request tickets · ${formatMoney(totalMinor, currency)}`
       : paidRequest === "waitlist"

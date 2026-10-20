@@ -34,11 +34,13 @@ export type AttendeeOrder = {
   currency: string;
   testMode: boolean;
   tickets: number;
-  /** How a confirmed order was settled. */
-  settlement: "online" | "offline" | "waived" | null;
+  /** How a confirmed order was settled; "desk" is reserved, to be paid in person. */
+  settlement: "online" | "offline" | "waived" | "desk" | null;
   paidMinor: number;
   refundedMinor: number;
   refundPendingMinor: number;
   /** The offline payment's record, as amended. */
   offlinePayment: { id: string; method: string | null; reference: string | null; } | null;
+  /** The latest chargeback on a payment, if any. */
+  dispute?: { status: "OPEN" | "UNDER_REVIEW" | "WON" | "LOST" | "CLOSED"; respondBy: string | null; } | null;
 };

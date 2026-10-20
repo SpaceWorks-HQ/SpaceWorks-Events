@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Check, Download } from "lucide-react";
-import { AttendeeDetailsForm, CancelOrderButton, ConfirmingPayment, HoldCountdown, PayNowButton } from "@/components/orders/OrderClient";
+import { AttendeeDetailsForm, CancelOrderButton, ConfirmingPayment, HoldCountdown, PayNowButton, TransferTicketForm } from "@/components/orders/OrderClient";
 import { Button } from "@/components/ui/button";
 import { Callout, Chip } from "@/components/ui/display";
 import { formatDayShort, formatTime } from "@/lib/format/datetime";
@@ -134,6 +134,7 @@ export default async function OrderPage({ params, searchParams }: Props) {
                 <Button asChild size="sm" variant="secondary"><Link href={ticket.ticketHref}>View ticket</Link></Button>
               ) : null}
               {!ticket.checkedIn ? <AttendeeDetailsForm orderToken={order.token} ticket={ticket} fields={order.fields} /> : null}
+              {ticket.transferUntil ? <TransferTicketForm orderToken={order.token} rsvpId={ticket.id} label={ticket.label} until={ticket.transferUntil} /> : null}
             </li>
           ))}
         </ul>

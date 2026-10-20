@@ -8,7 +8,7 @@ import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Callout, Card, CardHeader, Chip } from "@/components/ui/display";
-import { Radio, RadioGroup } from "@/components/ui/choice";
+import { CheckboxField, Radio, RadioGroup } from "@/components/ui/choice";
 import { Dropdown, Field, Input, Textarea } from "@/components/ui/field";
 import { formatMoney, minorToDecimalString, parseMoneyToMinor, UPI_TYPICAL_LIMIT_MINOR } from "@/lib/payments/money";
 
@@ -38,16 +38,17 @@ export type ManagedTicketType = {
   maxPriceMinor: number | null;
   seatsPerTicket: number;
   feeMinor: number;
+  payAtDesk: boolean;
 };
 
 type Draft = {
   id?: string; kind: "SINGLE" | "PASS"; name: string; description: string; price: string; capacity: string; minPerOrder: string; maxPerOrder: string; salesStartAt: string; salesEndAt: string;
-  visibility: "PUBLIC" | "CODE" | "MEMBERS"; accessCode: string; accessCodeHint: string | null; pricing: "FIXED" | "FLEXIBLE"; suggested: string; maxPrice: string; seatsPerTicket: string; fee: string;
+  visibility: "PUBLIC" | "CODE" | "MEMBERS"; accessCode: string; accessCodeHint: string | null; pricing: "FIXED" | "FLEXIBLE"; suggested: string; maxPrice: string; seatsPerTicket: string; fee: string; payAtDesk: boolean;
 };
 
 const EMPTY: Draft = {
   kind: "SINGLE", name: "", description: "", price: "", capacity: "", minPerOrder: "1", maxPerOrder: "10", salesStartAt: "", salesEndAt: "",
-  visibility: "PUBLIC", accessCode: "", accessCodeHint: null, pricing: "FIXED", suggested: "", maxPrice: "", seatsPerTicket: "1", fee: "",
+  visibility: "PUBLIC", accessCode: "", accessCodeHint: null, pricing: "FIXED", suggested: "", maxPrice: "", seatsPerTicket: "1", fee: "", payAtDesk: false,
 };
 
 const VISIBILITY_LABEL = { PUBLIC: null, CODE: "Access code", MEMBERS: "Members only" } as const;
@@ -112,6 +113,7 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
         ...(draft.pricing === "FLEXIBLE" ? { suggested: draft.suggested, maxPrice: draft.maxPrice } : {}),
         seatsPerTicket: Math.min(20, Math.max(1, Number(draft.seatsPerTicket) || 1)),
         fee: draft.fee,
+        payAtDesk: draft.payAtDesk,
       });
       if (!result.ok) {
         setError(result.error);
@@ -204,6 +206,7 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
                         maxPrice: ticket.maxPriceMinor != null ? minorToDecimalString(ticket.maxPriceMinor, ticket.currency) : "",
                         seatsPerTicket: String(ticket.seatsPerTicket),
                         fee: ticket.feeMinor > 0 ? minorToDecimalString(ticket.feeMinor, ticket.currency) : "",
+                        payAtDesk: ticket.payAtDesk,
                       });
                     }}
                   >
@@ -285,6 +288,12 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
                 <option value="MEMBERS">Only organisation members</option>
               </Dropdown>
             </Field>
+            <CheckboxField
+              checked={draft.payAtDesk}
+              onCheckedChange={(checked) => setDraft((current) => (current ? { ...current, payAtDesk: checked === true } : current))}
+              label="Guests may pay at the desk"
+              description="They reserve now and pay in person; mark it collected from the guest list. Places are held for them until you cancel."
+            />
             {draft.visibility === "CODE" ? (
               <Field label="Access code" required={!draft.accessCodeHint} helperText={draft.accessCodeHint ? `Current code starts ${draft.accessCodeHint}…; leave blank to keep it.` : "3 to 32 letters, numbers, - or _. Stored securely; you won't see it again."}>
                 <Input value={draft.accessCode} maxLength={32} autoComplete="off" spellCheck={false} onChange={(event) => set("accessCode", event.target.value.toUpperCase())} />

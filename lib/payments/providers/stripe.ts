@@ -11,6 +11,7 @@ import {
   type CheckoutRequest,
   type CheckoutResult,
   type CheckoutStatus,
+  type DisputeNotification,
   type PaymentGateway,
   type RefundNotification,
   type RefundRequest,
@@ -236,7 +237,24 @@ export function verifyStripeWebhook(secret: string, rawBody: Buffer, headers: He
 
   const closedCheckoutId = eventType === "checkout.session.expired" && isProviderId(object.id) ? object.id : null;
 
-  return { eventId, eventType, paid, refunds, closedCheckoutId };
+  // charge.dispute.created / updated / closed: the object is the dispute.
+  let dispute: DisputeNotification | null = null;
+  const disputedIntent = intentId(object.payment_intent);
+  if (eventType.startsWith("charge.dispute.") && isProviderId(object.id) && disputedIntent) {
+    const status = String(object.status ?? "");
+    const due = record(object.evidence_details).due_by;
+    dispute = {
+      disputeId: object.id,
+      paymentId: disputedIntent,
+      status: status === "won" ? "WON" : status === "lost" ? "LOST" : status === "under_review" || status === "warning_under_review" ? "UNDER_REVIEW" : status === "warning_closed" || status === "charge_refunded" ? "CLOSED" : "OPEN",
+      amountMinor: parseMinorAmount(object.amount),
+      currency: upperCurrency(object.currency),
+      reason: text(object.reason),
+      respondBy: typeof due === "number" ? new Date(due * 1000) : null,
+    };
+  }
+
+  return { eventId, eventType, paid, refunds, closedCheckoutId, dispute };
 }
 
 /** Stripe secret and restricted keys say whether they are test keys. */

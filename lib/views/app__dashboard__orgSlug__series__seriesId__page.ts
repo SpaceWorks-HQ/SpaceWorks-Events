@@ -56,7 +56,7 @@ export async function loadSeriesManageView({ params }: Props) {
   const takenBy = new Map(takenRows.map((row) => [row.eventInstanceId as string, row._count._all]));
   const dates = upcoming.map((date) => ({ id: date.id, start: date.startDateTime.toISOString(), capacity: date.capacity, taken: takenBy.get(date.id) ?? 0, cancelled: date.cancelledAt != null }));
   const tickets = canEditTickets
-    ? await loadTicketSettings({ owner: { eventSeriesId: series.id }, organisation, currency: series.currency, refundPolicy: series, now })
+    ? await loadTicketSettings({ owner: { eventSeriesId: series.id }, organisation, currency: series.currency, refundPolicy: series, transfers: series, now })
     : null;
   // The guest list shows the next date that is still on.
   const firstInstanceId = upcoming.find((date) => !date.cancelledAt)?.id;

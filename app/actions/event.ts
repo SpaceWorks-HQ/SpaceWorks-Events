@@ -28,6 +28,8 @@ import { recordAuditEvent } from "@/lib/audit";
 import { z } from "zod";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
 import { richTextToPlainText, sanitizeRichText } from "@/lib/richText";
+import { hasPaidOrders, refundCancelledEvent } from "@/lib/payments/eventCancellation";
+import { enqueueOperatorNotice } from "@/lib/outbox";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -381,6 +383,11 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
       metadata: { status: data.status },
     });
 
+    // Cancelling an event refunds everyone who paid, in full.
+    if (data.status === EventStatus.CANCELLED && event.status !== EventStatus.CANCELLED) {
+      await refundCancelledEvent({ eventId: event.id, organisationId: org.id, actorUserId: session.user.id });
+    }
+
     revalidateEventPaths(org.slug, event.slug, event.id);
     return { ok: true };
   } catch {
@@ -421,6 +428,10 @@ export async function deleteEvent(input: unknown): Promise<ActionResult> {
     where: { id: eventId, organisationId: org.id },
   });
   if (!event) return { ok: false, error: "Event not found." };
+  // Deleting would leave people who paid without their tickets: cancel instead, which refunds them.
+  if (await hasPaidOrders({ eventId: event.id })) {
+    return { ok: false, error: "People have paid for this event. Cancel it instead, which refunds them in full." };
+  }
 
   const slug = event.slug;
   try {
@@ -659,3 +670,49 @@ export async function publishEvent(input: unknown): Promise<ActionResult> {
   revalidateEventPaths(org.slug, event.slug, event.id);
   return { ok: true };
 }
+
+const cancelEventSchema = z.object({
+  organisationSlug: z.string().trim().min(1).max(120),
+  eventId: z.string().trim().min(1).max(128),
+  reason: z.string().trim().max(500).default(""),
+}).strict();
+
+/**
+ * Cancel an event: it stops taking registrations and shows as cancelled,
+ * everyone who paid is refunded in full (and emailed), and everyone with a
+ * free place is told. Owners and admins only. Running it again only finishes
+ * what's left, so nobody is refunded twice.
+ */
+export async function cancelEvent(input: unknown): Promise<ActionResult<{ refunded: number; failed: number; notified: number; }>> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
+  if (await isActionRateLimited("action", session.user.id)) return { ok: false, error: "Too many updates. Please try again later." };
+  const parsed = cancelEventSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose an event to cancel." };
+  const org = await prisma.organisation.findUnique({ where: { slug: parsed.data.organisationSlug } });
+  if (!org) return { ok: false, error: "Organisation not found." };
+  if (!canPublishEvents(await getMembership(session.user.id, org.id))) return { ok: false, error: "Only owners and admins can cancel events." };
+  const event = await prisma.event.findFirst({ where: { id: parsed.data.eventId, organisationId: org.id }, select: { id: true, slug: true, title: true, status: true } });
+  if (!event) return { ok: false, error: "Event not found." };
+
+  const notified = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${event.id} FOR UPDATE`;
+    if (event.status === EventStatus.CANCELLED) return 0;
+    await tx.event.update({ where: { id: event.id }, data: { status: EventStatus.CANCELLED } });
+    // People with free places are told here; buyers hear about their refund.
+    const free = await tx.rSVP.findMany({
+      where: { eventId: event.id, status: { in: ["CONFIRMED", "WAITLISTED", "PENDING_APPROVAL"] }, OR: [{ orderId: null }, { order: { totalMinor: 0 } }] },
+      select: { guestEmail: true, user: { select: { email: true } } },
+    });
+    const emails = [...new Set(free.map((rsvp) => rsvp.user?.email?.trim() || rsvp.guestEmail).filter((value): value is string => Boolean(value)))];
+    for (const to of emails) {
+      await enqueueOperatorNotice(tx, { to, subject: `Cancelled: ${event.title}`, lines: [`${event.title} has been cancelled by the organiser.`, ...(parsed.data.reason ? [parsed.data.reason] : [])] });
+    }
+    await recordAuditEvent({ action: "EVENT_CANCELLED", actorUserId: session.user!.id, organisationId: org.id, targetType: "Event", targetId: event.id, client: tx });
+    return emails.length;
+  });
+  const result = await refundCancelledEvent({ eventId: event.id, organisationId: org.id, actorUserId: session.user.id });
+  revalidateEventPaths(org.slug, event.slug, event.id);
+  return { ok: true, data: { ...result, notified } };
+}
+

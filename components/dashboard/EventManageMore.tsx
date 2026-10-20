@@ -7,7 +7,7 @@ import { Copy, CopyPlus, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/dialog";
 import { Field, PrefixInput } from "@/components/ui/field";
-import { cloneEvent, deleteEvent, updateEventSlug } from "@/app/actions/event";
+import { cancelEvent, cloneEvent, deleteEvent, updateEventSlug } from "@/app/actions/event";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { cn } from "@/lib/cn";
 
@@ -58,6 +58,7 @@ export function EventManageMore(props: {
 
   const [slug, setSlug] = useState(event.slug);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   // A fresh key per opening remounts the dialog so the typed slug always starts empty.
   const [deleteKey, setDeleteKey] = useState(0);
 
@@ -113,6 +114,17 @@ export function EventManageMore(props: {
       setDeleteOpen(false);
       showToast("Event deleted", "success");
       router.push(`/dashboard/${organisationSlug}`);
+      router.refresh();
+    });
+  };
+
+  const doCancel = () => {
+    startTransition(async () => {
+      const res = await cancelEvent({ organisationSlug, eventId: event.id });
+      setCancelOpen(false);
+      if (!res.ok) return showToast(res.error, "error");
+      const { refunded, failed, notified } = res.data!;
+      showToast(`Event cancelled. ${refunded} ${refunded === 1 ? "order" : "orders"} refunded, ${notified} free ${notified === 1 ? "guest" : "guests"} emailed.${failed ? ` ${failed} need settling by hand.` : ""}`, failed ? "warning" : "success");
       router.refresh();
     });
   };
@@ -208,6 +220,27 @@ export function EventManageMore(props: {
           />
         </div>
       </section>
+
+      {event.status !== "CANCELLED" ? (
+        <section aria-labelledby="event-cancel-title" className="flex flex-col gap-4 rounded-xl border-[1.5px] border-danger-border bg-panel p-5 sm:p-6 md:flex-row md:items-center">
+          <div className="min-w-0 flex-1">
+            <h2 id="event-cancel-title" className="text-h4 text-danger-fg">Cancel event</h2>
+            <p className="mt-0.5 text-body-ui text-ink-secondary">
+              The event page shows it&apos;s cancelled and registration closes. Everyone who paid is refunded in full; everyone is emailed.
+            </p>
+          </div>
+          <Button variant="danger" className="self-start md:self-auto" disabled={pending} onClick={() => setCancelOpen(true)}>Cancel event…</Button>
+        </section>
+      ) : null}
+      <ConfirmDialog
+        open={cancelOpen}
+        title={`Cancel ${event.title}?`}
+        message="Registration closes, every paid order is refunded in full, and all guests are emailed. This can't be undone."
+        confirmLabel="Cancel event and refund"
+        loading={pending}
+        onCancel={() => setCancelOpen(false)}
+        onConfirm={doCancel}
+      />
 
       <section aria-labelledby="event-delete-title" className="flex flex-col gap-4 rounded-xl border-[1.5px] border-danger-border bg-panel p-5 sm:p-6 md:flex-row md:items-center">
         <div className="min-w-0 flex-1">

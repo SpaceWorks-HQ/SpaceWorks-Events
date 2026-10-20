@@ -46,18 +46,22 @@ export const attendeeOrderSelect = {
   id: true, reference: true, status: true, totalMinor: true, currency: true, testMode: true,
   _count: { select: { rsvps: true } },
   payments: {
-    where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE", "WAIVED"] } },
+    where: { status: { in: ["PENDING", "PAID_ONLINE", "PAID_OFFLINE", "WAIVED"] } },
     select: {
-      id: true, status: true, amountMinor: true, offlineMethod: true, offlineReference: true,
+      id: true, status: true, provider: true, amountMinor: true, offlineMethod: true, offlineReference: true,
       refunds: { select: { amountMinor: true, status: true } },
       amendments: { orderBy: { createdAt: "asc" }, select: { field: true, newValue: true } },
+      disputes: { orderBy: { updatedAt: "desc" }, take: 1, select: { status: true, respondBy: true } },
     },
   },
 } satisfies Prisma.OrderSelect;
 
 /** One paid order's money, summed for the guest list. Duplicate captures (refunded automatically) count too. */
 export function attendeeOrder(order: Prisma.OrderGetPayload<{ select: typeof attendeeOrderSelect; }>): AttendeeOrder {
-  const collected = order.payments.filter((payment) => payment.status !== "WAIVED");
+  const collected = order.payments.filter((payment) => payment.status === "PAID_ONLINE" || payment.status === "PAID_OFFLINE");
+  // Confirmed with an offline payment still owed: reserved to pay at the desk.
+  const desk = order.status === "CONFIRMED" && order.payments.some((payment) => payment.status === "PENDING" && payment.provider === "OFFLINE");
+  const dispute = collected.flatMap((payment) => payment.disputes)[0] ?? null;
   const sum = (values: bigint[]) => Number(values.reduce((total, value) => total + value, BigInt(0)));
   const refunds = collected.flatMap((payment) => payment.refunds);
   const offline = collected.find((payment) => payment.status === "PAID_OFFLINE");
@@ -69,11 +73,12 @@ export function attendeeOrder(order: Prisma.OrderGetPayload<{ select: typeof att
     currency: order.currency,
     testMode: order.testMode,
     tickets: order._count.rsvps,
-    settlement: order.status !== "CONFIRMED" ? null : offline ? "offline" : collected.length > 0 ? "online" : order.payments.length > 0 ? "waived" : null,
+    settlement: order.status !== "CONFIRMED" ? null : desk ? "desk" : offline ? "offline" : collected.length > 0 ? "online" : order.payments.some((payment) => payment.status === "WAIVED") ? "waived" : null,
     paidMinor: sum(collected.map((payment) => payment.amountMinor)),
     refundedMinor: sum(refunds.filter((refund) => refund.status === "SUCCEEDED").map((refund) => refund.amountMinor)),
     refundPendingMinor: sum(refunds.filter((refund) => refund.status === "PENDING").map((refund) => refund.amountMinor)),
     offlinePayment: offline ? { id: offline.id, ...effectiveOfflineRecord(offline) } : null,
+    dispute: dispute ? { status: dispute.status, respondBy: dispute.respondBy?.toISOString() ?? null } : null,
   };
 }
 

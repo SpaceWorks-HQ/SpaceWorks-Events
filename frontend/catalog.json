@@ -693,6 +693,11 @@
       "id": "event:publishEvent"
     },
     {
+      "module": "app/actions/event",
+      "name": "cancelEvent",
+      "id": "event:cancelEvent"
+    },
+    {
       "module": "app/actions/feedback-form",
       "name": "applyFeedbackTemplate",
       "id": "feedback-form:applyFeedbackTemplate"
@@ -906,6 +911,11 @@
       "module": "app/actions/orders",
       "name": "cancelMyOrder",
       "id": "orders:cancelMyOrder"
+    },
+    {
+      "module": "app/actions/orders",
+      "name": "transferOrderTicket",
+      "id": "orders:transferOrderTicket"
     },
     {
       "module": "app/actions/org-invites",
@@ -1161,6 +1171,11 @@
       "module": "app/actions/ticket-types",
       "name": "archiveAddOn",
       "id": "ticket-types:archiveAddOn"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveTransferPolicy",
+      "id": "ticket-types:saveTransferPolicy"
     }
   ]
 }

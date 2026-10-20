@@ -8,6 +8,7 @@ import { asRefundPolicy, describeRefundPolicy } from "@/lib/payments/refundPolic
 import { formatMoney } from "@/lib/payments/money";
 import { checkoutLineName } from "@/lib/payments/pricing";
 import { ORDER_SUBJECT_SELECT, orderSubject } from "@/lib/payments/targets";
+import { transferWindow } from "@/lib/payments/transfers";
 import { toFieldDefinition } from "@/lib/registrationFields";
 import { safeTimeZone } from "@/lib/timeZone";
 
@@ -48,10 +49,12 @@ export async function loadOrderView({ params, searchParams }: Props) {
       payments: { where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE] } }, select: { status: true, refunds: { where: { automatic: false, status: { not: PaymentRefundStatus.FAILED } }, select: { amountMinor: true, status: true } } }, orderBy: { createdAt: "desc" } },
       ...ORDER_SUBJECT_SELECT,
       eventId: true,
+      eventSeriesId: true,
       rsvps: {
         orderBy: { createdAt: "asc" },
         select: {
           id: true, status: true, checkInToken: true, guestName: true, guestEmail: true, checkedInAt: true, attendeeKey: true,
+          eventInstance: { select: { startDateTime: true } },
           user: { select: { name: true, email: true } },
           ticketType: { select: { name: true } },
           answers: { select: { fieldId: true, valueText: true, valueBool: true, valueNumber: true, valueDate: true } },
@@ -62,6 +65,13 @@ export async function loadOrderView({ params, searchParams }: Props) {
   // Registration questions belong to events; series ask none.
   const formFields = order.eventId ? (await prisma.eventRegistrationForm.findUnique({ where: { eventId: order.eventId }, select: { fields: { orderBy: { sortOrder: "asc" } } } }))?.fields ?? [] : [];
   const subject = orderSubject(order);
+  // Transfers, where the organiser allows them, until their cut-off before each ticket's start.
+  const transferSettings = order.eventId
+    ? await prisma.event.findUnique({ where: { id: order.eventId }, select: { allowTransfers: true, transferCutoffHours: true } })
+    : order.eventSeriesId ? await prisma.eventSeries.findUnique({ where: { id: order.eventSeriesId }, select: { allowTransfers: true, transferCutoffHours: true } }) : null;
+  const transferUntil = (rsvp: { eventInstance: { startDateTime: Date; } | null; }) => order.status === OrderStatus.CONFIRMED
+    ? transferWindow(transferSettings, rsvp.eventInstance?.startDateTime ?? subject?.start ?? null)
+    : null;
   // A pass seats each person on every date: show each person once (their
   // first date's ticket, whose page lists the rest).
   const people = subject?.pass ? order.rsvps.filter((rsvp, index) => order.rsvps.findIndex((other) => other.attendeeKey === rsvp.attendeeKey) === index) : order.rsvps;
@@ -119,6 +129,8 @@ export async function loadOrderView({ params, searchParams }: Props) {
       status: rsvp.status,
       checkedIn: rsvp.checkedInAt != null,
       ticketHref: rsvp.status === "CONFIRMED" ? `/ticket/${rsvp.checkInToken}` : null,
+      /** Until when this ticket can be given to someone else, if at all. */
+      transferUntil: rsvp.status === "CONFIRMED" && !rsvp.checkedInAt ? transferUntil(rsvp)?.toISOString() ?? null : null,
       initialAnswers: initialAnswers(rsvp.answers),
     })),
   };

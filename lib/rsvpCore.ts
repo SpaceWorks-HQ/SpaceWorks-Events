@@ -51,6 +51,7 @@ type OrderRequest = {
   promoCode?: string;
   accessCode?: string;
   addOns?: Array<{ addOnId: string; quantity: number; }>;
+  payAtDesk?: boolean;
 };
 
 function requestedItems(request: OrderRequest) {
@@ -89,7 +90,10 @@ async function submitTicketOrder(params: {
   const items = requestedItems(params.request);
   if (items.length === 0) return { ok: false, error: "Choose a ticket." };
   try {
-    const payment = await paymentContextFor(params.organisationId, items);
+    // Paying at the desk needs no online account: it's recorded in person.
+    const payment = params.request.payAtDesk
+      ? (await isPaidEventsEnabled() ? { organisationId: params.organisationId, provider: "OFFLINE" as const, testMode: false } : undefined)
+      : await paymentContextFor(params.organisationId, items);
     const order = await prisma.$transaction(async (tx) => {
       const reserved = await reserveOrder(tx, {
         target: params.target,
@@ -101,6 +105,7 @@ async function submitTicketOrder(params: {
         promoCode: params.request.promoCode || undefined,
         accessCode: params.request.accessCode || undefined,
         addOns: params.request.addOns,
+        payAtDesk: params.request.payAtDesk,
       });
       if (params.setUserName && params.buyer.userId) await tx.user.update({ where: { id: params.buyer.userId }, data: { name: params.setUserName } });
       if (params.answers.length > 0) {

@@ -13,9 +13,9 @@ type OutboxClient = Prisma.TransactionClient | typeof prisma;
 export const PAYMENT_EMAIL_KIND = "payment-notice";
 
 /** Notices about one payment. */
-export const PAYMENT_NOTICES = ["pending", "paid", "expired", "late-refund", "organiser-late-refund", "refunded"] as const;
+export const PAYMENT_NOTICES = ["pending", "reminder", "desk", "paid", "expired", "late-refund", "organiser-late-refund", "refunded"] as const;
 /** Notices about an order as a whole. */
-export const ORDER_NOTICES = ["attendee-details"] as const;
+export const ORDER_NOTICES = ["attendee-details", "cancelled"] as const;
 export type PaymentNotice = (typeof PAYMENT_NOTICES)[number];
 export type OrderNotice = (typeof ORDER_NOTICES)[number];
 
@@ -86,7 +86,10 @@ type EmailRefund = { automatic: boolean; amountMinor: bigint; status: PaymentRef
 function matches(notice: PaymentNotice, payment: { status: PaymentStatus; refunds: EmailRefund[]; }, order: EmailOrder, now: Date) {
   const automaticRefund = payment.refunds.some((refund) => refund.automatic);
   switch (notice) {
-    case "pending": return payment.status === PaymentStatus.PENDING && order.status === OrderStatus.PENDING && Boolean(order.holdExpiresAt && order.holdExpiresAt > now);
+    case "pending":
+    case "reminder": return payment.status === PaymentStatus.PENDING && order.status === OrderStatus.PENDING && Boolean(order.holdExpiresAt && order.holdExpiresAt > now);
+    // Reserved now, paid in person on the day.
+    case "desk": return payment.status === PaymentStatus.PENDING && order.status === OrderStatus.CONFIRMED;
     case "paid": return (payment.status === PaymentStatus.PAID_ONLINE || payment.status === PaymentStatus.PAID_OFFLINE) && order.status === OrderStatus.CONFIRMED;
     case "expired": return payment.status === PaymentStatus.EXPIRED;
     case "late-refund":
@@ -115,7 +118,8 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
   } else {
     order = await prisma.order.findUnique({ where: { id: payload.orderId }, select: orderSelect });
     const missing = order?.rsvps.some((rsvp) => !(rsvp.user?.email || rsvp.guestEmail));
-    if (!order || order.status !== OrderStatus.CONFIRMED || !missing) return "dropped";
+    const current = payload.notice === "cancelled" ? order?.status === OrderStatus.CANCELLED : order?.status === OrderStatus.CONFIRMED && missing;
+    if (!order || !current) return "dropped";
   }
 
   const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -140,6 +144,18 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
       heading: "Your tickets are held",
       body: `Your tickets for <strong>${escapeHtml(title)}</strong> are held until ${escapeHtml(holdEnds)} while you pay ${escapeHtml(amount)}. They're confirmed as soon as the payment goes through.${testNote}`,
       button: { label: "Pay for your tickets", href: orderUrl },
+    },
+    reminder: {
+      subject: `Reminder: your tickets are held until ${holdEnds}: ${title}`,
+      heading: "Your tickets are still held",
+      body: `Your tickets for <strong>${escapeHtml(title)}</strong> are held for you until ${escapeHtml(holdEnds)}. Pay ${escapeHtml(amount)} before then to keep them; after that they go back on sale and nothing is charged.${testNote}`,
+      button: { label: "Pay for your tickets", href: orderUrl },
+    },
+    desk: {
+      subject: `Reserved, pay at the desk: ${title}`,
+      heading: "You're booked: pay at the desk",
+      body: `Your tickets for <strong>${escapeHtml(title)}</strong> are reserved. Pay ${escapeHtml(amount)} at the desk when you arrive; each attendee with an email address gets their own ticket. If you can't make it, cancel from your order so the places go to someone else.${testNote}`,
+      button: { label: "View your order", href: orderUrl },
     },
     paid: {
       subject: `Receipt ${order.reference}: ${title}`,
@@ -168,6 +184,12 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
       heading: cancelled ? "Your order was cancelled" : "You've been refunded",
       body: `${cancelled ? `Your tickets for <strong>${escapeHtml(title)}</strong> were cancelled. ` : ""}${refunded === formatMoney(0, order.currency) ? "There's nothing to refund." : `We've refunded ${escapeHtml(refunded)} for <strong>${escapeHtml(title)}</strong> in total. Card and UPI refunds can take 5 to 10 working days to appear; money paid in person is returned by the organiser.`}${testNote}`,
       button: { label: "View your order", href: orderUrl },
+    },
+    cancelled: {
+      subject: `Order cancelled ${order.reference}: ${title}`,
+      heading: "Your order was cancelled",
+      body: `Your tickets for <strong>${escapeHtml(title)}</strong> were cancelled. Nothing was charged for them, so there's nothing to refund.`,
+      button: { label: "Open the event", href: eventUrl },
     },
     "attendee-details": {
       subject: `Add attendee details: ${title}`,

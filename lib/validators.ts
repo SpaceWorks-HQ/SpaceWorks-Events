@@ -220,6 +220,8 @@ const rsvpTargetBase = z
     addOns: z.array(z.object({ addOnId: z.string().trim().min(1).max(64), quantity: z.number().int().min(0).max(100) }).strict()).max(20).optional(),
     /** Unlocks tickets hidden behind an access code. */
     accessCode: z.string().trim().max(32).optional().or(z.literal("")),
+    /** Reserve now and pay in person, where every chosen ticket allows it. */
+    payAtDesk: z.boolean().optional(),
     /** Optional details for the second and later tickets. */
     attendees: z.array(z.object({
       name: z.string().trim().max(200).optional(),

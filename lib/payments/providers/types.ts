@@ -112,9 +112,22 @@ export type RefundNotification = {
 };
 
 /** A verified, provider-neutral webhook. Anything not listed is ignored. */
+/** A chargeback on a captured payment, opened or updated by the provider. */
+export type DisputeNotification = {
+  disputeId: string;
+  /** The provider's payment id (Razorpay pay_…, Stripe pi_…). */
+  paymentId: string;
+  status: "OPEN" | "UNDER_REVIEW" | "WON" | "LOST" | "CLOSED";
+  amountMinor: bigint | null;
+  currency: string | null;
+  reason: string | null;
+  respondBy: Date | null;
+};
+
 export type VerifiedWebhookEvent = {
   eventId: string;
   eventType: string;
+  dispute?: DisputeNotification | null;
   paid: PaidNotification | null;
   refunds: RefundNotification[];
   /** A hosted page that expired or was cancelled unpaid. */

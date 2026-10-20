@@ -18,6 +18,7 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+import { hasPaidOrders } from "@/lib/payments/eventCancellation";
 import { cancelOccurrence, setOccurrenceCapacity } from "@/lib/payments/occurrences";
 import { PaymentOperationError } from "@/lib/payments/operations";
 
@@ -268,7 +269,7 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
 
   // Deleting would erase the tickets of people who paid: cancel dates instead,
   // which refunds them.
-  if (await prisma.order.count({ where: { eventSeriesId: series.id, totalMinor: { gt: 0 }, status: { in: ["CONFIRMED", "PENDING", "REQUESTED"] } } }) > 0) {
+  if (await hasPaidOrders({ eventSeriesId: series.id })) {
     return { ok: false, error: "People have paid for this series. Cancel its dates instead, which refunds them." };
   }
 

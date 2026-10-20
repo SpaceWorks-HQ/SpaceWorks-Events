@@ -8,6 +8,7 @@ import type { OnlineProvider } from "./http";
 import { verifyRazorpayWebhook } from "./providers/razorpay";
 import { verifyStripeWebhook } from "./providers/stripe";
 import { WebhookVerificationError, type VerifiedWebhookEvent } from "./providers/types";
+import { applyDisputeNotification } from "./disputes";
 import { applyRefundNotification, submitPendingRefund } from "./refunds";
 import { isWebhookPathId, webhookSecretForPath } from "./settings";
 import { settlePaidNotification } from "./settlement";
@@ -113,5 +114,6 @@ export const settleWebhookEvent: WebhookApplier = async (tx, context, event) => 
     });
   }
   for (const refund of event.refunds) await applyRefundNotification(tx, context, refund);
+  if (event.dispute) await applyDisputeNotification(tx, context, event.dispute);
   return refundIds;
 };
