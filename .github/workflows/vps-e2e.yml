@@ -255,7 +255,7 @@ jobs:
           [ "$before" != "$(sudo sha256sum /etc/spaceworks-events/tls/postgres/public.crt)" ]
           sudo bash $bin/vps-support.sh | tee support.log
           bundle=$(sudo sh -c 'ls /opt/spaceworks-events/support/*.tar.gz | tail -n 1')
-          mkdir bundle && sudo tar -xzf "$bundle" -C bundle && sudo chmod -R a+r bundle
+          mkdir bundle && sudo tar -xzf "$bundle" -C bundle && sudo chmod -R a+rX bundle
           ls -R bundle
           for secret in POSTGRES_PASSWORD AUTH_SECRET CRON_SECRET; do
             value=$(sudo sh -c "sed -n \"s/^$secret='\\(.*\\)'\$/\\1/p\" /etc/spaceworks-events/*.env | head -n 1")
