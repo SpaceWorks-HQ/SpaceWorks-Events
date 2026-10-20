@@ -12,10 +12,10 @@ import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
 import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import { identityErrors } from "@/components/rsvp/registrationAnswers";
-import { TicketPicker, ticketAvailable } from "@/components/rsvp/TicketPicker";
-import { PromoCodeField, previewOrderTotal, type AppliedPromo, type TicketingInfo } from "@/components/rsvp/PromoCodeField";
+import { AddOnPicker, TicketPicker, ticketAvailable } from "@/components/rsvp/TicketPicker";
+import { AccessCodeField, PromoCodeField, previewOrderTotal, type AppliedPromo, type TicketingInfo } from "@/components/rsvp/PromoCodeField";
 import { formatMoney } from "@/lib/payments/money";
-import type { PublicTicketType } from "@/lib/payments/tickets";
+import type { PublicAddOn, PublicTicketType } from "@/lib/payments/tickets";
 
 async function postRsvp(body: unknown) {
   const res = await fetch("/api/rsvp", {
@@ -85,6 +85,8 @@ export function RsvpForm(props: {
   registrationFields?: RegistrationFieldDefinition[];
   /** Ticket types to buy; registration without tickets when empty. */
   tickets?: PublicTicketType[];
+  /** Extras to buy alongside tickets. */
+  addOns?: PublicAddOn[];
   paidSalesOpen?: boolean;
   /** Paid tickets: whether promo codes exist, and the refund terms. */
   ticketing?: TicketingInfo | null;
@@ -93,7 +95,15 @@ export function RsvpForm(props: {
   /** Lets a containing event page update immediately after this tab saves an RSVP. */
   onRsvpSaved?: (rsvp: { ticketToken: string; status: RsvpStatus | null }) => void;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets = [], paidSalesOpen = false, ticketing = null, paidRequest = null } = props;
+  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets: listed = [], paidSalesOpen = false, ticketing = null, paidRequest = null } = props;
+  const addOns = useMemo(() => props.addOns ?? ticketing?.addOns ?? [], [props.addOns, ticketing]);
+  // Tickets an access code revealed join the public ones.
+  const [unlocked, setUnlocked] = useState<PublicTicketType[]>([]);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const tickets = useMemo(() => [...listed, ...unlocked.filter((ticket) => !listed.some((other) => other.id === ticket.id))], [listed, unlocked]);
+  const sellsTicketTypes = tickets.length > 0 || Boolean(ticketing?.accessCodes);
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>({});
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     // Start with one of the first ticket that can be bought.
     const first = tickets.find((ticket) => ticketAvailable(ticket, paidSalesOpen));
@@ -103,11 +113,12 @@ export function RsvpForm(props: {
   // Inside the embed widget's frame, provider pages must open in a new top-level tab.
   const [framedCheckout, setFramedCheckout] = useState<{ checkoutUrl: string; orderToken: string | null } | null>(null);
   const [attendees, setAttendees] = useState<Array<{ name: string; email: string }>>([]);
-  const seats = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
+  // People, not tickets: a group ticket seats several.
+  const seats = Object.entries(quantities).reduce((sum, [id, quantity]) => sum + quantity * (tickets.find((ticket) => ticket.id === id)?.seatsPerTicket ?? 1), 0);
   const [promo, setPromo] = useState<AppliedPromo | null>(null);
-  const { totalMinor, discountMinor, promoProblem } = previewOrderTotal(tickets, quantities, promo);
-  const currency = tickets[0]?.currency ?? "INR";
-  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0);
+  const { totalMinor, discountMinor, feeMinor, promoProblem, priceProblem } = previewOrderTotal(tickets, quantities, promo, { amounts, addOns: addOnQuantities, addOnTypes: addOns });
+  const currency = tickets[0]?.currency ?? addOns[0]?.currency ?? "INR";
+  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0 || ticket.flexible || ticket.feeMinor > 0) || addOns.some((addOn) => addOn.priceMinor > 0);
   const { data: session, status } = useSession();
   const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
@@ -142,10 +153,11 @@ export function RsvpForm(props: {
     const who = identityErrors({ name, email: guestEmail, requireName: isGuest || requireName, requireEmail: isGuest });
     const questionErrors = questionsState.validate();
     setIdentity(who);
-    const missingTicket = tickets.length > 0 && seats === 0;
-    setTicketError(missingTicket ? "Choose at least one ticket." : undefined);
+    const missingTicket = sellsTicketTypes && seats === 0;
+    const ticketProblem = missingTicket ? "Choose at least one ticket." : priceProblem ?? undefined;
+    setTicketError(ticketProblem);
     const firstQuestion = fields.find((field) => questionErrors[field.key])?.key;
-    const first = missingTicket ? "__ticket" : who.name ? "__name" : who.email ? "__email" : firstQuestion;
+    const first = ticketProblem ? "__ticket" : who.name ? "__name" : who.email ? "__email" : firstQuestion;
     if (first) focusQuestion(formRef.current, first);
     return !first;
   }
@@ -158,10 +170,15 @@ export function RsvpForm(props: {
         orgSlug,
         ...(eventInstanceId ? { eventInstanceId } : { eventSlug: eventSlug! }),
         ...(isGuest ? { guestEmail } : {}),
-        ...(tickets.length > 0 ? {
-          items: Object.entries(quantities).filter(([, quantity]) => quantity > 0).map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
-          attendees: attendees.slice(0, Math.max(0, seats - 1)).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
+        ...(sellsTicketTypes ? {
+          items: Object.entries(quantities).filter(([, quantity]) => quantity > 0).map(([ticketTypeId, quantity]) => ({
+            ticketTypeId, quantity,
+            ...(tickets.find((ticket) => ticket.id === ticketTypeId)?.flexible && amounts[ticketTypeId] != null ? { amountMinor: amounts[ticketTypeId] } : {}),
+          })),
+          attendees: attendees.slice(0, Math.min(19, Math.max(0, seats - 1))).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
           ...(promo ? { promoCode: promo.code } : {}),
+          ...(accessCode ? { accessCode } : {}),
+          ...(Object.values(addOnQuantities).some((quantity) => quantity > 0) ? { addOns: Object.entries(addOnQuantities).filter(([, quantity]) => quantity > 0).map(([addOnId, quantity]) => ({ addOnId, quantity })) } : {}),
         } : {}),
         name,
         answers: questionsState.payload(),
@@ -266,9 +283,23 @@ export function RsvpForm(props: {
   }
 
   const questions = <RegistrationQuestions controller={questionsState} />;
-  const ticketSection = tickets.length > 0 ? (
+  const ticketSection = sellsTicketTypes ? (
     <div data-question-key="__ticket" className="flex flex-col gap-3">
-      <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
+      {tickets.length > 0 ? (
+        <TicketPicker
+          tickets={tickets}
+          quantities={quantities}
+          onChange={(next) => { setQuantities(next); setTicketError(undefined); }}
+          error={ticketError}
+          paidSalesOpen={paidSalesOpen}
+          amounts={amounts}
+          onAmountChange={(id, amount) => { setAmounts((current) => { const next = { ...current }; if (amount == null) delete next[id]; else next[id] = amount; return next; }); setTicketError(undefined); }}
+        />
+      ) : ticketError ? <p role="alert" className="text-caption text-danger-fg">{ticketError}</p> : null}
+      {ticketing?.accessCodes ? (
+        <AccessCodeField orgSlug={orgSlug} eventSlug={eventSlug} eventInstanceId={eventInstanceId} applied={accessCode} onUnlocked={(code, revealed) => { setAccessCode(code); setUnlocked(revealed); setTicketError(undefined); }} />
+      ) : null}
+      <AddOnPicker addOns={addOns} quantities={addOnQuantities} onChange={setAddOnQuantities} />
       {seats > 1 ? (
         <div className="flex flex-col gap-3">
           <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
@@ -290,6 +321,7 @@ export function RsvpForm(props: {
       {discountMinor > 0 ? (
         <p className="text-body-ui text-ink">Discount: −{formatMoney(discountMinor, currency)} · Total {formatMoney(totalMinor, currency)}</p>
       ) : null}
+      {feeMinor > 0 ? <p className="text-caption text-ink-muted">Includes {formatMoney(feeMinor, currency)} in booking fees.</p> : null}
       {sellsPaid && ticketing ? (
         <p className="text-caption text-ink-muted">
           {ticketing.refundPolicy}{ticketing.refundPolicyText ? ` ${ticketing.refundPolicyText}` : ""}

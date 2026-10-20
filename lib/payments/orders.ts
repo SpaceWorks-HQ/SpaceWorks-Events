@@ -1,14 +1,14 @@
 import "server-only";
 
 import crypto from "crypto";
-import { EventPrivacyType, OfflinePaymentMethod, OrderStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
+import { EventPrivacyType, OfflinePaymentMethod, OrderStatus, PaymentStatus, RsvpStatus, TicketVisibility, type Prisma } from "@prisma/client";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
 import { enqueueOrderEmail, enqueuePaymentEmail } from "./email";
 import { CHECKOUT_HOLD_MS, HOLD_EXTENSION_CAP_MS, PAYMENT_LINK_HOLD_MS, seatTakingWhere } from "./holds";
 import type { OnlineProvider } from "./http";
 import { DEFAULT_CURRENCY, formatMoney, providerMinimumMinor } from "./money";
-import { priceOrder, PricingError, type OrderItem } from "./pricing";
-import { lockPromoCode, PromoCodeError } from "./promo";
+import { priceOrder, PricingError, type AddOnItem, type OrderItem } from "./pricing";
+import { isValidPromoCode, lockPromoCode, promoCodeDigest, PromoCodeError } from "./promo";
 import { lockSellable, passesTaken, type OrderTarget, type Slot } from "./targets";
 import { ticketSalesState } from "./tickets";
 
@@ -65,6 +65,9 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   enforceOpen: boolean;
   payment?: PaymentContext;
   promoCode?: string;
+  /** Unlocks tickets hidden behind an access code. */
+  accessCode?: string;
+  addOns?: AddOnItem[];
   /** Set when an organiser adds the guest by hand. */
   manual?: ManualPayment;
   now?: Date;
@@ -78,27 +81,51 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
 
   const types = await tx.ticketType.findMany({
     where: { ...sellable.owner, kind: sellable.typeKind, archivedAt: null },
-    select: { id: true, name: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true },
+    select: {
+      id: true, name: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true,
+      pricing: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true, visibility: true, accessCodeDigest: true,
+    },
   });
+  // Hidden tickets need their access code; members-only ones a signed-in
+  // member. An organiser adding a guest by hand may give any ticket.
+  if (!params.manual) {
+    const chosen = types.filter((type) => params.items.some((item) => item.ticketTypeId === type.id && item.quantity > 0));
+    const code = params.accessCode?.trim();
+    for (const type of chosen) {
+      if (type.visibility === TicketVisibility.CODE && (!code || !isValidPromoCode(code) || promoCodeDigest(code) !== type.accessCodeDigest)) {
+        throw new OrderError("That ticket needs a valid access code.");
+      }
+      if (type.visibility === TicketVisibility.MEMBERS && !(params.buyer.userId && await tx.membership.findFirst({ where: { userId: params.buyer.userId, organisationId: sellable.organisationId }, select: { id: true } }))) {
+        throw new OrderError(`${type.name} is for members of the organisation. Sign in with your member account.`);
+      }
+    }
+  }
+  const addOnTypes = params.addOns?.some((item) => item.quantity > 0)
+    ? await tx.addOn.findMany({ where: { ...sellable.owner, archivedAt: null }, select: { id: true, name: true, priceMinor: true, maxPerOrder: true, capacity: true } })
+    : [];
   let priced;
   let promoCodeId: string | null = null;
   try {
     const promo = params.promoCode ? await lockPromoCode(tx, { owner: sellable.owner, code: params.promoCode, now }) : null;
     promoCodeId = promo?.id ?? null;
-    priced = priceOrder(params.items, types, promo?.rule);
+    priced = priceOrder(params.items, types, promo?.rule, { addOns: params.addOns, addOnTypes });
   } catch (error) {
     if (error instanceof PricingError || error instanceof PromoCodeError) throw new OrderError(error.message);
     throw error;
   }
-  for (const line of priced.lines) {
+  const ticketLines = priced.lines.filter((line) => line.kind === "TICKET");
+  for (const line of ticketLines) {
     const type = types.find((candidate) => candidate.id === line.ticketTypeId)!;
     const sales = ticketSalesState(type, now);
     if (params.enforceOpen && sales === "not_started") throw new OrderError(`Sales for ${type.name} haven't started yet.`);
     if (params.enforceOpen && sales === "ended") throw new OrderError(`Sales for ${type.name} have ended.`);
   }
 
-  // The people, in line order; the buyer is the first.
-  const seatTypes = priced.lines.flatMap((line) => Array<string>(line.quantity).fill(line.ticketTypeId));
+  // The people, in line order (a group ticket seats several); the buyer is the first.
+  const seatTypes = ticketLines.flatMap((line) => {
+    const type = types.find((candidate) => candidate.id === line.ticketTypeId)!;
+    return Array<string>(line.quantity * type.seatsPerTicket).fill(type.id);
+  });
   const attendees = seatTypes.slice(1).map((_, index) => params.attendees[index] ?? {});
   const emails = [params.buyer.email, ...attendees.map((attendee) => attendee.email?.trim().toLowerCase()).filter(Boolean)];
   if (new Set(emails).size !== emails.length) throw new OrderError("Each ticket needs a different email address, or leave extra ones blank.");
@@ -122,12 +149,13 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   }
   const totalMinor = priced.totalMinor;
   let typesFit = true;
-  for (const line of priced.lines) {
+  for (const line of ticketLines) {
     const type = types.find((candidate) => candidate.id === line.ticketTypeId)!;
     if (type.capacity == null) continue;
+    // A ticket type's limit counts tickets: a group ticket is one ticket for several people.
     const typeTaken = isPass
       ? await passesTaken(tx, type.id, now)
-      : await tx.rSVP.count({ where: { ticketTypeId: type.id, ...sellable.slots[0]!.target, ...seatTakingWhere(now) } });
+      : Math.ceil(await tx.rSVP.count({ where: { ticketTypeId: type.id, ...sellable.slots[0]!.target, ...seatTakingWhere(now) } }) / type.seatsPerTicket);
     if (typeTaken + line.quantity > type.capacity) {
       // A paid order for a sold-out ticket waits for a place instead.
       if (!isPass && totalMinor > ZERO && typeTaken >= type.capacity) {
@@ -136,6 +164,13 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       }
       throw new OrderError(type.capacity - typeTaken <= 0 ? `${type.name} is sold out.` : `Only ${type.capacity - typeTaken} ${type.name} left.`);
     }
+  }
+  for (const line of priced.lines.filter((candidate) => candidate.kind === "ADD_ON")) {
+    const addOn = addOnTypes.find((candidate) => candidate.id === line.addOnId)!;
+    if (addOn.capacity == null) continue;
+    const sold = await tx.orderLine.aggregate({ _sum: { quantity: true }, where: { addOnId: addOn.id, order: { OR: [{ status: OrderStatus.CONFIRMED }, { status: OrderStatus.PENDING, holdExpiresAt: { gt: now } }] } } });
+    const left = addOn.capacity - (sold._sum.quantity ?? 0);
+    if (line.quantity > left) throw new OrderError(left <= 0 ? `${addOn.name} is sold out.` : `Only ${left} ${addOn.name} left.`);
   }
   // A pass needs a place on every date it covers.
   if (isPass && left != null && priced.seats > left) {
@@ -202,7 +237,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       holdCapAt: holdExpiresAt ? new Date(holdExpiresAt.getTime() + HOLD_EXTENSION_CAP_MS) : null,
       promoCodeId,
       refundPolicy: paid ? sellable.refundPolicy : undefined,
-      lines: { create: priced.lines.map((line) => ({ kind: line.kind, ticketTypeId: line.ticketTypeId, description: line.description, quantity: line.quantity, unitMinor: line.unitMinor, discountMinor: line.discountMinor, totalMinor: line.totalMinor })) },
+      lines: { create: priced.lines.map((line) => ({ kind: line.kind, ticketTypeId: line.kind === "ADD_ON" ? null : line.ticketTypeId, addOnId: line.addOnId, description: line.description, quantity: line.quantity, unitMinor: line.unitMinor, discountMinor: line.discountMinor, totalMinor: line.totalMinor })) },
     },
     select: { id: true, reference: true, accessToken: true },
   });

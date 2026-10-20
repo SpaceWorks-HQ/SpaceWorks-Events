@@ -9,7 +9,7 @@ import { useToast } from "@/components/feedback/ToastProvider";
 import { Button } from "@/components/ui/button";
 import { Callout, Card, CardHeader, Chip } from "@/components/ui/display";
 import { Radio, RadioGroup } from "@/components/ui/choice";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Dropdown, Field, Input, Textarea } from "@/components/ui/field";
 import { formatMoney, minorToDecimalString, parseMoneyToMinor, UPI_TYPICAL_LIMIT_MINOR } from "@/lib/payments/money";
 
 /** Tickets for an event, or for a series (one date's tickets, and passes). */
@@ -30,11 +30,27 @@ export type ManagedTicketType = {
   salesEndAt: string | null;
   confirmed: number;
   held: number;
+  visibility: "PUBLIC" | "CODE" | "MEMBERS";
+  /** The first letters of its access code, to recognise it; the code itself isn't stored. */
+  accessCodeHint: string | null;
+  pricing: "FIXED" | "FLEXIBLE";
+  suggestedMinor: number | null;
+  maxPriceMinor: number | null;
+  seatsPerTicket: number;
+  feeMinor: number;
 };
 
-type Draft = { id?: string; kind: "SINGLE" | "PASS"; name: string; description: string; price: string; capacity: string; minPerOrder: string; maxPerOrder: string; salesStartAt: string; salesEndAt: string; };
+type Draft = {
+  id?: string; kind: "SINGLE" | "PASS"; name: string; description: string; price: string; capacity: string; minPerOrder: string; maxPerOrder: string; salesStartAt: string; salesEndAt: string;
+  visibility: "PUBLIC" | "CODE" | "MEMBERS"; accessCode: string; accessCodeHint: string | null; pricing: "FIXED" | "FLEXIBLE"; suggested: string; maxPrice: string; seatsPerTicket: string; fee: string;
+};
 
-const EMPTY: Draft = { kind: "SINGLE", name: "", description: "", price: "", capacity: "", minPerOrder: "1", maxPerOrder: "10", salesStartAt: "", salesEndAt: "" };
+const EMPTY: Draft = {
+  kind: "SINGLE", name: "", description: "", price: "", capacity: "", minPerOrder: "1", maxPerOrder: "10", salesStartAt: "", salesEndAt: "",
+  visibility: "PUBLIC", accessCode: "", accessCodeHint: null, pricing: "FIXED", suggested: "", maxPrice: "", seatsPerTicket: "1", fee: "",
+};
+
+const VISIBILITY_LABEL = { PUBLIC: null, CODE: "Access code", MEMBERS: "Members only" } as const;
 
 /** "2026-10-20T09:30" in the browser's zone, for datetime-local inputs. */
 function toLocalInput(iso: string | null) {
@@ -90,6 +106,12 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
         maxPerOrder: Number(draft.maxPerOrder) || 10,
         salesStartAt: fromLocalInput(draft.salesStartAt),
         salesEndAt: fromLocalInput(draft.salesEndAt),
+        visibility: draft.visibility,
+        ...(draft.visibility === "CODE" && draft.accessCode.trim() ? { accessCode: draft.accessCode.trim() } : {}),
+        pricing: draft.pricing,
+        ...(draft.pricing === "FLEXIBLE" ? { suggested: draft.suggested, maxPrice: draft.maxPrice } : {}),
+        seatsPerTicket: Math.min(20, Math.max(1, Number(draft.seatsPerTicket) || 1)),
+        fee: draft.fee,
       });
       if (!result.ok) {
         setError(result.error);
@@ -153,6 +175,9 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {ticket.kind === "PASS" ? <Chip tone="ink" size="sm">Pass</Chip> : null}
+                  {VISIBILITY_LABEL[ticket.visibility] ? <Chip size="sm">{VISIBILITY_LABEL[ticket.visibility]}{ticket.accessCodeHint ? ` ${ticket.accessCodeHint}…` : ""}</Chip> : null}
+                  {ticket.pricing === "FLEXIBLE" ? <Chip size="sm">Pay what you want</Chip> : null}
+                  {ticket.seatsPerTicket > 1 ? <Chip size="sm">Admits {ticket.seatsPerTicket}</Chip> : null}
                   {ticket.priceMinor > 0 ? <Chip tone="accent" size="sm">Paid</Chip> : null}
                   <Button
                     variant="ghost"
@@ -171,6 +196,14 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
                         maxPerOrder: String(ticket.maxPerOrder),
                         salesStartAt: toLocalInput(ticket.salesStartAt),
                         salesEndAt: toLocalInput(ticket.salesEndAt),
+                        visibility: ticket.visibility,
+                        accessCode: "",
+                        accessCodeHint: ticket.accessCodeHint,
+                        pricing: ticket.pricing,
+                        suggested: ticket.suggestedMinor != null ? minorToDecimalString(ticket.suggestedMinor, ticket.currency) : "",
+                        maxPrice: ticket.maxPriceMinor != null ? minorToDecimalString(ticket.maxPriceMinor, ticket.currency) : "",
+                        seatsPerTicket: String(ticket.seatsPerTicket),
+                        fee: ticket.feeMinor > 0 ? minorToDecimalString(ticket.feeMinor, ticket.currency) : "",
                       });
                     }}
                   >
@@ -205,9 +238,29 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
             <Field label="Description" optional>
               <Textarea rows={2} value={draft.description} maxLength={500} onChange={(event) => set("description", event.target.value)} />
             </Field>
+            <RadioGroup value={draft.pricing} onValueChange={(value) => set("pricing", value)} aria-label="How the price works">
+              <Radio value="FIXED" label="Fixed price" />
+              <Radio value="FLEXIBLE" label="Pay what you want" description="Buyers choose the amount, from your minimum (0 allows free). Good for donations and sliding scales." disabled={!paidAllowed} />
+            </RadioGroup>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label={`Price (${draftCurrency})`} helperText={paidAllowed ? "Leave blank or 0 for a free ticket. Include any tax." : "Free only until payments are set up."}>
+              <Field label={draft.pricing === "FLEXIBLE" ? `Minimum (${draftCurrency})` : `Price (${draftCurrency})`} helperText={paidAllowed ? draft.pricing === "FLEXIBLE" ? "The least a buyer may pay; blank or 0 lets them pay nothing." : "Leave blank or 0 for a free ticket. Include any tax." : "Free only until payments are set up."}>
                 <Input inputMode="decimal" value={draft.price} disabled={!paidAllowed && !draft.price} onChange={(event) => set("price", event.target.value)} placeholder="0" />
+              </Field>
+              {draft.pricing === "FLEXIBLE" ? (
+                <>
+                  <Field label={`Suggested (${draftCurrency})`} optional helperText="Shown as the starting amount.">
+                    <Input inputMode="decimal" value={draft.suggested} onChange={(event) => set("suggested", event.target.value)} />
+                  </Field>
+                  <Field label={`Most a buyer may pay (${draftCurrency})`} optional>
+                    <Input inputMode="decimal" value={draft.maxPrice} onChange={(event) => set("maxPrice", event.target.value)} />
+                  </Field>
+                </>
+              ) : null}
+              <Field label={`Booking fee per ticket (${draftCurrency})`} optional helperText="Added on top of the price and paid by the buyer.">
+                <Input inputMode="decimal" value={draft.fee} disabled={!paidAllowed && !draft.fee} onChange={(event) => set("fee", event.target.value)} placeholder="0" />
+              </Field>
+              <Field label="People per ticket" helperText="More than 1 makes a group ticket: each person gets their own ticket to check in.">
+                <Input type="number" min={1} max={20} value={draft.seatsPerTicket} onChange={(event) => set("seatsPerTicket", event.target.value)} />
               </Field>
               <Field label="Limit" optional helperText="Seats for this ticket. Blank: only the event's capacity applies.">
                 <Input type="number" min={1} value={draft.capacity} onChange={(event) => set("capacity", event.target.value)} />
@@ -225,6 +278,18 @@ export function TicketTypesManager({ organisationSlug, target, tickets, currency
                 <Input type="datetime-local" value={draft.salesEndAt} onChange={(event) => set("salesEndAt", event.target.value)} />
               </Field>
             </div>
+            <Field label="Who can buy it" helperText={draft.visibility === "CODE" ? "Hidden until a buyer enters the code. Share it with the people it's for." : draft.visibility === "MEMBERS" ? "Only shown to people signed in as members of your organisation." : "Everyone who can see the event."}>
+              <Dropdown value={draft.visibility} onChange={(event) => set("visibility", event.target.value)}>
+                <option value="PUBLIC">Everyone</option>
+                <option value="CODE">Only with an access code</option>
+                <option value="MEMBERS">Only organisation members</option>
+              </Dropdown>
+            </Field>
+            {draft.visibility === "CODE" ? (
+              <Field label="Access code" required={!draft.accessCodeHint} helperText={draft.accessCodeHint ? `Current code starts ${draft.accessCodeHint}…; leave blank to keep it.` : "3 to 32 letters, numbers, - or _. Stored securely; you won't see it again."}>
+                <Input value={draft.accessCode} maxLength={32} autoComplete="off" spellCheck={false} onChange={(event) => set("accessCode", event.target.value.toUpperCase())} />
+              </Field>
+            ) : null}
             {overUpi ? <Callout tone="warning">UPI payments generally stop at ₹1 lakh, so buyers may need a card or netbanking for this ticket.</Callout> : null}
             <div className="flex flex-wrap gap-2">
               <Button type="submit" loading={pending} loadingLabel="Saving…">{draft.id ? "Save ticket" : "Add ticket"}</Button>

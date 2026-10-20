@@ -379,3 +379,45 @@ test("a guest buys a series pass on a date's page, and its ticket lists every da
     await context.close();
   }
 });
+
+test("a guest unlocks a code-only ticket, chooses what to pay, adds an extra and pays", async ({ browser }) => {
+  await prisma.organisationPaymentSettings.update({ where: { organisationId }, data: { provider: "RAZORPAY" } });
+  const event = await prisma.event.create({
+    data: {
+      organisationId, title: `Supporters night ${suffix.slice(0, 6)}`, slug: `supporters-${suffix}`, capacity: 20, timezone: "UTC", status: EventStatus.PUBLISHED, currency: "INR",
+      startDateTime: new Date("2035-06-01T10:00:00.000Z"), endDateTime: new Date("2035-06-01T12:00:00.000Z"), page: { create: { isPublished: true } },
+    },
+  });
+  const code = `FRIENDS-${suffix.slice(0, 4)}`.toUpperCase();
+  await prisma.ticketType.create({
+    data: {
+      eventId: event.id, name: "Supporter", priceMinor: BigInt(10000), pricing: "FLEXIBLE", suggestedMinor: BigInt(50000), visibility: "CODE",
+      accessCodeDigest: crypto.createHash("sha256").update(code).digest("hex"), accessCodeHint: code.slice(0, 3),
+    },
+  });
+  await prisma.addOn.create({ data: { eventId: event.id, name: "Tote bag", priceMinor: BigInt(20000) } });
+
+  const buyerEmail = `supporter-${suffix}@example.test`;
+  const context = await browser.newContext({ extraHTTPHeaders: { [process.env.PLAYWRIGHT_TRUSTED_IP_HEADER || "cf-connecting-ip"]: "192.0.2.245" } });
+  const guest = await context.newPage();
+  try {
+    await guest.goto(`/${orgSlug}/${event.slug}`, { waitUntil: "networkidle" });
+    await guest.getByRole("button", { name: "Get tickets" }).first().click();
+    const dialog = guest.getByRole("dialog");
+    await dialog.getByLabel("Access code").fill(code);
+    await dialog.getByRole("button", { name: "Unlock" }).click();
+    await expect(dialog.getByText("Unlocked with your code")).toBeVisible();
+    await dialog.getByRole("button", { name: "One more Supporter" }).click();
+    await dialog.getByLabel(/^Your price per ticket/).fill("750");
+    await dialog.getByRole("button", { name: "One more Tote bag" }).click();
+    await dialog.getByLabel("Name", { exact: true }).fill("Generous Guest");
+    await dialog.getByLabel("Email", { exact: true }).fill(buyerEmail);
+    await dialog.getByRole("button", { name: "Continue to payment · ₹950.00" }).click();
+    await expect(guest).toHaveURL(new RegExp(`^${fakeProvider}/razorpay/pay/`));
+    const order = await prisma.order.findFirstOrThrow({ where: { buyerEmail }, include: { lines: true } });
+    expect(order.totalMinor).toBe(BigInt(95000));
+    expect(order.lines.map((line) => [line.kind, line.unitMinor]).sort()).toEqual([["ADD_ON", BigInt(20000)], ["TICKET", BigInt(75000)]].sort());
+  } finally {
+    await context.close();
+  }
+});

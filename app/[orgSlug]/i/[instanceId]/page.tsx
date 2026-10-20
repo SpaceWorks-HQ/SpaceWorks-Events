@@ -69,7 +69,7 @@ export default async function InstanceEventPage({ params }: Props) {
                 {capacity != null ? <ProgressBar value={confirmedCount} max={capacity} tone="ink" label="Places taken" /> : null}
                 {full ? <p className="text-caption text-ink-muted">Join the waitlist below.</p> : null}
               </div>
-              <RsvpForm orgSlug={org.slug} eventInstanceId={instance.id} tickets={tickets} paidSalesOpen={paidSalesOpen} ticketing={ticketing} paidRequest={tickets.some((ticket) => ticket.priceMinor > 0) ? paidRequest : null} />
+              <RsvpForm orgSlug={org.slug} eventInstanceId={instance.id} tickets={tickets} paidSalesOpen={paidSalesOpen} ticketing={ticketing} paidRequest={ticketing?.sellsPaid ? paidRequest : null} />
             </>
           ) : (
             <p className="text-body-ui text-ink-muted">

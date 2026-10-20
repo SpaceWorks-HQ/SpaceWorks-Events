@@ -119,6 +119,21 @@ enum OrderStatus {
   CANCELLED
 }
 
+/** Who can see and buy a ticket type. */
+enum TicketVisibility {
+  PUBLIC
+  /// Hidden until the buyer enters its access code.
+  CODE
+  /// Only signed-in members of the organisation.
+  MEMBERS
+}
+
+/** A fixed price, or pay what you want from the price upwards. */
+enum TicketPricing {
+  FIXED
+  FLEXIBLE
+}
+
 enum OrderLineKind {
   TICKET
   ADD_ON
@@ -478,6 +493,7 @@ model Event {
   broadcasts       EventBroadcast[]
   badgeDesign      EventBadgeDesign?
   ticketTypes      TicketType[]
+  addOns           AddOn[]
   orders           Order[]
   shortLinkClickDays ShortLinkClickDay[]
   promoCodes       PromoCode[]
@@ -498,6 +514,18 @@ model TicketType {
   eventSeriesId String?
   /// PASS only on a series: one seat on every remaining date.
   kind         TicketTypeKind @default(SINGLE)
+  visibility   TicketVisibility @default(PUBLIC)
+  /// CODE: digest and first letters of the access code (never stored in clear).
+  accessCodeDigest String?
+  accessCodeHint   String?
+  /// FLEXIBLE: priceMinor is the minimum (0 allows free); buyers choose from there.
+  pricing      TicketPricing @default(FIXED)
+  suggestedMinor BigInt?
+  maxPriceMinor  BigInt?
+  /// A group ticket seats this many people (each gets their own registration).
+  seatsPerTicket Int @default(1)
+  /// Booking fee per ticket, paid by the buyer on top of the price.
+  feeMinor     BigInt @default(0)
   name         String
   description  String    @default("")
   /// Tax-inclusive price in integer minor units of the event's currency.
@@ -581,6 +609,7 @@ model OrderLine {
   orderId       String
   kind          OrderLineKind @default(TICKET)
   ticketTypeId  String?
+  addOnId       String?
   /// The name shown to the buyer when it was sold.
   description   String
   quantity      Int
@@ -599,6 +628,7 @@ model OrderLine {
 
   order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   ticketType TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+  addOn      AddOn?      @relation(fields: [addOnId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([ticketTypeId])
@@ -812,6 +842,7 @@ model EventSeries {
 
   organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   ticketTypes  TicketType[]
+  addOns       AddOn[]
   promoCodes   PromoCode[]
   orders       Order[]
   instances    EventInstance[]
@@ -1570,4 +1601,29 @@ model ShortLinkClickDay {
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@id([eventId, day])
+}
+
+/// Something bought alongside tickets (a T-shirt, lunch, a donation). It
+/// takes no seat. Exactly one of eventId and eventSeriesId (checked).
+model AddOn {
+  id            String    @id @default(cuid())
+  eventId       String?
+  eventSeriesId String?
+  name          String
+  description   String    @default("")
+  priceMinor    BigInt
+  /// How many can be sold in all; null is unlimited.
+  capacity      Int?
+  maxPerOrder   Int       @default(10)
+  sortOrder     Int       @default(0)
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
+  orderLines OrderLine[]
+
+  @@index([eventId, sortOrder])
+  @@index([eventSeriesId, sortOrder])
 }

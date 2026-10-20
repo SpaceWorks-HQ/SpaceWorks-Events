@@ -80,7 +80,7 @@ export function EventFooter() {
       <div className="mx-auto flex max-w-[1160px] flex-col gap-3 px-4 py-6 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <Link href="/" className="inline-flex items-center gap-2 self-start hover:text-ink">
           <SpaceWorksLogo variant="app-icon" height={18} label={null} />
-          <span>Free event, powered by Space Works</span>
+          <span>Powered by Space Works</span>
         </Link>
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <Link href="/privacy" className={creditLinkClasses}>Privacy</Link>
@@ -100,7 +100,7 @@ export function EmbedCredit() {
     <footer className="flex justify-center px-4 py-5">
       <a href="/" target="_blank" rel="noopener" className="inline-flex items-center gap-2 text-sm text-ink-muted hover:text-ink">
         <SpaceWorksLogo variant="app-icon" height={18} label={null} />
-        <span>Free event, powered by Space Works</span>
+        <span>Powered by Space Works</span>
       </a>
     </footer>
   );

@@ -147,7 +147,8 @@ export function EventWebsiteShell(p: Props) {
         {/* Title block */}
         <header className="flex min-w-0 flex-col gap-5 md:col-start-1 md:row-start-1">
           <div className="flex flex-wrap gap-1.5">
-            <Chip tone="accent" size="sm">Free</Chip>
+            {/* Anything sold for money (tickets, extras, fees) makes this a ticketed event. */}
+            <Chip tone="accent" size="sm">{p.ticketing?.sellsPaid || p.tickets?.some((ticket) => ticket.priceMinor > 0) ? "Tickets" : "Free"}</Chip>
             <Chip size="sm">{p.event.isOnline ? "Online" : "In person"}</Chip>
             {countLabel ? <Chip size="sm">{countLabel}</Chip> : null}
           </div>

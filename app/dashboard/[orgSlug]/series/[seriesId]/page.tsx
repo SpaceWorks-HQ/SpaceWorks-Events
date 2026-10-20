@@ -5,6 +5,7 @@ import { GuestsPeople } from "@/components/event-dashboard/panels/GuestsPeople";
 import { ScheduleManager } from "@/components/schedule/ScheduleManager";
 import { SeriesDatesManager } from "@/components/series/SeriesDatesManager";
 import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
+import { AddOnsManager } from "@/components/event-dashboard/settings/AddOnsManager";
 import { PromoCodesManager, RefundPolicyControl } from "@/components/event-dashboard/settings/PromoCodesManager";
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
 import { Card, PageHeader } from "@/components/ui/display";
@@ -72,6 +73,7 @@ export default async function SeriesManagePage({ params }: Props) {
             paidBlockedReason={tickets.paidBlockedReason}
             payee={tickets.payee}
           />
+          <AddOnsManager organisationSlug={organisation.slug} target={{ seriesId: series.id }} currency={tickets.currency} addOns={tickets.addOns} paidAllowed={tickets.paidAllowed} />
           <PromoCodesManager organisationSlug={organisation.slug} target={{ seriesId: series.id }} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
           {tickets.tickets.some((ticket) => ticket.priceMinor > 0) ? (
             <RefundPolicyControl organisationSlug={organisation.slug} target={{ seriesId: series.id }} policy={tickets.refundPolicy} sold={tickets.sold} />

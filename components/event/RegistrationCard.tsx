@@ -86,9 +86,9 @@ export function RegistrationCard(props: {
 }) {
   const { orgSlug, eventSlug, eventInstanceId, eventTitle, organisation, registrationFields, confirmedCount, capacity, state, accentColor, viewerRsvp = null, tickets = [], heldCount = 0, paidSalesOpen = false, ticketing = null } = props;
   const prices = tickets.filter((ticket) => ticket.priceMinor > 0);
-  const hasPaid = prices.length > 0;
-  const cheapest = hasPaid ? prices.reduce((low, ticket) => (ticket.priceMinor < low.priceMinor ? ticket : low)) : null;
-  const allFree = !hasPaid;
+  const cheapest = prices.length > 0 ? prices.reduce((low, ticket) => (ticket.priceMinor < low.priceMinor ? ticket : low)) : null;
+  // Hidden tickets, pay what you want, fees and paid extras count as tickets too.
+  const allFree = prices.length === 0 && !ticketing?.sellsPaid;
   const storageKey = eventInstanceId ? `swe:rsvp:${orgSlug}:i:${eventInstanceId}` : `swe:rsvp:${orgSlug}:e:${eventSlug ?? ""}`;
   const [saved, setSaved] = useSavedRsvp(storageKey, viewerRsvp);
   const [dialogOpen, setDialogOpen] = useState(false);

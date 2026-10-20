@@ -8,10 +8,10 @@ import { seatTakingWhere } from "@/lib/payments/holds";
 import { listPublicTicketTypes } from "@/lib/payments/tickets";
 import { DEFAULT_CURRENCY } from "@/lib/payments/money";
 import { canAcceptOnlinePayments } from "@/lib/payments/settings";
-import { describeRefundPolicy } from "@/lib/payments/refundPolicy";
 import { safeTimeZone } from "@/lib/timeZone";
 import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
 import { formatDateBlock } from "@/lib/format/datetime";
+import { ticketingInfo, viewerIsMember } from "@/lib/payments/ticketing";
 type Props = { params: Promise<{ orgSlug: string; instanceId: string; }>; };
 export async function loadRouteMetadata({ params }: Props): Promise<Metadata> {
   const { orgSlug, instanceId } = await params;
@@ -77,24 +77,17 @@ export async function loadInstanceEventView({ params }: Props) {
     countConfirmedForInstance(instance.id),
     // Seats being paid for are taken too.
     prisma.rSVP.count({ where: { eventInstanceId: instance.id, ...seatTakingWhere(now) } }),
-    listPublicTicketTypes({ eventSeriesId: series.id, eventInstanceId: instance.id }, series.currency ?? DEFAULT_CURRENCY, now),
+    viewerIsMember(org.id).then((member) => listPublicTicketTypes({ eventSeriesId: series.id, eventInstanceId: instance.id }, series.currency ?? DEFAULT_CURRENCY, now, { member })),
   ]);
   const capacity = instance.capacity ?? series.capacity;
   const spotsLeft = capacity != null ? Math.max(0, capacity - taken) : null;
   const full = spotsLeft !== null && spotsLeft <= 0;
   const timeZone = safeTimeZone(series.timezone);
   const dateBlock = formatDateBlock(instance.startDateTime, timeZone);
+  const ticketing = await ticketingInfo({ eventSeriesId: series.id }, tickets, series.currency ?? DEFAULT_CURRENCY, series);
   // Paid tickets and passes are on sale only while the installation allows
   // it and the organisation's account is fully connected.
-  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0);
-  const paidSalesOpen = sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
-  const ticketing = sellsPaid
-    ? {
-      promoCodes: (await prisma.promoCode.count({ where: { eventSeriesId: series.id, archivedAt: null } })) > 0,
-      refundPolicy: describeRefundPolicy({ kind: series.refundPolicyKind, hours: series.refundPolicyHours, percent: series.refundPolicyPercent, text: series.refundPolicyText }),
-      refundPolicyText: series.refundPolicyText,
-    }
-    : null;
+  const paidSalesOpen = ticketing?.sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
   const paidRequest = series.privacyType === EventPrivacyType.APPROVAL_REQUIRED ? "approval" as const : full ? "waitlist" as const : null;
   return { org, series, access, dateBlock, instance, timeZone, showRsvp, full, confirmedCount, capacity, spotsLeft, isPast, cancelled, tickets, paidSalesOpen, ticketing, paidRequest };
 }

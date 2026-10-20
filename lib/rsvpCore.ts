@@ -44,7 +44,14 @@ function isRsvpTargetClosedError(error: unknown): error is RsvpTargetClosedError
 
 type AnswerRow = { fieldId: string; valueText?: string | null; valueBool?: boolean | null; valueNumber?: number | null; valueDate?: Date | null; };
 
-type OrderRequest = { items?: Array<{ ticketTypeId: string; quantity: number; }>; ticketTypeId?: string; attendees?: OrderAttendee[]; promoCode?: string; };
+type OrderRequest = {
+  items?: Array<{ ticketTypeId: string; quantity: number; amountMinor?: number | null; }>;
+  ticketTypeId?: string;
+  attendees?: OrderAttendee[];
+  promoCode?: string;
+  accessCode?: string;
+  addOns?: Array<{ addOnId: string; quantity: number; }>;
+};
 
 function requestedItems(request: OrderRequest) {
   if (request.items?.length) return request.items;
@@ -52,14 +59,14 @@ function requestedItems(request: OrderRequest) {
 }
 
 /**
- * Who collects the order when any chosen ticket costs money: the
- * organisation's connected account, while paid events are on for this
- * installation. Undefined otherwise; the reservation then refuses a paid order.
+ * Who collects the order if it costs money: the organisation's connected
+ * account, while paid events are on for this installation. Whether it costs
+ * anything is only known once priced (a chosen amount, a fee, an add-on), so
+ * the account is resolved for any ticket order. Undefined otherwise; the
+ * reservation then refuses a paid order and still takes a free one.
  */
 async function paymentContextFor(organisationId: string, items: Array<{ ticketTypeId: string; }>): Promise<PaymentContext | undefined> {
-  if (items.length === 0) return undefined;
-  const paidTypes = await prisma.ticketType.count({ where: { id: { in: items.map((item) => item.ticketTypeId) }, priceMinor: { gt: 0 } } });
-  if (paidTypes === 0 || !(await isPaidEventsEnabled())) return undefined;
+  if (items.length === 0 || !(await isPaidEventsEnabled())) return undefined;
   const account = await loadPaymentAccount(organisationId);
   return account ? { organisationId, provider: account.provider, testMode: account.testMode } : undefined;
 }
@@ -92,6 +99,8 @@ async function submitTicketOrder(params: {
         enforceOpen: true,
         payment,
         promoCode: params.request.promoCode || undefined,
+        accessCode: params.request.accessCode || undefined,
+        addOns: params.request.addOns,
       });
       if (params.setUserName && params.buyer.userId) await tx.user.update({ where: { id: params.buyer.userId }, data: { name: params.setUserName } });
       if (params.answers.length > 0) {

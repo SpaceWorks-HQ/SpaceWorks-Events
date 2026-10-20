@@ -56,7 +56,10 @@ export async function loadTicketSettings(params: {
     prisma.ticketType.findMany({
       where: { ...owner, archivedAt: null },
       orderBy: [{ kind: "asc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
-      select: { id: true, kind: true, name: true, description: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true },
+      select: {
+        id: true, kind: true, name: true, description: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true,
+        visibility: true, accessCodeHint: true, pricing: true, suggestedMinor: true, maxPriceMinor: true, seatsPerTicket: true, feeMinor: true,
+      },
     }),
     prisma.organisationPaymentSettings.findUnique({ where: { organisationId: params.organisation.id } }),
     isPaidEventsEnabled(),
@@ -67,6 +70,8 @@ export async function loadTicketSettings(params: {
     }),
     prisma.order.count({ where: { ...owner, totalMinor: { gt: 0 } } }),
   ]);
+  const addOns = await prisma.addOn.findMany({ where: { ...owner, archivedAt: null }, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, name: true, description: true, priceMinor: true, capacity: true, maxPerOrder: true } });
+  const addOnSold = await Promise.all(addOns.map((addOn) => prisma.orderLine.aggregate({ _sum: { quantity: true }, where: { addOnId: addOn.id, order: { status: OrderStatus.CONFIRMED } } })));
   const [usage, uses] = await Promise.all([
     ticketTypeUsage(types, now),
     Promise.all(promoCodes.map((promo) => prisma.order.count({ where: redeemingOrdersWhere(promo.id, now) }))),
@@ -94,7 +99,15 @@ export async function loadTicketSettings(params: {
       salesEndAt: type.salesEndAt?.toISOString() ?? null,
       confirmed: usage.get(type.id)?.confirmed ?? 0,
       held: usage.get(type.id)?.held ?? 0,
+      visibility: type.visibility,
+      accessCodeHint: type.accessCodeHint,
+      pricing: type.pricing,
+      suggestedMinor: type.suggestedMinor == null ? null : Number(type.suggestedMinor),
+      maxPriceMinor: type.maxPriceMinor == null ? null : Number(type.maxPriceMinor),
+      seatsPerTicket: type.seatsPerTicket,
+      feeMinor: Number(type.feeMinor),
     })),
+    addOns: addOns.map((addOn, index) => ({ ...addOn, priceMinor: Number(addOn.priceMinor), sold: addOnSold[index]?._sum.quantity ?? 0 })),
     currency,
     paidAllowed: paidBlockedReason === null,
     paidBlockedReason,
