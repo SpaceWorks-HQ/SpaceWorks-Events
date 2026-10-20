@@ -68,6 +68,24 @@ Never commit `.env` or real secrets.
   `fix/<short-name>`) and open your pull request against `dev`. Changes reach
   `main` through a pull request from `dev` that the maintainer reviews and merges.
 
+## Syncing from Yuyu
+
+Space Works Events is derived from [Yuyu](https://github.com/twilighty-abhi/yuyu)
+and shares its Git history. Every Monday the **Yuyu upstream check** workflow
+fetches Yuyu's branches. If any of them has commits that `dev` lacks, it opens
+or updates the issue "Yuyu upstream has commits to review" with the list, and
+closes the issue once nothing is left. To port them:
+
+1. Branch from `dev` as `fix/yuyu-sync-<date>` and add the remote:
+   `git remote add upstream https://github.com/twilighty-abhi/yuyu.git && git fetch upstream`.
+2. Port security and bug fixes first, with `git cherry-pick -x <commit>`. Rework
+   UI and copy changes into the Space Works design ([docs/DESIGN.md](docs/DESIGN.md)).
+3. Never take Yuyu branding, analytics or product-boundary changes as they are.
+   Open the pull request against `dev` as usual.
+
+Yuyu does a lot of its newest work on branches other than `main` (such as
+`v1-design-overhaul`), so the check looks at every branch.
+
 ## Licence
 
 By contributing, you agree that your contributions are licensed under the
