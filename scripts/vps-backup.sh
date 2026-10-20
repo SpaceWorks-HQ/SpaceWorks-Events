@@ -94,8 +94,9 @@ printf '%s\n' "$kind" > "$target.partial/kind"
 # goes into backup.tar.age, which only the off-server private key opens.
 if [[ -n "$recipient" ]]; then
   command -v age >/dev/null || die 'Backups are set to be encrypted, but age is not installed. Install it (package "age") and rerun.'
-  tar -cf - -C "$target.partial" --exclude=./version --exclude=./kind . | age --encrypt --recipient "$recipient" \
-    > "$target.partial/backup.tar.age"
+  # The archive is written into the folder it archives, so it skips itself.
+  tar -cf - -C "$target.partial" --exclude=./version --exclude=./kind --exclude=./backup.tar.age . \
+    | age --encrypt --recipient "$recipient" > "$target.partial/backup.tar.age"
   find "$target.partial" -mindepth 1 -maxdepth 1 ! -name backup.tar.age ! -name version ! -name kind -exec rm -rf -- {} +
 fi
 mv "$target.partial" "$target"

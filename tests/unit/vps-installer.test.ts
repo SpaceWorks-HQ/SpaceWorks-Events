@@ -266,6 +266,8 @@ describe("VPS installer", () => {
     const backup = readFileSync(path.join(root, "scripts/vps-backup.sh"), "utf8");
     // Encrypted backups keep only the version and kind readable, and only encrypted ones leave the server.
     expect(backup).toContain('age --encrypt --recipient "$recipient"');
+    // The archive is written into the folder it archives: it must skip itself.
+    expect(backup).toContain("--exclude=./backup.tar.age .");
     expect(backup).toContain("Off-site copies need encrypted backups");
     expect(backup).toContain('"lastFullSuccessAt"');
     const restore = readFileSync(path.join(root, "scripts/vps-restore.sh"), "utf8");
