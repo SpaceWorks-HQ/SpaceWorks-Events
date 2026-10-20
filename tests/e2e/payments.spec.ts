@@ -6,9 +6,10 @@ import { expect as baseExpect, test, type Page } from "@playwright/test";
 // Dev servers compile each route on first visit, which can take a while.
 const expect = baseExpect.configure({ timeout: 60_000 });
 
-// Drives a local fake Razorpay (tests/e2e/fake-payment-provider.mjs). The app
-// refuses PAYMENTS_FAKE_PROVIDER_URL in production, so production runs skip.
-test.skip(process.env.PLAYWRIGHT_PRODUCTION_SERVER === "1", "The fake payment provider is refused in production builds.");
+// Drives a local fake Razorpay (tests/e2e/fake-payment-provider.mjs) against a
+// development server. The app refuses PAYMENTS_FAKE_PROVIDER_URL in
+// production, so this runs only with PLAYWRIGHT_FAKE_PAYMENTS=1.
+test.skip(process.env.PLAYWRIGHT_FAKE_PAYMENTS !== "1" || process.env.PLAYWRIGHT_PRODUCTION_SERVER === "1", "Set PLAYWRIGHT_FAKE_PAYMENTS=1 with a development server.");
 // Keys and webhook secrets must never be captured in trace artifacts.
 test.use({ trace: "off" });
 test.describe.configure({ mode: "serial", timeout: 180_000 });

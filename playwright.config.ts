@@ -7,7 +7,9 @@ const defaultServerCommand = productionServer
   ? `PORT=${testPort} node .next/standalone/server.js`
   : `PORT=${testPort} npm run dev`;
 // The payment specs drive a local fake Razorpay/Stripe. The app refuses that
-// override in production, so production runs skip those specs instead.
+// override in production, so it is strictly opt-in for development servers
+// (PLAYWRIGHT_FAKE_PAYMENTS=1); every other run skips those specs.
+const fakePayments = process.env.PLAYWRIGHT_FAKE_PAYMENTS === "1" && !productionServer;
 const fakeProviderPort = Number(process.env.FAKE_PROVIDER_PORT || 4010);
 const fakeProviderUrl = `http://127.0.0.1:${fakeProviderPort}`;
 
@@ -30,9 +32,9 @@ export default defineConfig({
       url: `${testBaseUrl}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: productionServer ? {} : { PAYMENTS_FAKE_PROVIDER_URL: fakeProviderUrl },
+      env: fakePayments ? { PAYMENTS_FAKE_PROVIDER_URL: fakeProviderUrl } : {},
     },
-    ...(productionServer ? [] : [{
+    ...(!fakePayments ? [] : [{
       command: `node tests/e2e/fake-payment-provider.mjs`,
       url: `${fakeProviderUrl}/health`,
       reuseExistingServer: !process.env.CI,

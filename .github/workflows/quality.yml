@@ -86,6 +86,7 @@ jobs:
       - name: Payment browser flows against the fake provider
         run: npx playwright test tests/e2e/payments.spec.ts
         env:
+          PLAYWRIGHT_FAKE_PAYMENTS: "1"
           PLAYWRIGHT_PORT: "3100"
           PLAYWRIGHT_SERVER_COMMAND: npx next dev --port 3100 --hostname 127.0.0.1
           AUTH_URL: http://127.0.0.1:3100
