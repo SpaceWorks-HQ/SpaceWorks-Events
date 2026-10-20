@@ -81,4 +81,10 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('REFERENCES "TicketType"("id", "eventId") ON DELETE NO ACTION');
     expect(sql).toContain('CREATE UNIQUE INDEX "Payment_one_pending_per_order"');
   });
+
+  it("locks an event's currency once set without touching existing rows", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261023000000_event_currency_lock/migration.sql"), "utf8");
+    expect(sql).toContain('CREATE TRIGGER "event_currency_lock"');
+    expect(sql).not.toMatch(/DROP|^\s*(UPDATE|DELETE)/im);
+  });
 });

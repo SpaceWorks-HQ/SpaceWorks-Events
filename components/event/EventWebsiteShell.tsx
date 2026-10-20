@@ -5,6 +5,7 @@ import { formatDateBlock, formatDayLong, formatTime, formatTimeRange, formatTime
 import { Avatar, Callout, Chip, DateBlock } from "@/components/ui/display";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
 import type { RsvpStatus } from "@prisma/client";
+import type { PublicTicketType } from "@/lib/payments/tickets";
 import { RegistrationCard } from "./RegistrationCard";
 import { SectionNav } from "./SectionNav";
 
@@ -57,6 +58,11 @@ type Props = {
   approvalRequired: boolean;
   /** The signed-in viewer's own registration, so the card shows it on any device. */
   viewerRsvp?: { token: string; status: RsvpStatus } | null;
+  /** Ticket types on sale; empty for a free event without types. */
+  tickets?: PublicTicketType[];
+  /** Seats currently held while attendees pay. */
+  heldCount?: number;
+  paidSalesOpen?: boolean;
 };
 
 const SECTION_LABELS: Record<string, string> = {
@@ -181,6 +187,9 @@ export function EventWebsiteShell(p: Props) {
               state={{ cancelled: p.event.status === "CANCELLED", open: p.registrationOpen, full: p.registrationFull, approvalRequired: p.approvalRequired }}
               accentColor={p.page.accentColor}
               viewerRsvp={p.viewerRsvp ?? null}
+              tickets={p.tickets ?? []}
+              heldCount={p.heldCount ?? 0}
+              paidSalesOpen={p.paidSalesOpen ?? false}
             />
           </div>
         </aside>

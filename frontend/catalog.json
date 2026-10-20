@@ -141,6 +141,16 @@
       "id": "app__join__org__token__page:loadJoinOrganisationView"
     },
     {
+      "module": "lib/views/app__order__token__page",
+      "name": "loadRouteMetadata",
+      "id": "app__order__token__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__order__token__page",
+      "name": "loadOrderView",
+      "id": "app__order__token__page:loadOrderView"
+    },
+    {
       "module": "lib/views/app__orgSlug__eventSlug__check-in__page",
       "name": "loadVenueCheckInStationView",
       "id": "app__orgSlug__eventSlug__check-in__page:loadVenueCheckInStationView"
@@ -888,6 +898,11 @@
       "id": "membership:deleteOrganisation"
     },
     {
+      "module": "app/actions/orders",
+      "name": "updateOrderAttendee",
+      "id": "orders:updateOrderAttendee"
+    },
+    {
       "module": "app/actions/org-invites",
       "name": "createOrgInvite",
       "id": "org-invites:createOrgInvite"
@@ -1056,6 +1071,16 @@
       "module": "app/actions/super-admin-mfa",
       "name": "verifySuperAdminMfa",
       "id": "super-admin-mfa:verifySuperAdminMfa"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveTicketType",
+      "id": "ticket-types:saveTicketType"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "archiveTicketType",
+      "id": "ticket-types:archiveTicketType"
     }
   ]
 }

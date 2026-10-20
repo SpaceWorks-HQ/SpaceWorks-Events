@@ -1,0 +1,135 @@
+import "server-only";
+
+import { CheckoutAttemptStatus, OrderStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
+import { recordAuditEvent } from "@/lib/audit";
+import { enqueueRsvpConfirmation } from "@/lib/outbox";
+import { enqueueOrderEmail, enqueuePaymentEmail, organisationOwnerEmails } from "./email";
+import { hasFreeSeats } from "./holds";
+import type { OnlineProvider } from "./http";
+import type { PaidNotification } from "./providers/types";
+import { createPendingRefund } from "./refunds";
+
+export type SettlementResult = {
+  outcome: "confirmed" | "refunding" | "duplicate" | "already-settled" | "mismatch" | "unmatched";
+  /** Refunds to submit to the provider after the transaction commits. */
+  refundIds: string[];
+};
+
+const SETTLED: PaymentStatus[] = [PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE, PaymentStatus.WAIVED];
+const ID = /^[a-z0-9]{20,40}$/;
+
+/** The payment a provider notification is about: by our attempt or the provider's ids, within one organisation and provider. */
+async function findPayment(tx: Prisma.TransactionClient, context: { organisationId: string; provider: OnlineProvider; }, paid: PaidNotification) {
+  const scope = { organisationId: context.organisationId, provider: context.provider };
+  const byPayment = await tx.payment.findFirst({ where: { ...scope, externalPaymentId: paid.paymentId }, select: { id: true } });
+  if (byPayment) return { paymentId: byPayment.id, attemptId: null };
+  const attempt = await tx.paymentCheckoutAttempt.findFirst({
+    where: {
+      provider: context.provider,
+      payment: { organisationId: context.organisationId },
+      OR: [
+        ...(paid.checkoutId ? [{ externalId: paid.checkoutId }] : []),
+        ...(paid.reference && ID.test(paid.reference) ? [{ id: paid.reference }] : []),
+      ],
+    },
+    select: { id: true, paymentId: true },
+  });
+  return attempt ? { paymentId: attempt.paymentId, attemptId: attempt.id } : null;
+}
+
+/**
+ * Settle a captured payment the provider reported (webhook, return-page
+ * check, or a hold expiry that found the page already paid).
+ *
+ * - A pending order whose seats are still held, or free again, becomes
+ *   CONFIRMED with its payment PAID_ONLINE and every ticket CONFIRMED.
+ * - A payment that arrives after the seats were released and taken is
+ *   recorded as paid and refunded in full automatically.
+ * - A second capture for an already-paid order is recorded as its own
+ *   payment and refunded in full.
+ *
+ * Lock order matches registration: the event row, the order, then the payment.
+ */
+export async function settlePaidNotification(
+  tx: Prisma.TransactionClient,
+  context: { organisationId: string; provider: OnlineProvider; },
+  paid: PaidNotification,
+  now = new Date(),
+): Promise<SettlementResult> {
+  if (paid.checkoutId == null && paid.reference == null) {
+    // Only a provider payment id: settled already, or not ours.
+    const known = await tx.payment.findFirst({ where: { organisationId: context.organisationId, provider: context.provider, externalPaymentId: paid.paymentId }, select: { id: true } });
+    return { outcome: known ? "already-settled" : "unmatched", refundIds: [] };
+  }
+  const found = await findPayment(tx, context, paid);
+  if (!found) return { outcome: "unmatched", refundIds: [] };
+  const located = await tx.payment.findUniqueOrThrow({ where: { id: found.paymentId }, select: { externalPaymentId: true, orderId: true, order: { select: { eventId: true } } } });
+  if (located.externalPaymentId === paid.paymentId) return { outcome: "already-settled", refundIds: [] };
+
+  if (located.order.eventId) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${located.order.eventId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${located.orderId} FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "Payment" WHERE "id" = ${found.paymentId} FOR UPDATE`;
+  const payment = await tx.payment.findUniqueOrThrow({
+    where: { id: found.paymentId },
+    select: {
+      id: true, organisationId: true, status: true, amountMinor: true, currency: true, testMode: true, description: true, externalPaymentId: true,
+      order: {
+        select: {
+          id: true, status: true, holdExpiresAt: true, buyerEmail: true, eventId: true, event: { select: { title: true } },
+          rsvps: { select: { id: true, eventId: true, ticketTypeId: true, status: true, holdExpiresAt: true, checkInToken: true, guestEmail: true, user: { select: { email: true } } } },
+        },
+      },
+    },
+  });
+  if (payment.externalPaymentId === paid.paymentId) return { outcome: "already-settled", refundIds: [] };
+  if (found.attemptId) await tx.paymentCheckoutAttempt.updateMany({ where: { id: found.attemptId, status: { not: CheckoutAttemptStatus.PAID } }, data: { status: CheckoutAttemptStatus.PAID } });
+
+  // Hosted checkout fixes the amount; a different one is never settled.
+  if ((paid.amountMinor != null && paid.amountMinor !== payment.amountMinor) || (paid.currency && paid.currency !== payment.currency)) {
+    await recordAuditEvent({ action: "PAYMENT_AMOUNT_MISMATCH", organisationId: payment.organisationId, targetType: "Payment", targetId: payment.id, client: tx });
+    return { outcome: "mismatch", refundIds: [] };
+  }
+
+  const order = payment.order;
+  if (SETTLED.includes(payment.status)) {
+    const duplicate = await tx.payment.create({
+      data: {
+        organisationId: payment.organisationId, orderId: order.id, amountMinor: payment.amountMinor, currency: payment.currency, status: PaymentStatus.PAID_ONLINE,
+        provider: context.provider, externalPaymentId: paid.paymentId, testMode: payment.testMode, description: `Duplicate payment: ${payment.description}`.slice(0, 300), paidAt: now,
+      },
+      select: { id: true },
+    });
+    const refund = await createPendingRefund(tx, { paymentId: duplicate.id, amountMinor: payment.amountMinor, reason: "Duplicate payment for an order that was already paid", automatic: true });
+    await recordAuditEvent({ action: "PAYMENT_DUPLICATE_REFUNDED", organisationId: payment.organisationId, targetType: "Payment", targetId: duplicate.id, client: tx });
+    return { outcome: "duplicate", refundIds: [refund.id] };
+  }
+
+  const held = order.rsvps.filter((rsvp) => rsvp.status === RsvpStatus.PENDING_PAYMENT);
+  const holdActive = order.status === OrderStatus.PENDING && Boolean(order.holdExpiresAt && order.holdExpiresAt > now);
+  const seats = held.length > 0 && (holdActive || await hasFreeSeats(tx, held, now));
+  await tx.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.PAID_ONLINE, externalPaymentId: paid.paymentId, paidAt: now } });
+
+  if (seats) {
+    await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CONFIRMED, holdExpiresAt: null, holdCapAt: null } });
+    await tx.rSVP.updateMany({ where: { id: { in: held.map((rsvp) => rsvp.id) } }, data: { status: RsvpStatus.CONFIRMED, holdExpiresAt: null } });
+    await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "paid" });
+    // Each attendee with an address gets their own ticket.
+    for (const rsvp of held) {
+      const to = rsvp.user?.email?.trim() || rsvp.guestEmail;
+      if (to) await enqueueRsvpConfirmation(tx, { to, eventTitle: order.event?.title ?? payment.description, status: RsvpStatus.CONFIRMED, checkInToken: rsvp.checkInToken });
+    }
+    if (held.some((rsvp) => !(rsvp.user?.email || rsvp.guestEmail))) await enqueueOrderEmail(tx, { to: order.buyerEmail, orderId: order.id, notice: "attendee-details" });
+    await recordAuditEvent({ action: "PAYMENT_SETTLED", organisationId: payment.organisationId, targetType: "Payment", targetId: payment.id, metadata: { testMode: payment.testMode, tickets: held.length }, client: tx });
+    return { outcome: "confirmed", refundIds: [] };
+  }
+
+  // The seats were released and taken: keep the money's record, return it all.
+  if (order.status === OrderStatus.PENDING) await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.EXPIRED, holdExpiresAt: null, holdCapAt: null } });
+  const refund = await createPendingRefund(tx, { paymentId: payment.id, amountMinor: payment.amountMinor, reason: "Paid after the hold ended and the places were gone", automatic: true });
+  await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "late-refund" });
+  for (const owner of await organisationOwnerEmails(tx, payment.organisationId)) {
+    await enqueuePaymentEmail(tx, { to: owner, paymentId: payment.id, notice: "organiser-late-refund" });
+  }
+  await recordAuditEvent({ action: "PAYMENT_LATE_REFUNDED", organisationId: payment.organisationId, targetType: "Payment", targetId: payment.id, client: tx });
+  return { outcome: "refunding", refundIds: [refund.id] };
+}

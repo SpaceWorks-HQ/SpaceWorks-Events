@@ -6,8 +6,13 @@ import { safeHttpUrl } from "@/lib/safeHttpUrl";
 import { type CalendarEvent } from "@/lib/calendarInvite";
 import { INK_ACCENT } from "@/lib/theme/accent";
 import { type ChipTone } from "@/components/ui/display";
+import { PaymentStatus } from "@prisma/client";
+import { refreshOrderFromProvider } from "@/lib/payments/checkout";
+import { isActiveHold } from "@/lib/payments/holds";
+import { formatMoney } from "@/lib/payments/money";
 type Props = {
   params: Promise<{ token: string; }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 };
 function validToken(value: string | undefined) {
   const token = value?.trim() ?? "";
@@ -53,20 +58,46 @@ function statusLabel(status: string) {
       return { label: "Pending approval", tone: "warning" as ChipTone };
     case "REJECTED":
       return { label: "Rejected", tone: "danger" as ChipTone };
+    case "PENDING_PAYMENT":
+      return { label: "Payment pending", tone: "warning" as ChipTone };
     default:
       return { label: status, tone: "neutral" as ChipTone };
   }
 }
-export async function loadTicketView({ params }: Props) {
+export async function loadTicketView({ params, searchParams }: Props) {
 
   const { token } = await params;
   const safeToken = validToken(token);
   if (!safeToken) notFound();
+  const returningFromCheckout = (await searchParams)?.payment === "return";
+
+  // Back from the provider's page: one status read so the ticket can confirm
+  // before the webhook arrives (rate limited; the webhook stays the authority).
+  if (returningFromCheckout) {
+    const pending = await prisma.rSVP.findUnique({
+      where: { checkInToken: safeToken },
+      select: { status: true, orderId: true },
+    });
+    if (pending?.status === "PENDING_PAYMENT" && pending.orderId) await refreshOrderFromProvider(pending.orderId).catch(() => undefined);
+  }
 
   const rsvp = await prisma.rSVP.findUnique({
     where: { checkInToken: safeToken },
     include: {
       user: { select: { name: true } },
+      ticketType: { select: { name: true } },
+      order: {
+        select: {
+          currency: true, testMode: true, totalMinor: true,
+          lines: { select: { ticketTypeId: true, unitMinor: true } },
+          payments: {
+            where: { status: { in: [PaymentStatus.PENDING, PaymentStatus.PAID_ONLINE, PaymentStatus.PAID_OFFLINE, PaymentStatus.WAIVED] } },
+            select: { status: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+      },
       event: {
         select: {
           title: true,
@@ -154,5 +185,21 @@ export async function loadTicketView({ params }: Props) {
   const eventPageHref = eventSlug ? `/${orgSlug}/${eventSlug}` : `/${orgSlug}`;
 
 
-  return { rsvp: { checkInToken: rsvp.checkInToken, checkedInAt: rsvp.checkedInAt, status: rsvp.status }, orgName, orgSlug, eventSlug, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, safeToken };
+  // Amounts and hold times only; provider ids and links stay on the server.
+  // This ticket's own price from its order line; the order's other tickets stay private.
+  const order = rsvp.order;
+  const payment = order?.payments[0];
+  const unit = order?.lines.find((line) => line.ticketTypeId === rsvp.ticketTypeId)?.unitMinor;
+  const paymentView = order && order.totalMinor > BigInt(0) && unit != null ? {
+    status: payment?.status ?? null,
+    ticketName: rsvp.ticketType?.name ?? null,
+    amount: formatMoney(unit, order.currency),
+    testMode: order.testMode,
+    paid: payment?.status === PaymentStatus.PAID_ONLINE || payment?.status === PaymentStatus.PAID_OFFLINE,
+  } : null;
+  const hold = rsvp.status === "PENDING_PAYMENT"
+    ? { active: isActiveHold(rsvp), expiresAt: rsvp.holdExpiresAt?.toISOString() ?? null, canPay: isActiveHold(rsvp) && payment?.status === PaymentStatus.PENDING }
+    : null;
+
+  return { rsvp: { checkInToken: rsvp.checkInToken, checkedInAt: rsvp.checkedInAt, status: rsvp.status }, orgName, orgSlug, eventSlug, title, start, timeZone, location, mapHref, accent, calendarEvent, status, isCheckedIn, confirmed, name, eventPageHref, safeToken, payment: paymentView, hold, returningFromCheckout };
 }

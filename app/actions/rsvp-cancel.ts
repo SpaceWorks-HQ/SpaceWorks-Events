@@ -10,6 +10,7 @@ import type { ActionResult } from "./org";
 import { z } from "zod";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { EventPrivacyType } from "@prisma/client";
+import { NOT_FROM_PAID_ORDER } from "@/lib/rsvpCapacity";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -75,15 +76,26 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     } else if (rsvp.eventInstanceId) {
       await tx.$queryRaw`SELECT "id" FROM "EventInstance" WHERE "id" = ${rsvp.eventInstanceId} FOR UPDATE`;
     }
-    const current = await tx.rSVP.findUnique({ where: { id: rsvp.id } });
+    const current = await tx.rSVP.findUnique({ where: { id: rsvp.id }, include: { order: { select: { id: true, status: true, payments: { where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE"] } }, select: { id: true } } } } } });
     if (!current) return { error: "RSVP not found." };
     if (current.checkedInAt) return { error: "Cannot cancel — you have already checked in." };
+    // Money was taken: the organiser cancels and refunds paid tickets.
+    if (current.order && current.order.payments.length > 0) return { error: "Paid tickets can't be cancelled here. Contact the organiser about a refund." };
+    if (current.order?.status === "PENDING") {
+      // A held order is released as a whole: ending its hold lets the
+      // scheduler close the payment page before the seats go back on sale.
+      const now = new Date();
+      await tx.order.update({ where: { id: current.order.id }, data: { holdExpiresAt: now } });
+      await tx.rSVP.updateMany({ where: { orderId: current.order.id, status: "PENDING_PAYMENT" }, data: { holdExpiresAt: now } });
+      return { error: null };
+    }
     await tx.rSVP.delete({ where: { id: current.id } });
     const privacyType = rsvp.event?.privacyType ?? rsvp.eventInstance?.series.privacyType;
     if (current.status === "CONFIRMED" && privacyType !== EventPrivacyType.APPROVAL_REQUIRED) {
       const target = current.eventId ? { eventId: current.eventId } : { eventInstanceId: current.eventInstanceId! };
       const nextWaitlisted = await tx.rSVP.findFirst({
-        where: { ...target, status: "WAITLISTED" },
+        // Tickets from paid orders are confirmed only by payment, never by promotion.
+        where: { ...target, status: "WAITLISTED", ...NOT_FROM_PAID_ORDER },
         orderBy: { createdAt: "asc" },
         include: { user: { select: { email: true } } },
       });

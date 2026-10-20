@@ -1,0 +1,79 @@
+"use client";
+
+import { useId } from "react";
+import { Minus, Plus } from "lucide-react";
+import { IconButton } from "@/components/ui/button";
+import { formatMoney } from "@/lib/payments/money";
+import type { PublicTicketType } from "@/lib/payments/tickets";
+
+/** Whether a ticket can be chosen right now. */
+export function ticketAvailable(ticket: PublicTicketType, paidSalesOpen: boolean) {
+  return ticket.sales === "on_sale" && ticket.remaining !== 0 && (ticket.priceMinor === 0 || paidSalesOpen);
+}
+
+/** The most of one ticket this order may take. */
+export function ticketLimit(ticket: PublicTicketType) {
+  return Math.max(0, Math.min(ticket.maxPerOrder, ticket.remaining ?? ticket.maxPerOrder));
+}
+
+function availabilityNote(ticket: PublicTicketType, paidSalesOpen: boolean) {
+  if (ticket.sales === "not_started") return "Not on sale yet";
+  if (ticket.sales === "ended") return "Sales ended";
+  if (ticket.remaining === 0) return "Sold out";
+  if (ticket.priceMinor > 0 && !paidSalesOpen) return "Not on sale right now";
+  if (ticket.remaining != null && ticket.remaining <= 10) return `${ticket.remaining} left`;
+  return null;
+}
+
+/**
+ * How many of each ticket to buy. Quantities stay within each ticket's
+ * per-order limits and what is left; the server checks both again under its lock.
+ */
+export function TicketPicker({ tickets, quantities, onChange, error, paidSalesOpen }: {
+  tickets: PublicTicketType[];
+  quantities: Record<string, number>;
+  onChange: (quantities: Record<string, number>) => void;
+  error?: string;
+  paidSalesOpen: boolean;
+}) {
+  const legendId = useId();
+  const errorId = useId();
+  const set = (ticket: PublicTicketType, quantity: number) => {
+    const next = quantity <= 0 ? 0 : Math.max(ticket.minPerOrder, Math.min(quantity, ticketLimit(ticket)));
+    onChange({ ...quantities, [ticket.id]: next });
+  };
+  return (
+    <fieldset className="flex flex-col gap-2.5" aria-describedby={error ? errorId : undefined}>
+      <legend id={legendId} className="mb-1.5 text-sm font-semibold text-ink">Tickets</legend>
+      <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
+        {tickets.map((ticket) => {
+          const available = ticketAvailable(ticket, paidSalesOpen);
+          const quantity = quantities[ticket.id] ?? 0;
+          const note = availabilityNote(ticket, paidSalesOpen);
+          const price = ticket.priceMinor > 0 ? formatMoney(ticket.priceMinor, ticket.currency) : "Free";
+          return (
+            <li key={ticket.id} className="flex items-center gap-3 p-3">
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-baseline gap-x-2 text-body-ui text-ink">
+                  <span className="font-semibold">{ticket.name}</span>
+                  <span>{price}</span>
+                </p>
+                {ticket.description || note ? <p className="text-caption text-ink-muted">{[ticket.description, note].filter(Boolean).join(" · ")}</p> : null}
+              </div>
+              <div className="flex items-center gap-2" role="group" aria-label={`${ticket.name} quantity`}>
+                <IconButton size="sm" variant="secondary" label={`One fewer ${ticket.name}`} disabled={!available || quantity === 0} onClick={() => set(ticket, quantity - 1 < ticket.minPerOrder ? 0 : quantity - 1)}>
+                  <Minus />
+                </IconButton>
+                <output aria-live="polite" className="w-6 text-center tabular-nums font-semibold text-ink">{quantity}</output>
+                <IconButton size="sm" variant="secondary" label={`One more ${ticket.name}`} disabled={!available || quantity >= ticketLimit(ticket)} onClick={() => set(ticket, quantity === 0 ? ticket.minPerOrder : quantity + 1)}>
+                  <Plus />
+                </IconButton>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {error ? <p id={errorId} role="alert" className="text-caption text-danger-fg">{error}</p> : null}
+    </fieldset>
+  );
+}

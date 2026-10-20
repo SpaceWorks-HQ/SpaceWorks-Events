@@ -1,12 +1,23 @@
 import { EventStatus, Prisma, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
+import { seatTakingWhere } from "@/lib/payments/holds";
 
 export async function countConfirmedForEvent(eventId: string): Promise<number> {
   return prisma.rSVP.count({
     where: { eventId, status: RsvpStatus.CONFIRMED },
   });
 }
+
+/** Paid-ticket seats currently held while buyers pay. */
+export async function countHeldForEvent(eventId: string, now = new Date()): Promise<number> {
+  return prisma.rSVP.count({
+    where: { eventId, status: RsvpStatus.PENDING_PAYMENT, holdExpiresAt: { gt: now } },
+  });
+}
+
+/** Registrations from a paid order are confirmed only by its payment. */
+export const NOT_FROM_PAID_ORDER = { OR: [{ orderId: null }, { order: { totalMinor: 0 } }] } satisfies Prisma.RSVPWhereInput;
 
 export async function countConfirmedForInstance(
   eventInstanceId: string,
@@ -39,8 +50,8 @@ export async function hasCapacityToRestoreConfirmedRsvp(
     capacity = instance.series.capacity;
   }
   if (capacity == null) return true;
-  const confirmed = await tx.rSVP.count({ where: { ...target, status: RsvpStatus.CONFIRMED } });
-  return confirmed < capacity;
+  const taken = await tx.rSVP.count({ where: { ...target, ...seatTakingWhere(new Date()) } });
+  return taken < capacity;
 }
 
 /** Atomically promote/approve an RSVP without exceeding the configured capacity. */
@@ -79,10 +90,10 @@ export async function confirmRsvpWithinCapacity(params: {
       isOpen = instance.status === EventStatus.PUBLISHED && instance.endDateTime > new Date();
     }
     if (params.requireOpen && !isOpen) return "closed";
-    const confirmed = await tx.rSVP.count({ where: { ...target, status: RsvpStatus.CONFIRMED } });
-    if (capacity != null && confirmed >= capacity) return "full";
+    const taken = await tx.rSVP.count({ where: { ...target, ...seatTakingWhere(new Date()) } });
+    if (capacity != null && taken >= capacity) return "full";
     const updated = await tx.rSVP.updateMany({
-      where: { id: params.rsvpId, ...target, status: { in: params.expectedStatuses } },
+      where: { id: params.rsvpId, ...target, status: { in: params.expectedStatuses }, ...NOT_FROM_PAID_ORDER },
       data: { status: RsvpStatus.CONFIRMED },
     });
     if (updated.count === 1 && params.notification) {

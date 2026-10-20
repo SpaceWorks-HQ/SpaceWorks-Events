@@ -12,6 +12,9 @@ import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
 import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import { identityErrors } from "@/components/rsvp/registrationAnswers";
+import { TicketPicker, ticketAvailable } from "@/components/rsvp/TicketPicker";
+import { formatMoney } from "@/lib/payments/money";
+import type { PublicTicketType } from "@/lib/payments/tickets";
 
 async function postRsvp(body: unknown) {
   const res = await fetch("/api/rsvp", {
@@ -20,13 +23,10 @@ async function postRsvp(body: unknown) {
     credentials: "include",
     body: JSON.stringify(body),
   });
-  let data: { ok?: boolean; error?: string; data?: { ticketToken?: string; status?: RsvpStatus } } = {};
+  type Saved = { ticketToken?: string; status?: RsvpStatus; orderToken?: string; checkoutUrl?: string | null };
+  let data: { ok?: boolean; error?: string; data?: Saved } = {};
   try {
-    data = (await res.json()) as {
-      ok?: boolean;
-      error?: string;
-      data?: { ticketToken?: string; status?: RsvpStatus };
-    };
+    data = (await res.json()) as { ok?: boolean; error?: string; data?: Saved };
   } catch {
     /* empty */
   }
@@ -47,6 +47,8 @@ async function postRsvp(body: unknown) {
       ok: true as const,
       ticketToken: data.data?.ticketToken ?? "",
       status: data.data?.status ?? null,
+      orderToken: data.data?.orderToken ?? null,
+      checkoutUrl: data.data?.checkoutUrl ?? null,
     };
   }
   return {
@@ -80,10 +82,25 @@ export function RsvpForm(props: {
   eventSlug?: string;
   eventInstanceId?: string;
   registrationFields?: RegistrationFieldDefinition[];
+  /** Ticket types to buy; registration without tickets when empty. */
+  tickets?: PublicTicketType[];
+  paidSalesOpen?: boolean;
   /** Lets a containing event page update immediately after this tab saves an RSVP. */
   onRsvpSaved?: (rsvp: { ticketToken: string; status: RsvpStatus | null }) => void;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved } = props;
+  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets = [], paidSalesOpen = false } = props;
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    // Start with one of the first ticket that can be bought.
+    const first = tickets.find((ticket) => ticketAvailable(ticket, paidSalesOpen));
+    return first ? { [first.id]: first.minPerOrder } : {};
+  });
+  const [ticketError, setTicketError] = useState<string | undefined>();
+  // Inside the embed widget's frame, provider pages must open in a new top-level tab.
+  const [framedCheckout, setFramedCheckout] = useState<{ checkoutUrl: string; orderToken: string | null } | null>(null);
+  const [attendees, setAttendees] = useState<Array<{ name: string; email: string }>>([]);
+  const seats = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
+  const totalMinor = tickets.reduce((sum, ticket) => sum + ticket.priceMinor * (quantities[ticket.id] ?? 0), 0);
+  const currency = tickets[0]?.currency ?? "INR";
   const { data: session, status } = useSession();
   const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
@@ -118,8 +135,10 @@ export function RsvpForm(props: {
     const who = identityErrors({ name, email: guestEmail, requireName: isGuest || requireName, requireEmail: isGuest });
     const questionErrors = questionsState.validate();
     setIdentity(who);
+    const missingTicket = tickets.length > 0 && seats === 0;
+    setTicketError(missingTicket ? "Choose at least one ticket." : undefined);
     const firstQuestion = fields.find((field) => questionErrors[field.key])?.key;
-    const first = who.name ? "__name" : who.email ? "__email" : firstQuestion;
+    const first = missingTicket ? "__ticket" : who.name ? "__name" : who.email ? "__email" : firstQuestion;
     if (first) focusQuestion(formRef.current, first);
     return !first;
   }
@@ -132,15 +151,19 @@ export function RsvpForm(props: {
         orgSlug,
         ...(eventInstanceId ? { eventInstanceId } : { eventSlug: eventSlug! }),
         ...(isGuest ? { guestEmail } : {}),
+        ...(tickets.length > 0 ? {
+          items: Object.entries(quantities).filter(([, quantity]) => quantity > 0).map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
+          attendees: attendees.slice(0, Math.max(0, seats - 1)).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
+        } : {}),
         name,
         answers: questionsState.payload(),
       });
       if (!res.ok) setError(res.error);
-      else saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status });
+      else saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status }, res);
     });
   }
 
-  function saveSuccessfulRsvp(rsvp: { ticketToken: string; status: RsvpStatus | null }) {
+  function saveSuccessfulRsvp(rsvp: { ticketToken: string; status: RsvpStatus | null }, order: { orderToken?: string | null; checkoutUrl?: string | null } = {}) {
     setTicketToken(rsvp.ticketToken);
     setRsvpStatus(rsvp.status);
     if (rsvp.ticketToken) {
@@ -158,6 +181,18 @@ export function RsvpForm(props: {
         // this browser has disabled local storage.
       }
     }
+    // A paid order continues on the provider's hosted page, or on the order
+    // page ("Pay now") if that page couldn't open yet. Orders for several
+    // people go to the order page to name each attendee.
+    if (rsvp.status === "PENDING_PAYMENT" && order.checkoutUrl) {
+      if (window.self !== window.top) setFramedCheckout({ checkoutUrl: order.checkoutUrl, orderToken: order.orderToken ?? null });
+      else window.location.assign(order.checkoutUrl);
+      return;
+    }
+    if (order.orderToken && (rsvp.status === "PENDING_PAYMENT" || seats > 1)) {
+      router.push(`/order/${order.orderToken}`);
+      return;
+    }
     onRsvpSaved?.(rsvp);
     setDone(true);
     // Re-read the going count and spots left, which now include this registration.
@@ -166,6 +201,25 @@ export function RsvpForm(props: {
 
   if (status === "loading") {
     return <p className="text-body-ui text-ink-muted">Loading…</p>;
+  }
+
+  if (framedCheckout) {
+    return (
+      <div role="status" className="flex flex-col items-start gap-3 rounded-lg bg-info-bg p-5 text-ink">
+        <p className="text-body font-semibold">Your tickets are held. Pay on the secure payment page, which opens in a new tab.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="accent" size="sm">
+            <a href={framedCheckout.checkoutUrl} target="_blank" rel="noopener noreferrer">Open the payment page</a>
+          </Button>
+          {framedCheckout.orderToken ? (
+            <Button asChild variant="secondary" size="sm">
+              <a href={`/order/${framedCheckout.orderToken}`} target="_blank" rel="noopener noreferrer">View your order</a>
+            </Button>
+          ) : null}
+        </div>
+        <p className="text-caption text-ink-muted">Finish paying in the new tab; your order page confirms the tickets.</p>
+      </div>
+    );
   }
 
   if (done) {
@@ -211,6 +265,26 @@ export function RsvpForm(props: {
       <div ref={formRef} className="flex flex-col gap-3.5">
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
         {problems}
+        {tickets.length > 0 ? (
+          <div data-question-key="__ticket" className="flex flex-col gap-3">
+            <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
+            {seats > 1 ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
+                {Array.from({ length: seats - 1 }, (_, index) => (
+                  <div key={index} className="grid gap-2 sm:grid-cols-2">
+                    <Field label={`Ticket ${index + 2}: name`} optional>
+                      <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
+                    </Field>
+                    <Field label={`Ticket ${index + 2}: email`} optional>
+                      <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
+                    </Field>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         <div data-question-key="__name">
           <Field label="Name" optional={!requireName} required={requireName} error={identity.name} helperText={!requireName ? `Leave blank to use ${session.user.name}.` : undefined}>
             <Input
@@ -228,7 +302,7 @@ export function RsvpForm(props: {
         </div>
         {questions}
         <Button variant="accent" size="lg" fullWidth loading={pending} loadingLabel="Registering…" onClick={submit}>
-          Register
+          {totalMinor > 0 ? `Continue to payment · ${formatMoney(totalMinor, currency)}` : "Register"}
         </Button>
       </div>
     );
@@ -246,7 +320,27 @@ export function RsvpForm(props: {
     >
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {problems}
-      <p className="text-body-ui text-ink-muted">Register with your email</p>
+      {tickets.length > 0 ? (
+        <div data-question-key="__ticket" className="flex flex-col gap-3">
+          <TicketPicker tickets={tickets} quantities={quantities} onChange={(next) => { setQuantities(next); setTicketError(undefined); }} error={ticketError} paidSalesOpen={paidSalesOpen} />
+          {seats > 1 ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
+              {Array.from({ length: seats - 1 }, (_, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-2">
+                  <Field label={`Ticket ${index + 2}: name`} optional>
+                    <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
+                  </Field>
+                  <Field label={`Ticket ${index + 2}: email`} optional>
+                    <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <p className="text-body-ui text-ink-muted">Your details</p>
       <div data-question-key="__name">
         <Field label="Name" required error={identity.name}>
           <Input
@@ -280,7 +374,7 @@ export function RsvpForm(props: {
       </div>
       {questions}
       <Button variant="accent" size="lg" fullWidth type="submit" loading={pending} loadingLabel="Registering…">
-        Register
+        {totalMinor > 0 ? `Continue to payment · ${formatMoney(totalMinor, currency)}` : "Register"}
       </Button>
     </form>
   );

@@ -21,6 +21,7 @@ Dynamic segments are shown as `:name` for readability.
 | `/:orgSlug/i/:instanceId` | Recurring-series instance and RSVP |
 | `/:shortCode` | Event short link: a 7-character code (letters and digits, always at least one uppercase letter, so it never matches a lowercase organisation slug) that temporarily redirects to the event's current public page. Unknown or unpublished codes return the same not-found page as an unknown organisation; lookups are rate-limited |
 | `/ticket/:token` | Attendee ticket status and QR page; tears off the QR stub live when the attendee is checked in |
+| `/order/:token` | The buyer's order (opaque access token): lines and total, payment state with "Pay now" while the tickets are held, and each ticket with its attendee's details |
 | `/:orgSlug/ids` | An organisation's ID programmes that are taking card requests |
 | `/:orgSlug/ids/:programmeSlug` | Member ID join form (sign-in required; only while the programme is active with requests open) and the requester's own status |
 | `/verify/:token` | Public member ID check (QR target): Valid / Expired show name, photo, programme, organisation, ID number and valid-until; Revoked shows status only; pending, rejected and unknown tokens share one "Card not found". `noindex`, `no-referrer`, rate limited per IP |
@@ -72,6 +73,9 @@ Every super-admin page additionally requires a current TOTP verification, and ea
 | `POST /api/check-in/station` | PIN-scoped station session, rate-limited | Open and operate a venue check-in station |
 | `GET /api/search?q=...` | Public, rate-limited | Return matching public events |
 | `GET /api/ticket/:token/download` | Opaque token | Download the attendee ticket |
+| `POST /api/ticket/:token/checkout` | Opaque token, rate-limited per IP (`ticketCheckout`, 20/min) | "Pay now" for a held ticket: opens (or reuses) the hosted checkout for its whole order and returns only that address (`no-store`) |
+| `POST /api/orders/:token/checkout` | Opaque order access token, rate-limited per IP (`ticketCheckout`) | "Pay now" on the buyer's order page |
+| `GET /api/payments/return/:orderId?e=…&s=…` | Signed, 24-hour link (HMAC under a `MFA_ENCRYPTION_KEY` subkey) | Where Razorpay and Stripe send the buyer after checkout; redirects to `/order/:token?payment=return`, so the order's access token never reaches the provider |
 | `GET /api/ticket/:token/status` | Opaque token, rate-limited per IP (`ticketStatus`, 120/min) | Return only `{ checkedIn, checkedInAt }` for the ticket (`no-store`, `no-referrer`; empty 404 for unknown tokens) |
 | `GET /api/ticket/:token/events` | Opaque token, rate-limited per IP (`ticketEvents`, 60/min) | Server-Sent Events: initial `state`, then one `checked-in` event when the attendee is admitted; `: ping` every 25 s, closes after at most 10 minutes |
 | `GET /api/feedback/certificate/:token` | Opaque token | Download an eligible JPEG certificate |
@@ -100,7 +104,7 @@ Opaque ticket and certificate URLs are bearer capabilities. Do not log them or p
 | `POST /api/webhooks/razorpay/:webhookPathId` | `X-Razorpay-Signature` HMAC over the raw body with the addressed organisation's own webhook secret; `paymentWebhook` bucket (600/min per IP) instead of the global one | Razorpay settlement and refund notifications |
 | `POST /api/webhooks/stripe/:webhookPathId` | `Stripe-Signature` (`t`, `v1`) over `t.rawBody` with the organisation's signing secret, 5-minute tolerance; `paymentWebhook` bucket | Stripe settlement and refund notifications |
 
-The random `webhookPathId` only addresses the organisation; it is not a credential. Bodies over 256 KB get 413, unknown addresses 404, and failed verification an empty 400. Verified events are recorded once per organisation, provider and event id (`ProcessedWebhookEvent`, kept 90 days) and replays get 200. These routes live on the backend API host: in the split layout providers must point at `BACKEND_ORIGIN`, because the website's proxy refuses `/api/webhooks/*`.
+The random `webhookPathId` only addresses the organisation; it is not a credential. Bodies over 256 KB get 413, unknown addresses 404, and failed verification an empty 400. Verified captures confirm the order whose checkout attempt the provider echoes back; expired or cancelled pages close their attempt; refund events settle pending refunds. Verified events are recorded once per organisation, provider and event id (`ProcessedWebhookEvent`, kept 90 days) and replays get 200. These routes live on the backend API host: in the split layout providers must point at `BACKEND_ORIGIN`, because the website's proxy refuses `/api/webhooks/*`.
 
 Self-hosted Node.js instances run the outbox worker every minute. The endpoint remains available for an independent scheduler or manual recovery. Protected operational endpoints return a generic not-found response when authorization fails.
 

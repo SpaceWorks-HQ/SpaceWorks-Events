@@ -28,189 +28,194 @@ import { loadDiscoverView as endpoint24 } from "@/lib/views/app__discover__page"
 import { loadView as endpoint25 } from "@/lib/views/app__features__page";
 import { loadJoinEventCollaboratorView as endpoint26 } from "@/lib/views/app__join__event-collaborator__token__page";
 import { loadJoinOrganisationView as endpoint27 } from "@/lib/views/app__join__org__token__page";
-import { loadVenueCheckInStationView as endpoint28 } from "@/lib/views/app__orgSlug__eventSlug__check-in__page";
-import { loadRouteMetadata as endpoint29 } from "@/lib/views/app__orgSlug__eventSlug__feedback__page";
-import { loadFeedbackView as endpoint30 } from "@/lib/views/app__orgSlug__eventSlug__feedback__page";
-import { loadOpenGraphImage as endpoint31 } from "@/lib/views/app__orgSlug__eventSlug__opengraph-image";
-import { loadRouteMetadata as endpoint32 } from "@/lib/views/app__orgSlug__eventSlug__page";
-import { loadEventView as endpoint33 } from "@/lib/views/app__orgSlug__eventSlug__page";
-import { loadEventScheduleView as endpoint34 } from "@/lib/views/app__orgSlug__eventSlug__schedule__page";
-import { loadSessionView as endpoint35 } from "@/lib/views/app__orgSlug__eventSlug__sessions__sessionSlug__page";
-import { loadSpeakerView as endpoint36 } from "@/lib/views/app__orgSlug__eventSlug__speakers__speakerSlug__page";
-import { loadOpenGraphImage as endpoint37 } from "@/lib/views/app__orgSlug__i__instanceId__opengraph-image";
-import { loadRouteMetadata as endpoint38 } from "@/lib/views/app__orgSlug__i__instanceId__page";
-import { loadInstanceEventView as endpoint39 } from "@/lib/views/app__orgSlug__i__instanceId__page";
-import { loadInstanceScheduleView as endpoint40 } from "@/lib/views/app__orgSlug__i__instanceId__schedule__page";
-import { loadOrganisationIdsView as endpoint41 } from "@/lib/views/app__orgSlug__ids__page";
-import { loadRouteMetadata as endpoint42 } from "@/lib/views/app__orgSlug__ids__programmeSlug__page";
-import { loadJoinIdProgrammeView as endpoint43 } from "@/lib/views/app__orgSlug__ids__programmeSlug__page";
-import { loadOrganiserShell as endpoint44 } from "@/lib/views/app__orgSlug__layout";
-import { loadRouteMetadata as endpoint45 } from "@/lib/views/app__orgSlug__page";
-import { loadOrganisationView as endpoint46 } from "@/lib/views/app__orgSlug__page";
-import { loadView as endpoint47 } from "@/lib/views/app__page";
-import { loadSuperAdminMfaView as endpoint48 } from "@/lib/views/app__super-admin-mfa__page";
-import { loadSuperAdminActivityView as endpoint49 } from "@/lib/views/app__super-admin__activity__page";
-import { loadSuperAdminAuditView as endpoint50 } from "@/lib/views/app__super-admin__audit__page";
-import { loadSuperAdminAuthView as endpoint51 } from "@/lib/views/app__super-admin__auth__page";
-import { loadSuperAdminEmailView as endpoint52 } from "@/lib/views/app__super-admin__email__page";
-import { loadSuperAdminEventsView as endpoint53 } from "@/lib/views/app__super-admin__events__page";
-import { loadSuperAdminInvitesView as endpoint54 } from "@/lib/views/app__super-admin__invites__page";
-import { loadSuperAdminShell as endpoint55 } from "@/lib/views/app__super-admin__layout";
-import { loadSuperAdminMonitoringView as endpoint56 } from "@/lib/views/app__super-admin__monitoring__page";
-import { loadSuperAdminOperationsView as endpoint57 } from "@/lib/views/app__super-admin__operations__page";
-import { loadSuperAdminOrgDetailView as endpoint58 } from "@/lib/views/app__super-admin__orgs__orgId__page";
-import { loadSuperAdminOrgsView as endpoint59 } from "@/lib/views/app__super-admin__orgs__page";
-import { loadSuperAdminOverviewView as endpoint60 } from "@/lib/views/app__super-admin__page";
-import { loadSuperAdminSecurityView as endpoint61 } from "@/lib/views/app__super-admin__security__page";
-import { loadSuperAdminSettingsView as endpoint62 } from "@/lib/views/app__super-admin__settings__page";
-import { loadSuperAdminStorageView as endpoint63 } from "@/lib/views/app__super-admin__storage__page";
-import { loadSuperAdminUsersView as endpoint64 } from "@/lib/views/app__super-admin__users__page";
-import { loadSuperAdminUserDetailView as endpoint65 } from "@/lib/views/app__super-admin__users__userId__page";
-import { loadRouteMetadata as endpoint66 } from "@/lib/views/app__ticket__token__page";
-import { loadTicketView as endpoint67 } from "@/lib/views/app__ticket__token__page";
-import { loadVerifyView as endpoint68 } from "@/lib/views/app__verify__token__page";
-import { loadAnalyticsPanel as endpoint69 } from "@/lib/views/components__event-dashboard__panels__AnalyticsPanel";
-import { loadCheckInPanel as endpoint70 } from "@/lib/views/components__event-dashboard__panels__CheckInPanel";
-import { loadEmailsPanel as endpoint71 } from "@/lib/views/components__event-dashboard__panels__EmailsPanel";
-import { loadEventPagePanel as endpoint72 } from "@/lib/views/components__event-dashboard__panels__EventPagePanel";
-import { loadFeedbackPanel as endpoint73 } from "@/lib/views/components__event-dashboard__panels__FeedbackPanel";
-import { loadGuestsPanel as endpoint74 } from "@/lib/views/components__event-dashboard__panels__GuestsPanel";
-import { loadOverviewPanel as endpoint75 } from "@/lib/views/components__event-dashboard__panels__OverviewPanel";
-import { loadSettingsPanel as endpoint76 } from "@/lib/views/components__event-dashboard__panels__SettingsPanel";
-import { loadSuperAdminGate as endpoint77 } from "@/lib/views/frontend-gates";
-import { leaveOrganisation as endpoint78 } from "@/app/actions/account-organisations";
-import { updateAccountProfile as endpoint79 } from "@/app/actions/account";
-import { updateAccountPassword as endpoint80 } from "@/app/actions/account";
-import { createApiClient as endpoint81 } from "@/app/actions/api-clients";
-import { createApiCredential as endpoint82 } from "@/app/actions/api-clients";
-import { revokeApiCredential as endpoint83 } from "@/app/actions/api-clients";
-import { updateApiClientScopes as endpoint84 } from "@/app/actions/api-clients";
-import { setApiClientStatus as endpoint85 } from "@/app/actions/api-clients";
-import { signUpWithPassword as endpoint86 } from "@/app/actions/auth";
-import { confirmEmailVerification as endpoint87 } from "@/app/actions/auth";
-import { resendEmailVerification as endpoint88 } from "@/app/actions/auth";
-import { getBadgeDesign as endpoint89 } from "@/app/actions/badge";
-import { saveBadgeDesign as endpoint90 } from "@/app/actions/badge";
-import { getBadgeAttendeePhoto as endpoint91 } from "@/app/actions/badge";
-import { countBroadcastRecipients as endpoint92 } from "@/app/actions/broadcasts";
-import { previewEventBroadcast as endpoint93 } from "@/app/actions/broadcasts";
-import { sendEventBroadcast as endpoint94 } from "@/app/actions/broadcasts";
-import { sendEventBroadcastTest as endpoint95 } from "@/app/actions/broadcasts";
-import { uploadCertificateBackground as endpoint96 } from "@/app/actions/certificate";
-import { uploadCertificateAsset as endpoint97 } from "@/app/actions/certificate";
-import { previewCertificate as endpoint98 } from "@/app/actions/certificate";
-import { createOrRotateCheckInStation as endpoint99 } from "@/app/actions/checkin-station";
-import { disableCheckInStation as endpoint100 } from "@/app/actions/checkin-station";
-import { revealCheckInStationPin as endpoint101 } from "@/app/actions/checkin-station";
-import { previewCheckInByToken as endpoint102 } from "@/app/actions/checkin";
-import { checkInByToken as endpoint103 } from "@/app/actions/checkin";
-import { undoCheckIn as endpoint104 } from "@/app/actions/checkin";
-import { downloadOfflineCheckInRoster as endpoint105 } from "@/app/actions/checkin";
-import { syncOfflineCheckIns as endpoint106 } from "@/app/actions/checkin";
-import { lookupAttendeesForCheckIn as endpoint107 } from "@/app/actions/checkin";
-import { previewCheckInByRsvpId as endpoint108 } from "@/app/actions/checkin";
-import { checkInByRsvpId as endpoint109 } from "@/app/actions/checkin";
-import { createEventCollaboratorInvite as endpoint110 } from "@/app/actions/event-collaborators";
-import { revokeEventCollaborator as endpoint111 } from "@/app/actions/event-collaborators";
-import { updateEventCollaboratorPermissions as endpoint112 } from "@/app/actions/event-collaborators";
-import { cancelEventCollaboratorInvite as endpoint113 } from "@/app/actions/event-collaborators";
-import { uploadEventSpeakerPhoto as endpoint114 } from "@/app/actions/event-website";
-import { uploadEventSponsorLogo as endpoint115 } from "@/app/actions/event-website";
-import { saveEventPage as endpoint116 } from "@/app/actions/event-website";
-import { saveHighlight as endpoint117 } from "@/app/actions/event-website";
-import { saveSpeaker as endpoint118 } from "@/app/actions/event-website";
-import { saveSponsor as endpoint119 } from "@/app/actions/event-website";
-import { saveResource as endpoint120 } from "@/app/actions/event-website";
-import { saveFaq as endpoint121 } from "@/app/actions/event-website";
-import { saveVenue as endpoint122 } from "@/app/actions/event-website";
-import { saveScheduleTrack as endpoint123 } from "@/app/actions/event-website";
-import { deleteScheduleTrack as endpoint124 } from "@/app/actions/event-website";
-import { reorderScheduleTracks as endpoint125 } from "@/app/actions/event-website";
-import { saveSession as endpoint126 } from "@/app/actions/event-website";
-import { setEventSessionDelay as endpoint127 } from "@/app/actions/event-website";
-import { deleteWebsiteContent as endpoint128 } from "@/app/actions/event-website";
-import { uploadEventCoverImage as endpoint129 } from "@/app/actions/event";
-import { createEvent as endpoint130 } from "@/app/actions/event";
-import { updateEvent as endpoint131 } from "@/app/actions/event";
-import { deleteEvent as endpoint132 } from "@/app/actions/event";
-import { updateEventSlug as endpoint133 } from "@/app/actions/event";
-import { cloneEvent as endpoint134 } from "@/app/actions/event";
-import { publishEvent as endpoint135 } from "@/app/actions/event";
-import { applyFeedbackTemplate as endpoint136 } from "@/app/actions/feedback-form";
-import { saveFeedbackSettings as endpoint137 } from "@/app/actions/feedback-form";
-import { saveFeedbackField as endpoint138 } from "@/app/actions/feedback-form";
-import { deleteFeedbackField as endpoint139 } from "@/app/actions/feedback-form";
-import { setNewUserRegistrationEnabled as endpoint140 } from "@/app/actions/instance-settings";
-import { setPaidEventsEnabled as endpoint141 } from "@/app/actions/instance-settings";
-import { saveInstanceServiceSettings as endpoint142 } from "@/app/actions/instance-settings";
-import { deliverInstanceOutbox as endpoint143 } from "@/app/actions/instance";
-import { sendInstanceTestEmail as endpoint144 } from "@/app/actions/instance";
-import { purgeExpiredVerificationTokens as endpoint145 } from "@/app/actions/instance";
-import { retryFailedOutboxMessages as endpoint146 } from "@/app/actions/instance";
-import { recordBackupRestoreVerification as endpoint147 } from "@/app/actions/instance";
-import { acceptOrganisationInvite as endpoint148 } from "@/app/actions/invite-acceptance";
-import { acceptEventCollaboratorInvite as endpoint149 } from "@/app/actions/invite-acceptance";
-import { addEventInvite as endpoint150 } from "@/app/actions/invites";
-import { removeEventInvite as endpoint151 } from "@/app/actions/invites";
-import { addSeriesInvite as endpoint152 } from "@/app/actions/invites";
-import { removeSeriesInvite as endpoint153 } from "@/app/actions/invites";
-import { uploadOrganisationLogo as endpoint154 } from "@/app/actions/media";
-import { uploadEventPageLogo as endpoint155 } from "@/app/actions/media";
-import { uploadAccountProfileImage as endpoint156 } from "@/app/actions/media";
-import { joinIdProgramme as endpoint157 } from "@/app/actions/member-id-join";
-import { createIdProgramme as endpoint158 } from "@/app/actions/member-ids";
-import { updateIdProgramme as endpoint159 } from "@/app/actions/member-ids";
-import { deleteIdProgramme as endpoint160 } from "@/app/actions/member-ids";
-import { saveIdProgrammeFields as endpoint161 } from "@/app/actions/member-ids";
-import { saveIdProgrammeDesign as endpoint162 } from "@/app/actions/member-ids";
-import { uploadIdProgrammeWatermark as endpoint163 } from "@/app/actions/member-ids";
-import { addIdMember as endpoint164 } from "@/app/actions/member-ids";
-import { updateIdMember as endpoint165 } from "@/app/actions/member-ids";
-import { uploadIdMemberPhoto as endpoint166 } from "@/app/actions/member-ids";
-import { deleteIdMember as endpoint167 } from "@/app/actions/member-ids";
-import { setIdMemberStatus as endpoint168 } from "@/app/actions/member-ids";
-import { renewIdMembers as endpoint169 } from "@/app/actions/member-ids";
-import { emailIdCards as endpoint170 } from "@/app/actions/member-ids";
-import { emailIdCard as endpoint171 } from "@/app/actions/member-ids";
-import { readIdImportSource as endpoint172 } from "@/app/actions/member-ids";
-import { commitIdImport as endpoint173 } from "@/app/actions/member-ids";
-import { updateMemberRole as endpoint174 } from "@/app/actions/membership";
-import { removeMember as endpoint175 } from "@/app/actions/membership";
-import { deleteOrganisation as endpoint176 } from "@/app/actions/membership";
-import { createOrgInvite as endpoint177 } from "@/app/actions/org-invites";
-import { revokeOrgInvite as endpoint178 } from "@/app/actions/org-invites";
-import { createOrganisation as endpoint179 } from "@/app/actions/org";
-import { updateOrganisation as endpoint180 } from "@/app/actions/org";
-import { checkSlugAvailability as endpoint181 } from "@/app/actions/org";
-import { requestPasswordReset as endpoint182 } from "@/app/actions/password-reset";
-import { confirmPasswordReset as endpoint183 } from "@/app/actions/password-reset";
-import { savePaymentSettings as endpoint184 } from "@/app/actions/payment-settings";
-import { disconnectPaymentProvider as endpoint185 } from "@/app/actions/payment-settings";
-import { testPaymentConnection as endpoint186 } from "@/app/actions/payment-settings";
-import { upsertEventRegistrationField as endpoint187 } from "@/app/actions/registration-form";
-import { deleteEventRegistrationField as endpoint188 } from "@/app/actions/registration-form";
-import { reorderEventRegistrationFields as endpoint189 } from "@/app/actions/registration-form";
-import { addManualRsvp as endpoint190 } from "@/app/actions/rsvp-admin";
-import { updateRsvpRegistration as endpoint191 } from "@/app/actions/rsvp-admin";
-import { deleteRsvp as endpoint192 } from "@/app/actions/rsvp-admin";
-import { restoreRsvp as endpoint193 } from "@/app/actions/rsvp-admin";
-import { cancelRsvp as endpoint194 } from "@/app/actions/rsvp-cancel";
-import { approveRsvp as endpoint195 } from "@/app/actions/rsvp-lifecycle";
-import { rejectRsvp as endpoint196 } from "@/app/actions/rsvp-lifecycle";
-import { promoteFromWaitlist as endpoint197 } from "@/app/actions/rsvp-lifecycle";
-import { submitRsvp as endpoint198 } from "@/app/actions/rsvp";
-import { saveScheduleItem as endpoint199 } from "@/app/actions/schedule";
-import { setScheduleDelay as endpoint200 } from "@/app/actions/schedule";
-import { beginMfaEnrollment as endpoint201 } from "@/app/actions/security";
-import { confirmMfaEnrollment as endpoint202 } from "@/app/actions/security";
-import { disableMfa as endpoint203 } from "@/app/actions/security";
-import { revokeAllSessions as endpoint204 } from "@/app/actions/security";
-import { createEventSeries as endpoint205 } from "@/app/actions/series";
-import { updateEventSeriesMeta as endpoint206 } from "@/app/actions/series";
-import { deleteEventSeries as endpoint207 } from "@/app/actions/series";
-import { createEventShortLink as endpoint208 } from "@/app/actions/shortLink";
-import { regenerateEventShortLink as endpoint209 } from "@/app/actions/shortLink";
-import { verifySuperAdminMfa as endpoint210 } from "@/app/actions/super-admin-mfa";
+import { loadRouteMetadata as endpoint28 } from "@/lib/views/app__order__token__page";
+import { loadOrderView as endpoint29 } from "@/lib/views/app__order__token__page";
+import { loadVenueCheckInStationView as endpoint30 } from "@/lib/views/app__orgSlug__eventSlug__check-in__page";
+import { loadRouteMetadata as endpoint31 } from "@/lib/views/app__orgSlug__eventSlug__feedback__page";
+import { loadFeedbackView as endpoint32 } from "@/lib/views/app__orgSlug__eventSlug__feedback__page";
+import { loadOpenGraphImage as endpoint33 } from "@/lib/views/app__orgSlug__eventSlug__opengraph-image";
+import { loadRouteMetadata as endpoint34 } from "@/lib/views/app__orgSlug__eventSlug__page";
+import { loadEventView as endpoint35 } from "@/lib/views/app__orgSlug__eventSlug__page";
+import { loadEventScheduleView as endpoint36 } from "@/lib/views/app__orgSlug__eventSlug__schedule__page";
+import { loadSessionView as endpoint37 } from "@/lib/views/app__orgSlug__eventSlug__sessions__sessionSlug__page";
+import { loadSpeakerView as endpoint38 } from "@/lib/views/app__orgSlug__eventSlug__speakers__speakerSlug__page";
+import { loadOpenGraphImage as endpoint39 } from "@/lib/views/app__orgSlug__i__instanceId__opengraph-image";
+import { loadRouteMetadata as endpoint40 } from "@/lib/views/app__orgSlug__i__instanceId__page";
+import { loadInstanceEventView as endpoint41 } from "@/lib/views/app__orgSlug__i__instanceId__page";
+import { loadInstanceScheduleView as endpoint42 } from "@/lib/views/app__orgSlug__i__instanceId__schedule__page";
+import { loadOrganisationIdsView as endpoint43 } from "@/lib/views/app__orgSlug__ids__page";
+import { loadRouteMetadata as endpoint44 } from "@/lib/views/app__orgSlug__ids__programmeSlug__page";
+import { loadJoinIdProgrammeView as endpoint45 } from "@/lib/views/app__orgSlug__ids__programmeSlug__page";
+import { loadOrganiserShell as endpoint46 } from "@/lib/views/app__orgSlug__layout";
+import { loadRouteMetadata as endpoint47 } from "@/lib/views/app__orgSlug__page";
+import { loadOrganisationView as endpoint48 } from "@/lib/views/app__orgSlug__page";
+import { loadView as endpoint49 } from "@/lib/views/app__page";
+import { loadSuperAdminMfaView as endpoint50 } from "@/lib/views/app__super-admin-mfa__page";
+import { loadSuperAdminActivityView as endpoint51 } from "@/lib/views/app__super-admin__activity__page";
+import { loadSuperAdminAuditView as endpoint52 } from "@/lib/views/app__super-admin__audit__page";
+import { loadSuperAdminAuthView as endpoint53 } from "@/lib/views/app__super-admin__auth__page";
+import { loadSuperAdminEmailView as endpoint54 } from "@/lib/views/app__super-admin__email__page";
+import { loadSuperAdminEventsView as endpoint55 } from "@/lib/views/app__super-admin__events__page";
+import { loadSuperAdminInvitesView as endpoint56 } from "@/lib/views/app__super-admin__invites__page";
+import { loadSuperAdminShell as endpoint57 } from "@/lib/views/app__super-admin__layout";
+import { loadSuperAdminMonitoringView as endpoint58 } from "@/lib/views/app__super-admin__monitoring__page";
+import { loadSuperAdminOperationsView as endpoint59 } from "@/lib/views/app__super-admin__operations__page";
+import { loadSuperAdminOrgDetailView as endpoint60 } from "@/lib/views/app__super-admin__orgs__orgId__page";
+import { loadSuperAdminOrgsView as endpoint61 } from "@/lib/views/app__super-admin__orgs__page";
+import { loadSuperAdminOverviewView as endpoint62 } from "@/lib/views/app__super-admin__page";
+import { loadSuperAdminSecurityView as endpoint63 } from "@/lib/views/app__super-admin__security__page";
+import { loadSuperAdminSettingsView as endpoint64 } from "@/lib/views/app__super-admin__settings__page";
+import { loadSuperAdminStorageView as endpoint65 } from "@/lib/views/app__super-admin__storage__page";
+import { loadSuperAdminUsersView as endpoint66 } from "@/lib/views/app__super-admin__users__page";
+import { loadSuperAdminUserDetailView as endpoint67 } from "@/lib/views/app__super-admin__users__userId__page";
+import { loadRouteMetadata as endpoint68 } from "@/lib/views/app__ticket__token__page";
+import { loadTicketView as endpoint69 } from "@/lib/views/app__ticket__token__page";
+import { loadVerifyView as endpoint70 } from "@/lib/views/app__verify__token__page";
+import { loadAnalyticsPanel as endpoint71 } from "@/lib/views/components__event-dashboard__panels__AnalyticsPanel";
+import { loadCheckInPanel as endpoint72 } from "@/lib/views/components__event-dashboard__panels__CheckInPanel";
+import { loadEmailsPanel as endpoint73 } from "@/lib/views/components__event-dashboard__panels__EmailsPanel";
+import { loadEventPagePanel as endpoint74 } from "@/lib/views/components__event-dashboard__panels__EventPagePanel";
+import { loadFeedbackPanel as endpoint75 } from "@/lib/views/components__event-dashboard__panels__FeedbackPanel";
+import { loadGuestsPanel as endpoint76 } from "@/lib/views/components__event-dashboard__panels__GuestsPanel";
+import { loadOverviewPanel as endpoint77 } from "@/lib/views/components__event-dashboard__panels__OverviewPanel";
+import { loadSettingsPanel as endpoint78 } from "@/lib/views/components__event-dashboard__panels__SettingsPanel";
+import { loadSuperAdminGate as endpoint79 } from "@/lib/views/frontend-gates";
+import { leaveOrganisation as endpoint80 } from "@/app/actions/account-organisations";
+import { updateAccountProfile as endpoint81 } from "@/app/actions/account";
+import { updateAccountPassword as endpoint82 } from "@/app/actions/account";
+import { createApiClient as endpoint83 } from "@/app/actions/api-clients";
+import { createApiCredential as endpoint84 } from "@/app/actions/api-clients";
+import { revokeApiCredential as endpoint85 } from "@/app/actions/api-clients";
+import { updateApiClientScopes as endpoint86 } from "@/app/actions/api-clients";
+import { setApiClientStatus as endpoint87 } from "@/app/actions/api-clients";
+import { signUpWithPassword as endpoint88 } from "@/app/actions/auth";
+import { confirmEmailVerification as endpoint89 } from "@/app/actions/auth";
+import { resendEmailVerification as endpoint90 } from "@/app/actions/auth";
+import { getBadgeDesign as endpoint91 } from "@/app/actions/badge";
+import { saveBadgeDesign as endpoint92 } from "@/app/actions/badge";
+import { getBadgeAttendeePhoto as endpoint93 } from "@/app/actions/badge";
+import { countBroadcastRecipients as endpoint94 } from "@/app/actions/broadcasts";
+import { previewEventBroadcast as endpoint95 } from "@/app/actions/broadcasts";
+import { sendEventBroadcast as endpoint96 } from "@/app/actions/broadcasts";
+import { sendEventBroadcastTest as endpoint97 } from "@/app/actions/broadcasts";
+import { uploadCertificateBackground as endpoint98 } from "@/app/actions/certificate";
+import { uploadCertificateAsset as endpoint99 } from "@/app/actions/certificate";
+import { previewCertificate as endpoint100 } from "@/app/actions/certificate";
+import { createOrRotateCheckInStation as endpoint101 } from "@/app/actions/checkin-station";
+import { disableCheckInStation as endpoint102 } from "@/app/actions/checkin-station";
+import { revealCheckInStationPin as endpoint103 } from "@/app/actions/checkin-station";
+import { previewCheckInByToken as endpoint104 } from "@/app/actions/checkin";
+import { checkInByToken as endpoint105 } from "@/app/actions/checkin";
+import { undoCheckIn as endpoint106 } from "@/app/actions/checkin";
+import { downloadOfflineCheckInRoster as endpoint107 } from "@/app/actions/checkin";
+import { syncOfflineCheckIns as endpoint108 } from "@/app/actions/checkin";
+import { lookupAttendeesForCheckIn as endpoint109 } from "@/app/actions/checkin";
+import { previewCheckInByRsvpId as endpoint110 } from "@/app/actions/checkin";
+import { checkInByRsvpId as endpoint111 } from "@/app/actions/checkin";
+import { createEventCollaboratorInvite as endpoint112 } from "@/app/actions/event-collaborators";
+import { revokeEventCollaborator as endpoint113 } from "@/app/actions/event-collaborators";
+import { updateEventCollaboratorPermissions as endpoint114 } from "@/app/actions/event-collaborators";
+import { cancelEventCollaboratorInvite as endpoint115 } from "@/app/actions/event-collaborators";
+import { uploadEventSpeakerPhoto as endpoint116 } from "@/app/actions/event-website";
+import { uploadEventSponsorLogo as endpoint117 } from "@/app/actions/event-website";
+import { saveEventPage as endpoint118 } from "@/app/actions/event-website";
+import { saveHighlight as endpoint119 } from "@/app/actions/event-website";
+import { saveSpeaker as endpoint120 } from "@/app/actions/event-website";
+import { saveSponsor as endpoint121 } from "@/app/actions/event-website";
+import { saveResource as endpoint122 } from "@/app/actions/event-website";
+import { saveFaq as endpoint123 } from "@/app/actions/event-website";
+import { saveVenue as endpoint124 } from "@/app/actions/event-website";
+import { saveScheduleTrack as endpoint125 } from "@/app/actions/event-website";
+import { deleteScheduleTrack as endpoint126 } from "@/app/actions/event-website";
+import { reorderScheduleTracks as endpoint127 } from "@/app/actions/event-website";
+import { saveSession as endpoint128 } from "@/app/actions/event-website";
+import { setEventSessionDelay as endpoint129 } from "@/app/actions/event-website";
+import { deleteWebsiteContent as endpoint130 } from "@/app/actions/event-website";
+import { uploadEventCoverImage as endpoint131 } from "@/app/actions/event";
+import { createEvent as endpoint132 } from "@/app/actions/event";
+import { updateEvent as endpoint133 } from "@/app/actions/event";
+import { deleteEvent as endpoint134 } from "@/app/actions/event";
+import { updateEventSlug as endpoint135 } from "@/app/actions/event";
+import { cloneEvent as endpoint136 } from "@/app/actions/event";
+import { publishEvent as endpoint137 } from "@/app/actions/event";
+import { applyFeedbackTemplate as endpoint138 } from "@/app/actions/feedback-form";
+import { saveFeedbackSettings as endpoint139 } from "@/app/actions/feedback-form";
+import { saveFeedbackField as endpoint140 } from "@/app/actions/feedback-form";
+import { deleteFeedbackField as endpoint141 } from "@/app/actions/feedback-form";
+import { setNewUserRegistrationEnabled as endpoint142 } from "@/app/actions/instance-settings";
+import { setPaidEventsEnabled as endpoint143 } from "@/app/actions/instance-settings";
+import { saveInstanceServiceSettings as endpoint144 } from "@/app/actions/instance-settings";
+import { deliverInstanceOutbox as endpoint145 } from "@/app/actions/instance";
+import { sendInstanceTestEmail as endpoint146 } from "@/app/actions/instance";
+import { purgeExpiredVerificationTokens as endpoint147 } from "@/app/actions/instance";
+import { retryFailedOutboxMessages as endpoint148 } from "@/app/actions/instance";
+import { recordBackupRestoreVerification as endpoint149 } from "@/app/actions/instance";
+import { acceptOrganisationInvite as endpoint150 } from "@/app/actions/invite-acceptance";
+import { acceptEventCollaboratorInvite as endpoint151 } from "@/app/actions/invite-acceptance";
+import { addEventInvite as endpoint152 } from "@/app/actions/invites";
+import { removeEventInvite as endpoint153 } from "@/app/actions/invites";
+import { addSeriesInvite as endpoint154 } from "@/app/actions/invites";
+import { removeSeriesInvite as endpoint155 } from "@/app/actions/invites";
+import { uploadOrganisationLogo as endpoint156 } from "@/app/actions/media";
+import { uploadEventPageLogo as endpoint157 } from "@/app/actions/media";
+import { uploadAccountProfileImage as endpoint158 } from "@/app/actions/media";
+import { joinIdProgramme as endpoint159 } from "@/app/actions/member-id-join";
+import { createIdProgramme as endpoint160 } from "@/app/actions/member-ids";
+import { updateIdProgramme as endpoint161 } from "@/app/actions/member-ids";
+import { deleteIdProgramme as endpoint162 } from "@/app/actions/member-ids";
+import { saveIdProgrammeFields as endpoint163 } from "@/app/actions/member-ids";
+import { saveIdProgrammeDesign as endpoint164 } from "@/app/actions/member-ids";
+import { uploadIdProgrammeWatermark as endpoint165 } from "@/app/actions/member-ids";
+import { addIdMember as endpoint166 } from "@/app/actions/member-ids";
+import { updateIdMember as endpoint167 } from "@/app/actions/member-ids";
+import { uploadIdMemberPhoto as endpoint168 } from "@/app/actions/member-ids";
+import { deleteIdMember as endpoint169 } from "@/app/actions/member-ids";
+import { setIdMemberStatus as endpoint170 } from "@/app/actions/member-ids";
+import { renewIdMembers as endpoint171 } from "@/app/actions/member-ids";
+import { emailIdCards as endpoint172 } from "@/app/actions/member-ids";
+import { emailIdCard as endpoint173 } from "@/app/actions/member-ids";
+import { readIdImportSource as endpoint174 } from "@/app/actions/member-ids";
+import { commitIdImport as endpoint175 } from "@/app/actions/member-ids";
+import { updateMemberRole as endpoint176 } from "@/app/actions/membership";
+import { removeMember as endpoint177 } from "@/app/actions/membership";
+import { deleteOrganisation as endpoint178 } from "@/app/actions/membership";
+import { updateOrderAttendee as endpoint179 } from "@/app/actions/orders";
+import { createOrgInvite as endpoint180 } from "@/app/actions/org-invites";
+import { revokeOrgInvite as endpoint181 } from "@/app/actions/org-invites";
+import { createOrganisation as endpoint182 } from "@/app/actions/org";
+import { updateOrganisation as endpoint183 } from "@/app/actions/org";
+import { checkSlugAvailability as endpoint184 } from "@/app/actions/org";
+import { requestPasswordReset as endpoint185 } from "@/app/actions/password-reset";
+import { confirmPasswordReset as endpoint186 } from "@/app/actions/password-reset";
+import { savePaymentSettings as endpoint187 } from "@/app/actions/payment-settings";
+import { disconnectPaymentProvider as endpoint188 } from "@/app/actions/payment-settings";
+import { testPaymentConnection as endpoint189 } from "@/app/actions/payment-settings";
+import { upsertEventRegistrationField as endpoint190 } from "@/app/actions/registration-form";
+import { deleteEventRegistrationField as endpoint191 } from "@/app/actions/registration-form";
+import { reorderEventRegistrationFields as endpoint192 } from "@/app/actions/registration-form";
+import { addManualRsvp as endpoint193 } from "@/app/actions/rsvp-admin";
+import { updateRsvpRegistration as endpoint194 } from "@/app/actions/rsvp-admin";
+import { deleteRsvp as endpoint195 } from "@/app/actions/rsvp-admin";
+import { restoreRsvp as endpoint196 } from "@/app/actions/rsvp-admin";
+import { cancelRsvp as endpoint197 } from "@/app/actions/rsvp-cancel";
+import { approveRsvp as endpoint198 } from "@/app/actions/rsvp-lifecycle";
+import { rejectRsvp as endpoint199 } from "@/app/actions/rsvp-lifecycle";
+import { promoteFromWaitlist as endpoint200 } from "@/app/actions/rsvp-lifecycle";
+import { submitRsvp as endpoint201 } from "@/app/actions/rsvp";
+import { saveScheduleItem as endpoint202 } from "@/app/actions/schedule";
+import { setScheduleDelay as endpoint203 } from "@/app/actions/schedule";
+import { beginMfaEnrollment as endpoint204 } from "@/app/actions/security";
+import { confirmMfaEnrollment as endpoint205 } from "@/app/actions/security";
+import { disableMfa as endpoint206 } from "@/app/actions/security";
+import { revokeAllSessions as endpoint207 } from "@/app/actions/security";
+import { createEventSeries as endpoint208 } from "@/app/actions/series";
+import { updateEventSeriesMeta as endpoint209 } from "@/app/actions/series";
+import { deleteEventSeries as endpoint210 } from "@/app/actions/series";
+import { createEventShortLink as endpoint211 } from "@/app/actions/shortLink";
+import { regenerateEventShortLink as endpoint212 } from "@/app/actions/shortLink";
+import { verifySuperAdminMfa as endpoint213 } from "@/app/actions/super-admin-mfa";
+import { saveTicketType as endpoint214 } from "@/app/actions/ticket-types";
+import { archiveTicketType as endpoint215 } from "@/app/actions/ticket-types";
 
 export const viewReaders = Object.freeze({
   "app__about__page:loadView": endpoint0,
@@ -241,189 +246,194 @@ export const viewReaders = Object.freeze({
   "app__features__page:loadView": endpoint25,
   "app__join__event-collaborator__token__page:loadJoinEventCollaboratorView": endpoint26,
   "app__join__org__token__page:loadJoinOrganisationView": endpoint27,
-  "app__orgSlug__eventSlug__check-in__page:loadVenueCheckInStationView": endpoint28,
-  "app__orgSlug__eventSlug__feedback__page:loadRouteMetadata": endpoint29,
-  "app__orgSlug__eventSlug__feedback__page:loadFeedbackView": endpoint30,
-  "app__orgSlug__eventSlug__opengraph-image:loadOpenGraphImage": endpoint31,
-  "app__orgSlug__eventSlug__page:loadRouteMetadata": endpoint32,
-  "app__orgSlug__eventSlug__page:loadEventView": endpoint33,
-  "app__orgSlug__eventSlug__schedule__page:loadEventScheduleView": endpoint34,
-  "app__orgSlug__eventSlug__sessions__sessionSlug__page:loadSessionView": endpoint35,
-  "app__orgSlug__eventSlug__speakers__speakerSlug__page:loadSpeakerView": endpoint36,
-  "app__orgSlug__i__instanceId__opengraph-image:loadOpenGraphImage": endpoint37,
-  "app__orgSlug__i__instanceId__page:loadRouteMetadata": endpoint38,
-  "app__orgSlug__i__instanceId__page:loadInstanceEventView": endpoint39,
-  "app__orgSlug__i__instanceId__schedule__page:loadInstanceScheduleView": endpoint40,
-  "app__orgSlug__ids__page:loadOrganisationIdsView": endpoint41,
-  "app__orgSlug__ids__programmeSlug__page:loadRouteMetadata": endpoint42,
-  "app__orgSlug__ids__programmeSlug__page:loadJoinIdProgrammeView": endpoint43,
-  "app__orgSlug__layout:loadOrganiserShell": endpoint44,
-  "app__orgSlug__page:loadRouteMetadata": endpoint45,
-  "app__orgSlug__page:loadOrganisationView": endpoint46,
-  "app__page:loadView": endpoint47,
-  "app__super-admin-mfa__page:loadSuperAdminMfaView": endpoint48,
-  "app__super-admin__activity__page:loadSuperAdminActivityView": endpoint49,
-  "app__super-admin__audit__page:loadSuperAdminAuditView": endpoint50,
-  "app__super-admin__auth__page:loadSuperAdminAuthView": endpoint51,
-  "app__super-admin__email__page:loadSuperAdminEmailView": endpoint52,
-  "app__super-admin__events__page:loadSuperAdminEventsView": endpoint53,
-  "app__super-admin__invites__page:loadSuperAdminInvitesView": endpoint54,
-  "app__super-admin__layout:loadSuperAdminShell": endpoint55,
-  "app__super-admin__monitoring__page:loadSuperAdminMonitoringView": endpoint56,
-  "app__super-admin__operations__page:loadSuperAdminOperationsView": endpoint57,
-  "app__super-admin__orgs__orgId__page:loadSuperAdminOrgDetailView": endpoint58,
-  "app__super-admin__orgs__page:loadSuperAdminOrgsView": endpoint59,
-  "app__super-admin__page:loadSuperAdminOverviewView": endpoint60,
-  "app__super-admin__security__page:loadSuperAdminSecurityView": endpoint61,
-  "app__super-admin__settings__page:loadSuperAdminSettingsView": endpoint62,
-  "app__super-admin__storage__page:loadSuperAdminStorageView": endpoint63,
-  "app__super-admin__users__page:loadSuperAdminUsersView": endpoint64,
-  "app__super-admin__users__userId__page:loadSuperAdminUserDetailView": endpoint65,
-  "app__ticket__token__page:loadRouteMetadata": endpoint66,
-  "app__ticket__token__page:loadTicketView": endpoint67,
-  "app__verify__token__page:loadVerifyView": endpoint68,
-  "components__event-dashboard__panels__AnalyticsPanel:loadAnalyticsPanel": endpoint69,
-  "components__event-dashboard__panels__CheckInPanel:loadCheckInPanel": endpoint70,
-  "components__event-dashboard__panels__EmailsPanel:loadEmailsPanel": endpoint71,
-  "components__event-dashboard__panels__EventPagePanel:loadEventPagePanel": endpoint72,
-  "components__event-dashboard__panels__FeedbackPanel:loadFeedbackPanel": endpoint73,
-  "components__event-dashboard__panels__GuestsPanel:loadGuestsPanel": endpoint74,
-  "components__event-dashboard__panels__OverviewPanel:loadOverviewPanel": endpoint75,
-  "components__event-dashboard__panels__SettingsPanel:loadSettingsPanel": endpoint76,
-  "frontend-gates:loadSuperAdminGate": endpoint77,
+  "app__order__token__page:loadRouteMetadata": endpoint28,
+  "app__order__token__page:loadOrderView": endpoint29,
+  "app__orgSlug__eventSlug__check-in__page:loadVenueCheckInStationView": endpoint30,
+  "app__orgSlug__eventSlug__feedback__page:loadRouteMetadata": endpoint31,
+  "app__orgSlug__eventSlug__feedback__page:loadFeedbackView": endpoint32,
+  "app__orgSlug__eventSlug__opengraph-image:loadOpenGraphImage": endpoint33,
+  "app__orgSlug__eventSlug__page:loadRouteMetadata": endpoint34,
+  "app__orgSlug__eventSlug__page:loadEventView": endpoint35,
+  "app__orgSlug__eventSlug__schedule__page:loadEventScheduleView": endpoint36,
+  "app__orgSlug__eventSlug__sessions__sessionSlug__page:loadSessionView": endpoint37,
+  "app__orgSlug__eventSlug__speakers__speakerSlug__page:loadSpeakerView": endpoint38,
+  "app__orgSlug__i__instanceId__opengraph-image:loadOpenGraphImage": endpoint39,
+  "app__orgSlug__i__instanceId__page:loadRouteMetadata": endpoint40,
+  "app__orgSlug__i__instanceId__page:loadInstanceEventView": endpoint41,
+  "app__orgSlug__i__instanceId__schedule__page:loadInstanceScheduleView": endpoint42,
+  "app__orgSlug__ids__page:loadOrganisationIdsView": endpoint43,
+  "app__orgSlug__ids__programmeSlug__page:loadRouteMetadata": endpoint44,
+  "app__orgSlug__ids__programmeSlug__page:loadJoinIdProgrammeView": endpoint45,
+  "app__orgSlug__layout:loadOrganiserShell": endpoint46,
+  "app__orgSlug__page:loadRouteMetadata": endpoint47,
+  "app__orgSlug__page:loadOrganisationView": endpoint48,
+  "app__page:loadView": endpoint49,
+  "app__super-admin-mfa__page:loadSuperAdminMfaView": endpoint50,
+  "app__super-admin__activity__page:loadSuperAdminActivityView": endpoint51,
+  "app__super-admin__audit__page:loadSuperAdminAuditView": endpoint52,
+  "app__super-admin__auth__page:loadSuperAdminAuthView": endpoint53,
+  "app__super-admin__email__page:loadSuperAdminEmailView": endpoint54,
+  "app__super-admin__events__page:loadSuperAdminEventsView": endpoint55,
+  "app__super-admin__invites__page:loadSuperAdminInvitesView": endpoint56,
+  "app__super-admin__layout:loadSuperAdminShell": endpoint57,
+  "app__super-admin__monitoring__page:loadSuperAdminMonitoringView": endpoint58,
+  "app__super-admin__operations__page:loadSuperAdminOperationsView": endpoint59,
+  "app__super-admin__orgs__orgId__page:loadSuperAdminOrgDetailView": endpoint60,
+  "app__super-admin__orgs__page:loadSuperAdminOrgsView": endpoint61,
+  "app__super-admin__page:loadSuperAdminOverviewView": endpoint62,
+  "app__super-admin__security__page:loadSuperAdminSecurityView": endpoint63,
+  "app__super-admin__settings__page:loadSuperAdminSettingsView": endpoint64,
+  "app__super-admin__storage__page:loadSuperAdminStorageView": endpoint65,
+  "app__super-admin__users__page:loadSuperAdminUsersView": endpoint66,
+  "app__super-admin__users__userId__page:loadSuperAdminUserDetailView": endpoint67,
+  "app__ticket__token__page:loadRouteMetadata": endpoint68,
+  "app__ticket__token__page:loadTicketView": endpoint69,
+  "app__verify__token__page:loadVerifyView": endpoint70,
+  "components__event-dashboard__panels__AnalyticsPanel:loadAnalyticsPanel": endpoint71,
+  "components__event-dashboard__panels__CheckInPanel:loadCheckInPanel": endpoint72,
+  "components__event-dashboard__panels__EmailsPanel:loadEmailsPanel": endpoint73,
+  "components__event-dashboard__panels__EventPagePanel:loadEventPagePanel": endpoint74,
+  "components__event-dashboard__panels__FeedbackPanel:loadFeedbackPanel": endpoint75,
+  "components__event-dashboard__panels__GuestsPanel:loadGuestsPanel": endpoint76,
+  "components__event-dashboard__panels__OverviewPanel:loadOverviewPanel": endpoint77,
+  "components__event-dashboard__panels__SettingsPanel:loadSettingsPanel": endpoint78,
+  "frontend-gates:loadSuperAdminGate": endpoint79,
 });
 export const backendActions = Object.freeze({
-  "account-organisations:leaveOrganisation": endpoint78,
-  "account:updateAccountProfile": endpoint79,
-  "account:updateAccountPassword": endpoint80,
-  "api-clients:createApiClient": endpoint81,
-  "api-clients:createApiCredential": endpoint82,
-  "api-clients:revokeApiCredential": endpoint83,
-  "api-clients:updateApiClientScopes": endpoint84,
-  "api-clients:setApiClientStatus": endpoint85,
-  "auth:signUpWithPassword": endpoint86,
-  "auth:confirmEmailVerification": endpoint87,
-  "auth:resendEmailVerification": endpoint88,
-  "badge:getBadgeDesign": endpoint89,
-  "badge:saveBadgeDesign": endpoint90,
-  "badge:getBadgeAttendeePhoto": endpoint91,
-  "broadcasts:countBroadcastRecipients": endpoint92,
-  "broadcasts:previewEventBroadcast": endpoint93,
-  "broadcasts:sendEventBroadcast": endpoint94,
-  "broadcasts:sendEventBroadcastTest": endpoint95,
-  "certificate:uploadCertificateBackground": endpoint96,
-  "certificate:uploadCertificateAsset": endpoint97,
-  "certificate:previewCertificate": endpoint98,
-  "checkin-station:createOrRotateCheckInStation": endpoint99,
-  "checkin-station:disableCheckInStation": endpoint100,
-  "checkin-station:revealCheckInStationPin": endpoint101,
-  "checkin:previewCheckInByToken": endpoint102,
-  "checkin:checkInByToken": endpoint103,
-  "checkin:undoCheckIn": endpoint104,
-  "checkin:downloadOfflineCheckInRoster": endpoint105,
-  "checkin:syncOfflineCheckIns": endpoint106,
-  "checkin:lookupAttendeesForCheckIn": endpoint107,
-  "checkin:previewCheckInByRsvpId": endpoint108,
-  "checkin:checkInByRsvpId": endpoint109,
-  "event-collaborators:createEventCollaboratorInvite": endpoint110,
-  "event-collaborators:revokeEventCollaborator": endpoint111,
-  "event-collaborators:updateEventCollaboratorPermissions": endpoint112,
-  "event-collaborators:cancelEventCollaboratorInvite": endpoint113,
-  "event-website:uploadEventSpeakerPhoto": endpoint114,
-  "event-website:uploadEventSponsorLogo": endpoint115,
-  "event-website:saveEventPage": endpoint116,
-  "event-website:saveHighlight": endpoint117,
-  "event-website:saveSpeaker": endpoint118,
-  "event-website:saveSponsor": endpoint119,
-  "event-website:saveResource": endpoint120,
-  "event-website:saveFaq": endpoint121,
-  "event-website:saveVenue": endpoint122,
-  "event-website:saveScheduleTrack": endpoint123,
-  "event-website:deleteScheduleTrack": endpoint124,
-  "event-website:reorderScheduleTracks": endpoint125,
-  "event-website:saveSession": endpoint126,
-  "event-website:setEventSessionDelay": endpoint127,
-  "event-website:deleteWebsiteContent": endpoint128,
-  "event:uploadEventCoverImage": endpoint129,
-  "event:createEvent": endpoint130,
-  "event:updateEvent": endpoint131,
-  "event:deleteEvent": endpoint132,
-  "event:updateEventSlug": endpoint133,
-  "event:cloneEvent": endpoint134,
-  "event:publishEvent": endpoint135,
-  "feedback-form:applyFeedbackTemplate": endpoint136,
-  "feedback-form:saveFeedbackSettings": endpoint137,
-  "feedback-form:saveFeedbackField": endpoint138,
-  "feedback-form:deleteFeedbackField": endpoint139,
-  "instance-settings:setNewUserRegistrationEnabled": endpoint140,
-  "instance-settings:setPaidEventsEnabled": endpoint141,
-  "instance-settings:saveInstanceServiceSettings": endpoint142,
-  "instance:deliverInstanceOutbox": endpoint143,
-  "instance:sendInstanceTestEmail": endpoint144,
-  "instance:purgeExpiredVerificationTokens": endpoint145,
-  "instance:retryFailedOutboxMessages": endpoint146,
-  "instance:recordBackupRestoreVerification": endpoint147,
-  "invite-acceptance:acceptOrganisationInvite": endpoint148,
-  "invite-acceptance:acceptEventCollaboratorInvite": endpoint149,
-  "invites:addEventInvite": endpoint150,
-  "invites:removeEventInvite": endpoint151,
-  "invites:addSeriesInvite": endpoint152,
-  "invites:removeSeriesInvite": endpoint153,
-  "media:uploadOrganisationLogo": endpoint154,
-  "media:uploadEventPageLogo": endpoint155,
-  "media:uploadAccountProfileImage": endpoint156,
-  "member-id-join:joinIdProgramme": endpoint157,
-  "member-ids:createIdProgramme": endpoint158,
-  "member-ids:updateIdProgramme": endpoint159,
-  "member-ids:deleteIdProgramme": endpoint160,
-  "member-ids:saveIdProgrammeFields": endpoint161,
-  "member-ids:saveIdProgrammeDesign": endpoint162,
-  "member-ids:uploadIdProgrammeWatermark": endpoint163,
-  "member-ids:addIdMember": endpoint164,
-  "member-ids:updateIdMember": endpoint165,
-  "member-ids:uploadIdMemberPhoto": endpoint166,
-  "member-ids:deleteIdMember": endpoint167,
-  "member-ids:setIdMemberStatus": endpoint168,
-  "member-ids:renewIdMembers": endpoint169,
-  "member-ids:emailIdCards": endpoint170,
-  "member-ids:emailIdCard": endpoint171,
-  "member-ids:readIdImportSource": endpoint172,
-  "member-ids:commitIdImport": endpoint173,
-  "membership:updateMemberRole": endpoint174,
-  "membership:removeMember": endpoint175,
-  "membership:deleteOrganisation": endpoint176,
-  "org-invites:createOrgInvite": endpoint177,
-  "org-invites:revokeOrgInvite": endpoint178,
-  "org:createOrganisation": endpoint179,
-  "org:updateOrganisation": endpoint180,
-  "org:checkSlugAvailability": endpoint181,
-  "password-reset:requestPasswordReset": endpoint182,
-  "password-reset:confirmPasswordReset": endpoint183,
-  "payment-settings:savePaymentSettings": endpoint184,
-  "payment-settings:disconnectPaymentProvider": endpoint185,
-  "payment-settings:testPaymentConnection": endpoint186,
-  "registration-form:upsertEventRegistrationField": endpoint187,
-  "registration-form:deleteEventRegistrationField": endpoint188,
-  "registration-form:reorderEventRegistrationFields": endpoint189,
-  "rsvp-admin:addManualRsvp": endpoint190,
-  "rsvp-admin:updateRsvpRegistration": endpoint191,
-  "rsvp-admin:deleteRsvp": endpoint192,
-  "rsvp-admin:restoreRsvp": endpoint193,
-  "rsvp-cancel:cancelRsvp": endpoint194,
-  "rsvp-lifecycle:approveRsvp": endpoint195,
-  "rsvp-lifecycle:rejectRsvp": endpoint196,
-  "rsvp-lifecycle:promoteFromWaitlist": endpoint197,
-  "rsvp:submitRsvp": endpoint198,
-  "schedule:saveScheduleItem": endpoint199,
-  "schedule:setScheduleDelay": endpoint200,
-  "security:beginMfaEnrollment": endpoint201,
-  "security:confirmMfaEnrollment": endpoint202,
-  "security:disableMfa": endpoint203,
-  "security:revokeAllSessions": endpoint204,
-  "series:createEventSeries": endpoint205,
-  "series:updateEventSeriesMeta": endpoint206,
-  "series:deleteEventSeries": endpoint207,
-  "shortLink:createEventShortLink": endpoint208,
-  "shortLink:regenerateEventShortLink": endpoint209,
-  "super-admin-mfa:verifySuperAdminMfa": endpoint210,
+  "account-organisations:leaveOrganisation": endpoint80,
+  "account:updateAccountProfile": endpoint81,
+  "account:updateAccountPassword": endpoint82,
+  "api-clients:createApiClient": endpoint83,
+  "api-clients:createApiCredential": endpoint84,
+  "api-clients:revokeApiCredential": endpoint85,
+  "api-clients:updateApiClientScopes": endpoint86,
+  "api-clients:setApiClientStatus": endpoint87,
+  "auth:signUpWithPassword": endpoint88,
+  "auth:confirmEmailVerification": endpoint89,
+  "auth:resendEmailVerification": endpoint90,
+  "badge:getBadgeDesign": endpoint91,
+  "badge:saveBadgeDesign": endpoint92,
+  "badge:getBadgeAttendeePhoto": endpoint93,
+  "broadcasts:countBroadcastRecipients": endpoint94,
+  "broadcasts:previewEventBroadcast": endpoint95,
+  "broadcasts:sendEventBroadcast": endpoint96,
+  "broadcasts:sendEventBroadcastTest": endpoint97,
+  "certificate:uploadCertificateBackground": endpoint98,
+  "certificate:uploadCertificateAsset": endpoint99,
+  "certificate:previewCertificate": endpoint100,
+  "checkin-station:createOrRotateCheckInStation": endpoint101,
+  "checkin-station:disableCheckInStation": endpoint102,
+  "checkin-station:revealCheckInStationPin": endpoint103,
+  "checkin:previewCheckInByToken": endpoint104,
+  "checkin:checkInByToken": endpoint105,
+  "checkin:undoCheckIn": endpoint106,
+  "checkin:downloadOfflineCheckInRoster": endpoint107,
+  "checkin:syncOfflineCheckIns": endpoint108,
+  "checkin:lookupAttendeesForCheckIn": endpoint109,
+  "checkin:previewCheckInByRsvpId": endpoint110,
+  "checkin:checkInByRsvpId": endpoint111,
+  "event-collaborators:createEventCollaboratorInvite": endpoint112,
+  "event-collaborators:revokeEventCollaborator": endpoint113,
+  "event-collaborators:updateEventCollaboratorPermissions": endpoint114,
+  "event-collaborators:cancelEventCollaboratorInvite": endpoint115,
+  "event-website:uploadEventSpeakerPhoto": endpoint116,
+  "event-website:uploadEventSponsorLogo": endpoint117,
+  "event-website:saveEventPage": endpoint118,
+  "event-website:saveHighlight": endpoint119,
+  "event-website:saveSpeaker": endpoint120,
+  "event-website:saveSponsor": endpoint121,
+  "event-website:saveResource": endpoint122,
+  "event-website:saveFaq": endpoint123,
+  "event-website:saveVenue": endpoint124,
+  "event-website:saveScheduleTrack": endpoint125,
+  "event-website:deleteScheduleTrack": endpoint126,
+  "event-website:reorderScheduleTracks": endpoint127,
+  "event-website:saveSession": endpoint128,
+  "event-website:setEventSessionDelay": endpoint129,
+  "event-website:deleteWebsiteContent": endpoint130,
+  "event:uploadEventCoverImage": endpoint131,
+  "event:createEvent": endpoint132,
+  "event:updateEvent": endpoint133,
+  "event:deleteEvent": endpoint134,
+  "event:updateEventSlug": endpoint135,
+  "event:cloneEvent": endpoint136,
+  "event:publishEvent": endpoint137,
+  "feedback-form:applyFeedbackTemplate": endpoint138,
+  "feedback-form:saveFeedbackSettings": endpoint139,
+  "feedback-form:saveFeedbackField": endpoint140,
+  "feedback-form:deleteFeedbackField": endpoint141,
+  "instance-settings:setNewUserRegistrationEnabled": endpoint142,
+  "instance-settings:setPaidEventsEnabled": endpoint143,
+  "instance-settings:saveInstanceServiceSettings": endpoint144,
+  "instance:deliverInstanceOutbox": endpoint145,
+  "instance:sendInstanceTestEmail": endpoint146,
+  "instance:purgeExpiredVerificationTokens": endpoint147,
+  "instance:retryFailedOutboxMessages": endpoint148,
+  "instance:recordBackupRestoreVerification": endpoint149,
+  "invite-acceptance:acceptOrganisationInvite": endpoint150,
+  "invite-acceptance:acceptEventCollaboratorInvite": endpoint151,
+  "invites:addEventInvite": endpoint152,
+  "invites:removeEventInvite": endpoint153,
+  "invites:addSeriesInvite": endpoint154,
+  "invites:removeSeriesInvite": endpoint155,
+  "media:uploadOrganisationLogo": endpoint156,
+  "media:uploadEventPageLogo": endpoint157,
+  "media:uploadAccountProfileImage": endpoint158,
+  "member-id-join:joinIdProgramme": endpoint159,
+  "member-ids:createIdProgramme": endpoint160,
+  "member-ids:updateIdProgramme": endpoint161,
+  "member-ids:deleteIdProgramme": endpoint162,
+  "member-ids:saveIdProgrammeFields": endpoint163,
+  "member-ids:saveIdProgrammeDesign": endpoint164,
+  "member-ids:uploadIdProgrammeWatermark": endpoint165,
+  "member-ids:addIdMember": endpoint166,
+  "member-ids:updateIdMember": endpoint167,
+  "member-ids:uploadIdMemberPhoto": endpoint168,
+  "member-ids:deleteIdMember": endpoint169,
+  "member-ids:setIdMemberStatus": endpoint170,
+  "member-ids:renewIdMembers": endpoint171,
+  "member-ids:emailIdCards": endpoint172,
+  "member-ids:emailIdCard": endpoint173,
+  "member-ids:readIdImportSource": endpoint174,
+  "member-ids:commitIdImport": endpoint175,
+  "membership:updateMemberRole": endpoint176,
+  "membership:removeMember": endpoint177,
+  "membership:deleteOrganisation": endpoint178,
+  "orders:updateOrderAttendee": endpoint179,
+  "org-invites:createOrgInvite": endpoint180,
+  "org-invites:revokeOrgInvite": endpoint181,
+  "org:createOrganisation": endpoint182,
+  "org:updateOrganisation": endpoint183,
+  "org:checkSlugAvailability": endpoint184,
+  "password-reset:requestPasswordReset": endpoint185,
+  "password-reset:confirmPasswordReset": endpoint186,
+  "payment-settings:savePaymentSettings": endpoint187,
+  "payment-settings:disconnectPaymentProvider": endpoint188,
+  "payment-settings:testPaymentConnection": endpoint189,
+  "registration-form:upsertEventRegistrationField": endpoint190,
+  "registration-form:deleteEventRegistrationField": endpoint191,
+  "registration-form:reorderEventRegistrationFields": endpoint192,
+  "rsvp-admin:addManualRsvp": endpoint193,
+  "rsvp-admin:updateRsvpRegistration": endpoint194,
+  "rsvp-admin:deleteRsvp": endpoint195,
+  "rsvp-admin:restoreRsvp": endpoint196,
+  "rsvp-cancel:cancelRsvp": endpoint197,
+  "rsvp-lifecycle:approveRsvp": endpoint198,
+  "rsvp-lifecycle:rejectRsvp": endpoint199,
+  "rsvp-lifecycle:promoteFromWaitlist": endpoint200,
+  "rsvp:submitRsvp": endpoint201,
+  "schedule:saveScheduleItem": endpoint202,
+  "schedule:setScheduleDelay": endpoint203,
+  "security:beginMfaEnrollment": endpoint204,
+  "security:confirmMfaEnrollment": endpoint205,
+  "security:disableMfa": endpoint206,
+  "security:revokeAllSessions": endpoint207,
+  "series:createEventSeries": endpoint208,
+  "series:updateEventSeriesMeta": endpoint209,
+  "series:deleteEventSeries": endpoint210,
+  "shortLink:createEventShortLink": endpoint211,
+  "shortLink:regenerateEventShortLink": endpoint212,
+  "super-admin-mfa:verifySuperAdminMfa": endpoint213,
+  "ticket-types:saveTicketType": endpoint214,
+  "ticket-types:archiveTicketType": endpoint215,
 });

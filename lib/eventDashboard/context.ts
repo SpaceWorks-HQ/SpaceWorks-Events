@@ -36,6 +36,8 @@ export type EventDashboardPermissions = {
   canManageInvitations: boolean;
   canCheckIn: boolean;
   canEditDetails: boolean;
+  /** Ticket types, prices, add-ons and promo codes: admins and EDIT_DETAILS collaborators. */
+  canEditTickets: boolean;
   canManageSchedule: boolean;
   canManageCollaborators: boolean;
 };
@@ -79,6 +81,7 @@ export const loadEventDashboard = cache(async (orgSlug: string, eventId: string)
       canManageInvitations: has(EventPermission.MANAGE_INVITATIONS),
       canCheckIn: has(EventPermission.CHECK_IN),
       canEditDetails: isAdmin,
+      canEditTickets: has(EventPermission.EDIT_DETAILS),
       canManageSchedule: has(EventPermission.PUBLISH_AND_SCHEDULE),
       canManageCollaborators: isAdmin,
     },
