@@ -4,6 +4,7 @@ import { EventPermission } from "@prisma/client";
 import { getRequestOrigin } from "@/lib/publicUrl";
 import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
 import { canViewEventDashboard } from "@/lib/eventAccess";
+import { percentOf } from "@/components/event-dashboard/analytics/metrics";
 type Props = { params: Promise<{ orgSlug: string; seriesId: string; }>; };
 const MAX_BROWSER_ATTENDEES = 250;
 export async function loadSeriesManageView({ params }: Props) {
@@ -64,5 +65,24 @@ export async function loadSeriesManageView({ params }: Props) {
     ticketUrl: `${origin}/ticket/${r.checkInToken}`,
     rawAnswers: [],
   }));
-  return { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated };
+  // Attendance across finished occurrences (organisers only): counts, never people.
+  let rollup: { rows: Array<{ id: string; start: Date; going: number; came: number; turnout: number | null }>; averageTurnout: number | null; totalCame: number } | null = null;
+  if (canDownloadReports && finishedInstances.length) {
+    const ids = finishedInstances.map((instance) => instance.id);
+    const [going, came] = await Promise.all([
+      prisma.rSVP.groupBy({ by: ["eventInstanceId"], where: { eventInstanceId: { in: ids }, status: "CONFIRMED" }, _count: { _all: true } }),
+      prisma.rSVP.groupBy({ by: ["eventInstanceId"], where: { eventInstanceId: { in: ids }, status: "CONFIRMED", checkedInAt: { not: null } }, _count: { _all: true } }),
+    ]);
+    const goingBy = new Map(going.map((row) => [row.eventInstanceId as string, row._count._all]));
+    const cameBy = new Map(came.map((row) => [row.eventInstanceId as string, row._count._all]));
+    const rows = finishedInstances.map((instance) => {
+      const g = goingBy.get(instance.id) ?? 0;
+      const c = cameBy.get(instance.id) ?? 0;
+      return { id: instance.id, start: instance.startDateTime, going: g, came: c, turnout: percentOf(c, g) };
+    });
+    const totalGoing = rows.reduce((sum, row) => sum + row.going, 0);
+    const totalCame = rows.reduce((sum, row) => sum + row.came, 0);
+    rollup = { rows, averageTurnout: percentOf(totalCame, totalGoing), totalCame };
+  }
+  return { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup };
 }

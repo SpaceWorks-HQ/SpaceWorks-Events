@@ -117,7 +117,10 @@ The full list lives in [Features](docs/FEATURES.md).
       <img src="docs/readme/screens/member-id-wallet-dark.webp" alt="A member's ID card in the account wallet, in dark mode" />
       <p><strong>ID wallet, dark mode.</strong> Tilt it, flip it, verify it.</p>
     </td>
-    <td width="50%" valign="top"></td>
+    <td width="50%" valign="top">
+      <img src="docs/readme/screens/event-report.webp" alt="An event's analytics: places, waitlist and turnout, and the funnel from sign-up through check-in to feedback, with a PDF report download" />
+      <p><strong>Event report.</strong> From sign-up to thank-you, with a PDF to share.</p>
+    </td>
   </tr>
 </table>
 
