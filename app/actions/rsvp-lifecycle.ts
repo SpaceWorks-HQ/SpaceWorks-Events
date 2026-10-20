@@ -13,6 +13,7 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
+import { declineRequestedOrder, offerRequestedOrder, PaymentOperationError } from "@/lib/payments/operations";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -84,6 +85,24 @@ async function loadRsvpContext(
   return { error: "Event not found." as const };
 }
 
+/** A paid order waiting for approval or a waitlist place; it moves as a whole. */
+async function paidRequest(rsvp: { orderId: string | null; }) {
+  if (!rsvp.orderId) return null;
+  const order = await prisma.order.findUnique({ where: { id: rsvp.orderId }, select: { id: true, status: true, totalMinor: true } });
+  return order && order.status === "REQUESTED" && order.totalMinor > BigInt(0) ? order : null;
+}
+
+/** Run a paid-order operation, turning its refusal into the action's error. */
+async function paymentOperation(run: () => Promise<unknown>): Promise<ActionResult> {
+  try {
+    await run();
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
 function attendeeEmail(rsvp: {
   guestEmail: string | null;
   user: { email: string | null; } | null;
@@ -128,6 +147,16 @@ export async function approveRsvp(input: unknown): Promise<ActionResult> {
   const { org, rsvp } = ctx;
   if (rsvp.status !== RsvpStatus.PENDING_APPROVAL) {
     return { ok: false, error: "Only pending requests can be approved." };
+  }
+
+  const request = ctx.event ? await paidRequest(rsvp) : null;
+  if (request && ctx.event) {
+    // Approval offers a paid order its seats; the tickets confirm once it's paid.
+    const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!offered.ok) return offered;
+    await recordAuditEvent({ action: "RSVP_APPROVED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    return { ok: true };
   }
 
   if (ctx.event) {
@@ -221,6 +250,15 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "This RSVP cannot be rejected." };
   }
 
+  const request = ctx.event ? await paidRequest(rsvp) : null;
+  if (request && ctx.event) {
+    const declined = await paymentOperation(() => declineRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!declined.ok) return declined;
+    await recordAuditEvent({ action: "RSVP_REJECTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    return { ok: true };
+  }
+
   const to = attendeeEmail(rsvp);
   const rejected = await prisma.$transaction(async (tx) => {
     const result = await tx.rSVP.updateMany({
@@ -288,6 +326,15 @@ export async function promoteFromWaitlist(input: unknown): Promise<ActionResult>
   const { org, rsvp } = ctx;
   if (rsvp.status !== RsvpStatus.WAITLISTED) {
     return { ok: false, error: "Only waitlisted attendees can be promoted." };
+  }
+
+  const request = ctx.event ? await paidRequest(rsvp) : null;
+  if (request && ctx.event) {
+    const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!offered.ok) return offered;
+    await recordAuditEvent({ action: "RSVP_WAITLIST_PROMOTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths({ orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id });
+    return { ok: true };
   }
 
   if (ctx.event) {

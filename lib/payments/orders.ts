@@ -1,21 +1,27 @@
 import "server-only";
 
 import crypto from "crypto";
-import { EventPrivacyType, EventStatus, OrderStatus, RsvpStatus, type Prisma } from "@prisma/client";
+import { EventPrivacyType, EventStatus, OfflinePaymentMethod, OrderStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { enqueueOrderEmail, enqueuePaymentEmail } from "./email";
-import { CHECKOUT_HOLD_MS, HOLD_EXTENSION_CAP_MS, seatTakingWhere } from "./holds";
+import { CHECKOUT_HOLD_MS, HOLD_EXTENSION_CAP_MS, PAYMENT_LINK_HOLD_MS, seatTakingWhere } from "./holds";
 import type { OnlineProvider } from "./http";
 import { DEFAULT_CURRENCY, formatMoney, providerMinimumMinor } from "./money";
 import { priceOrder, PricingError, type OrderItem } from "./pricing";
+import { lockPromoCode, PromoCodeError } from "./promo";
+import type { RefundPolicySnapshot } from "./refundPolicy";
 import { ticketSalesState } from "./tickets";
 
 /** A rule refused the order; the message is safe to show the buyer. */
 export class OrderError extends Error {}
 
 /** Who collects a paid order, resolved before the reservation transaction. */
-export type PaymentContext = { organisationId: string; provider: OnlineProvider; testMode: boolean; };
+export type PaymentContext = { organisationId: string; provider: OnlineProvider | "OFFLINE"; testMode: boolean; };
+
+/** An organiser adding a paid guest: email a payment link, record money taken, or make it complimentary. */
+export type ManualPayment = { mode: "link" | "offline" | "waive"; method?: OfflinePaymentMethod; reference?: string | null; actorUserId: string; };
+
 
 export type OrderAttendee = { name?: string | null; email?: string | null; };
 
@@ -39,11 +45,15 @@ function freeStatus(params: { capacity: number | null; taken: number; seats: num
 }
 
 /**
- * Reserve an order under the event row lock: price its lines, check every
- * ticket type's sales window and limit and the event capacity (confirmed
- * tickets plus live holds), then create one registration per seat. A paid
- * order holds its seats for 30 minutes with one pending payment; a free one
- * is confirmed at once. The caller is inside a transaction.
+ * Reserve an order under the event row lock: price its lines (with any promo
+ * code), check every ticket type's sales window and limit and the event
+ * capacity (confirmed tickets plus live holds), then create one registration
+ * per seat. A paid order holds its seats for 30 minutes with one pending
+ * payment; a free one is confirmed at once. A paid order that needs approval
+ * or doesn't fit becomes a request: nothing is held or charged until the
+ * organiser approves it or a place frees up. An organiser adding a guest can
+ * instead record the payment, waive it, or send a day-long payment link.
+ * The caller is inside a transaction.
  */
 export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   eventId: string;
@@ -53,6 +63,9 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   attendees: OrderAttendee[];
   enforceOpen: boolean;
   payment?: PaymentContext;
+  promoCode?: string;
+  /** Set when an organiser adds the guest by hand. */
+  manual?: ManualPayment;
   now?: Date;
 }) {
   const now = params.now ?? new Date();
@@ -62,6 +75,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
     select: {
       id: true, organisationId: true, title: true, capacity: true, privacyType: true, status: true, currency: true,
       startDateTime: true, endDateTime: true, registrationClosesAt: true, registrationLeadMinutes: true, page: { select: { isPublished: true } },
+      refundPolicyKind: true, refundPolicyHours: true, refundPolicyPercent: true, refundPolicyText: true,
     },
   });
   if (!event) throw new OrderError("This event is not open for registration.");
@@ -74,10 +88,13 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
     select: { id: true, name: true, priceMinor: true, capacity: true, minPerOrder: true, maxPerOrder: true, salesStartAt: true, salesEndAt: true },
   });
   let priced;
+  let promoCodeId: string | null = null;
   try {
-    priced = priceOrder(params.items, types);
+    const promo = params.promoCode ? await lockPromoCode(tx, { eventId: event.id, code: params.promoCode, now }) : null;
+    promoCodeId = promo?.id ?? null;
+    priced = priceOrder(params.items, types, promo?.rule);
   } catch (error) {
-    if (error instanceof PricingError) throw new OrderError(error.message);
+    if (error instanceof PricingError || error instanceof PromoCodeError) throw new OrderError(error.message);
     throw error;
   }
   for (const line of priced.lines) {
@@ -100,32 +117,64 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   });
 
   const taken = await tx.rSVP.count({ where: { eventId: event.id, ...seatTakingWhere(now) } });
+  let typesFit = true;
   for (const line of priced.lines) {
     const type = types.find((candidate) => candidate.id === line.ticketTypeId)!;
     if (type.capacity == null) continue;
     const typeTaken = await tx.rSVP.count({ where: { ticketTypeId: type.id, ...seatTakingWhere(now) } });
     if (typeTaken + line.quantity > type.capacity) {
+      // A paid order for a sold-out ticket waits for a place instead.
+      if (priced.totalMinor > ZERO && typeTaken >= type.capacity) {
+        typesFit = false;
+        continue;
+      }
       throw new OrderError(type.capacity - typeTaken <= 0 ? `${type.name} is sold out.` : `Only ${type.capacity - typeTaken} ${type.name} left.`);
     }
   }
 
   const paid = priced.totalMinor > ZERO;
   const currency = event.currency ?? DEFAULT_CURRENCY;
+  const manual = params.manual;
+  const settledByHand = paid && manual && manual.mode !== "link";
   let status: RsvpStatus;
+  let orderStatus: OrderStatus;
   if (paid) {
     if (!params.payment) throw new OrderError("Tickets can't be bought right now. Try again later.");
-    if (event.privacyType === EventPrivacyType.APPROVAL_REQUIRED) throw new OrderError("Paid tickets aren't available yet for events that need approval.");
-    if (event.capacity != null && taken + priced.seats > event.capacity) {
-      throw new OrderError(event.capacity - taken <= 0 ? "Sold out." : `Only ${event.capacity - taken} ${event.capacity - taken === 1 ? "place" : "places"} left.`);
+    if (manual?.mode === "link" && params.payment.provider === "OFFLINE") throw new OrderError("Connect a payment account to send payment links.");
+    const left = event.capacity == null ? null : event.capacity - taken;
+    // Some places left but not enough: choose fewer. None left: the waitlist.
+    if (left != null && left > 0 && priced.seats > left) throw new OrderError(`Only ${left} ${left === 1 ? "place" : "places"} left.`);
+    const fits = typesFit && (left == null || left > 0);
+    if (params.payment.provider !== "OFFLINE" && !settledByHand) {
+      const minimum = providerMinimumMinor(params.payment.provider, currency);
+      if (priced.totalMinor < minimum) throw new OrderError(`The total is below the smallest payment the provider accepts (${formatMoney(minimum, currency)}).`);
     }
-    const minimum = providerMinimumMinor(params.payment.provider, currency);
-    if (priced.totalMinor < minimum) throw new OrderError(`The total is below the smallest payment the provider accepts (${formatMoney(minimum, currency)}).`);
-    status = RsvpStatus.PENDING_PAYMENT;
+    if (event.privacyType === EventPrivacyType.APPROVAL_REQUIRED && !manual) {
+      // Sign up first; pay after approval, through a payment link.
+      status = RsvpStatus.PENDING_APPROVAL;
+      orderStatus = OrderStatus.REQUESTED;
+    } else if (!fits) {
+      // Money taken by hand needs a place now; it can't wait on the list.
+      if (settledByHand) throw new OrderError("There's no free place for this guest. Free one first, or send them a payment link to join the waitlist.");
+      // The waitlist: pay only if a place is offered.
+      status = RsvpStatus.WAITLISTED;
+      orderStatus = OrderStatus.REQUESTED;
+    } else if (settledByHand) {
+      status = RsvpStatus.CONFIRMED;
+      orderStatus = OrderStatus.CONFIRMED;
+    } else {
+      status = RsvpStatus.PENDING_PAYMENT;
+      orderStatus = OrderStatus.PENDING;
+    }
   } else {
     status = freeStatus({ capacity: event.capacity, taken, seats: priced.seats, privacyType: event.privacyType });
+    orderStatus = OrderStatus.CONFIRMED;
   }
 
-  const holdExpiresAt = paid ? new Date(now.getTime() + CHECKOUT_HOLD_MS) : null;
+  // Organiser-sent links give the guest a day to pay; the checkout opens only when they click Pay.
+  const holdMs = manual ? PAYMENT_LINK_HOLD_MS : CHECKOUT_HOLD_MS;
+  const holdExpiresAt = orderStatus === OrderStatus.PENDING ? new Date(now.getTime() + holdMs) : null;
+  const refundPolicy: RefundPolicySnapshot = { kind: event.refundPolicyKind, hours: event.refundPolicyHours, percent: event.refundPolicyPercent, text: event.refundPolicyText };
   const order = await tx.order.create({
     data: {
       organisationId: event.organisationId,
@@ -134,7 +183,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       buyerUserId: params.buyer.userId,
       buyerEmail: params.buyer.email,
       buyerName: params.buyer.name,
-      status: paid ? OrderStatus.PENDING : OrderStatus.CONFIRMED,
+      status: orderStatus,
       currency,
       subtotalMinor: priced.subtotalMinor,
       discountMinor: priced.discountMinor,
@@ -142,6 +191,8 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
       testMode: params.payment?.testMode ?? false,
       holdExpiresAt,
       holdCapAt: holdExpiresAt ? new Date(holdExpiresAt.getTime() + HOLD_EXTENSION_CAP_MS) : null,
+      promoCodeId,
+      refundPolicy: paid ? refundPolicy : undefined,
       lines: { create: priced.lines.map((line) => ({ kind: line.kind, ticketTypeId: line.ticketTypeId, description: line.description, quantity: line.quantity, unitMinor: line.unitMinor, discountMinor: line.discountMinor, totalMinor: line.totalMinor })) },
     },
     select: { id: true, reference: true, accessToken: true },
@@ -168,18 +219,25 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
   }
 
   let paymentId: string | null = null;
-  if (paid && params.payment) {
+  if (paid && params.payment && (orderStatus === OrderStatus.PENDING || orderStatus === OrderStatus.CONFIRMED)) {
     paymentId = (await tx.payment.create({
-      data: { organisationId: event.organisationId, orderId: order.id, amountMinor: priced.totalMinor, currency, provider: params.payment.provider, testMode: params.payment.testMode, description: event.title.slice(0, 300) },
+      data: {
+        organisationId: event.organisationId, orderId: order.id, amountMinor: priced.totalMinor, currency, provider: params.payment.provider, testMode: params.payment.testMode, description: event.title.slice(0, 300),
+        ...(manual?.mode === "offline"
+          ? { status: PaymentStatus.PAID_OFFLINE, paidAt: now, offlineMethod: manual.method ?? OfflinePaymentMethod.OTHER, offlineReference: manual.reference?.trim().slice(0, 120) || null, settledByUserId: manual.actorUserId }
+          : manual?.mode === "waive" ? { status: PaymentStatus.WAIVED, settledByUserId: manual.actorUserId } : {}),
+      },
       select: { id: true },
     })).id;
-    await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "pending" });
-  } else {
+    if (orderStatus === OrderStatus.PENDING) await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "pending" });
+    else if (manual?.mode === "offline") await enqueuePaymentEmail(tx, { to: params.buyer.email, paymentId, notice: "paid" });
+  }
+  if (orderStatus !== OrderStatus.PENDING) {
     for (const rsvp of rsvps) {
       if (rsvp.email) await enqueueRsvpConfirmation(tx, { to: rsvp.email, eventTitle: event.title, status, checkInToken: rsvp.checkInToken });
     }
-    if (rsvps.some((rsvp) => !rsvp.email)) await enqueueOrderEmail(tx, { to: params.buyer.email, orderId: order.id, notice: "attendee-details" });
   }
+  if (orderStatus === OrderStatus.CONFIRMED && rsvps.some((rsvp) => !rsvp.email)) await enqueueOrderEmail(tx, { to: params.buyer.email, orderId: order.id, notice: "attendee-details" });
   const count = await tx.rSVP.count({ where: { eventId: event.id } });
   return { orderId: order.id, reference: order.reference, accessToken: order.accessToken, status, buyerRsvpId: rsvps[0]!.id, buyerTicketToken: rsvps[0]!.checkInToken, paymentId, count };
 }

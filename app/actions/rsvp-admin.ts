@@ -187,9 +187,12 @@ export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId:
     include: {
       answers: true,
       event: { select: { slug: true } },
+      order: { select: { totalMinor: true } },
     },
   });
   if (!rsvp) return { ok: false, error: "RSVP not found." };
+  // Paid tickets keep their money trail: they're cancelled (and refunded) as an order.
+  if (rsvp.order && rsvp.order.totalMinor > BigInt(0)) return { ok: false, error: "This ticket was part of a paid order. Use Payment → Cancel tickets instead." };
 
   const snapshot = {
     eventId: rsvp.eventId,

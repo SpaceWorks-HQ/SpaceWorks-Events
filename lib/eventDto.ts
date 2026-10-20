@@ -28,6 +28,10 @@ export function toEventClientDto(event: Omit<Event, "checkInStationPinHash" | "c
     registrationClosesAt: event.registrationClosesAt,
     registrationLeadMinutes: event.registrationLeadMinutes,
     currency: event.currency,
+    refundPolicyKind: event.refundPolicyKind,
+    refundPolicyHours: event.refundPolicyHours,
+    refundPolicyPercent: event.refundPolicyPercent,
+    refundPolicyText: event.refundPolicyText,
     shortCode: event.shortCode,
     createdAt: event.createdAt,
   };

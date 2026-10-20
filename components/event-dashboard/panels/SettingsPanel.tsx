@@ -4,6 +4,7 @@ import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { CollaboratorInvitePanel } from "@/components/event/CollaboratorInvitePanel";
 import { EventManageMore } from "@/components/dashboard/EventManageMore";
 import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
+import { PromoCodesManager, RefundPolicyControl } from "@/components/event-dashboard/settings/PromoCodesManager";
 import { NoPermission } from "./shared";
 
 export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
@@ -19,6 +20,12 @@ export async function SettingsPanel({ ctx }: { ctx: EventDashboardContext; }) {
           paidAllowed={tickets.paidAllowed}
           paidBlockedReason={tickets.paidBlockedReason}
         />
+      ) : null}
+      {tickets ? (
+        <PromoCodesManager organisationSlug={organisation.slug} eventId={event.id} currency={tickets.currency} promoCodes={tickets.promoCodes} tickets={tickets.tickets} />
+      ) : null}
+      {tickets && tickets.tickets.some((ticket) => ticket.priceMinor > 0) ? (
+        <RefundPolicyControl organisationSlug={organisation.slug} eventId={event.id} policy={tickets.refundPolicy} sold={tickets.sold} />
       ) : null}
       {permissions.canManageCollaborators ? (
         <CollaboratorInvitePanel

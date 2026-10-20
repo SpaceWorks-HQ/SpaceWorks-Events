@@ -1,6 +1,6 @@
 import "server-only";
 
-import { OrderStatus, PaymentStatus, type Prisma } from "@prisma/client";
+import { OrderStatus, PaymentRefundStatus, PaymentStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { EMAIL_BUTTON_STYLE, EMAIL_COLORS, emailLayout } from "@/lib/email/brand";
 import { assertEmailAccepted, getEmailTransport } from "@/lib/email/transporter";
@@ -12,7 +12,7 @@ type OutboxClient = Prisma.TransactionClient | typeof prisma;
 export const PAYMENT_EMAIL_KIND = "payment-notice";
 
 /** Notices about one payment. */
-export const PAYMENT_NOTICES = ["pending", "paid", "expired", "late-refund", "organiser-late-refund"] as const;
+export const PAYMENT_NOTICES = ["pending", "paid", "expired", "late-refund", "organiser-late-refund", "refunded"] as const;
 /** Notices about an order as a whole. */
 export const ORDER_NOTICES = ["attendee-details"] as const;
 export type PaymentNotice = (typeof PAYMENT_NOTICES)[number];
@@ -80,7 +80,9 @@ const orderSelect = {
 
 type EmailOrder = Prisma.OrderGetPayload<{ select: typeof orderSelect; }>;
 
-function matches(notice: PaymentNotice, payment: { status: PaymentStatus; refunds: Array<{ automatic: boolean; }>; }, order: EmailOrder, now: Date) {
+type EmailRefund = { automatic: boolean; amountMinor: bigint; status: PaymentRefundStatus; };
+
+function matches(notice: PaymentNotice, payment: { status: PaymentStatus; refunds: EmailRefund[]; }, order: EmailOrder, now: Date) {
   const automaticRefund = payment.refunds.some((refund) => refund.automatic);
   switch (notice) {
     case "pending": return payment.status === PaymentStatus.PENDING && order.status === OrderStatus.PENDING && Boolean(order.holdExpiresAt && order.holdExpiresAt > now);
@@ -88,6 +90,7 @@ function matches(notice: PaymentNotice, payment: { status: PaymentStatus; refund
     case "expired": return payment.status === PaymentStatus.EXPIRED;
     case "late-refund":
     case "organiser-late-refund": return automaticRefund;
+    case "refunded": return payment.refunds.some((refund) => !refund.automatic && refund.status !== PaymentRefundStatus.FAILED);
   }
 }
 
@@ -99,11 +102,11 @@ function matches(notice: PaymentNotice, payment: { status: PaymentStatus; refund
 export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageId: string): Promise<"sent" | "dropped"> {
   const now = new Date();
   let order: EmailOrder | null;
-  let payment: { status: PaymentStatus; amountMinor: bigint; testMode: boolean; refunds: Array<{ automatic: boolean; }>; } | null = null;
+  let payment: { status: PaymentStatus; amountMinor: bigint; testMode: boolean; refunds: EmailRefund[]; } | null = null;
   if ("paymentId" in payload) {
     const row = await prisma.payment.findUnique({
       where: { id: payload.paymentId },
-      select: { status: true, amountMinor: true, testMode: true, refunds: { select: { automatic: true } }, order: { select: orderSelect } },
+      select: { status: true, amountMinor: true, testMode: true, refunds: { select: { automatic: true, amountMinor: true, status: true } }, order: { select: orderSelect } },
     });
     if (!row || !matches(payload.notice, row, row.order, now)) return "dropped";
     payment = row;
@@ -126,6 +129,8 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
     ? order.holdExpiresAt.toLocaleString("en-GB", { hour: "numeric", minute: "2-digit", day: "numeric", month: "short", timeZone: order.event?.timezone || "UTC", timeZoneName: "short" })
     : "";
 
+  const refunded = formatMoney((payment?.refunds ?? []).filter((refund) => !refund.automatic && refund.status !== PaymentRefundStatus.FAILED).reduce((sum, refund) => sum + refund.amountMinor, BigInt(0)), order.currency);
+  const cancelled = order.status === OrderStatus.CANCELLED;
   const content: Record<PaymentNotice | OrderNotice, { subject: string; heading: string; body: string; button?: { label: string; href: string | null; }; }> = {
     pending: {
       subject: `Complete your payment: ${title}`,
@@ -154,6 +159,12 @@ export async function deliverPaymentEmail(payload: PaymentEmailPayload, messageI
       subject: `A late payment was refunded: ${title}`,
       heading: "A late payment was refunded automatically",
       body: `Order ${escapeHtml(order.reference)} paid ${escapeHtml(amount)} for <strong>${escapeHtml(title)}</strong> after its hold had ended and the places were gone, so Space Works Events refunded it in full and told the buyer.${testNote}`,
+    },
+    refunded: {
+      subject: `${cancelled ? "Order cancelled" : "Refund"} ${order.reference}: ${title}`,
+      heading: cancelled ? "Your order was cancelled" : "You've been refunded",
+      body: `${cancelled ? `Your tickets for <strong>${escapeHtml(title)}</strong> were cancelled. ` : ""}${refunded === formatMoney(0, order.currency) ? "There's nothing to refund." : `We've refunded ${escapeHtml(refunded)} for <strong>${escapeHtml(title)}</strong> in total. Card and UPI refunds can take 5 to 10 working days to appear; money paid in person is returned by the organiser.`}${testNote}`,
+      button: { label: "View your order", href: orderUrl },
     },
     "attendee-details": {
       subject: `Add attendee details: ${title}`,

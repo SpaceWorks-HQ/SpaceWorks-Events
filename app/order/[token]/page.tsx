@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Check } from "lucide-react";
-import { AttendeeDetailsForm, ConfirmingPayment, HoldCountdown, PayNowButton } from "@/components/orders/OrderClient";
+import { AttendeeDetailsForm, CancelOrderButton, ConfirmingPayment, HoldCountdown, PayNowButton } from "@/components/orders/OrderClient";
 import { Button } from "@/components/ui/button";
 import { Callout, Chip } from "@/components/ui/display";
 import { formatDayShort, formatTime } from "@/lib/format/datetime";
@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> { return loadRouteMetadata(); }
 
 const STATUS: Record<string, { label: string; tone: "success" | "warning" | "neutral"; }> = {
+  REQUESTED: { label: "Requested", tone: "neutral" },
   PENDING: { label: "Awaiting payment", tone: "warning" },
   CONFIRMED: { label: "Confirmed", tone: "success" },
   EXPIRED: { label: "Released", tone: "neutral" },
@@ -60,6 +61,22 @@ export default async function OrderPage({ params, searchParams }: Props) {
         </Callout>
       ) : null}
 
+      {order.status === "REQUESTED" ? (
+        <Callout tone="info">
+          Nothing has been charged.{" "}
+          {order.tickets.some((ticket) => ticket.status === "WAITLISTED")
+            ? "You're on the waitlist: if places free up, we'll email you a link to pay."
+            : "If the organiser approves your request, we'll email you a link to pay."}
+        </Callout>
+      ) : null}
+      {order.status === "CANCELLED" ? (
+        <Callout tone="info">
+          This order was cancelled.{order.refunded ? ` ${order.refunded.amount} ${order.refunded.pending ? "is being refunded" : "was refunded"}; card and UPI refunds can take 5 to 10 working days to appear.` : ""}
+        </Callout>
+      ) : order.refunded ? (
+        <Callout tone="info">{order.refunded.amount} {order.refunded.pending ? "is being refunded" : "has been refunded"} on this order.</Callout>
+      ) : null}
+
       <section aria-labelledby="order-lines" className="rounded-xl border border-line bg-panel p-5">
         <h2 id="order-lines" className="sr-only">Order summary</h2>
         <dl className="flex flex-col gap-2">
@@ -69,11 +86,18 @@ export default async function OrderPage({ params, searchParams }: Props) {
               <dd className="tabular-nums text-ink">{line.amount}</dd>
             </div>
           ))}
+          {order.discount ? (
+            <div className="flex justify-between gap-3 text-body-ui">
+              <dt className="text-ink-secondary">Discount</dt>
+              <dd className="tabular-nums text-ink">−{order.discount}</dd>
+            </div>
+          ) : null}
           <div className="mt-1 flex justify-between gap-3 border-t border-line pt-3 font-semibold">
             <dt className="text-ink">Total</dt>
             <dd className="tabular-nums text-ink">{order.free ? "Free" : order.total}</dd>
           </div>
         </dl>
+        {order.refundPolicy ? <p className="mt-3 text-caption text-ink-muted">{order.refundPolicy}</p> : null}
       </section>
 
       <section aria-labelledby="order-tickets" className="flex flex-col gap-3">
@@ -96,6 +120,16 @@ export default async function OrderPage({ params, searchParams }: Props) {
           ))}
         </ul>
       </section>
+
+      {order.cancellation ? (
+        <section aria-labelledby="order-cancel" className="flex flex-col gap-2 border-t border-line pt-5">
+          <h2 id="order-cancel" className="text-h4 text-ink">Can&apos;t make it?</h2>
+          <p className="text-body-ui text-ink-secondary">
+            Cancelling gives up every ticket in this order{order.cancellation.refund ? ` and refunds ${order.cancellation.refund}` : ""}.
+          </p>
+          <div><CancelOrderButton orderToken={order.token} refund={order.cancellation.refund} /></div>
+        </section>
+      ) : null}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
+import { cancelOrderAsBuyer, PaymentOperationError } from "@/lib/payments/operations";
 import { validateAndNormalizeAnswers } from "@/lib/rsvpCore";
 import { isValidAttendeeName } from "@/lib/validators";
 
@@ -77,6 +78,28 @@ export async function updateOrderAttendee(input: unknown): Promise<ActionResult>
     if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
       return { ok: false, error: "That person is already registered for this event." };
     }
+    throw error;
+  }
+  revalidatePath(`/order/${parsed.data.orderToken}`);
+  return { ok: true };
+}
+
+const cancelSchema = z.object({ orderToken: z.string().trim().regex(/^[a-z0-9]{20,40}$/) }).strict();
+
+/**
+ * The buyer cancels their whole order, refunded as its refund policy (frozen
+ * when they bought) allows. The order's access token is the proof.
+ */
+export async function cancelMyOrder(input: unknown): Promise<ActionResult> {
+  const parsed = cancelSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Order not found." };
+  if (await isActionRateLimited("rsvp", parsed.data.orderToken)) return { ok: false, error: "Too many attempts. Try again shortly." };
+  const order = await prisma.order.findUnique({ where: { accessToken: parsed.data.orderToken }, select: { id: true } });
+  if (!order) return { ok: false, error: "Order not found." };
+  try {
+    await cancelOrderAsBuyer({ orderId: order.id });
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
     throw error;
   }
   revalidatePath(`/order/${parsed.data.orderToken}`);

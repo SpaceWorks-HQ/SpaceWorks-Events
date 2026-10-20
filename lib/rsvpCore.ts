@@ -1,6 +1,7 @@
 import {
   EventPrivacyType,
   EventStatus,
+  OfflinePaymentMethod,
   Prisma,
   RegistrationFieldType,
   RsvpStatus,
@@ -18,6 +19,7 @@ import { flattenZodErrors } from "@/app/actions/utils";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
+import { recordAuditEvent } from "@/lib/audit";
 import { startCheckout } from "@/lib/payments/checkout";
 import { OrderError, reserveOrder, type OrderAttendee, type PaymentContext } from "@/lib/payments/orders";
 import { loadPaymentAccount } from "@/lib/payments/settings";
@@ -39,7 +41,7 @@ function isRsvpTargetClosedError(error: unknown): error is RsvpTargetClosedError
 
 type AnswerRow = { fieldId: string; valueText?: string | null; valueBool?: boolean | null; valueNumber?: number | null; valueDate?: Date | null; };
 
-type OrderRequest = { items?: Array<{ ticketTypeId: string; quantity: number; }>; ticketTypeId?: string; attendees?: OrderAttendee[]; };
+type OrderRequest = { items?: Array<{ ticketTypeId: string; quantity: number; }>; ticketTypeId?: string; attendees?: OrderAttendee[]; promoCode?: string; };
 
 function requestedItems(request: OrderRequest) {
   if (request.items?.length) return request.items;
@@ -84,6 +86,7 @@ async function submitTicketOrder(params: {
         attendees: params.request.attendees ?? [],
         enforceOpen: true,
         payment,
+        promoCode: params.request.promoCode || undefined,
       });
       if (params.setUserName && params.buyer.userId) await tx.user.update({ where: { id: params.buyer.userId }, data: { name: params.setUserName } });
       if (params.answers.length > 0) {
@@ -744,6 +747,9 @@ export async function submitManualGuestRsvpCore(
   });
   if (!event) return { ok: false, error: "Event not found." };
 
+  // Events that sell tickets add guests with a ticket (addTicketGuest).
+  if (await sellsTickets(event.id)) return { ok: false, error: "Choose a ticket for this guest." };
+
   const email = normalizeGuestEmail(parsed.data.guestEmail);
   const form = await prisma.eventRegistrationForm.findUnique({
     where: { eventId: event.id },
@@ -810,6 +816,64 @@ export async function submitManualGuestRsvpCore(
     }
     console.error("[rsvp] manual submission failed");
     return { ok: false, error: "Could not save the attendee RSVP." };
+  }
+}
+
+/**
+ * An organiser adds a guest with a ticket. A paid ticket is settled one of
+ * three ways: a payment link emailed with a day to pay, money collected in
+ * person, or complimentary. Without an online account the last two still
+ * work, recorded as offline payments.
+ */
+export async function submitManualTicketOrderCore(
+  input: {
+    eventId: string; name: string; guestEmail: string; ticketTypeId: string;
+    payment: "link" | "offline" | "waive"; method?: OfflinePaymentMethod; reference?: string | null;
+    answers: Record<string, unknown>;
+  },
+  opts: { organisationId: string; actorUserId: string; },
+): Promise<ActionResult<{ status: RsvpStatus; orderId: string; }>> {
+  const event = await prisma.event.findFirst({ where: { id: input.eventId, organisationId: opts.organisationId }, select: { id: true, organisationId: true } });
+  if (!event) return { ok: false, error: "Event not found." };
+  const email = normalizeGuestEmail(input.guestEmail);
+  const form = await prisma.eventRegistrationForm.findUnique({ where: { eventId: event.id }, include: { fields: { orderBy: { sortOrder: "asc" } } } });
+  const validated = validateAndNormalizeAnswers({
+    fields: (form?.fields ?? []).map((field) => ({ id: field.id, key: field.key, label: field.label, type: field.type, required: field.required, options: field.options, settings: field.settings })),
+    answers: input.answers,
+  });
+  if ("error" in validated) return { ok: false, error: validated.error };
+  const items = [{ ticketTypeId: input.ticketTypeId, quantity: 1 }];
+  let payment = await paymentContextFor(event, items);
+  if (!payment && input.payment !== "link" && await isPaidEventsEnabled()) {
+    payment = { organisationId: event.organisationId, provider: "OFFLINE", testMode: false };
+  }
+  try {
+    const order = await prisma.$transaction(async (tx) => {
+      const reserved = await reserveOrder(tx, {
+        eventId: event.id,
+        items,
+        buyer: { userId: null, email, name: input.name.trim(), attendeeKey: `guest:${email}` },
+        attendees: [],
+        enforceOpen: false,
+        payment,
+        manual: { mode: input.payment, method: input.method, reference: input.reference, actorUserId: opts.actorUserId },
+      });
+      if (validated.rows.length > 0) {
+        await tx.rsvpAnswer.createMany({
+          data: validated.rows.map((row) => ({ rsvpId: reserved.buyerRsvpId, fieldId: row.fieldId, valueText: row.valueText ?? null, valueBool: row.valueBool ?? null, valueNumber: row.valueNumber ?? null, valueDate: row.valueDate ?? null })),
+        });
+      }
+      await recordAuditEvent({ action: "MANUAL_RSVP_CREATED", actorUserId: opts.actorUserId, organisationId: event.organisationId, targetType: "RSVP", targetId: reserved.buyerRsvpId, metadata: { eventId: event.id, status: reserved.status, payment: input.payment }, client: tx });
+      return reserved;
+    });
+    return { ok: true, data: { status: order.status, orderId: order.orderId } };
+  } catch (error: unknown) {
+    if (error instanceof OrderError) return { ok: false, error: error.message };
+    if (typeof error === "object" && error !== null && "code" in error && (error as { code: string }).code === "P2002") {
+      return { ok: false, error: "This email is already registered for this event." };
+    }
+    console.error("[rsvp] manual ticket order failed");
+    return { ok: false, error: "Could not add the guest." };
   }
 }
 

@@ -10,6 +10,7 @@ import { countConfirmedForEvent, countHeldForEvent } from "@/lib/rsvpCapacity";
 import { listPublicTicketTypes } from "@/lib/payments/tickets";
 import { DEFAULT_CURRENCY } from "@/lib/payments/money";
 import { canAcceptOnlinePayments } from "@/lib/payments/settings";
+import { describeRefundPolicy } from "@/lib/payments/refundPolicy";
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string; }>; };
 export async function loadRouteMetadata({ params }: Props): Promise<Metadata> {
   const { orgSlug, eventSlug } = await params;
@@ -144,6 +145,15 @@ export async function loadEventView({ params }: Props) {
   ]);
   // Paid tickets are on sale only while the installation allows it and the
   // organisation's account is fully connected.
-  const paidSalesOpen = tickets.some((ticket) => ticket.priceMinor > 0) ? await canAcceptOnlinePayments(org.id) : false;
-  return { org, preview, event: eventForView(event), page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp, held, tickets, paidSalesOpen };
+  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0);
+  const paidSalesOpen = sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
+  // What the form needs to sell paid tickets: whether codes exist, and the refund terms.
+  const ticketing = sellsPaid
+    ? {
+      promoCodes: (await prisma.promoCode.count({ where: { eventId: event.id, archivedAt: null } })) > 0,
+      refundPolicy: describeRefundPolicy({ kind: event.refundPolicyKind, hours: event.refundPolicyHours, percent: event.refundPolicyPercent, text: event.refundPolicyText }),
+      refundPolicyText: event.refundPolicyText,
+    }
+    : null;
+  return { org, preview, event: eventForView(event), page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp, held, tickets, paidSalesOpen, ticketing };
 }

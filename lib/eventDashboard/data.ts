@@ -1,8 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
-import type { RegistrationFieldType } from "@prisma/client";
+import type { Prisma, RegistrationFieldType } from "@prisma/client";
+import type { AttendeeOrder } from "@/components/attendees/types";
 import { prisma } from "@/lib/db";
+import { effectiveOfflineRecord } from "@/lib/payments/offlineRecord";
 import { toFieldDefinition, type FieldSettings } from "@/lib/registrationFields";
 
 /*
@@ -40,11 +42,51 @@ export const loadRegistrationFields = cache(async (eventId: string): Promise<Reg
 
 export const MAX_BROWSER_ATTENDEES = 250;
 
+const attendeeOrderSelect = {
+  id: true, reference: true, status: true, totalMinor: true, currency: true, testMode: true,
+  _count: { select: { rsvps: true } },
+  payments: {
+    where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE", "WAIVED"] } },
+    select: {
+      id: true, status: true, amountMinor: true, offlineMethod: true, offlineReference: true,
+      refunds: { select: { amountMinor: true, status: true } },
+      amendments: { orderBy: { createdAt: "asc" }, select: { field: true, newValue: true } },
+    },
+  },
+} satisfies Prisma.OrderSelect;
+
+/** One paid order's money, summed for the guest list. Duplicate captures (refunded automatically) count too. */
+function attendeeOrder(order: Prisma.OrderGetPayload<{ select: typeof attendeeOrderSelect; }>): AttendeeOrder {
+  const collected = order.payments.filter((payment) => payment.status !== "WAIVED");
+  const sum = (values: bigint[]) => Number(values.reduce((total, value) => total + value, BigInt(0)));
+  const refunds = collected.flatMap((payment) => payment.refunds);
+  const offline = collected.find((payment) => payment.status === "PAID_OFFLINE");
+  return {
+    id: order.id,
+    reference: order.reference,
+    status: order.status,
+    totalMinor: Number(order.totalMinor),
+    currency: order.currency,
+    testMode: order.testMode,
+    tickets: order._count.rsvps,
+    settlement: order.status !== "CONFIRMED" ? null : offline ? "offline" : collected.length > 0 ? "online" : order.payments.length > 0 ? "waived" : null,
+    paidMinor: sum(collected.map((payment) => payment.amountMinor)),
+    refundedMinor: sum(refunds.filter((refund) => refund.status === "SUCCEEDED").map((refund) => refund.amountMinor)),
+    refundPendingMinor: sum(refunds.filter((refund) => refund.status === "PENDING").map((refund) => refund.amountMinor)),
+    offlinePayment: offline ? { id: offline.id, ...effectiveOfflineRecord(offline) } : null,
+  };
+}
+
 /** The most recent registrations for the browser (organisation admins only). */
 export const loadAttendees = cache(async (eventId: string, origin: string) => {
   const rsvps = await prisma.rSVP.findMany({
     where: { eventId },
-    include: { user: { select: { id: true, name: true, email: true } }, answers: { include: { field: true } } },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+      answers: { include: { field: true } },
+      ticketType: { select: { name: true } },
+      order: { select: attendeeOrderSelect },
+    },
     orderBy: { createdAt: "desc" },
     take: MAX_BROWSER_ATTENDEES + 1,
   });
@@ -57,6 +99,8 @@ export const loadAttendees = cache(async (eventId: string, origin: string) => {
     user: rsvp.user ? { id: rsvp.user.id, name: rsvp.user.name, email: rsvp.user.email } : null,
     checkedInAt: rsvp.checkedInAt?.toISOString() ?? null,
     ticketUrl: `${origin}/ticket/${rsvp.checkInToken}`,
+    ticketName: rsvp.ticketType?.name ?? null,
+    order: rsvp.order && rsvp.order.totalMinor > BigInt(0) ? attendeeOrder(rsvp.order) : null,
     rawAnswers: rsvp.answers.map((answer) => ({
       fieldId: answer.fieldId,
       valueText: answer.valueText,

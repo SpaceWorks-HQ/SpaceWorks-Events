@@ -177,13 +177,14 @@ describe.sequential.each(["RAZORPAY", "STRIPE"] as const)("paid orders on %s", (
     expect(after.rsvps[0]!.status).toBe(RsvpStatus.CONFIRMED);
   });
 
-  it("refuses totals below the provider minimum and paid tickets on approval events", async () => {
+  it("refuses totals below the provider minimum, and takes paid requests on approval events without charging", async () => {
     const tiny = await createEvent({ price: provider === "RAZORPAY" ? 99 : 49 });
     expect(await buy(tiny.event.slug, tiny.ticket.id, `tiny-${provider}-${suffix}@example.test`)).toEqual({
       ok: false, error: `The total is below the smallest payment the provider accepts (${provider === "RAZORPAY" ? "₹1.00" : "₹0.50"}).`,
     });
     const approval = await createEvent({ privacyType: EventPrivacyType.APPROVAL_REQUIRED });
-    expect(await buy(approval.event.slug, approval.ticket.id, `ask-${provider}-${suffix}@example.test`)).toEqual({ ok: false, error: "Paid tickets aren't available yet for events that need approval." });
+    expect(await buy(approval.event.slug, approval.ticket.id, `ask-${provider}-${suffix}@example.test`)).toMatchObject({ ok: true, data: { status: RsvpStatus.PENDING_APPROVAL, checkoutUrl: null } });
+    expect(await orderFor(approval.event.id)).toMatchObject({ status: OrderStatus.REQUESTED, payments: [], holdExpiresAt: null });
   });
 });
 
@@ -205,6 +206,8 @@ describe.sequential("free and multi-ticket orders", () => {
     expect(await buy(event.slug, ticket.id, `same-${suffix}@example.test`, 2, [{ email: `same-${suffix}@example.test` }]))
       .toEqual({ ok: false, error: "Each ticket needs a different email address, or leave extra ones blank." });
     expect((await buy(event.slug, ticket.id, `first-${suffix}@example.test`, 2)).ok).toBe(true);
-    expect(await buy(event.slug, ticket.id, `third-${suffix}@example.test`)).toEqual({ ok: false, error: "General is sold out." });
+    // A sold-out paid ticket takes a waitlist request instead; nothing is held or charged.
+    expect(await buy(event.slug, ticket.id, `third-${suffix}@example.test`)).toMatchObject({ ok: true, data: { status: RsvpStatus.WAITLISTED, checkoutUrl: null } });
+    expect(await buy(event.slug, ticket.id, `fourth-${suffix}@example.test`, 2)).toMatchObject({ ok: true, data: { status: RsvpStatus.WAITLISTED } });
   });
 });

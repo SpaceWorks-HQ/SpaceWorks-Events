@@ -15,6 +15,7 @@ import type { RegistrationFieldRow } from "@/components/registration/EventRegist
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { deleteRsvp, restoreRsvp } from "@/app/actions/rsvp-admin";
+import { PaymentDialog } from "@/components/attendees/PaymentDialog";
 import { approveRsvp, promoteFromWaitlist, rejectRsvp } from "@/app/actions/rsvp-lifecycle";
 import { undoCheckIn } from "@/app/actions/checkin";
 import { GuestRow, type GuestRowActions } from "@/components/event-dashboard/guests/GuestRow";
@@ -60,6 +61,7 @@ export function GuestsPeople({
   attendees,
   truncated,
   registrationFields,
+  ticketTypes = [],
 }: {
   organisationSlug: string;
   target: GuestListTarget;
@@ -70,6 +72,8 @@ export function GuestsPeople({
   attendees: AttendeeRow[];
   truncated: boolean;
   registrationFields: RegistrationFieldRow[];
+  /** Events that sell tickets: what a manually added guest can be given. */
+  ticketTypes?: Array<{ id: string; name: string; priceMinor: number; currency: string; }>;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -81,6 +85,7 @@ export function GuestsPeople({
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editGuest, setEditGuest] = useState<AttendeeRow | null>(null);
+  const [paymentGuest, setPaymentGuest] = useState<AttendeeRow | null>(null);
   const [removeGuest, setRemoveGuest] = useState<AttendeeRow | null>(null);
   const [undoGuest, setUndoGuest] = useState<AttendeeRow | null>(null);
 
@@ -121,6 +126,7 @@ export function GuestsPeople({
     edit: (guest) => setEditGuest(guest),
     undoCheckIn: eventId ? (guest) => setUndoGuest(guest) : undefined,
     remove: (guest) => setRemoveGuest(guest),
+    payment: eventId ? (guest) => setPaymentGuest(guest) : undefined,
   };
 
   function resetPage<T>(setter: (value: T) => void) {
@@ -237,7 +243,21 @@ export function GuestsPeople({
         </>
       )}
 
-      {manualRsvpOpen && eventId ? <ManualRsvpDialog organisationSlug={organisationSlug} eventId={eventId} fields={registrationFields} onClose={() => setManualRsvpOpen(false)} onAdded={() => router.refresh()} /> : null}
+      {paymentGuest?.order && eventId ? (
+        <PaymentDialog
+          organisationSlug={organisationSlug}
+          eventId={eventId}
+          guest={paymentGuest}
+          onClose={() => setPaymentGuest(null)}
+          onDone={(message) => {
+            setPaymentGuest(null);
+            showToast(message, "success");
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {manualRsvpOpen && eventId ? <ManualRsvpDialog organisationSlug={organisationSlug} eventId={eventId} fields={registrationFields} ticketTypes={ticketTypes} onClose={() => setManualRsvpOpen(false)} onAdded={() => router.refresh()} /> : null}
 
       {editGuest ? (
         <EditRsvpDialog

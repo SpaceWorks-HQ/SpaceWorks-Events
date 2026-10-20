@@ -3,7 +3,8 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, UserPen } from "lucide-react";
-import { updateOrderAttendee } from "@/app/actions/orders";
+import { cancelMyOrder, updateOrderAttendee } from "@/app/actions/orders";
+import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { RegistrationQuestions, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
 import { Button } from "@/components/ui/button";
@@ -138,5 +139,36 @@ export function AttendeeDetailsForm({ orderToken, ticket, fields }: {
         {!ticket.needsDetails ? <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>Close</Button> : null}
       </div>
     </form>
+  );
+}
+
+/** The buyer cancels the whole order, refunded as its policy allows. */
+export function CancelOrderButton({ orderToken, refund }: { orderToken: string; refund: string | null; }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  return (
+    <div className="flex flex-col gap-2">
+      {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
+      <Button variant="dangerQuiet" onClick={() => setOpen(true)}>Cancel order</Button>
+      <ConfirmationDialog
+        open={open}
+        title="Cancel this order?"
+        message={`Every ticket in it stops working${refund ? ` and ${refund} is refunded to how you paid` : ""}. This can't be undone.`}
+        confirmLabel="Cancel order"
+        loading={pending}
+        onCancel={() => setOpen(false)}
+        onConfirm={() => startTransition(async () => {
+          const result = await cancelMyOrder({ orderToken });
+          setOpen(false);
+          if (!result.ok) {
+            setError(result.error);
+            return;
+          }
+          router.refresh();
+        })}
+      />
+    </div>
   );
 }

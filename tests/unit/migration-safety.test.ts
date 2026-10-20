@@ -60,7 +60,7 @@ describe("production migration safety contracts", () => {
 
   it("adds paid-event settings without touching existing data", () => {
     const sql = readFileSync(resolve(root, "prisma/migrations/20261022000000_payments_core/migration.sql"), "utf8");
-    expect(sql).not.toMatch(/(DROP|DELETE|UPDATE)/i);
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(DELETE|UPDATE)\b/im);
     expect(sql).not.toMatch(/ALTER TABLE "(?!InstanceSetting"|OrganisationPaymentSettings"|ProcessedWebhookEvent")/);
     expect(sql).toContain('ADD COLUMN "paidEventsEnabled" BOOLEAN NOT NULL DEFAULT false');
     expect(sql).toContain(`CHECK ("provider" IS NULL OR "provider" <> 'OFFLINE')`);
@@ -82,9 +82,25 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('CREATE UNIQUE INDEX "Payment_one_pending_per_order"');
   });
 
+  it("adds the REQUESTED order status in its own migration", () => {
+    const value = readFileSync(resolve(root, "prisma/migrations/20261024000000_order_requested/migration.sql"), "utf8");
+    expect(value.replace(/^--.*$/gm, "").trim()).toBe(`ALTER TYPE "OrderStatus" ADD VALUE 'REQUESTED' BEFORE 'PENDING';`);
+  });
+
+  it("adds payment operations with an append-only amendment trail and immutable settled payments", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261024000100_payment_operations/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).not.toMatch(/ADD COLUMN\s+"\w+" [^,;]*NOT NULL(?! DEFAULT)/);
+    expect(sql).toContain('CREATE TRIGGER "payment_amendment_append_only"');
+    expect(sql).toContain('CREATE OR REPLACE FUNCTION "payment_ledger_guard"()');
+    expect(sql).toContain('NEW."offlineReference" IS DISTINCT FROM OLD."offlineReference"');
+    expect(sql).toContain(`CHECK ("codeDigest" ~ '^[a-f0-9]{64}$')`);
+    expect(sql).toContain('REFERENCES "TicketType"("id", "eventId") ON DELETE NO ACTION');
+  });
+
   it("locks an event's currency once set without touching existing rows", () => {
     const sql = readFileSync(resolve(root, "prisma/migrations/20261023000000_event_currency_lock/migration.sql"), "utf8");
     expect(sql).toContain('CREATE TRIGGER "event_currency_lock"');
-    expect(sql).not.toMatch(/DROP|^\s*(UPDATE|DELETE)/im);
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
   });
 });

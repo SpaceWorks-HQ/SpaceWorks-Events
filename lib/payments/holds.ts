@@ -3,6 +3,8 @@ import { CHECKOUT_WINDOWS } from "./providers/types";
 
 /** How long seats stay held while a buyer pays at checkout. */
 export const CHECKOUT_HOLD_MS = 30 * 60_000;
+/** Approved, promoted or hand-added guests get a day to pay from the emailed link. */
+export const PAYMENT_LINK_HOLD_MS = 24 * 60 * 60_000;
 /**
  * How far a hold may stretch so a provider page can still open: a checkout
  * hold never exceeds 60 minutes in total.
