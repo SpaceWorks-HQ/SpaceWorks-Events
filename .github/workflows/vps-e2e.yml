@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  RELEASE: v0.9.3-feat-installer-0-9-3.18.abfa64b60138
+  RELEASE: v0.9.3-feat-installer-0-9-3.19.0ed303a1b14d
   OLD_RELEASE: v0.9.1-main.11.f2e7307410ee
   SILO: pgsty/silo:RELEASE.2026-09-16T00-00-00Z
 
@@ -177,7 +177,7 @@ jobs:
           grep -q "${RELEASE#v} is running" resume.log
           grep -q '^AGE-SECRET-KEY-1' key.txt
           systemctl is-enabled swevents-backup.timer swevents-certificates.timer
-          ! systemctl is-active --quiet ufw
+          sudo ufw status | grep -q 'Status: inactive'
 
       - name: "C: 0.9.1 split install, then update to this release"
         if: matrix.scenario == 'upgrade-from-0.9.1'
