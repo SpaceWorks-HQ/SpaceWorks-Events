@@ -75,18 +75,29 @@ jobs:
             -e NEXT_SERVER_ACTIONS_ENCRYPTION_KEY -e MFA_ENCRYPTION_KEY \
             -e EMAIL_FROM -e SMTP_SERVICE -e SMTP_ALLOW_UNAUTHENTICATED \
             -e TRUSTED_PROXY_IP_HEADER -e S3_BUCKET -e S3_REGION swevents:ci
-          curl --fail --retry 15 --retry-delay 2 --retry-all-errors http://127.0.0.1:3000/api/health
+          # The server needs a few seconds to boot; print its logs if it never answers.
+          if ! curl --fail --silent --show-error --retry 30 --retry-delay 2 --retry-all-errors http://127.0.0.1:3000/api/health; then
+            docker logs swevents-ci
+            docker rm -f swevents-ci
+            exit 1
+          fi
           curl --fail --header "Authorization: Bearer $HEALTHCHECK_SECRET" http://127.0.0.1:3000/api/health/db
           docker logs swevents-ci 2>&1 | grep -q "Applying database migrations"
+          docker exec swevents-ci node -e "require('sharp'); console.log('sharp loads in the image')"
           docker rm -f swevents-ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:production
+        env:
+          # The specs give each browser context its own client IP through
+          # cf-connecting-ip, so per-IP limits (10 sign-ins/min) don't couple tests.
+          TRUSTED_PROXY_IP_HEADER: cf-connecting-ip
       # The payment flows drive a local fake Razorpay/Stripe, which the app
       # refuses in production builds, so they run against a dev server.
       - name: Payment browser flows against the fake provider
         run: npx playwright test tests/e2e/payments.spec.ts
         env:
           PLAYWRIGHT_FAKE_PAYMENTS: "1"
+          TRUSTED_PROXY_IP_HEADER: cf-connecting-ip
           PLAYWRIGHT_PORT: "3100"
           PLAYWRIGHT_SERVER_COMMAND: npx next dev --port 3100 --hostname 127.0.0.1
           AUTH_URL: http://127.0.0.1:3100
