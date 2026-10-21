@@ -10,6 +10,8 @@ export default defineConfig({
     // Coverage is intentionally service-independent. PostgreSQL suites have
     // their own config and must be invoked only with a disposable TEST_DATABASE_URL.
     include: ["tests/unit/**/*.test.ts"],
+    // As in vitest.config.mts: the sign-in protections are off unless a test turns one on.
+    env: { NEXT_PUBLIC_BASE_URL: "http://localhost:3000", STAFF_MFA_REQUIRED: "false", LOGIN_NEW_DEVICE_CHECK: "false", PWNED_PASSWORDS_CHECK: "false" },
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
