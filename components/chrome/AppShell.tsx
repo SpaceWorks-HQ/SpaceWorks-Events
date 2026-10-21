@@ -1,9 +1,8 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowUpRight,
@@ -11,16 +10,12 @@ import {
   ChevronsUpDown,
   Home,
   IdCard,
-  LogOut,
   Menu as MenuIcon,
-  Moon,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Repeat,
   Settings,
-  Sun,
-  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -28,137 +23,12 @@ import { cn } from "@/lib/cn";
 import type { ShellOrganisation, ShellUser } from "@/lib/appShell";
 import { SIDEBAR_COLLAPSED, SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { SpaceWorksEventsLogo, SpaceWorksLogo } from "@/components/brand/SpaceWorksLogo";
-import { useAppColorMode } from "@/components/providers";
-import { Avatar, OrgLogo } from "@/components/ui/display";
+import { OrgLogo } from "@/components/ui/display";
 import { IconButton } from "@/components/ui/button";
-import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger, Tooltip } from "@/components/ui/menu";
+import { Menu, MenuContent, MenuItem, MenuLabel, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import { BrandHomeLink } from "./SiteHeader";
-
-const roleLabel: Record<ShellOrganisation["role"], string> = {
-  OWNER: "Owner",
-  ADMIN: "Admin",
-  MEMBER: "Member",
-  COLLABORATOR: "Collaborator",
-};
-
-/** Shows a tooltip with the label only when the sidebar is collapsed to icons. */
-function RailTip({ collapsed, label, children }: { collapsed: boolean; label: string; children: ReactNode }) {
-  return collapsed ? <Tooltip content={label} side="right">{children}</Tooltip> : <>{children}</>;
-}
-
-function NavItem({
-  href,
-  icon,
-  children,
-  active,
-  indent = false,
-  collapsed,
-  onNavigate,
-  badge,
-}: {
-  href: string;
-  icon: ReactNode;
-  children: string;
-  active: boolean;
-  indent?: boolean;
-  collapsed: boolean;
-  onNavigate?: () => void;
-  badge?: ReactNode;
-}) {
-  return (
-    <RailTip collapsed={collapsed} label={children}>
-      <Link
-        href={href}
-        onClick={onNavigate}
-        aria-current={active ? "page" : undefined}
-        aria-label={collapsed ? children : undefined}
-        className={cn(
-          "relative flex min-h-11 items-center gap-2.5 rounded-[10px] text-[15px] text-ink transition-colors hover:bg-sidebar-hover [&_svg]:size-[18px] [&_svg]:shrink-0",
-          collapsed ? "justify-center px-0" : "px-3",
-          indent && !collapsed && "pl-6 text-sm",
-          active && "bg-sidebar-active font-semibold text-on-sidebar-active hover:bg-sidebar-active",
-        )}
-      >
-        {/* The expanded sidebar is text-only (brand spec D9); the collapsed rail has no room for words, so it keeps the icon. */}
-        {collapsed ? <span aria-hidden className="inline-flex">{icon}</span> : <span className="min-w-0 flex-1 truncate">{children}</span>}
-        {badge}
-      </Link>
-    </RailTip>
-  );
-}
-
-function currentOrganisationSlug(pathname: string | null) {
-  const match = /^\/dashboard\/([^/]+)/.exec(pathname ?? "");
-  if (!match || match[1] === "org" || match[1] === "security") return null;
-  return decodeURIComponent(match[1]!);
-}
-
-function PendingBadge({ count, collapsed }: { count: number; collapsed: boolean }) {
-  if (count <= 0) return null;
-  const label = `${count} waiting for approval`;
-  return collapsed ? (
-    <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-highlight ring-2 ring-sidebar" title={label}>
-      <span className="sr-only">{label}</span>
-    </span>
-  ) : (
-    <span className="shrink-0 rounded-full bg-highlight px-[7px] text-xs font-semibold leading-5 tabular-nums text-on-highlight" title={label}>
-      {count}
-      <span className="sr-only"> waiting for approval</span>
-    </span>
-  );
-}
-
-/** The person's menu: account, light/dark mode and sign out. */
-function AccountMenu({ user, collapsed, onNavigate }: { user: ShellUser; collapsed: boolean; onNavigate?: () => void }) {
-  const pathname = usePathname() ?? "";
-  const { mode, toggleColorMode } = useAppColorMode();
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const name = user.name ?? user.email ?? "Account";
-  return (
-    <Menu>
-      <MenuTrigger
-        ref={triggerRef}
-        aria-label={collapsed ? `Account menu for ${name}` : undefined}
-        className={cn(
-          "flex min-h-12 w-full items-center gap-2.5 rounded-[10px] border border-line bg-panel text-left transition-colors hover:bg-surface data-[state=open]:bg-surface",
-          collapsed ? "justify-center p-1.5" : "p-2",
-          pathname.startsWith("/account") && "ring-1 ring-line-strong",
-        )}
-      >
-        <Avatar name={user.name ?? user.email} src={user.image} size="sm" className="size-8 text-[11px]" />
-        {collapsed ? null : (
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold text-ink">{name}</span>
-              {user.email && user.name ? <span className="block truncate text-caption text-ink-muted">{user.email}</span> : null}
-            </span>
-            <ChevronsUpDown aria-hidden className="size-4 shrink-0 text-ink-muted" />
-          </>
-        )}
-      </MenuTrigger>
-      <MenuContent side={collapsed ? "right" : "top"} align={collapsed ? "end" : "start"} className="min-w-[232px]">
-        <MenuLabel>{name}</MenuLabel>
-        <MenuItem asChild icon={<UserRound />}>
-          <Link href="/account" onClick={onNavigate}>Account settings</Link>
-        </MenuItem>
-        <MenuItem
-          icon={mode === "dark" ? <Sun /> : <Moon />}
-          onSelect={() => {
-            // Reveal the new mode from the account button, which stays on screen.
-            const rect = triggerRef.current?.getBoundingClientRect();
-            toggleColorMode(rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : undefined);
-          }}
-        >
-          {mode === "dark" ? "Light mode" : "Dark mode"}
-        </MenuItem>
-        <MenuSeparator />
-        <MenuItem icon={<LogOut />} onSelect={() => void signOut({ callbackUrl: "/" })}>
-          Sign out
-        </MenuItem>
-      </MenuContent>
-    </Menu>
-  );
-}
+import { AccountMenu } from "./AppShell/AccountMenu";
+import { currentOrganisationSlug, NavItem, PendingBadge, RailTip, roleLabel } from "./AppShell/NavItems";
 
 function SidebarContents({
   user,

@@ -1,21 +1,16 @@
 "use client";
 
-import { BrandLoader } from "@/components/brand/BrandLoader";
-import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { BroadcastAttendanceFilter, RsvpStatus } from "@prisma/client";
-import { ChevronDown, FlaskConical, Monitor, Send, Smartphone } from "lucide-react";
+import { FlaskConical, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SegmentedControl } from "@/components/ui/choice";
 import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
 import { Tooltip } from "@/components/ui/menu";
-import { cn } from "@/lib/cn";
 import { countBroadcastRecipients, previewEventBroadcast, sendEventBroadcast, sendEventBroadcastTest } from "@/app/actions/broadcasts";
 import {
-  BROADCAST_PLACEHOLDERS,
   BROADCAST_STARTER_TEMPLATES,
-  BROADCAST_STATUS_OPTIONS,
   BROADCAST_SUBJECT_MAX,
   broadcastHtmlToText,
   defaultBroadcastTemplate,
@@ -25,75 +20,14 @@ import { useToast } from "@/components/feedback/ToastProvider";
 import { SendConfirmDialog } from "./SendConfirmDialog";
 import { recipientDots, recipientSummary, sendBarLabel } from "@/components/event-dashboard/emails/recipients";
 import { BroadcastEmailEditor } from "./BroadcastEmailEditor";
-import { BroadcastPreviewFrame } from "./BroadcastPreviewFrame";
-import { DesignPicker } from "./DesignPicker";
 import { DEFAULT_BROADCAST_DESIGN, type BroadcastDesignId } from "@/lib/email/broadcastDesigns";
+import { AudienceSection } from "./EventBroadcastPanel/AudienceSection";
+import { HistorySection } from "./EventBroadcastPanel/HistorySection";
+import { PreviewSection } from "./EventBroadcastPanel/PreviewSection";
+import { MORE_TEMPLATES, StepHeading, SUBJECT_PLACEHOLDERS, cardClass, type BroadcastHistoryRow } from "./EventBroadcastPanel/shared";
+import { TemplateSection } from "./EventBroadcastPanel/TemplateSection";
 
-export type BroadcastHistoryRow = {
-  id: string;
-  subject: string;
-  body: string;
-  statuses: RsvpStatus[];
-  attendance: BroadcastAttendanceFilter;
-  design: BroadcastDesignId;
-  recipientCount: number;
-  createdAt: string;
-  /** Pre-formatted on the server in the event timezone ("3 days ago", "13 Oct 2026"). */
-  sentLabel: string;
-  createdByName: string | null;
-  /** Outbox delivery counts; `expired` once the outbox has purged them. */
-  delivery: { sent: number; waiting: number; failed: number; skipped: number; expired: boolean } | null;
-};
-
-/** "38 delivered · 2 waiting · 1 failed" for a sent broadcast. */
-function deliverySummary(delivery: BroadcastHistoryRow["delivery"]): string | null {
-  if (!delivery) return null;
-  if (delivery.expired) return "Delivery details are no longer kept";
-  const parts = [
-    `${delivery.sent} delivered`,
-    delivery.waiting ? `${delivery.waiting} waiting` : null,
-    delivery.failed ? `${delivery.failed} failed` : null,
-    delivery.skipped ? `${delivery.skipped} skipped (no longer in the audience)` : null,
-  ].filter(Boolean);
-  return parts.join(" · ");
-}
-
-const SUBJECT_PLACEHOLDERS = BROADCAST_PLACEHOLDERS.filter((placeholder) => ["{{name}}", "{{event}}", "{{eventDate}}", "{{organisation}}"].includes(placeholder.token));
-
-/** The first cards shown; the rest sit behind "More templates". */
-const FEATURED_TEMPLATE_IDS = ["update", "reminder", "know-before-you-go", "agenda", "thank-you"];
-const FEATURED_TEMPLATES = FEATURED_TEMPLATE_IDS.map((id) => BROADCAST_STARTER_TEMPLATES.find((template) => template.id === id)).filter((template) => template !== undefined);
-const MORE_TEMPLATES = BROADCAST_STARTER_TEMPLATES.filter((template) => !FEATURED_TEMPLATE_IDS.includes(template.id));
-
-/** The design's short names for each registration status (the values and server filter are unchanged). */
-const STATUS_PILL_LABEL: Record<RsvpStatus, string> = {
-  CONFIRMED: "Going",
-  WAITLISTED: "Waitlist",
-  PENDING_APPROVAL: "To approve",
-  REJECTED: "Declined",
-  PENDING_PAYMENT: "Unpaid",
-};
-
-const ATTENDANCE_OPTIONS: ReadonlyArray<{ value: BroadcastAttendanceFilter; label: string; ariaLabel: string }> = [
-  { value: "ANY", label: "Everyone", ariaLabel: "Everyone in the selected statuses" },
-  { value: "CHECKED_IN", label: "Checked in", ariaLabel: "Only people who checked in" },
-  { value: "NOT_CHECKED_IN", label: "Didn't check in", ariaLabel: "Only people who did not check in" },
-];
-
-function StepHeading({ step, id, title, aside }: { step: number; id: string; title: string; aside?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-      <span aria-hidden className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-full bg-primary text-[13px] font-semibold tabular-nums text-on-primary">{step}</span>
-      <h2 id={id} className="text-h4 text-ink">
-        <span className="sr-only">Step {step}: </span>
-        {title}
-      </h2>
-      {aside ? <span className="text-sm text-ink-muted">{aside}</span> : null}
-    </div>
-  );
-}
-
-const cardClass = "flex min-w-0 flex-col gap-4 rounded-xl border border-line bg-panel p-4 sm:p-5";
+export type { BroadcastHistoryRow } from "./EventBroadcastPanel/shared";
 
 const UNDO_SECONDS = 5;
 type SendPayload = { statuses: RsvpStatus[]; attendance: BroadcastAttendanceFilter; subject: string; body: string; design: BroadcastDesignId; count: number };
@@ -253,108 +187,29 @@ export function EventBroadcastPanel(props: {
 
   const sendLabel = recipientCount && recipientCount > 0 ? `Send to ${recipientCount} ${recipientCount === 1 ? "person" : "people"}` : "Send";
 
-  const templateCard = (template: (typeof BROADCAST_STARTER_TEMPLATES)[number]) => {
-    const selected = templateId === template.id;
-    return (
-      <li key={template.id} className="flex">
-        <button
-          type="button"
-          aria-pressed={selected}
-          onClick={() => applyTemplate(template.id)}
-          disabled={pending}
-          className={cn(
-            "flex w-full flex-col items-start gap-1 rounded-xl p-3.5 text-left transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:bg-surface disabled:text-ink-muted",
-            selected ? "border-2 border-primary bg-accent-soft" : "border border-line bg-panel hover:bg-subtle",
-          )}
-        >
-          <span className="font-bold text-ink">{template.name}</span>
-          <span className="line-clamp-2 text-[13px] text-ink-muted">{template.description}</span>
-        </button>
-      </li>
-    );
-  };
-
   return (
     <div className="flex flex-col gap-6">
       <Callout tone="info">
         Emails go only to people who already registered for this event. Messages are queued and delivered in the background, a few at a time, so large audiences take a few minutes. Send yourself a test first.
       </Callout>
 
-      <section aria-labelledby="broadcast-step-template" className="flex flex-col gap-3">
-        <StepHeading step={1} id="broadcast-step-template" title="Pick a starting point" aside="Everything stays editable." />
-        <ul className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-          {FEATURED_TEMPLATES.map(templateCard)}
-          {moreOpen ? MORE_TEMPLATES.map(templateCard) : null}
-          {MORE_TEMPLATES.length > 0 && !moreOpen ? (
-            <li className="flex">
-              <button
-                type="button"
-                aria-expanded={false}
-                onClick={() => setShowAllTemplates(true)}
-                className="flex w-full flex-col items-start gap-1 rounded-xl border border-dashed border-line-strong bg-panel p-3.5 text-left transition-colors duration-[180ms] ease-yy hover:bg-subtle"
-              >
-                <span className="inline-flex items-center gap-1 font-bold text-ink">
-                  More templates <ChevronDown aria-hidden className="size-4" />
-                </span>
-                <span className="line-clamp-2 text-[13px] text-ink-muted">
-                  {MORE_TEMPLATES.length} more · {MORE_TEMPLATES.slice(0, 2).map((template) => template.name.toLowerCase()).join(", ")}…
-                </span>
-              </button>
-            </li>
-          ) : null}
-        </ul>
-      </section>
+      <TemplateSection templateId={templateId} applyTemplate={applyTemplate} pending={pending} moreOpen={moreOpen} setShowAllTemplates={setShowAllTemplates} />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-5">
-          <section aria-labelledby="broadcast-step-audience" className={cardClass}>
-            <StepHeading step={2} id="broadcast-step-audience" title="Who gets it" />
-            <div role="group" aria-label="Registration status" className="flex flex-wrap gap-1.5">
-              {BROADCAST_STATUS_OPTIONS.map((option) => {
-                const selected = statuses.includes(option.value);
-                return (
-                  <Tooltip key={option.value} content={`${option.label}: ${option.hint}`}>
-                    <button
-                      type="button"
-                      aria-pressed={selected}
-                      onClick={() => toggleStatus(option.value)}
-                      disabled={pending}
-                      className={cn(
-                        "inline-flex min-h-[38px] items-center gap-1.5 rounded-full border px-3.5 text-sm font-semibold transition-colors duration-[180ms] ease-yy disabled:pointer-events-none disabled:border-line disabled:bg-surface disabled:text-ink-muted",
-                        selected ? "border-primary bg-primary text-on-primary" : "border-line-strong bg-panel text-ink hover:bg-subtle",
-                      )}
-                    >
-                      {STATUS_PILL_LABEL[option.value]}
-                      <span className="font-medium tabular-nums">{statusCounts[option.value] ?? 0}</span>
-                    </button>
-                  </Tooltip>
-                );
-              })}
-            </div>
-            <SegmentedControl
-              ariaLabel="Attendance"
-              size="sm"
-              value={attendance}
-              onValueChange={(value) => setAttendance(value)}
-              options={ATTENDANCE_OPTIONS}
-              className="max-w-full self-start"
-            />
-            <div aria-live="polite" className="flex flex-col gap-2 rounded-lg bg-subtle px-3.5 py-3 sm:flex-row sm:items-center sm:gap-3">
-              <span aria-hidden className="flex w-full max-w-[160px] shrink-0 flex-wrap gap-[3px]">
-                {Array.from({ length: reach.dots }, (_, index) => (
-                  <span key={index} className={cn("size-[7px] rounded-full", index < reach.lit ? "bg-accent" : "bg-track")} />
-                ))}
-              </span>
-              {countError ? (
-                <Callout tone="danger" className="flex-1">{countError}</Callout>
-              ) : (
-                <p className="text-sm text-ink">
-                  {summary.count ? <strong className="font-bold">{summary.count}</strong> : null} {summary.rest}
-                  {recipientCount !== null && recipientCount > 0 ? <span className="block text-caption text-ink-muted">Matches {audienceText}. Someone who registered twice still gets one email.</span> : null}
-                </p>
-              )}
-            </div>
-          </section>
+          <AudienceSection
+            statuses={statuses}
+            attendance={attendance}
+            setAttendance={setAttendance}
+            toggleStatus={toggleStatus}
+            statusCounts={statusCounts}
+            pending={pending}
+            reach={reach}
+            summary={summary}
+            countError={countError}
+            recipientCount={recipientCount}
+            audienceText={audienceText}
+          />
 
           <section aria-labelledby="broadcast-step-message" className={cardClass}>
             <StepHeading step={3} id="broadcast-step-message" title="Write it" />
@@ -381,74 +236,9 @@ export function EventBroadcastPanel(props: {
         </div>
 
         <div className="flex min-w-0 flex-col gap-5">
-          <section aria-labelledby="broadcast-preview" className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="broadcast-preview" className="text-overline text-ink-muted">Preview · as sent</h2>
-              <SegmentedControl
-                ariaLabel="Preview width"
-                size="sm"
-                value={previewWidth}
-                onValueChange={setPreviewWidth}
-                options={[
-                  { value: "mobile", label: "Phone", icon: <Smartphone aria-hidden />, ariaLabel: "Mobile width" },
-                  { value: "desktop", label: "Desktop", icon: <Monitor aria-hidden />, ariaLabel: "Desktop width" },
-                ]}
-              />
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-3">
-              <p className="text-label text-ink">Design</p>
-              <DesignPicker value={design} onChange={setDesign} accentColor={brand.accentColor} coverImageUrl={brand.coverImageUrl} />
-            </div>
-            <p className="text-caption text-ink-muted">
-              Rendered by the server with example values, exactly as it will arrive. Each attendee sees their own name and, when confirmed, their own ticket link.
-            </p>
-            {!hasContent ? (
-              <Callout tone="info">Add a subject and a message to see the preview.</Callout>
-            ) : preview.error && previewReady ? (
-              <Callout tone="danger">{preview.error}</Callout>
-            ) : (
-              <div className="relative flex flex-col gap-2 rounded-xl border border-line bg-muted p-2.5 sm:p-3.5">
-                {!previewReady ? (
-                  <div aria-live="polite" className="absolute right-3 top-3 z-[1] flex items-center gap-2 rounded-full bg-panel px-2.5 py-1 text-caption text-ink-secondary">
-                    <BrandLoader size={20} label="Updating preview" /> Updating…
-                  </div>
-                ) : null}
-                <p className="px-1 text-label text-ink-muted [overflow-wrap:anywhere]">
-                  Subject: <span className="font-bold text-ink">{preview.subject || "…"}</span>
-                </p>
-                <BroadcastPreviewFrame html={preview.html} width={previewWidth} dimmed={!previewReady} />
-              </div>
-            )}
-          </section>
+          <PreviewSection previewWidth={previewWidth} setPreviewWidth={setPreviewWidth} design={design} setDesign={setDesign} brand={brand} hasContent={hasContent} preview={preview} previewReady={previewReady} />
 
-          <section aria-labelledby="broadcast-history" className={cn(cardClass, "gap-3")}>
-            <h2 id="broadcast-history" className="text-h4 text-ink">Sent before</h2>
-            {history.length === 0 ? (
-              <p className="text-sm text-ink-muted">No emails have been sent for this event yet.</p>
-            ) : (
-              <ul className="flex flex-col divide-y divide-line">
-                {history.map((row) => (
-                  <li key={row.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-ink [overflow-wrap:anywhere]">{row.subject}</p>
-                      <p className="text-[13px] text-ink-muted">
-                        Sent to {row.recipientCount} {row.recipientCount === 1 ? "person" : "people"} · <time dateTime={row.createdAt}>{row.sentLabel}</time>
-                        {row.createdByName ? ` · by ${row.createdByName}` : ""}
-                      </p>
-                      <p className="text-[13px] text-ink-muted">{describeBroadcastAudience(row.statuses, row.attendance)}</p>
-                      {deliverySummary(row.delivery) ? (
-                        <p className={cn("text-[13px]", row.delivery && !row.delivery.expired && row.delivery.failed ? "font-semibold text-danger-fg" : "text-ink-muted")}>{deliverySummary(row.delivery)}</p>
-                      ) : null}
-                      <p className="mt-1 line-clamp-2 whitespace-pre-wrap text-[13px] text-ink-secondary">{broadcastHtmlToText(row.body)}</p>
-                    </div>
-                    <Button size="sm" variant="quiet" className="shrink-0 font-semibold text-ink" onClick={() => loadFromHistory(row)} disabled={pending} aria-label={`Reuse “${row.subject}”`}>
-                      Reuse
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+          <HistorySection history={history} pending={pending} loadFromHistory={loadFromHistory} />
         </div>
       </div>
 

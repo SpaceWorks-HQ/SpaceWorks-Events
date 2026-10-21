@@ -1,121 +1,17 @@
 "use server";
 
 import { RsvpStatus } from "@prisma/client";
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
-import { canManageEvents, getMembership } from "@/lib/permissions";
 import { confirmRsvpWithinCapacity } from "@/lib/rsvpCapacity";
 import { rsvpTransitionSchema } from "@/lib/validators";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-import { declineRequestedOrder, offerRequestedOrder, PaymentOperationError } from "@/lib/payments/operations";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
-
-function revalidateRsvpPaths(params: {
-  orgSlug: string;
-  eventSlug?: string;
-  eventId?: string;
-  eventInstanceId?: string;
-}) {
-  const { orgSlug, eventSlug, eventId, eventInstanceId } = params;
-  revalidatePath(`/${orgSlug}`);
-  revalidatePath(`/dashboard/${orgSlug}`);
-  if (eventSlug && eventId) {
-    revalidatePath(`/${orgSlug}/${eventSlug}`);
-    revalidatePath(`/dashboard/${orgSlug}/event/${eventId}`);
-  }
-  if (eventInstanceId) {
-    revalidatePath(`/${orgSlug}/i/${eventInstanceId}`);
-  }
-}
-
-async function loadRsvpContext(
-  organisationSlug: string,
-  userId: string,
-  rsvpId: string,
-  eventId: string | undefined,
-  eventInstanceId: string | undefined,
-) {
-  const org = await prisma.organisation.findUnique({
-    where: { slug: organisationSlug },
-  });
-  if (!org) return { error: "Organisation not found." as const };
-
-  const membership = await getMembership(userId, org.id);
-  if (!canManageEvents(membership)) {
-    return { error: "You do not have permission to manage attendees." as const };
-  }
-
-  if (eventId) {
-    const event = await prisma.event.findFirst({
-      where: { id: eventId, organisationId: org.id },
-    });
-    if (!event) return { error: "Event not found." as const };
-    const rsvp = await prisma.rSVP.findFirst({
-      where: { id: rsvpId, eventId: event.id },
-      include: { user: { select: { email: true, name: true } } },
-    });
-    if (!rsvp) return { error: "RSVP not found." as const };
-    return { org, event, rsvp, instance: null as null };
-  }
-
-  if (eventInstanceId) {
-    const instance = await prisma.eventInstance.findFirst({
-      where: {
-        id: eventInstanceId,
-        series: { organisationId: org.id },
-      },
-      include: { series: true },
-    });
-    if (!instance) return { error: "Instance not found." as const };
-    const rsvp = await prisma.rSVP.findFirst({
-      where: { id: rsvpId, eventInstanceId: instance.id },
-      include: { user: { select: { email: true, name: true } } },
-    });
-    if (!rsvp) return { error: "RSVP not found." as const };
-    return { org, event: null, instance, rsvp };
-  }
-
-  return { error: "Event not found." as const };
-}
-
-/** A paid order waiting for approval or a waitlist place; it moves as a whole. */
-async function paidRequest(rsvp: { orderId: string | null; }) {
-  if (!rsvp.orderId) return null;
-  const order = await prisma.order.findUnique({ where: { id: rsvp.orderId }, select: { id: true, status: true, totalMinor: true } });
-  return order && order.status === "REQUESTED" && order.totalMinor > BigInt(0) ? order : null;
-}
-
-/** Run a paid-order operation, turning its refusal into the action's error. */
-async function paymentOperation(run: () => Promise<unknown>): Promise<ActionResult> {
-  try {
-    await run();
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
-    throw error;
-  }
-}
-
-function attendeeEmail(rsvp: {
-  guestEmail: string | null;
-  user: { email: string | null; } | null;
-}): string | null {
-  return rsvp.user?.email?.trim() || rsvp.guestEmail;
-}
-
-function attendeeName(rsvp: {
-  guestName: string | null;
-  user: { name: string | null; } | null;
-}): string | undefined {
-  return rsvp.user?.name?.trim() || rsvp.guestName?.trim() || undefined;
-}
+import { declineRequestedOrder, offerRequestedOrder } from "@/lib/payments/operations";
+import { attendeeEmail, attendeeName, loadRsvpContext, paidRequest, paymentOperation, revalidateRsvpPaths } from "./rsvp-lifecycle/helpers";
 
 export async function approveRsvp(input: unknown): Promise<ActionResult> {
   const session = await auth();

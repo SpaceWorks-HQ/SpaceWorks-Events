@@ -2,25 +2,25 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import type { RegistrationFieldType } from "@prisma/client";
-import { RegistrationFieldType as FieldType } from "@prisma/client";
 import { Award, Copy, LayoutTemplate, Pencil, Plus, Trash2 } from "lucide-react";
 import { MoodTile } from "@/components/brand/MoodTile";
 import { Button, IconButton } from "@/components/ui/button";
-import { CheckboxField, Switch } from "@/components/ui/choice";
+import { Switch } from "@/components/ui/choice";
 import { Callout, Chip, EmptyState } from "@/components/ui/display";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
-import { Field as FormField, Input, Dropdown } from "@/components/ui/field";
+import { Field as FormField, Input } from "@/components/ui/field";
 import { applyFeedbackTemplate, deleteFeedbackField, saveFeedbackField, saveFeedbackSettings } from "@/app/actions/feedback-form";
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useUnsavedChangesGuard } from "@/components/forms/useUnsavedChangesGuard";
-import { FIELD_TYPE_LABELS, questionTypeLabel } from "@/components/event-dashboard/feedback/helpers";
-import { feedbackTemplates, type FeedbackTemplate } from "@/lib/feedbackTemplates";
-import { cn } from "@/lib/cn";
+import { questionTypeLabel } from "@/components/event-dashboard/feedback/helpers";
+import { type FeedbackTemplate } from "@/lib/feedbackTemplates";
 
 import { CertificateBuilder } from "./CertificateBuilder";
-import { certificateMergeTags, fillCertificateText, parseCertificateTemplate, type CertificateMergeValues, type CertificateTemplate } from "@/lib/certificateTemplate";
-
-type Field = { id: string; key: string; label: string; type: RegistrationFieldType; required: boolean; options: string[] };
+import { parseCertificateTemplate } from "@/lib/certificateTemplate";
+import { CertificatePreview } from "./FeedbackFormEditor/CertificatePreview";
+import { QuestionDialog } from "./FeedbackFormEditor/QuestionDialog";
+import { TemplateDialog } from "./FeedbackFormEditor/TemplateDialog";
+import type { Field } from "./FeedbackFormEditor/field";
 
 const card = "flex flex-col gap-4 rounded-xl border border-line bg-panel p-5";
 
@@ -288,53 +288,22 @@ export function FeedbackFormEditor(props: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={dialog} onOpenChange={(next) => { if (!next && !pending) setDialog(false); }}>
-        <DialogContent size="md">
-          <DialogHeader title={editingField ? "Edit feedback question" : "Add feedback question"} />
-          <DialogBody className="flex flex-col gap-4">
-            <FormField label="Question">
-              <Input value={label} onChange={(event) => setLabel(event.target.value)} autoFocus />
-            </FormField>
-            <FormField label="Answer type">
-              <Dropdown value={type} onChange={(event) => setType(event.target.value as RegistrationFieldType)}>
-                {Object.values(FieldType).filter((item) => item !== "EMAIL" && item !== "PHONE" && item !== "DATE").map((item) => <option key={item} value={item}>{FIELD_TYPE_LABELS[item] ?? item}</option>)}
-              </Dropdown>
-            </FormField>
-            {["SELECT", "MULTI_SELECT", "RADIO"].includes(type) ? (
-              <FormField label="Options (comma separated)" helperText={type === "MULTI_SELECT" ? undefined : "For a rating scale, use numbers such as 1, 2, 3, 4, 5."}>
-                <Input value={options} onChange={(event) => setOptions(event.target.value)} />
-              </FormField>
-            ) : null}
-            <CheckboxField label="Required" checked={required} onCheckedChange={(checked) => setRequired(checked === true)} />
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setDialog(false)} disabled={pending}>Cancel</Button>
-            <Button variant="primary" onClick={saveField} disabled={pending || !label.trim()}>{editingField ? "Save question" : "Add question"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={templateDialog} onOpenChange={(next) => { if (!next && !pending) setTemplateDialog(false); }}>
-        <DialogContent size="lg">
-          <DialogHeader title="Choose a feedback template" description="A template replaces unanswered questions and closes the form so you can review it." />
-          <DialogBody>
-            <ul className="flex flex-col gap-2.5">
-              {feedbackTemplates.map((template) => (
-                <li key={template.id} className="flex flex-col gap-3 rounded-xl border border-line p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-[16px] font-bold text-ink">{template.name}</p>
-                    <p className="text-body-ui text-ink-secondary">{template.description}</p>
-                    <p className="text-caption text-ink-muted">{template.fields.length} questions · {template.title}</p>
-                  </div>
-                  <Button variant="primary" size="sm" onClick={() => applyTemplate(template)} disabled={pending} className="shrink-0">Use template</Button>
-                </li>
-              ))}
-            </ul>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setTemplateDialog(false)} disabled={pending}>Cancel</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <QuestionDialog
+        dialog={dialog}
+        setDialog={setDialog}
+        pending={pending}
+        editingField={editingField}
+        label={label}
+        setLabel={setLabel}
+        type={type}
+        setType={setType}
+        options={options}
+        setOptions={setOptions}
+        required={required}
+        setRequired={setRequired}
+        saveField={saveField}
+      />
+      <TemplateDialog templateDialog={templateDialog} setTemplateDialog={setTemplateDialog} pending={pending} applyTemplate={applyTemplate} />
       <ConfirmationDialog
         open={Boolean(deleteField)}
         title="Delete feedback question?"
@@ -344,49 +313,6 @@ export function FeedbackFormEditor(props: {
         onCancel={() => setDeleteField(null)}
         onConfirm={confirmDelete}
       />
-    </div>
-  );
-}
-
-/** Small, decorative preview of the certificate: uploaded artwork with every layer outlined, or the standard layout. */
-function CertificatePreview({ template, eventTitle, eventDateLabel, organisationName, muted }: { template: CertificateTemplate | null; eventTitle?: string; eventDateLabel?: string; organisationName?: string; muted: boolean }) {
-  const values: CertificateMergeValues = {
-    name: certificateMergeTags.name.sample,
-    event: eventTitle || certificateMergeTags.event.sample,
-    eventDate: eventDateLabel || certificateMergeTags.eventDate.sample,
-    organisation: organisationName || certificateMergeTags.organisation.sample,
-    issueDate: certificateMergeTags.issueDate.sample,
-  };
-  return (
-    <div aria-hidden className={cn("overflow-hidden rounded-xl border border-line bg-panel transition-opacity", muted && "opacity-50")}>
-      {template ? (
-        <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element -- served by the app's private upload route */}
-          <img src={`/api/uploads/${template.backgroundKey}`} alt="" className="block h-auto w-full" />
-          {template.elements.map((element) => (
-            <span
-              key={element.id}
-              className="absolute flex items-center justify-center overflow-hidden rounded-[3px] border border-dashed border-accent"
-              style={{ left: `${element.x}%`, top: `${element.y}%`, width: `${element.width}%`, height: `${element.height}%` }}
-            >
-              {element.type === "text" ? (
-                <span className="truncate px-0.5 text-[10px] font-bold leading-tight text-ink" style={{ color: element.color }}>
-                  {fillCertificateText(element.text, values).replace(/\s+/g, " ")}
-                </span>
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element -- served by the app's private upload route
-                <img src={`/api/uploads/${element.key}`} alt="" className="size-full object-contain" />
-              )}
-            </span>
-          ))}
-        </div>
-      ) : (
-        <div className="flex aspect-[1.414] flex-col items-center justify-center gap-1.5 p-4 text-center">
-          <span className="text-[10px] font-bold tracking-[0.12em] text-ink-muted">CERTIFICATE OF ATTENDANCE</span>
-          <span className="rounded-lg border-[1.5px] border-dashed border-accent px-3 py-1 font-display text-lg font-semibold text-ink">Attendee name</span>
-          {eventTitle ? <span className="line-clamp-2 text-xs text-ink-secondary">{eventTitle}{eventDateLabel ? ` · ${eventDateLabel}` : ""}</span> : null}
-        </div>
-      )}
     </div>
   );
 }

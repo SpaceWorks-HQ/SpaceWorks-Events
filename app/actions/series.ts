@@ -1,9 +1,6 @@
 "use server";
 
 import { EventStatus, RsvpStatus } from "@prisma/client";
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { z } from "zod";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { buildRecurrenceIcs, materializeInstances } from "@/lib/recurrence";
@@ -22,21 +19,7 @@ import { hasPaidOrders, peopleWithPlaces } from "@/lib/payments/eventCancellatio
 import { noticeEach, noticeSubject, uniqueEmails } from "@/lib/notices";
 import { cancelOccurrence, setOccurrenceCapacity } from "@/lib/payments/occurrences";
 import { PaymentOperationError } from "@/lib/payments/operations";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
-
-function revalidateAllSeriesPaths(
-  orgSlug: string,
-  seriesId: string,
-  instanceIds: string[],
-) {
-  revalidatePath(`/dashboard/${orgSlug}`);
-  revalidatePath(`/dashboard/${orgSlug}/series/${seriesId}`);
-  revalidatePath(`/${orgSlug}`);
-  for (const id of instanceIds) {
-    revalidatePath(`/${orgSlug}/i/${id}`);
-  }
-}
+import { cancelDateSchema, capacitySchema, dateAccess, revalidateAllSeriesPaths, revalidatePath } from "./series/helpers";
 
 export async function createEventSeries(
   input: unknown,
@@ -313,25 +296,6 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
     revalidatePath(`/${org.slug}/i/${i.id}`);
   }
   return { ok: true };
-}
-
-const dateSchema = z.object({
-  organisationSlug: z.string().trim().min(1).max(120),
-  eventSeriesId: z.string().trim().min(1).max(128),
-  instanceId: z.string().trim().min(1).max(128),
-});
-const capacitySchema = dateSchema.extend({ capacity: z.number().int().min(1).max(1_000_000).nullable() }).strict();
-const cancelDateSchema = dateSchema.extend({ reason: z.string().trim().max(500).default("") }).strict();
-
-/** Owners and admins manage a series' dates, as they edit the series. */
-async function dateAccess(organisationSlug: string) {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "You must be signed in." } as const;
-  if (await isActionRateLimited("action", session.user.id)) return { error: "Too many updates. Please try again later." } as const;
-  const org = await prisma.organisation.findUnique({ where: { slug: organisationSlug }, select: { id: true, slug: true } });
-  if (!org) return { error: "Organisation not found." } as const;
-  if (!canManageEvents(await getMembership(session.user.id, org.id))) return { error: "You do not have permission to change this series." } as const;
-  return { org, userId: session.user.id };
 }
 
 /** One date's own capacity, or null to use the series capacity. */

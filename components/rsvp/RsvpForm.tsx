@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RsvpStatus } from "@prisma/client";
-import { CheckCircle2, Download } from "lucide-react";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
@@ -17,67 +15,9 @@ import { AccessCodeField, PromoCodeField, previewOrderTotal, type AppliedPromo, 
 import { formatMoney } from "@/lib/payments/money";
 import type { PublicAddOn, PublicTicketType } from "@/lib/payments/tickets";
 import { Radio, RadioGroup } from "@/components/ui/choice";
-
-async function postRsvp(body: unknown) {
-  const res = await fetch("/api/rsvp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  type Saved = { ticketToken?: string; status?: RsvpStatus; orderToken?: string; checkoutUrl?: string | null };
-  let data: { ok?: boolean; error?: string; data?: Saved } = {};
-  try {
-    data = (await res.json()) as { ok?: boolean; error?: string; data?: Saved };
-  } catch {
-    /* empty */
-  }
-  if (res.status === 429) {
-    return {
-      ok: false as const,
-      error: data.error ?? "Too many requests. Try again later.",
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false as const,
-      error: data.error ?? "Could not save your RSVP.",
-    };
-  }
-  if (data.ok) {
-    return {
-      ok: true as const,
-      ticketToken: data.data?.ticketToken ?? "",
-      status: data.data?.status ?? null,
-      orderToken: data.data?.orderToken ?? null,
-      checkoutUrl: data.data?.checkoutUrl ?? null,
-    };
-  }
-  return {
-    ok: false as const,
-    error: data.error ?? "Could not save your RSVP.",
-  };
-}
-
-function storageKey(params: {
-  orgSlug: string;
-  eventSlug?: string;
-  eventInstanceId?: string;
-}) {
-  const suffix = params.eventInstanceId
-    ? `i:${params.eventInstanceId}`
-    : `e:${params.eventSlug ?? ""}`;
-  return `swe:rsvp:${params.orgSlug}:${suffix}`;
-}
-
-function safeJsonParse<T>(v: string | null): T | null {
-  if (!v) return null;
-  try {
-    return JSON.parse(v) as T;
-  } catch {
-    return null;
-  }
-}
+import { AttendeeFields } from "./RsvpForm/AttendeeFields";
+import { postRsvp, safeJsonParse, storageKey } from "./RsvpForm/helpers";
+import { FramedCheckoutNotice, RsvpDone } from "./RsvpForm/states";
 
 export function RsvpForm(props: {
   orgSlug: string;
@@ -236,57 +176,11 @@ export function RsvpForm(props: {
   }
 
   if (framedCheckout) {
-    return (
-      <div role="status" className="flex flex-col items-start gap-3 rounded-lg bg-info-bg p-5 text-ink">
-        <p className="text-body font-semibold">Your tickets are held. Pay on the secure payment page, which opens in a new tab.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="accent" size="sm">
-            <a href={framedCheckout.checkoutUrl} target="_blank" rel="noopener noreferrer">Open the payment page</a>
-          </Button>
-          {framedCheckout.orderToken ? (
-            <Button asChild variant="secondary" size="sm">
-              <a href={`/order/${framedCheckout.orderToken}`} target="_blank" rel="noopener noreferrer">View your order</a>
-            </Button>
-          ) : null}
-        </div>
-        <p className="text-caption text-ink-muted">Finish paying in the new tab; your order page confirms the tickets.</p>
-      </div>
-    );
+    return <FramedCheckoutNotice framedCheckout={framedCheckout} />;
   }
 
   if (done) {
-    const href = ticketToken ? `/ticket/${ticketToken}` : null;
-    const ticketDownloadUrl = ticketToken ? `/api/ticket/${ticketToken}/download` : null;
-    const isConfirmed = rsvpStatus === "CONFIRMED";
-    return (
-      <div role="status" className="flex flex-col items-start gap-3 rounded-lg bg-success-bg p-5 text-success-fg">
-        <CheckCircle2 aria-hidden className="yy-success-in size-8" />
-        <p className="text-body font-semibold">
-          {isConfirmed
-            ? "Registration confirmed. Download and save your ticket now — you’ll need it for check-in."
-            : sellsPaid && (rsvpStatus === "PENDING_APPROVAL" || rsvpStatus === "WAITLISTED")
-              ? rsvpStatus === "WAITLISTED"
-                ? "You’re on the waitlist. Nothing has been charged; if a place frees up, we’ll email you a link to pay."
-                : "Request sent. Nothing has been charged; if the organiser approves it, we’ll email you a link to pay."
-              : "Registration received. We’ll let you know when its status changes."}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {isConfirmed && ticketDownloadUrl ? (
-            <Button asChild variant="primary" size="sm">
-              <a href={ticketDownloadUrl} download>
-                <Download aria-hidden className="size-4" />
-                Download and save ticket
-              </a>
-            </Button>
-          ) : null}
-          {href ? (
-            <Button asChild variant="secondary" size="sm">
-              <Link href={href}>{isConfirmed ? "View ticket" : "View status"}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    );
+    return <RsvpDone ticketToken={ticketToken} rsvpStatus={rsvpStatus} sellsPaid={sellsPaid} />;
   }
 
   const questions = <RegistrationQuestions controller={questionsState} />;
@@ -308,19 +202,7 @@ export function RsvpForm(props: {
       ) : null}
       <AddOnPicker addOns={addOns} quantities={addOnQuantities} onChange={setAddOnQuantities} />
       {seats > 1 ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-caption text-ink-muted">Who else is coming? Optional now; you can add them after ordering, and each gets their own ticket.</p>
-          {Array.from({ length: seats - 1 }, (_, index) => (
-            <div key={index} className="grid gap-2 sm:grid-cols-2">
-              <Field label={`Ticket ${index + 2}: name`} optional>
-                <Input value={attendees[index]?.name ?? ""} maxLength={200} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: event.target.value, email: next[index]?.email ?? "" }; return next; })} />
-              </Field>
-              <Field label={`Ticket ${index + 2}: email`} optional>
-                <Input type="email" value={attendees[index]?.email ?? ""} onChange={(event) => setAttendees((current) => { const next = [...current]; next[index] = { name: next[index]?.name ?? "", email: event.target.value }; return next; })} />
-              </Field>
-            </div>
-          ))}
-        </div>
+        <AttendeeFields seats={seats} attendees={attendees} setAttendees={setAttendees} />
       ) : null}
       {ticketing?.promoCodes && (eventSlug || eventInstanceId) ? (
         <PromoCodeField orgSlug={orgSlug} eventSlug={eventSlug} eventInstanceId={eventInstanceId} applied={promo} onApplied={setPromo} problem={promoProblem} />
