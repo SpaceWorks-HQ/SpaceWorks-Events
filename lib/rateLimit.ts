@@ -31,7 +31,8 @@ export type Bucket =
   | "loginCode"
   | "paymentSettings"
   | "paymentStatus"
-  | "ticketCheckout";
+  | "ticketCheckout"
+  | "clientError";
 
 const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   global: { max: 300, windowMs: 60_000 },
@@ -78,6 +79,8 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   loginCode: { max: 5, windowMs: 60 * 60_000 },
   // "Pay now" on a pending order or ticket, per IP.
   ticketCheckout: { max: 20, windowMs: 60_000 },
+  // Browser crash reports forwarded to the operator alert webhook.
+  clientError: { max: 10, windowMs: 60_000 },
 };
 
 // Local fallback store

@@ -13,16 +13,19 @@ const required = [
   "HEALTHCHECK_SECRET",
   "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY",
   "MFA_ENCRYPTION_KEY",
-  "EMAIL_FROM",
   "TRUSTED_PROXY_IP_HEADER",
   "S3_BUCKET",
   "S3_REGION",
 ];
 
+// SMTP (EMAIL_FROM, SMTP_*) and Google SSO (AUTH_GOOGLE_*) are not required
+// here: Super admin -> Settings stores them in the database, and that copy
+// overrides the environment at send/sign-in time. This preflight cannot see the
+// database, so it only reports whether an environment fallback exists. Use
+// scripts/check-instance-secrets.mjs to confirm that MFA_ENCRYPTION_KEY can
+// decrypt the secrets already saved in the panel.
 const missing = required.filter((key) => !process.env[key]?.trim());
-if (!(process.env.SMTP_SERVICE?.trim() || process.env.SMTP_HOST?.trim())) {
-  missing.push("SMTP_SERVICE or SMTP_HOST");
-}
+const hasSmtpFallback = Boolean(process.env.SMTP_SERVICE?.trim() || process.env.SMTP_HOST?.trim());
 
 if (missing.length > 0) {
   console.error(`Missing required production configuration: ${missing.join(", ")}`);
@@ -47,7 +50,7 @@ for (const key of ["NEXT_SERVER_ACTIONS_ENCRYPTION_KEY", "MFA_ENCRYPTION_KEY"]) 
   }
 }
 
-if ((process.env.SMTP_HOST || process.env.SMTP_SERVICE) && process.env.SMTP_ALLOW_UNAUTHENTICATED !== "1" && (!process.env.SMTP_USER?.trim() || !process.env.SMTP_PASSWORD?.trim())) {
+if (hasSmtpFallback && process.env.SMTP_ALLOW_UNAUTHENTICATED !== "1" && (!process.env.SMTP_USER?.trim() || !process.env.SMTP_PASSWORD?.trim())) {
   console.error("SMTP requires credentials unless SMTP_ALLOW_UNAUTHENTICATED=1 is explicitly set.");
   process.exit(1);
 }
@@ -101,6 +104,10 @@ try {
 } catch (error) {
   console.error(error instanceof Error ? error.message : "Invalid production URLs.");
   process.exit(1);
+}
+
+if (!hasSmtpFallback) {
+  console.warn("Note: no SMTP_SERVICE/SMTP_HOST fallback is set. Email is sent only once SMTP is configured in Super admin -> Settings.");
 }
 
 console.log("Production environment preflight passed.");

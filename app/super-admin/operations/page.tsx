@@ -67,7 +67,7 @@ export default async function SuperAdminOperationsPage() {
             <StatusChip ok={prerequisites.redis} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
             <StatusChip ok={prerequisites.scheduler} ready="Recovery endpoint secret configured" missing="Recovery endpoint secret (CRON_SECRET) missing" />
             <StatusChip ok={prerequisites.readiness} ready="Readiness probe protected" missing="Readiness probe secret missing" />
-            <StatusChip ok={prerequisites.smtp} ready="Transactional email configured" missing="Transactional email not configured" />
+            <StatusChip ok={prerequisites.smtp} ready={`Transactional email configured (${prerequisites.smtpSource})`} missing="Transactional email not configured" />
           </div>
         </AdminPanel>
       </div>

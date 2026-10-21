@@ -8,7 +8,7 @@ import { Chip, PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; filter?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[]; filter?: string | string[]; }>;
 };
 
 const filters = {
@@ -22,7 +22,7 @@ type FilterKey = keyof typeof filters;
 
 export default async function SuperAdminUsersPage({ searchParams }: Props) {
   await requireSuperAdminMfa();
-  const { q, filter, users, page } = await loadSuperAdminUsersView({ searchParams });
+  const { q, filter, users, page, hasNext } = await loadSuperAdminUsersView({ searchParams });
 
   const filterHref = (key: FilterKey) => `/super-admin/users?q=${encodeURIComponent(q)}${key === "all" ? "" : `&filter=${key}`}`;
   return (
@@ -83,7 +83,7 @@ export default async function SuperAdminUsersPage({ searchParams }: Props) {
         </TBody>
       </Table>
 
-      <AdminPager basePath="/super-admin/users" query={q} page={page} extra={filter === "all" ? "" : `&filter=${filter}`} />
+      <AdminPager basePath="/super-admin/users" query={q} page={page} extra={filter === "all" ? "" : `&filter=${filter}`} hasNext={hasNext} />
     </div>
   );
 }

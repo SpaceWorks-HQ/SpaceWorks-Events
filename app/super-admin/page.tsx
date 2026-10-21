@@ -8,7 +8,7 @@ import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 export default async function SuperAdminOverviewPage() {
   await requireSuperAdminMfa();
-  const { stats, attention, activity7d, orgs24h, events24h, rsvps24h, rsvps7d, topOrgsByEvents, topOrgsByRsvps, recentOrgs, recentEvents } = await loadSuperAdminOverviewView();
+  const { stats, attention, activity7d, orgs24h, events24h, rsvps24h, rsvps7d, topOrgsByEvents, topOrgRsvps, recentOrgs, recentEvents } = await loadSuperAdminOverviewView();
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Overview" description="Instance-wide master data and operational controls." />
@@ -29,9 +29,9 @@ export default async function SuperAdminOverviewPage() {
       </AdminPanel>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <SparklineCard title="Orgs (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.orgs }))} />
-        <SparklineCard title="Events (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.events }))} />
-        <SparklineCard title="RSVPs (7d)" subtitle="Created per day" points={activity7d.map((d) => ({ xLabel: d.day, y: d.rsvps }))} />
+        <SparklineCard title="Orgs (7d)" subtitle="Created per UTC day" points={activity7d.organisations} />
+        <SparklineCard title="Events (7d)" subtitle="Created per UTC day" points={activity7d.events} />
+        <SparklineCard title="RSVPs (7d)" subtitle="Created per UTC day" points={activity7d.rsvps} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -56,14 +56,15 @@ export default async function SuperAdminOverviewPage() {
               </tr>
             </THead>
             <TBody>
-              {topOrgsByEvents.map((o) => {
-                const r = topOrgsByRsvps.find((x) => x.organisation_id === o.id);
+              {topOrgsByEvents.length === 0 ? (
+                <tr><TD colSpan={4} className="py-8 text-center text-ink-muted">No organisations yet.</TD></tr>
+              ) : topOrgsByEvents.map((o) => {
                 return (
                   <TR key={o.id}>
                     <TD><NameCell href={`/super-admin/orgs/${o.id}`} name={o.name} sub={`/${o.slug}`} /></TD>
                     <TD className="text-right tabular-nums">{o._count.events}</TD>
                     <TD className="text-right tabular-nums">{o._count.memberships}</TD>
-                    <TD className="text-right tabular-nums">{r?.rsvps?.toLocaleString?.() ?? "—"}</TD>
+                    <TD className="text-right tabular-nums">{(topOrgRsvps[o.id] ?? 0).toLocaleString()}</TD>
                   </TR>
                 );
               })}
@@ -76,7 +77,9 @@ export default async function SuperAdminOverviewPage() {
         <AdminPanel title="Recent organisations">
           <Table label="Recent organisations">
             <TBody>
-              {recentOrgs.map((o) => (
+              {recentOrgs.length === 0 ? (
+                <tr><TD colSpan={2} className="py-8 text-center text-ink-muted">No organisations yet.</TD></tr>
+              ) : recentOrgs.map((o) => (
                 <TR key={o.id}>
                   <TD><NameCell href={`/super-admin/orgs/${o.id}`} name={o.name} sub={`/${o.slug}`} /></TD>
                   <TD className="text-right text-ink-secondary">{o.createdAt.toLocaleString()}</TD>
@@ -88,7 +91,9 @@ export default async function SuperAdminOverviewPage() {
         <AdminPanel title="Recent events">
           <Table label="Recent events">
             <TBody>
-              {recentEvents.map((e) => (
+              {recentEvents.length === 0 ? (
+                <tr><TD colSpan={3} className="py-8 text-center text-ink-muted">No events yet.</TD></tr>
+              ) : recentEvents.map((e) => (
                 <TR key={e.id}>
                   <TD className="font-semibold">{e.title}</TD>
                   <TD><NameCell href={`/${e.organisation.slug}/${e.slug}`} name={`/${e.organisation.slug}/${e.slug}`} sub={e.organisation.name} /></TD>

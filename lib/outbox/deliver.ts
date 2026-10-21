@@ -13,6 +13,7 @@ import { sendSignInCodeEmail } from "@/lib/email/signInCode";
 import { sendEmailVerificationEmail } from "@/lib/email/emailVerification";
 import { sendOperatorNotice } from "@/lib/email/operatorNotice";
 import { describeOperationalError } from "@/lib/redactSensitiveText";
+import { reportOpsAlert } from "@/lib/opsAlerts";
 import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 import { asPaymentEmailPayload, deliverPaymentEmail, PAYMENT_EMAIL_KIND } from "@/lib/payments/email";
 import { sendAs } from "@/lib/email/transporter";
@@ -292,6 +293,13 @@ export async function deliverOutboxBatch(limit = 20) {
           },
         });
       }
+      reportOpsAlert({
+        level: terminal ? "error" : "warning",
+        source: "email",
+        title: terminal ? "Email delivery failed permanently" : "Email delivery failed; will retry",
+        error,
+        context: { kind: message.kind, attempt: attempts },
+      });
       failed += 1;
     }
   }

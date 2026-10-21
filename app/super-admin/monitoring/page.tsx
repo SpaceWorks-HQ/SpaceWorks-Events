@@ -19,7 +19,7 @@ export default async function SuperAdminMonitoringPage() {
   const { dbName, dbOk, configuredDbUrl, configuredAuthSecret, configuredSuperAdmin, snapshot } = await loadSuperAdminMonitoringView();
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Monitoring" description="Health checks and API request stats for this server." />
+      <PageHeader title="Monitoring" description="Database health and configuration checks, plus API request stats from the server process that rendered this page." />
 
       <AdminPanel title="Health checks">
         <div className="flex flex-col gap-3">
@@ -36,9 +36,12 @@ export default async function SuperAdminMonitoringPage() {
         </div>
       </AdminPanel>
 
-      <AdminPanel title="API request stats (in-memory)" description="These stats reset on server restart and are not shared across multiple instances.">
+      <AdminPanel
+        title="API request stats (this server process)"
+        description={`Counted in memory by the process that rendered this page since ${new Date(snapshot.startedAtMs).toLocaleString()}. They reset on restart and are not combined across replicas, so with several replicas each refresh may show a different process.`}
+      >
         {snapshot.routes.length === 0 ? (
-          <EmptyState mood="sleepy">No traffic observed yet.</EmptyState>
+          <EmptyState mood="sleepy">No API traffic observed by this process yet.</EmptyState>
         ) : (
           <div className="flex flex-col gap-4">
             <Table label="API request stats">

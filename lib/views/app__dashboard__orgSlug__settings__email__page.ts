@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { getEmailSettings } from "@/lib/instanceSettings";
+import { getEmailSettingsStatus } from "@/lib/instanceSettings";
 import { senderAddress } from "@/lib/email/transporter";
 import { requireOrgRole } from "@/lib/permissions";
 import type { OrganisationEmailStatus } from "@/components/settings/OrganisationEmailForm";
@@ -10,7 +10,7 @@ export async function loadOrganisationEmailView({ params }: { params: Promise<{ 
   const { organisation } = await requireOrgRole(orgSlug, "OWNER");
   const [row, platform] = await Promise.all([
     prisma.organisationEmailSettings.findUnique({ where: { organisationId: organisation.id } }),
-    getEmailSettings().catch(() => null),
+    getEmailSettingsStatus().catch(() => null),
   ]);
   const status: OrganisationEmailStatus = {
     fromName: row?.fromName ?? "",

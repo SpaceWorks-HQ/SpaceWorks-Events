@@ -1,8 +1,9 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { readPageParam, readSearchParam } from "@/lib/superAdminInsights";
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; filter?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[]; filter?: string | string[]; }>;
 };
 const filters = {
   all: { label: "All", where: {} },
@@ -15,12 +16,15 @@ type FilterKey = keyof typeof filters;
 export async function loadSuperAdminUsersView({ searchParams }: Props) {
   await requireSuperAdminMfa();
   const sp = await searchParams;
-  const q = (sp.q ?? "").trim();
-  const filter: FilterKey = sp.filter && sp.filter in filters ? (sp.filter as FilterKey) : "all";
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
+  const q = readSearchParam(sp.q);
+  const requestedFilter = readSearchParam(sp.filter, 20);
+  // Own keys only: `in` would also accept inherited names such as "toString".
+  const filter: FilterKey = Object.hasOwn(filters, requestedFilter) ? (requestedFilter as FilterKey) : "all";
+  const page = readPageParam(sp.page);
   const take = 50;
   const skip = page * take;
-  const users = await prisma.user.findMany({
+  // One extra row tells the pager whether a next page exists.
+  const rows = await prisma.user.findMany({
     where: {
       ...filters[filter].where,
       ...(q
@@ -33,7 +37,7 @@ export async function loadSuperAdminUsersView({ searchParams }: Props) {
         : {}),
     },
     orderBy: { createdAt: "desc" },
-    take,
+    take: take + 1,
     skip,
     select: {
       id: true,
@@ -47,5 +51,5 @@ export async function loadSuperAdminUsersView({ searchParams }: Props) {
       },
     },
   });
-  return { q, filter, users, page };
+  return { q, filter, users: rows.slice(0, take), page, hasNext: rows.length > take };
 }

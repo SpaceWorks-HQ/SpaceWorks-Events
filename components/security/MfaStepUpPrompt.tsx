@@ -23,7 +23,13 @@ export function MfaStepUpPrompt({ next }: { next: string; }) {
           event.preventDefault();
           startTransition(async () => {
             setError(null);
-            const result = await verifyStepUpMfa({ code });
+            let result: Awaited<ReturnType<typeof verifyStepUpMfa>>;
+            try {
+              result = await verifyStepUpMfa({ code });
+            } catch {
+              setError("Could not reach the server. Check your connection and try again.");
+              return;
+            }
             if (!result.ok) {
               setError(result.error);
               return;

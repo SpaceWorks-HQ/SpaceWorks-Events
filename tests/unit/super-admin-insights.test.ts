@@ -9,6 +9,8 @@ import {
   minutesAgo,
   outboxByKind,
   percentChange,
+  readPageParam,
+  readSearchParam,
   SECURITY_AUDIT_ACTIONS,
   shortDayLabel,
   utcDayKeys,
@@ -101,5 +103,24 @@ describe("super-admin insight helpers", () => {
     // Bulk badge sheets and member ID card exports carry personal data too.
     expect(SECURITY_AUDIT_ACTIONS).toContain("BADGES_EXPORTED");
     expect(SECURITY_AUDIT_ACTIONS).toContain("ID_CARDS_EXPORTED");
+  });
+
+  it("reads list search params defensively", () => {
+    expect(readSearchParam(undefined)).toBe("");
+    expect(readSearchParam("  ada  ")).toBe("ada");
+    expect(readSearchParam(["first", "second"])).toBe("first");
+    expect(readSearchParam("x".repeat(500))).toHaveLength(120);
+    expect(readSearchParam("abcdef", 3)).toBe("abc");
+  });
+
+  it("clamps page numbers to a bounded, non-negative integer", () => {
+    expect(readPageParam(undefined)).toBe(0);
+    expect(readPageParam("3")).toBe(3);
+    expect(readPageParam(["2", "9"])).toBe(2);
+    expect(readPageParam("-4")).toBe(0);
+    expect(readPageParam("1e9")).toBe(0);
+    expect(readPageParam("abc")).toBe(0);
+    expect(readPageParam("99999999999999")).toBe(0);
+    expect(readPageParam("5000")).toBe(1000);
   });
 });

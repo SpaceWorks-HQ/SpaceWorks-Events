@@ -1,7 +1,8 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
 import { ApiClientStatus, MembershipRole, OutboxStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { minutesAgo } from "@/lib/superAdminInsights";
+import { DAY_MS, fillDailySeries, minutesAgo, windowStart } from "@/lib/superAdminInsights";
+import { loadDailyActivity } from "@/lib/superAdminData";
 
 export async function loadSuperAdminOverviewView() {
   await requireSuperAdminMfa();
@@ -40,47 +41,19 @@ export async function loadSuperAdminOverviewView() {
     prisma.user.count({ where: { mfaEnabledAt: null, memberships: { some: { role: { in: [MembershipRole.OWNER, MembershipRole.ADMIN] } } } } }),
     prisma.user.count({ where: { emailVerified: null } }),
   ]);
-  const [{ orgs24h, events24h, rsvps24h, rsvps7d }] = await prisma.$queryRaw<
-    Array<{ orgs24h: bigint; events24h: bigint; rsvps24h: bigint; rsvps7d: bigint; }>
-  >`
-    select
-      (select count(*) from "Organisation" where "createdAt" >= (now() - interval '24 hours')) as "orgs24h",
-      (select count(*) from "Event" where "createdAt" >= (now() - interval '24 hours')) as "events24h",
-      (select count(*) from "RSVP" where "createdAt" >= (now() - interval '24 hours')) as "rsvps24h",
-      (select count(*) from "RSVP" where "createdAt" >= (now() - interval '7 days')) as "rsvps7d"
-  `.then((rows) => [
-    {
-      orgs24h: Number(rows?.[0]?.orgs24h ?? 0),
-      events24h: Number(rows?.[0]?.events24h ?? 0),
-      rsvps24h: Number(rows?.[0]?.rsvps24h ?? 0),
-      rsvps7d: Number(rows?.[0]?.rsvps7d ?? 0),
-    },
+  // Windows are computed in JS and bound through Prisma, which compares
+  // DateTime columns in UTC regardless of the database session TimeZone.
+  const now = new Date();
+  const since24h = new Date(now.getTime() - DAY_MS);
+  const since7d = new Date(now.getTime() - 7 * DAY_MS);
+  const [orgs24h, events24h, rsvps24h, rsvps7d, dailyRows] = await Promise.all([
+    prisma.organisation.count({ where: { createdAt: { gte: since24h } } }),
+    prisma.event.count({ where: { createdAt: { gte: since24h } } }),
+    prisma.rSVP.count({ where: { createdAt: { gte: since24h } } }),
+    prisma.rSVP.count({ where: { createdAt: { gte: since7d } } }),
+    loadDailyActivity(windowStart(7, now)),
   ]);
-  const activity7d = await prisma.$queryRaw<
-    Array<{ day: string; orgs: bigint; events: bigint; rsvps: bigint; }>
-  >`
-    with days as (
-      select generate_series(
-        date_trunc('day', now()) - interval '6 days',
-        date_trunc('day', now()),
-        interval '1 day'
-      ) as day
-    )
-    select
-      to_char(d.day, 'Mon DD') as day,
-      (select count(*) from "Organisation" o where date_trunc('day', o."createdAt") = d.day) as orgs,
-      (select count(*) from "Event" e where date_trunc('day', e."createdAt") = d.day) as events,
-      (select count(*) from "RSVP" r where date_trunc('day', r."createdAt") = d.day) as rsvps
-    from days d
-    order by d.day asc
-  `.then((rows) =>
-    rows.map((r) => ({
-      day: r.day,
-      orgs: Number(r.orgs),
-      events: Number(r.events),
-      rsvps: Number(r.rsvps),
-    })),
-  );
+  const activity7d = fillDailySeries(dailyRows, ["organisations", "events", "rsvps"] as const, 7, now);
   const [recentOrgs, recentEvents, topOrgsByEvents] = await Promise.all([
     prisma.organisation.findMany({
       orderBy: { createdAt: "desc" },
@@ -109,29 +82,16 @@ export async function loadSuperAdminOverviewView() {
       },
     }),
   ]);
-  const topOrgsByRsvps = await prisma
-    .$queryRaw<Array<{ organisation_id: string; slug: string; name: string; rsvps: bigint; }>>`
-      select
-        o.id as organisation_id,
-        o.slug as slug,
-        o.name as name,
-        count(r.id) as rsvps
-      from "Organisation" o
-      left join "Event" e on e."organisationId" = o.id
-      left join "RSVP" r on r."eventId" = e.id
-      group by o.id, o.slug, o.name
-      order by count(r.id) desc
-      limit 10
-    `
-    .then((rows) =>
-      rows.map((r) => ({
-        organisation_id: r.organisation_id,
-        slug: r.slug,
-        name: r.name,
-        rsvps: Number(r.rsvps),
-      })),
-    )
-    .catch(() => []);
+  // Registrations for exactly the organisations listed (one-off events and
+  // series occurrences), so every row has a real count rather than "—".
+  const topOrgRsvps = Object.fromEntries(
+    await Promise.all(
+      topOrgsByEvents.map(async (o) => [
+        o.id,
+        await prisma.rSVP.count({ where: { OR: [{ event: { organisationId: o.id } }, { eventInstance: { series: { organisationId: o.id } } }] } }),
+      ] as const),
+    ),
+  );
   const stats = [
     { label: "Organisations", value: orgs },
     { label: "Users", value: users },
@@ -152,5 +112,5 @@ export async function loadSuperAdminOverviewView() {
     { label: "Owners and admins without MFA", value: managersWithoutMfa, href: "/super-admin/security" },
     { label: "Users with unverified email", value: unverifiedUsers, href: "/super-admin/users?filter=unverified" },
   ];
-  return { stats, attention, activity7d, orgs24h, events24h, rsvps24h, rsvps7d, topOrgsByEvents, topOrgsByRsvps, recentOrgs, recentEvents };
+  return { stats, attention, activity7d, orgs24h, events24h, rsvps24h, rsvps7d, topOrgsByEvents, topOrgRsvps, recentOrgs, recentEvents };
 }

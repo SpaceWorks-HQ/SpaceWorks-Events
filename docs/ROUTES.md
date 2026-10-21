@@ -60,7 +60,7 @@ Dashboard pages require authentication and enforce membership/role permissions o
 
 ## Super-admin pages
 
-The `/super-admin` area includes overview, activity, audit log, auth, email, events, invites, monitoring, operations, organisations (with a detail page per organisation), security, settings, storage, and users (with a detail page per user at `/super-admin/users/:userId`). The Auth page includes the instance-wide new-account creation control. `/super-admin/settings` manages SMTP, Google SSO, the paid events switch (off by default), and displayed backup posture; secrets entered there are write-only. Access requires the authenticated email configured in `SUPER_ADMIN_EMAIL`; other users receive a not-found response.
+The `/super-admin` area includes overview, activity, audit log, auth, email, events, invites, monitoring, operations, organisations (with a detail page per organisation), security, settings, storage, and users (with a detail page per user at `/super-admin/users/:userId`). The Auth page includes the instance-wide new-account creation control. `/super-admin/settings` manages SMTP, Google SSO, the paid events switch (off by default), displayed backup posture, and the operational alerts webhook; secrets (including the webhook URL) entered there are write-only. Access requires the authenticated email configured in `SUPER_ADMIN_EMAIL`; other users receive a not-found response.
 
 The super admin signs in with email and password; there is no separate authenticator step-up. Each `page.tsx` calls `requireSuperAdminMfa()` itself, which now checks super-admin access only, because layout checks do not re-run on client navigation (`tests/unit/super-admin-page-guards.test.ts` enforces this).
 
@@ -75,6 +75,7 @@ The super admin signs in with email and password; there is no separate authentic
 | `GET /api/exports/account/ids/:memberId` | Session; the card's own holder | The signed-in user's own approved card as PDF or PNG |
 | `POST /api/check-in/station` | PIN-scoped station session, rate-limited | Open and operate a venue check-in station |
 | `GET /api/search?q=...` | Public, rate-limited | Return matching public events |
+| `POST /api/client-errors` | Public, same-origin, rate-limited per IP (`clientError`, 10/min), 4 KB body cap | Browser crash report from the app error boundaries; forwarded (redacted) to the alert webhook when configured. Always an empty `204` |
 | `GET /api/ticket/:token/download` | Opaque token | Download the attendee ticket |
 | `POST /api/ticket/:token/checkout` | Opaque token, rate-limited per IP (`ticketCheckout`, 20/min) | "Pay now" for a held ticket: opens (or reuses) the hosted checkout for its whole order and returns only that address (`no-store`) |
 | `POST /api/orders/:token/checkout` | Opaque order access token, rate-limited per IP (`ticketCheckout`) | "Pay now" on the buyer's order page |

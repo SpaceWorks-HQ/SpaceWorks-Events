@@ -30,6 +30,28 @@ chmod 600 .env.staging
 `REDIS_PASSWORD` must match the password embedded in `REDIS_URL`. Generate the
 three encryption/authentication keys as documented in [Configuration](CONFIGURATION.md).
 
+Both `migrate` and `app` read `.env.staging`, so they share one
+`MFA_ENCRYPTION_KEY`. Keep that value when redeploying or recreating the file:
+it decrypts the SMTP password, Google client secret, and alert webhook saved in
+Super admin → Settings. A changed key leaves those settings unreadable (check
+with `docker compose --env-file .env.staging -f compose.staging.yml run --rm migrate node scripts/check-instance-secrets.mjs`).
+
+## Email, Google SSO, and alerts
+
+The template's `EMAIL_FROM`/`SMTP_*` values point at the bundled Mailpit and
+are only a fallback. Once SMTP is saved in Super admin → Settings, those
+environment values are ignored entirely; clear the panel's SMTP to return to
+Mailpit. Panel changes apply on the next send or sign-in without rebuilding or
+restarting the container. The app container sends email from its in-process
+outbox worker (there is no separate worker service) and posts operational
+alerts directly to the configured webhook, so the VM must allow outbound HTTPS
+(and outbound SMTP for a real relay).
+
+The application runs with `NODE_ENV=production`, so its SMTP transport requires
+TLS with a verified certificate. Mailpit listens on plain SMTP (port 1025), so
+delivery to it is rejected unless the transport applies the staging/CI
+exception; to test real delivery, save an external TLS relay in the panel.
+
 ## First deployment
 
 Start infrastructure services:
@@ -52,7 +74,8 @@ before starting `silo` (for example
 `docker run --rm -v <project>_minio_data:/from:ro -v <project>_silo_data:/to alpine cp -a /from/. /to/`).
 Start with `--remove-orphans` so the old `minio` containers are removed.
 
-Run database migrations:
+Run database migrations (starting `app` also runs `migrate` first and waits
+for it to succeed, but running it explicitly shows the output):
 
 ```bash
 docker compose --env-file .env.staging -f compose.staging.yml run --rm migrate

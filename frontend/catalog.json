@@ -763,6 +763,21 @@
       "id": "instance-settings:saveInstanceServiceSettings"
     },
     {
+      "module": "app/actions/instance-settings",
+      "name": "sendSettingsTestEmail",
+      "id": "instance-settings:sendSettingsTestEmail"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "saveOpsWebhookSettings",
+      "id": "instance-settings:saveOpsWebhookSettings"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "sendOpsWebhookTest",
+      "id": "instance-settings:sendOpsWebhookTest"
+    },
+    {
       "module": "app/actions/instance",
       "name": "deliverInstanceOutbox",
       "id": "instance:deliverInstanceOutbox"

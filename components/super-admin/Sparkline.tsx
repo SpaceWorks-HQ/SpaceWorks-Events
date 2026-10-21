@@ -37,6 +37,11 @@ export function SparklineCard(props: {
   const prev = values.length >= 2 ? values.at(-2) ?? 0 : null;
   const delta = props.total != null || prev == null ? null : latest - prev;
   const headline = props.total ?? latest;
+  const first = props.points[0];
+  const last = props.points.at(-1);
+  const chartLabel = first && last
+    ? `${props.title}: ${props.points.length} points from ${first.xLabel} to ${last.xLabel}, total ${values.reduce((a, b) => a + b, 0).toLocaleString()}, peak ${Math.max(...values).toLocaleString()}, latest ${latest.toLocaleString()}`
+    : `${props.title}: no data`;
 
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-panel p-4">
@@ -51,7 +56,7 @@ export function SparklineCard(props: {
         ) : null}
       </div>
       {props.subtitle ? <p className="text-caption text-ink-muted">{props.subtitle}</p> : null}
-      <svg className="mt-2 block w-full text-ink" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={props.title}>
+      <svg className="mt-2 block w-full text-ink" viewBox={`0 0 ${w} ${h}`} role="img" aria-label={chartLabel}>
         <path d={path} fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
       </svg>
     </div>

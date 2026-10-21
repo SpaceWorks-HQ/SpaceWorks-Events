@@ -87,7 +87,7 @@ When an RSVP transitions to checked in, `commitCheckInProjection` (`lib/checkInM
 
 ## Instance service configuration
 
-The super admin can configure SMTP, Google SSO, and backup posture at `/super-admin/settings`. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
+The super admin can configure SMTP, Google SSO, backup posture, and an operational alerts webhook (`lib/opsAlerts.ts`, fed by `instrumentation.ts`) at `/super-admin/settings`. These are read from PostgreSQL per send or sign-in; every process that serves requests or runs the worker or beat forwards its own alerts. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
 
 ## Storage
 

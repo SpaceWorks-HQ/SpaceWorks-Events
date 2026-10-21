@@ -153,3 +153,25 @@ export const SECURITY_AUDIT_ACTIONS = [
 export function minutesAgo(minutes: number, now: Date = new Date()): Date {
   return new Date(now.getTime() - minutes * 60_000);
 }
+
+/** Longest free-text search the list pages accept. */
+export const ADMIN_SEARCH_MAX_LENGTH = 120;
+/** Deepest list page served; keeps OFFSET scans bounded and within Prisma's Int range. */
+export const ADMIN_MAX_PAGE = 1000;
+
+/**
+ * Reads one free-text search parameter. Next.js passes repeated keys
+ * (`?q=a&q=b`) as an array, so only the first value is used, then trimmed
+ * and capped before it reaches a parameterised query.
+ */
+export function readSearchParam(value: string | string[] | undefined, maxLength: number = ADMIN_SEARCH_MAX_LENGTH): string {
+  const first = Array.isArray(value) ? value[0] : value;
+  return typeof first === "string" ? first.trim().slice(0, maxLength) : "";
+}
+
+/** Zero-based page number from `?page=`, clamped to 0..ADMIN_MAX_PAGE. */
+export function readPageParam(value: string | string[] | undefined): number {
+  const first = Array.isArray(value) ? value[0] : value;
+  if (typeof first !== "string" || !/^\d{1,9}$/.test(first.trim())) return 0;
+  return Math.min(ADMIN_MAX_PAGE, Number.parseInt(first.trim(), 10));
+}
