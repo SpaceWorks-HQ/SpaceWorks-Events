@@ -14,6 +14,7 @@ import { NOT_FROM_PAID_ORDER } from "@/lib/rsvpCapacity";
 import { fillFromWaitlist } from "@/lib/payments/operations";
 import { lockSeriesDates, seatTargetOf } from "@/lib/payments/targets";
 import { noticeEach, noticeSubject, personEmail } from "@/lib/notices";
+import { notifyChat } from "@/lib/chat/notify";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -106,6 +107,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     const to = personEmail(current);
     if (to) {
       const what = current.status === "WAITLISTED" ? "left the waitlist for" : current.status === "PENDING_APPROVAL" ? "withdrawn your request to join" : "cancelled your place at";
+      await notifyChat(tx, organisationId, "cancellation", `${current.guestName?.trim() || "A guest"} cancelled their place at ${title}.`);
       await noticeEach(tx, [to], { organisationId, subject: noticeSubject("Cancelled", title), lines: [`You've ${what} ${title}. Your ticket no longer works.`, "Changed your mind? Register again from the event page if places are still open."] });
     }
     const privacyType = rsvp.event?.privacyType ?? rsvp.eventInstance?.series.privacyType;

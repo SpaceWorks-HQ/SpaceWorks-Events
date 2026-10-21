@@ -148,4 +148,11 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('ON DELETE CASCADE');
     expect(sql).toContain('"deviceHash" ~ \'^[a-f0-9]{64}$\'');
   });
+
+  it("adds chat channels as a new table with known notification types only", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261101000000_chat_channels/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain('ON DELETE CASCADE');
+    expect(sql).toContain('"events" <@ ARRAY[');
+  });
 });

@@ -3,6 +3,7 @@ import "server-only";
 import { OrderStatus, PaymentStatus, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { notifyChat } from "@/lib/chat/notify";
 import { noticeEach, noticeSubject, titleWith } from "@/lib/notices";
 import { peopleWithPlaces } from "./eventCancellation";
 import { seatTakingWhere } from "./holds";
@@ -66,6 +67,7 @@ export async function cancelOccurrence(params: { organisationId: string; seriesI
     // Everyone is told before anything is removed, in this transaction, so a
     // retry can never lose the notices. A retry that finds the date already
     // cancelled has told them.
+    if (!current.cancelledAt) await notifyChat(tx, params.organisationId, "event", `${label} was cancelled. Everyone on it is being told, and buyers refunded.`);
     const told = current.cancelledAt ? 0 : await noticeEach(tx, await peopleWithPlaces(tx, { eventInstanceId: date.id }), {
       organisationId: params.organisationId,
       subject: noticeSubject("Cancelled", label),
