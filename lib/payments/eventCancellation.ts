@@ -3,6 +3,7 @@ import "server-only";
 import { OrderStatus, RsvpStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { notifyChat } from "@/lib/chat/notify";
 import { noticeEach, noticeSubject, personEmail, uniqueEmails } from "@/lib/notices";
 import { PaymentOperationError, refundOrder } from "./operations";
 
@@ -62,6 +63,7 @@ export async function peopleWithPlaces(tx: Prisma.TransactionClient, target: { e
 
 /** Tell everyone on an event that it was cancelled. Run in the transaction that cancels it, before anything is removed. */
 export async function notifyEventCancelled(tx: Prisma.TransactionClient, params: { organisationId: string; eventId: string; title: string; reason?: string | null; }) {
+  await notifyChat(tx, params.organisationId, "event", `${params.title} was cancelled. Everyone with a place is being told, and buyers refunded.`);
   return noticeEach(tx, await peopleWithPlaces(tx, { eventId: params.eventId }), {
     organisationId: params.organisationId,
     subject: noticeSubject("Cancelled", params.title),

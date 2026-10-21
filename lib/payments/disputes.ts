@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@prisma/client";
 import { recordAuditEvent } from "@/lib/audit";
+import { notifyChat } from "@/lib/chat/notify";
 import { enqueueOperatorNotice } from "@/lib/outbox";
 import { organisationOwnerEmails } from "./email";
 import type { OnlineProvider } from "./http";
@@ -41,6 +42,7 @@ export async function applyDisputeNotification(tx: Prisma.TransactionClient, con
   await recordAuditEvent({ action: "PAYMENT_DISPUTE_UPDATED", organisationId: context.organisationId, targetType: "PaymentDispute", targetId: saved.id, metadata: { status: dispute.status }, client: tx });
   const provider = context.provider === "RAZORPAY" ? "Razorpay" : "Stripe";
   const amount = formatMoney(values.amountMinor, values.currency);
+  await notifyChat(tx, context.organisationId, "dispute", `Chargeback ${LABELS[dispute.status]}: ${amount} on order ${payment.order.reference} (${provider}).`);
   for (const to of await organisationOwnerEmails(tx, context.organisationId)) {
     await enqueueOperatorNotice(tx, {
       to,

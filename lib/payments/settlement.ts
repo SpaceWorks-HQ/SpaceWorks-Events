@@ -8,6 +8,8 @@ import { hasFreeSeats, lockOrderTargets, ORDER_SUBJECT_SELECT, orderSubject } fr
 import type { OnlineProvider } from "./http";
 import type { PaidNotification } from "./providers/types";
 import { createPendingRefund } from "./refunds";
+import { formatMoney } from "./money";
+import { notifyChat } from "@/lib/chat/notify";
 
 export type SettlementResult = {
   outcome: "confirmed" | "refunding" | "duplicate" | "already-settled" | "mismatch" | "unmatched";
@@ -113,6 +115,7 @@ export async function settlePaidNotification(
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CONFIRMED, holdExpiresAt: null, holdCapAt: null } });
     await tx.rSVP.updateMany({ where: { id: { in: held.map((rsvp) => rsvp.id) } }, data: { status: RsvpStatus.CONFIRMED, holdExpiresAt: null } });
     await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "paid" });
+    await notifyChat(tx, payment.organisationId, "payment", `Payment received: ${formatMoney(payment.amountMinor, payment.currency)} for ${payment.description}, ${held.length} ${held.length === 1 ? "ticket" : "tickets"}${payment.testMode ? " (test)" : ""}.`);
     // Each attendee with an address gets their own ticket, once (a pass's
     // ticket page lists its other dates).
     const emailed = new Set<string>();

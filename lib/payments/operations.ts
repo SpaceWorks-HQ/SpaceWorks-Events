@@ -3,6 +3,7 @@ import "server-only";
 import { CheckoutAttemptStatus, EventPrivacyType, OfflinePaymentMethod, OrderStatus, PaymentRefundStatus, PaymentStatus, RsvpStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { notifyChat } from "@/lib/chat/notify";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { enqueueRsvpConfirmation, enqueueRsvpStatusNotification } from "@/lib/outbox";
 import { closeOpenAttempts } from "./checkout";
@@ -355,6 +356,9 @@ export async function refundOrder(params: {
     if (refundedPaymentId) await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: refundedPaymentId, notice: "refunded" });
     // Complimentary, unpaid or nothing left to refund: still tell the buyer.
     else if (params.cancelTickets) await enqueueOrderEmail(tx, { to: order.buyerEmail, orderId: order.id, notice: "cancelled" });
+    if (wanted > ZERO || params.cancelTickets) {
+      await notifyChat(tx, params.organisationId, "refund", `${wanted > ZERO ? `Refund of ${formatMoney(wanted, order.currency)}` : "Tickets cancelled"} for ${order.buyerEmail}${params.cancelTickets ? ", tickets cancelled" : ""}. Reason: ${params.reason.slice(0, 200)}`);
+    }
     await recordAuditEvent({
       action: params.cancelTickets ? "ORDER_CANCELLED" : "PAYMENT_REFUNDED",
       actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Order", targetId: order.id,

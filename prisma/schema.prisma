@@ -327,6 +327,7 @@ model Organisation {
   idProgrammes      IdProgramme[]
   paymentSettings   OrganisationPaymentSettings?
   emailSettings     OrganisationEmailSettings?
+  chatChannels      ChatChannel[]
   processedWebhookEvents ProcessedWebhookEvent[]
   orders            Order[]
   payments          Payment[]
@@ -337,6 +338,37 @@ model Organisation {
 /// the organiser; the platform never holds it. Secrets are AES-256-GCM
 /// ciphertext (lib/payments/secrets.ts), write-only, and never leave the
 /// server. Only the owner may view or change this row.
+enum ChatChannelKind {
+  SLACK
+  DISCORD
+  MATTERMOST
+  TELEGRAM
+  WHATSAPP
+}
+
+/// A team chat the organisation's notifications go to (new registrations,
+/// requests, payments, refunds...). Its webhook address or bot token is
+/// encrypted (lib/orgSecrets.ts) and never shown again.
+model ChatChannel {
+  id              String          @id @default(cuid())
+  organisationId  String
+  kind            ChatChannelKind
+  name            String
+  /// JSON with the webhook address, or the bot or WhatsApp credentials.
+  secretEncrypted String
+  /// Notification types it receives (lib/chat/events.ts).
+  events          String[]
+  enabled         Boolean         @default(true)
+  lastDeliveredAt DateTime?
+  lastFailedAt    DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
 /// How an organisation's event email is sent (tickets, reminders, broadcasts,
 /// receipts, notices). Account email (sign-up, forgot password) always uses the
 /// platform server. The SMTP password is encrypted and never shown again.
