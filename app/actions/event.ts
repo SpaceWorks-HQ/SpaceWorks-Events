@@ -28,8 +28,9 @@ import { recordAuditEvent } from "@/lib/audit";
 import { z } from "zod";
 import { isOrganisationUploadUrl } from "@/lib/uploadUrl";
 import { richTextToPlainText, sanitizeRichText } from "@/lib/richText";
-import { hasPaidOrders, refundCancelledEvent } from "@/lib/payments/eventCancellation";
-import { enqueueOperatorNotice } from "@/lib/outbox";
+import { hasPaidOrders, notifyEventCancelled, peopleWithPlaces, refundCancelledEvent } from "@/lib/payments/eventCancellation";
+import { noticeEach, noticeSubject, whenLabel } from "@/lib/notices";
+import { getBroadcastBaseUrl } from "@/lib/eventBroadcast";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -343,6 +344,24 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
           registrationLeadMinutes: data.registrationLeadMinutes ?? null,
         },
       });
+      if (data.status === EventStatus.CANCELLED && event.status !== EventStatus.CANCELLED) {
+        await notifyEventCancelled(tx, { eventId: event.id, title: data.title });
+      } else if (data.status === EventStatus.PUBLISHED && event.status === EventStatus.PUBLISHED && event.endDateTime > new Date()) {
+        // Guests hear when the time or place changes, not about wording edits.
+        const moved = data.startDateTime.getTime() !== event.startDateTime.getTime() || data.endDateTime.getTime() !== event.endDateTime.getTime() || data.timezone !== event.timezone;
+        const relocated = (data.location ?? "") !== event.location || (data.isOnline ?? false) !== event.isOnline;
+        if (moved || relocated) {
+          await noticeEach(tx, await peopleWithPlaces(tx, { eventId: event.id }), {
+            subject: noticeSubject("Updated", data.title),
+            lines: [
+              `The organiser changed ${moved && relocated ? "the time and place" : moved ? "the time" : "the place"} of ${data.title}.`,
+              `When: ${whenLabel(data.startDateTime, data.timezone)}`,
+              `Where: ${data.isOnline ? "Online" : (data.location?.trim() || "to be announced")}`,
+              `Your registration still stands. Event page: ${getBroadcastBaseUrl()}/${org.slug}/${event.slug}`,
+            ],
+          });
+        }
+      }
       await tx.eventPage.upsert({
         where: { eventId: event.id },
         create: {
@@ -435,7 +454,10 @@ export async function deleteEvent(input: unknown): Promise<ActionResult> {
 
   const slug = event.slug;
   try {
-    await prisma.event.delete({ where: { id: event.id } });
+    await prisma.$transaction(async (tx) => {
+      if (event.status === EventStatus.PUBLISHED && event.endDateTime > new Date()) await notifyEventCancelled(tx, { eventId: event.id, title: event.title });
+      await tx.event.delete({ where: { id: event.id } });
+    });
     await recordAuditEvent({
       action: "EVENT_DELETED",
       actorUserId: session.user.id,
@@ -699,17 +721,10 @@ export async function cancelEvent(input: unknown): Promise<ActionResult<{ refund
     await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${event.id} FOR UPDATE`;
     if (event.status === EventStatus.CANCELLED) return 0;
     await tx.event.update({ where: { id: event.id }, data: { status: EventStatus.CANCELLED } });
-    // People with free places are told here; buyers hear about their refund.
-    const free = await tx.rSVP.findMany({
-      where: { eventId: event.id, status: { in: ["CONFIRMED", "WAITLISTED", "PENDING_APPROVAL"] }, OR: [{ orderId: null }, { order: { totalMinor: 0 } }] },
-      select: { guestEmail: true, user: { select: { email: true } } },
-    });
-    const emails = [...new Set(free.map((rsvp) => rsvp.user?.email?.trim() || rsvp.guestEmail).filter((value): value is string => Boolean(value)))];
-    for (const to of emails) {
-      await enqueueOperatorNotice(tx, { to, subject: `Cancelled: ${event.title}`, lines: [`${event.title} has been cancelled by the organiser.`, ...(parsed.data.reason ? [parsed.data.reason] : [])] });
-    }
+    // Everyone is told here; buyers also hear about their refund.
+    const told = await notifyEventCancelled(tx, { eventId: event.id, title: event.title, reason: parsed.data.reason });
     await recordAuditEvent({ action: "EVENT_CANCELLED", actorUserId: session.user!.id, organisationId: org.id, targetType: "Event", targetId: event.id, client: tx });
-    return emails.length;
+    return told;
   });
   const result = await refundCancelledEvent({ eventId: event.id, organisationId: org.id, actorUserId: session.user.id });
   revalidateEventPaths(org.slug, event.slug, event.id);

@@ -72,7 +72,6 @@ write("postgres.env", envText({ POSTGRES_USER: "swevents", POSTGRES_DB: "swevent
 write("migrator.env", envText({ DATABASE_URL: dbUrl("swevents", adminPassword), DIRECT_URL: dbUrl("swevents", adminPassword) }));
 write("storage.env", envText({ MINIO_ROOT_USER: "swevents-root", MINIO_ROOT_PASSWORD: storageRoot }));
 write("storage-init.env", envText({ MC_HOST_local: `https://swevents-root:${storageRoot}@storage:9000`, S3_APP_PASSWORD: storageApp, SSL_CERT_FILE: "/tls/ca.crt" }));
-write("scheduler.env", envText({ CRON_SECRET: cronSecret }));
 write("app.env", envText({
   NODE_ENV: "production", AUTH_URL: publicOrigin, NEXT_PUBLIC_BASE_URL: publicOrigin,
   ...(frontendHost ? { DEPLOYMENT_MODE: "backend", FRONTEND_GATEWAY_SECRET: peerKey } : {}),

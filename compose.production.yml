@@ -3,9 +3,9 @@
 #   split    website (frontend) and API (backend) containers on this VPS, two hostnames
 #   single   one app container serves the website and the API, one hostname
 #   netlify  the website runs on Netlify; this VPS serves the API
-# Two images: the backend runs the API, migrations (migrator), the outbox
-# worker, the scheduler, live check-in and the operator tools; the frontend runs
-# the website. PostgreSQL, Redis, Silo and Caddy use their own standard images.
+# Two images: the backend runs the API, migrations (migrator), the email
+# worker, the beat (timed jobs), live check-in and the operator tools; the
+# frontend runs the website. PostgreSQL, Redis, Silo and Caddy use their own standard images.
 # Published releases set SWE_BACKEND_IMAGE / SWE_FRONTEND_IMAGE to
 # ghcr.io/<owner>/spaceworks-events-backend|frontend; otherwise the images are
 # built here under the local names below. Both carry placeholder public
@@ -117,12 +117,14 @@ services:
     logging: *logging
 
   # The backend: the whole application in the single layout, the API otherwise.
-  # It also runs the outbox worker and live check-in, and reads the installer's
-  # backup status (no secrets) for the super-admin Operations page.
+  # It runs live check-in and reads the installer's backup status (no secrets)
+  # for the super-admin Operations page. Email and timed jobs run in the worker
+  # and the beat below.
   app:
     <<: *backend
     restart: unless-stopped
     environment:
+      SWE_PROCESS_ROLE: web
       SWE_STATUS_DIR: /status
     volumes:
       - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
@@ -173,24 +175,33 @@ services:
         aliases: ["${PUBLIC_HOST}"]
     logging: *logging
 
-  # The backend image's scheduler role: it only calls the app's outbox endpoint
-  # every minute, with the scheduler secret and no other credentials.
-  scheduler:
-    image: ${SWE_BACKEND_IMAGE:-swevents-backend}:${SWE_VERSION}
+  # The backend image's worker role: sends queued email within seconds. It
+  # serves no traffic (loopback only) and has no proxy alias.
+  worker:
+    <<: *backend
+    command: ["worker"]
     restart: unless-stopped
-    env_file: ${SWE_CONFIG_DIR}/scheduler.env
-    command: ["node", "docker/vps/scheduler.mjs"]
-    # The image's own health check probes a web server this role does not run;
-    # the scheduler is healthy when it can reach the app it calls.
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://app:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
     depends_on:
-      app: { condition: service_healthy }
-    networks: [edge]
-    logging: *logging
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrator: { condition: service_completed_successfully }
+
+  # The backend image's beat role: the timed jobs (payment holds and reminders,
+  # event reminders, retention, backup alerts). Its jobs queue email for the
+  # worker. It reads the backup status to alert super admins.
+  beat:
+    <<: *backend
+    command: ["beat"]
+    restart: unless-stopped
+    volumes:
+      - ${SWE_CONFIG_DIR}/tls/ca.crt:/tls/ca.crt:ro
+      - ${SWE_CONFIG_DIR}/status:/status:ro
+    environment:
+      SWE_STATUS_DIR: /status
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      migrator: { condition: service_completed_successfully }
 
   # The backend image's operator tools (setup, preflight, checks), run on demand.
   ops:

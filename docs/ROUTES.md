@@ -90,13 +90,13 @@ Every super-admin page additionally requires a current TOTP verification, and ea
 
 Opaque ticket and certificate URLs are bearer capabilities. Do not log them or place them in analytics payloads.
 
-## Health and scheduler APIs
+## Health and recovery APIs
 
 | Method and route | Protection | Purpose |
 | --- | --- | --- |
 | `GET /api/health` | Public | Process liveness without database or Redis dependency |
 | `GET /api/health/db` | `Authorization: Bearer $HEALTHCHECK_SECRET` | Database readiness check |
-| `POST /api/internal/outbox` | `Authorization: Bearer $CRON_SECRET` | Deliver queued email and purge expired operational data |
+| `POST /api/internal/outbox` | `Authorization: Bearer $CRON_SECRET` | Run every timed job once (payment maintenance, waitlists, event reminders, backup alerts, retention), then deliver queued email |
 
 ## Payment webhooks
 
@@ -107,7 +107,7 @@ Opaque ticket and certificate URLs are bearer capabilities. Do not log them or p
 
 The random `webhookPathId` only addresses the organisation; it is not a credential. Bodies over 256 KB get 413, unknown addresses 404, and failed verification an empty 400. Verified captures confirm the order whose checkout attempt the provider echoes back; expired or cancelled pages close their attempt; refund events settle pending refunds. Verified events are recorded once per organisation, provider and event id (`ProcessedWebhookEvent`, kept 90 days) and replays get 200. These routes live on the backend API host: in the split layout providers must point at `BACKEND_ORIGIN`, because the website's proxy refuses `/api/webhooks/*`.
 
-Self-hosted Node.js instances run the outbox worker every minute. The endpoint remains available for an independent scheduler or manual recovery. Protected operational endpoints return a generic not-found response when authorization fails.
+Self-hosted installations send email from the worker and run timed jobs from the beat (see `SWE_PROCESS_ROLE`). The outbox endpoint remains for cron services, such as the Cloudflare Worker on free hosting, and for manual recovery. Protected operational endpoints return a generic not-found response when authorization fails.
 
 ## Mutation endpoints
 

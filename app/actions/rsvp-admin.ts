@@ -15,6 +15,8 @@ import { submitManualGuestRsvpCore } from "@/lib/rsvpCore";
 import { validateAndNormalizeAnswers } from "@/lib/rsvpCore";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { hasCapacityToRestoreConfirmedRsvp } from "@/lib/rsvpCapacity";
+import { noticeSubject, personEmail } from "@/lib/notices";
+import { enqueueRsvpConfirmation } from "@/lib/outbox";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -77,7 +79,8 @@ export async function updateRsvpRegistration(input: unknown): Promise<ActionResu
     where: { id: parsed.data.rsvpId, ...target },
     include: {
       user: { select: { id: true } },
-      event: { select: { slug: true, registrationForm: { include: { fields: { orderBy: { sortOrder: "asc" } } } } } },
+      event: { select: { slug: true, title: true, registrationForm: { include: { fields: { orderBy: { sortOrder: "asc" } } } } } },
+      eventInstance: { select: { series: { select: { title: true } } } },
     },
   });
   if (!rsvp) return { ok: false, error: "RSVP not found." };
@@ -103,6 +106,11 @@ export async function updateRsvpRegistration(input: unknown): Promise<ActionResu
           ...(rsvp.userId ? {} : { attendeeKey: `guest:${guestEmail}` }),
         },
       });
+      const title = rsvp.event?.title ?? rsvp.eventInstance?.series.title;
+      const live = rsvp.status === RsvpStatus.CONFIRMED || rsvp.status === RsvpStatus.WAITLISTED || rsvp.status === RsvpStatus.PENDING_APPROVAL;
+      if (guestEmail && guestEmail !== rsvp.guestEmail && title && live) {
+        await enqueueRsvpConfirmation(tx, { to: guestEmail, eventTitle: title, status: rsvp.status, checkInToken: rsvp.checkInToken });
+      }
       await tx.rsvpAnswer.deleteMany({ where: { rsvpId: rsvp.id } });
       if (validated.rows.length > 0) {
         await tx.rsvpAnswer.createMany({
@@ -186,7 +194,9 @@ export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId:
     },
     include: {
       answers: true,
-      event: { select: { slug: true } },
+      user: { select: { email: true } },
+      event: { select: { slug: true, title: true, endDateTime: true } },
+      eventInstance: { select: { endDateTime: true, series: { select: { title: true } } } },
       order: { select: { totalMinor: true } },
     },
   });
@@ -230,6 +240,18 @@ export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId:
     await tx.rSVP.delete({ where: { id: rsvp.id } });
     return created;
   });
+  // The guest is told once the undo window has passed, unless the removal was undone.
+  const to = rsvp.status === RsvpStatus.CONFIRMED || rsvp.status === RsvpStatus.WAITLISTED || rsvp.status === RsvpStatus.PENDING_APPROVAL ? personEmail(rsvp) : null;
+  const title = rsvp.event?.title ?? rsvp.eventInstance?.series.title;
+  if (to && title && (rsvp.event ? rsvp.event.endDateTime > new Date() : (rsvp.eventInstance?.endDateTime ?? new Date(0)) > new Date())) {
+    await prisma.outboxMessage.create({
+      data: {
+        kind: "operator-notice",
+        availableAt: new Date(Date.now() + UNDO_TTL_MS),
+        payload: { to, subject: noticeSubject("Registration removed", title), lines: [`The organiser removed your registration for ${title}, so your ticket no longer works.`, "If you think this is a mistake, reply to the organiser's emails or contact them directly."], undoId: undo.id },
+      },
+    });
+  }
 
   await recordAuditEvent({ action: "RSVP_DELETED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
 
@@ -298,6 +320,8 @@ export async function restoreRsvp(input: unknown): Promise<ActionResult> {
         },
       });
       await tx.rsvpDeletionUndo.delete({ where: { id: undo.id } });
+      // The removal notice waiting out the undo window is no longer true.
+      await tx.outboxMessage.deleteMany({ where: { kind: "operator-notice", status: "PENDING", payload: { path: ["undoId"], equals: undo.id } } });
       return created;
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     if (!restored) return { ok: false, error: "This RSVP cannot be restored because the event is now at capacity." };

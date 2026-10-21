@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "crypto";
 import { EventPrivacyType, OfflinePaymentMethod, OrderStatus, PaymentStatus, RsvpStatus, TicketVisibility, type Prisma } from "@prisma/client";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
+import { noticeOrganisersOfRequest } from "@/lib/notices";
 import { enqueueOrderEmail, enqueuePaymentEmail } from "./email";
 import { CHECKOUT_HOLD_MS, HOLD_EXTENSION_CAP_MS, PAYMENT_LINK_HOLD_MS, seatTakingWhere } from "./holds";
 import type { OnlineProvider } from "./http";
@@ -297,6 +298,7 @@ export async function reserveOrder(tx: Prisma.TransactionClient, params: {
     }
   }
   if (orderStatus === OrderStatus.CONFIRMED && rsvps.some((rsvp) => !rsvp.email)) await enqueueOrderEmail(tx, { to: params.buyer.email, orderId: order.id, notice: "attendee-details" });
+  if (status === RsvpStatus.PENDING_APPROVAL) await noticeOrganisersOfRequest(tx, sellable.slots[0]!.target);
   const count = await tx.rSVP.count({ where: sellable.slots[0]!.target });
   return { orderId: order.id, reference: order.reference, accessToken: order.accessToken, status, buyerRsvpId: rsvps[0]!.id, buyerTicketToken: rsvps[0]!.checkInToken, paymentId, count };
 }

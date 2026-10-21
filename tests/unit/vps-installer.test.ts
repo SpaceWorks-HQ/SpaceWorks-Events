@@ -303,14 +303,17 @@ describe("VPS installer", () => {
     expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).toContain("vps-renew-certs.sh --if-due");
   });
 
-  it("runs the scheduler from the backend image and shows the app only the backup status", () => {
+  it("runs the email worker and the beat from the backend image, and shows them only the backup status", () => {
     const compose = readFileSync(path.join(root, "compose.production.yml"), "utf8");
     expect(compose).not.toContain("node:22-alpine");
-    expect(compose).toMatch(/ {2}scheduler:\n {4}image: \$\{SWE_BACKEND_IMAGE:-swevents-backend\}/);
-    expect(compose).toContain('command: ["node", "docker/vps/scheduler.mjs"]');
-    // The image's web health check would mark the scheduler unhealthy, and `up --wait` refuses a
-    // running service without one: it checks that it can reach the app instead.
-    expect(compose).toMatch(/scheduler\.mjs"\]\n(?: +#.*\n)* +healthcheck:\n +test: \["CMD", "node", "-e", "fetch\('http:\/\/app:3000\/api\/health'\)/);
+    expect(compose).not.toContain("scheduler.mjs");
+    // The web container serves requests only; the worker sends email and the beat runs timed jobs.
+    expect(compose).toMatch(/ {2}app:\n(?: +.*\n)*? +SWE_PROCESS_ROLE: web\n/);
+    expect(compose).toMatch(/ {2}worker:\n {4}<<: \*backend\n {4}command: \["worker"\]/);
+    expect(compose).toMatch(/ {2}beat:\n {4}<<: \*backend\n {4}command: \["beat"\]/);
+    const entrypoint = readFileSync(path.join(root, "scripts/docker-entrypoint.sh"), "utf8");
+    expect(entrypoint).toContain('export SWE_PROCESS_ROLE="$1" HOSTNAME=127.0.0.1');
+    expect(readFileSync(path.join(root, "scripts/vps-restore.sh"), "utf8")).toContain("serving=(app worker beat)");
     expect(compose).toContain("${SWE_CONFIG_DIR}/status:/status:ro");
     expect(compose).not.toMatch(/\$\{SWE_CONFIG_DIR\}\/backups:\/[a-z]+:ro/);
   });

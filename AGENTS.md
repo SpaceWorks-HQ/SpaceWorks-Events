@@ -53,7 +53,7 @@ field, constraint, or cascade from a component alone.
 | `prisma/` | Prisma schema and ordered migrations |
 | `tests/` | Unit, PostgreSQL integration, and Playwright suites |
 | `scripts/` | Production checks, schema checks, storage migration, and standalone helpers |
-| `charts/spaceworks-events/` | Helm deployment chart and migration job |
+| `charts/spaceworks-events/` | Helm deployment chart: web, worker and beat Deployments and the migration job |
 | `deploy/cloudflare-cron/` | Cloudflare Worker that runs the outbox every minute on free hosting |
 | `docs/` | Product, security, development, and operational handbook |
 
@@ -136,7 +136,7 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
 - Event short codes resolve only for published events with a released
   website, and unknown, unreleased, and rate-limited codes share the
   unknown-organisation 404 so a code never reveals a hidden event's slug.
-- Treat ticket, certificate, invite, password-reset, MFA, scheduler, and
+- Treat ticket, certificate, invite, password-reset, MFA, `CRON_SECRET`, and
   readiness values as secrets/bearer capabilities. Never log, expose, test
   with, or place them in audit metadata, URLs in diagnostics, or analytics.
 - Do not read, print, commit, or copy `.env` values. Use `.env.example` for
@@ -162,7 +162,9 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
   job where applicable.
 - Email is queued in `OutboxMessage`; request paths must not wait for SMTP.
   Preserve safe concurrent claims, retry behaviour, retention cleanup, and the
-  one-minute worker/`POST /api/internal/outbox` recovery path.
+  worker/beat roles (`SWE_PROCESS_ROLE`, `lib/outboxWorker.ts`) and the
+  `POST /api/internal/outbox` recovery path. Beat jobs must stay safe to run
+  twice or from two processes at once; they queue email for the worker.
 - Sent emails need an absolute `NEXT_PUBLIC_BASE_URL` for links and images;
   dashboard previews render stored paths site-relative. When no public address
   is configured, leave images out rather than sending `localhost` links.
@@ -231,7 +233,7 @@ protection enforces. Never push to `main`; open a pull request instead.
 - Changes to public build-visible variables (including
   `NEXT_PUBLIC_BASE_URL`) require a rebuild. Google SSO is runtime
   instance-managed; do not reintroduce a build-visible feature flag for it.
-- A hostname change also needs OAuth callback/origin, DNS/TLS/CDN, scheduler,
+- A hostname change also needs OAuth callback/origin, DNS/TLS/CDN, cron-service,
   monitoring, and trusted-host review; retain an HTTPS redirect for shared
   event, invitation, ticket, and certificate links.
 - Keep `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` stable across all replicas and the

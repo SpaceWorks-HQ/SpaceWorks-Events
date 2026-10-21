@@ -1,6 +1,7 @@
 import "server-only";
 
 import { EventPrivacyType, EventStatus, OrderStatus, TicketTypeKind, type Prisma } from "@prisma/client";
+import { titleWith } from "@/lib/noticeText";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { seatTakingWhere } from "./holds";
 import type { RefundPolicySnapshot } from "./refundPolicy";
@@ -108,7 +109,7 @@ export async function lockSellable(tx: Prisma.TransactionClient, target: OrderTa
     slots: dates.map((date) => ({
       target: { eventInstanceId: date.id },
       capacity: date.capacity ?? series.capacity,
-      label: `${series.title}, ${dateLabel(date.startDateTime, series.timezone)}`,
+      label: titleWith(series.title, dateLabel(date.startDateTime, series.timezone)),
     })),
   };
 }
@@ -244,7 +245,7 @@ export function orderSubject(order: SubjectOrder): OrderSubject | null {
     };
   }
   return {
-    title: `${series.title}, ${dateLabel(date.startDateTime, series.timezone)}`, start: date.startDateTime, end: date.endDateTime, timeZone: series.timezone, organisation: series.organisation,
+    title: titleWith(series.title, dateLabel(date.startDateTime, series.timezone)), start: date.startDateTime, end: date.endDateTime, timeZone: series.timezone, organisation: series.organisation,
     path: `/${series.organisation.slug}/i/${date.id}`,
     open: (now) => series.status === EventStatus.PUBLISHED && date.endDateTime > now && !date.cancelledAt,
     pass: false,

@@ -1,11 +1,11 @@
 import "server-only";
 
-import { CheckoutAttemptStatus, OrderStatus, PaymentRefundStatus, PaymentStatus } from "@prisma/client";
+import { CheckoutAttemptStatus, EventStatus, OrderStatus, PaymentRefundStatus, PaymentStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
 import { closeOpenAttempts } from "./checkout";
 import { enqueuePaymentEmail } from "./email";
-import { offerNextWaitlisted } from "./operations";
+import { fillFromWaitlist } from "./operations";
 import { lockOrderTargets, seatTargetOf } from "./targets";
 import { submitPendingRefund } from "./refunds";
 
@@ -30,7 +30,10 @@ async function releaseOrder(orderId: string, now: Date): Promise<"expired" | "se
     await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${orderId} FOR UPDATE`;
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      select: { id: true, organisationId: true, status: true, holdExpiresAt: true, buyerEmail: true, payments: { where: { status: PaymentStatus.PENDING }, select: { id: true } } },
+      select: {
+        id: true, organisationId: true, status: true, holdExpiresAt: true, buyerEmail: true, payments: { where: { status: PaymentStatus.PENDING }, select: { id: true } },
+        event: { select: { status: true } }, series: { select: { status: true } }, instance: { select: { cancelledAt: true } },
+      },
     });
     // Extended or settled meanwhile.
     if (order?.status !== OrderStatus.PENDING || (order.holdExpiresAt && order.holdExpiresAt > now)) return "skipped" as const;
@@ -38,9 +41,11 @@ async function releaseOrder(orderId: string, now: Date): Promise<"expired" | "se
     await tx.order.update({ where: { id: orderId }, data: { status: OrderStatus.EXPIRED, holdExpiresAt: null, holdCapAt: null } });
     // The registrations stay as ended holds (no longer counted toward
     // capacity); ordering again replaces them.
+    // A cancelled event's buyers were already told why; "time ran out" would be wrong.
+    const cancelled = order.event?.status === EventStatus.CANCELLED || order.series?.status === EventStatus.CANCELLED || Boolean(order.instance?.cancelledAt);
     for (const payment of order.payments) {
       await tx.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.EXPIRED } });
-      await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "expired" });
+      if (!cancelled) await enqueuePaymentEmail(tx, { to: order.buyerEmail, paymentId: payment.id, notice: "expired" });
     }
     await recordAuditEvent({ action: "ORDER_HOLD_EXPIRED", organisationId: order.organisationId, targetType: "Order", targetId: orderId, client: tx });
     return "expired" as const;
@@ -103,7 +108,7 @@ export async function runPaymentMaintenance(now = new Date()) {
       const seats = await prisma.rSVP.findMany({ where: { orderId: id }, select: { eventId: true, eventInstanceId: true }, distinct: ["eventId", "eventInstanceId"] });
       for (const seat of seats) {
         const target = seatTargetOf(seat);
-        if (target) await offerNextWaitlisted(target, now).catch(() => undefined);
+        if (target) await fillFromWaitlist(target, now);
       }
     }
     if (result === "settled") settled += 1;

@@ -5,6 +5,8 @@
 #   node server.js            the backend web server (default)
 #   node frontend/server.js   the frontend web server (frontend image default)
 #   migrate                   apply pending database migrations once, then exit
+#   worker                    send queued email within seconds (no public traffic)
+#   beat                      run the timed jobs: holds, reminders, cleanup, alerts
 #   node docker/vps/*.mjs,    the VPS operator tools, run as given
 #   node scripts/*.mjs
 #   anything else             treated like a web server: it gets the origins
@@ -33,6 +35,14 @@ if [ "${1:-}" = migrate ]; then
   echo "[entrypoint] Applying database migrations"
   migrate
   exit 0
+fi
+
+# The worker and the beat are the backend server in a background role,
+# listening on loopback only (for the image's health check).
+if [ "${1:-}" = worker ] || [ "${1:-}" = beat ]; then
+  export SWE_PROCESS_ROLE="$1" HOSTNAME=127.0.0.1
+  echo "[entrypoint] Starting the $1"
+  set -- node server.js
 fi
 
 built=${SWE_NEXT_DIR:-/app/.next}

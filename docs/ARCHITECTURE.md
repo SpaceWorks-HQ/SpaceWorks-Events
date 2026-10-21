@@ -72,7 +72,12 @@ Refer to `prisma/schema.prisma` for the authoritative fields, constraints, index
 
 ## Background and scheduled work
 
-Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. Every self-hosted Node.js instance starts a singleton one-minute worker that claims and sends a batch, retries failures, purges expired operational records, and updates a one-row `OperationalHeartbeat`. Queue row claims keep concurrent replicas safe. The protected `POST /api/internal/outbox` endpoint remains available as an external scheduler or recovery trigger.
+Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. Background work runs in two roles, both in `lib/outboxWorker.ts` and selected per process by `SWE_PROCESS_ROLE`:
+
+- The **worker** polls the outbox every `OUTBOX_POLL_MS` (default 3 seconds), claims and sends batches of 50 until the queue is empty, and retries failures. It records the `outbox-scheduler` heartbeat.
+- The **beat** checks every 15 seconds which timed jobs are due and runs them: payment maintenance (hold expiry, refunds, payment-link reminders) and waitlist filling every minute, event reminders (a day before each event or series date, once per guest) and backup alerts every 5 minutes, and the retention purge every hour. Its jobs queue email for the worker. It records the `beat` heartbeat.
+
+With the default role, `all`, one process serves requests and runs both loops, as the Render free instance does. The VPS stack and the Helm chart run `web` containers that only serve requests, beside separate `worker` and `beat` containers from the same backend image. Queue row claims keep concurrent workers safe, and every timed job is safe to run twice. Heartbeats live in `OperationalHeartbeat`; the super-admin Operations page treats either as stale after 3 minutes. The protected `POST /api/internal/outbox` endpoint runs every timed job once and then drains the queue, for cron services (the Cloudflare Worker on free hosting) and manual recovery.
 
 ## Realtime ticket check-in
 
@@ -94,7 +99,7 @@ This per-request nonce makes application pages dynamically rendered. There is de
 
 ## Deployment shape
 
-`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage, Caddy and the recovery scheduler alongside the application; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The default deployment shares one Next.js runtime. The [split deployment](DEPLOYMENT_SPLIT.md) builds a separate rendering workspace for Netlify; guarded view readers, authentication persistence, domain actions, HTTP APIs and jobs run on the VPS.
+`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage and Caddy alongside the application, its email worker and its beat; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The default deployment shares one Next.js runtime. The [split deployment](DEPLOYMENT_SPLIT.md) builds a separate rendering workspace for Netlify; guarded view readers, authentication persistence, domain actions, HTTP APIs and jobs run on the VPS.
 
 
 ### Separate rendering workspace

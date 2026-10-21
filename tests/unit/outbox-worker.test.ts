@@ -7,25 +7,35 @@ const mocks = vi.hoisted(() => ({
   success: vi.fn(),
   failure: vi.fn(),
   payments: vi.fn(),
+  alerts: vi.fn(),
+  waitlists: vi.fn(),
+  reminders: vi.fn(),
 }));
 vi.mock("@/lib/outbox", () => ({ deliverOutboxBatch: mocks.deliver }));
 vi.mock("@/lib/retention", () => ({ purgeExpiredOperationalData: mocks.purge }));
 vi.mock("@/lib/payments/maintenance", () => ({ runPaymentMaintenance: mocks.payments }));
-vi.mock("@/lib/backupAlerts", () => ({ alertOnBackupProblems: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/backupAlerts", () => ({ alertOnBackupProblems: mocks.alerts }));
+vi.mock("@/lib/payments/operations", () => ({ fillWaitlists: mocks.waitlists }));
+vi.mock("@/lib/eventReminders", () => ({ sendEventReminders: mocks.reminders }));
 vi.mock("@/lib/operationalHeartbeat", () => ({
-  recordOutboxSchedulerStarted: mocks.started,
-  recordOutboxSchedulerSuccess: mocks.success,
-  recordOutboxSchedulerFailure: mocks.failure,
+  OUTBOX_SCHEDULER_HEARTBEAT_KEY: "outbox-scheduler",
+  BEAT_HEARTBEAT_KEY: "beat",
+  recordHeartbeatStarted: mocks.started,
+  recordHeartbeatSuccess: mocks.success,
+  recordHeartbeatFailure: mocks.failure,
 }));
 
-import { runOutboxScheduler } from "@/lib/outboxWorker";
+import { drainOutbox, processRole, runOutboxScheduler, runScheduledJobs, SCHEDULED_JOBS } from "@/lib/outboxWorker";
 
 describe("outbox scheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.waitlists.mockResolvedValue({ offered: 0 });
+    mocks.reminders.mockResolvedValue({ queued: 0 });
     mocks.started.mockResolvedValue(undefined);
     mocks.success.mockResolvedValue(undefined);
     mocks.failure.mockResolvedValue(undefined);
+    mocks.alerts.mockResolvedValue(undefined);
     mocks.deliver.mockResolvedValue({ sent: 2, failed: 0 });
     mocks.purge.mockResolvedValue({ verificationTokens: 1 });
     mocks.payments.mockResolvedValue({ expired: 1, settled: 0, refundsSubmitted: 0 });
@@ -34,7 +44,7 @@ describe("outbox scheduler", () => {
   it("does not make heartbeat observability a delivery dependency", async () => {
     mocks.started.mockRejectedValue(new Error("heartbeat unavailable"));
     mocks.success.mockRejectedValue(new Error("heartbeat unavailable"));
-    await expect(runOutboxScheduler()).resolves.toMatchObject({ sent: 2, failed: 0 });
+    await expect(runOutboxScheduler()).resolves.toMatchObject({ sent: 2, failed: 0, purged: { verificationTokens: 1 } });
     expect(mocks.deliver).toHaveBeenCalled();
     expect(mocks.purge).toHaveBeenCalled();
   });
@@ -43,14 +53,81 @@ describe("outbox scheduler", () => {
     const error = new Error("delivery failed");
     mocks.deliver.mockRejectedValue(error);
     await expect(runOutboxScheduler()).rejects.toBe(error);
-    expect(mocks.failure).toHaveBeenCalledWith(error);
-    expect(mocks.purge).not.toHaveBeenCalled();
+    expect(mocks.failure).toHaveBeenCalledWith("outbox-scheduler", error);
   });
 
-  it("runs payment housekeeping first, and never lets it stop email delivery", async () => {
+  it("runs payment housekeeping first, and never lets a job stop email delivery", async () => {
     await expect(runOutboxScheduler()).resolves.toMatchObject({ payments: { expired: 1 } });
     expect(mocks.payments.mock.invocationCallOrder[0]).toBeLessThan(mocks.deliver.mock.invocationCallOrder[0]!);
     mocks.payments.mockRejectedValue(new Error("provider down"));
-    await expect(runOutboxScheduler()).resolves.toMatchObject({ sent: 2, payments: null });
+    mocks.purge.mockRejectedValue(new Error("database busy"));
+    await expect(runOutboxScheduler()).resolves.toMatchObject({ sent: 2, payments: null, purged: null });
+    expect(mocks.success).toHaveBeenCalledWith("beat", { sent: 0, failed: 2 });
+  });
+});
+
+describe("worker", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("keeps sending full batches until the queue is empty", async () => {
+    mocks.deliver
+      .mockResolvedValueOnce({ sent: 50, failed: 0 })
+      .mockResolvedValueOnce({ sent: 48, failed: 2 })
+      .mockResolvedValueOnce({ sent: 3, failed: 0 });
+    await expect(drainOutbox()).resolves.toEqual({ sent: 101, failed: 2 });
+    expect(mocks.deliver).toHaveBeenCalledTimes(3);
+    expect(mocks.deliver).toHaveBeenCalledWith(50);
+  });
+
+  it("stops after a bounded number of batches so one tick never runs forever", async () => {
+    mocks.deliver.mockResolvedValue({ sent: 50, failed: 0 });
+    await expect(drainOutbox()).resolves.toEqual({ sent: 1000, failed: 0 });
+    expect(mocks.deliver).toHaveBeenCalledTimes(20);
+  });
+});
+
+describe("beat", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.payments.mockResolvedValue({});
+    mocks.purge.mockResolvedValue({});
+    mocks.alerts.mockResolvedValue(undefined);
+    mocks.waitlists.mockResolvedValue({ offered: 0 });
+    mocks.reminders.mockResolvedValue({ queued: 0 });
+  });
+
+  it("runs each job only when its interval has passed", async () => {
+    const lastRun = new Map<string, number>();
+    const start = new Date("2030-01-01T00:00:00Z");
+    await runScheduledJobs({ now: start, lastRun });
+    expect(mocks.payments).toHaveBeenCalledTimes(1);
+    expect(mocks.purge).toHaveBeenCalledTimes(1);
+
+    await runScheduledJobs({ now: new Date(start.getTime() + 61_000), lastRun });
+    expect(mocks.payments).toHaveBeenCalledTimes(2);
+    expect(mocks.purge).toHaveBeenCalledTimes(1);
+
+    await runScheduledJobs({ now: new Date(start.getTime() + 61 * 60_000), lastRun });
+    expect(mocks.purge).toHaveBeenCalledTimes(2);
+    expect(mocks.reminders).toHaveBeenCalledTimes(2);
+    expect(SCHEDULED_JOBS.map((job) => job.name)).toEqual(["payments", "waitlists", "event-reminders", "backup-alerts", "retention"]);
+  });
+
+  it("keeps going when one job fails", async () => {
+    mocks.payments.mockRejectedValue(new Error("down"));
+    const { failures } = await runScheduledJobs({ force: true });
+    expect(failures).toBe(1);
+    expect(mocks.purge).toHaveBeenCalled();
+    expect(mocks.alerts).toHaveBeenCalled();
+  });
+});
+
+describe("process role", () => {
+  it("defaults to doing everything, and accepts only known roles", () => {
+    expect(processRole(undefined)).toBe("all");
+    expect(processRole(" Worker ")).toBe("worker");
+    expect(processRole("beat")).toBe("beat");
+    expect(processRole("web")).toBe("web");
+    expect(processRole("celery")).toBe("all");
   });
 });

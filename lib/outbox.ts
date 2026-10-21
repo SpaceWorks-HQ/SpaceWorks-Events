@@ -2,7 +2,7 @@ import "server-only";
 
 import { OutboxStatus, Prisma, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { sendApprovalNotification, sendCollaboratorInvitation, sendEventBroadcast, sendEventInvitation, sendRSVPConfirmation } from "@/lib/email";
+import { sendApprovalNotification, sendCollaboratorInvitation, sendEventBroadcast, sendEventInvitation, sendReminder, sendRSVPConfirmation } from "@/lib/email";
 import { broadcastHtmlToText, formatBroadcastEventDate, renderBroadcastHtml, renderBroadcastTemplate, sampleBroadcastVariables } from "@/lib/broadcastTemplate";
 import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, broadcastFeedbackUrl, broadcastScheduleUrl, broadcastTicketUrl, rsvpMatchesBroadcastAudience } from "@/lib/eventBroadcast";
 import { isBroadcastDesign } from "@/lib/email/broadcastDesigns";
@@ -42,8 +42,13 @@ type EventInvitePayload = {
   organisationName: string;
   orgSlug: string;
   eventSlug: string;
+  /** A series invite links its next date, "/<org>/i/<date id>", instead of an event page. */
+  eventPath?: string;
   expiresAt?: string;
 };
+
+/** A site path an invite may link: an event page or a series date page. */
+const INVITE_PATH = /^\/[a-z0-9-]{1,64}(\/i\/[a-z0-9]{10,40})?$/;
 
 type EmailVerificationPayload = {
   to: string;
@@ -56,6 +61,17 @@ type CollaboratorInvitePayload = { to: string; eventTitle: string; inviteUrl: st
 type EventBroadcastPayload = { to: string; broadcastId: string; rsvpId: string };
 
 type EventBroadcastTestPayload = { to: string; eventId: string; subject: string; body: string; design?: string; recipientName?: string };
+
+/** A guest's reminder before the event. The ticket link is built at send time, so the queue never stores it. */
+export type EventReminderPayload = { to: string; rsvpId: string };
+
+export const EVENT_REMINDER_KIND = "event-reminder";
+
+function asEventReminderPayload(value: Prisma.JsonValue): EventReminderPayload | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const p = value as Record<string, unknown>;
+  return isEmail(p.to) && isBoundedString(p.rsvpId, 64) ? p as EventReminderPayload : null;
+}
 
 /** A short plain message to a super admin: the test email and backup alerts. It never carries links or secrets. */
 export type OperatorNoticePayload = { to: string; subject: string; lines: string[] };
@@ -263,6 +279,7 @@ function asEventInvitePayload(value: Prisma.JsonValue): EventInvitePayload | nul
     !isBoundedString(payload.organisationName, 120) ||
     !isBoundedString(payload.orgSlug, 64) ||
     !isBoundedString(payload.eventSlug, 64) ||
+    (payload.eventPath !== undefined && !(typeof payload.eventPath === "string" && INVITE_PATH.test(payload.eventPath))) ||
     (payload.expiresAt !== undefined && !isIsoDate(payload.expiresAt))
   ) return null;
   return payload as EventInvitePayload;
@@ -513,6 +530,36 @@ export async function deliverOutboxBatch(limit = 20) {
           organisationName: event.organisation.name,
           design: isBroadcastDesign(payload.design) ? payload.design : undefined,
           brand: broadcastBrandFor(event),
+          messageId: stableMessageId,
+        });
+      } else if (message.kind === EVENT_REMINDER_KIND) {
+        const payload = asEventReminderPayload(message.payload);
+        if (!payload) throw new PermanentOutboxError();
+        const rsvp = await prisma.rSVP.findUnique({
+          where: { id: payload.rsvpId },
+          select: {
+            status: true, checkInToken: true,
+            event: { select: { title: true, startDateTime: true, timezone: true, location: true, isOnline: true, status: true } },
+            eventInstance: { select: { startDateTime: true, cancelledAt: true, series: { select: { title: true, timezone: true, status: true } } } },
+          },
+        });
+        const occasion = rsvp?.event
+          ? { title: rsvp.event.title, start: rsvp.event.startDateTime, timezone: rsvp.event.timezone, location: rsvp.event.isOnline ? "Online" : rsvp.event.location, live: rsvp.event.status === "PUBLISHED" }
+          : rsvp?.eventInstance
+            ? { title: rsvp.eventInstance.series.title, start: rsvp.eventInstance.startDateTime, timezone: rsvp.eventInstance.series.timezone, location: undefined, live: rsvp.eventInstance.series.status === "PUBLISHED" && !rsvp.eventInstance.cancelledAt }
+            : null;
+        // Cancelled, moved into the past, or no longer confirmed: a reminder would be wrong.
+        if (!rsvp || !occasion || rsvp.status !== RsvpStatus.CONFIRMED || !occasion.live || occasion.start <= new Date()) {
+          await prisma.outboxMessage.deleteMany({ where: { id: message.id, status: OutboxStatus.PROCESSING, lockedAt: claimTime } });
+          continue;
+        }
+        await sendReminder({
+          to: payload.to,
+          eventTitle: occasion.title,
+          startsAtIso: occasion.start.toISOString(),
+          timezone: occasion.timezone,
+          location: occasion.location,
+          ticketUrl: broadcastTicketUrl(rsvp.checkInToken),
           messageId: stableMessageId,
         });
       } else if (message.kind === "operator-notice") {

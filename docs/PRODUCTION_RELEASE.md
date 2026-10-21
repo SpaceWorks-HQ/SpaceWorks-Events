@@ -4,7 +4,7 @@
 
 Space Works Events must not be released until every item below is complete and recorded in the deployment change.
 
-The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render (app), Supabase (PostgreSQL), Upstash (Redis), Cloudflare R2 (storage), Brevo (SMTP), and a Cloudflare Worker (scheduler). It satisfies the TLS, private-storage, authenticated-SMTP, and scheduler requirements below. It does **not** provide point-in-time recovery, provider backups, or alerting on the free plans: take operator backups (`DATABASE_URL="$DIRECT_URL" npm run db:backup`) and add an uptime monitor for `/api/health`, or upgrade those services before holding real attendee data at scale.
+The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render (app), Supabase (PostgreSQL), Upstash (Redis), Cloudflare R2 (storage), Brevo (SMTP), and a Cloudflare Worker (scheduler). It satisfies the TLS, private-storage, authenticated-SMTP, and background-job requirements below. It does **not** provide point-in-time recovery, provider backups, or alerting on the free plans: take operator backups (`DATABASE_URL="$DIRECT_URL" npm run db:backup`) and add an uptime monitor for `/api/health`, or upgrade those services before holding real attendee data at scale.
 
 ## Required managed services
 
@@ -12,7 +12,7 @@ The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Rend
 - Redis configured through `REDIS_URL`. The application deliberately rejects security-sensitive traffic when Redis is unavailable in production.
 - Private S3-compatible object storage configured with `S3_BUCKET` and `S3_REGION`. Use an IAM workload role where possible; keep the bucket private.
 - A transactional email provider with a verified sending domain, SPF, DKIM, DMARC, bounce handling, and alerting.
-- The self-hosted Node.js service runs an in-process outbox worker once per minute. Keep `POST /api/internal/outbox` with `Authorization: Bearer $CRON_SECRET` available as an independent scheduler or recovery trigger, and monitor both delivery and cleanup results.
+- The email worker (sends queued email within seconds) and the beat (timed jobs: payment holds and reminders, waitlists, event reminders, retention, backup alerts) run in the application process by default, or as separate `worker` and `beat` containers (`SWE_PROCESS_ROLE`). Keep `POST /api/internal/outbox` with `Authorization: Bearer $CRON_SECRET` available for cron services and recovery, and monitor both heartbeats.
 - WAF/CDN and TLS termination in front of the app. Forward only the configured trusted client-IP header.
 - Centralized PII-scrubbed logs, error reporting, uptime checks, and alerts for database, Redis, outbox, mail, and backup failures.
 
@@ -23,7 +23,7 @@ The default deployment is the [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Rend
 3. Review and approve the Prisma migration; take a backup before applying it. The secure-token migration rotates existing ticket and certificate links.
 4. Run `npm ci`, `npm run production:check`, `npm run db:deploy`, `npm run db:verify`, `npm run storage:migrate`, `npm run lint`, `npx tsc --noEmit`, `npm run test:coverage`, and `npm run build` in staging.
 5. Exercise auth, organisation permissions, RSVP capacity, duplicate RSVP, upload rejection, email delivery, and offline-check-in sync in staging.
-6. Build an immutable image with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` supplied as a BuildKit secret (Render: as the service environment variable, which Render passes as a build arg), inject that same value at runtime, run the authenticated `/api/health/db` readiness probe, and verify the outbox scheduler.
+6. Build an immutable image with `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` supplied as a BuildKit secret (Render: as the service environment variable, which Render passes as a build arg), inject that same value at runtime, run the authenticated `/api/health/db` readiness probe, and verify the worker and beat heartbeats.
 7. Confirm alert delivery and record the release, backup point, migration version, and rollback owner.
 
 ## Breaking changes from Yuyu

@@ -189,12 +189,30 @@ application image does not reverse a database migration; migrations must be
 reviewed for backward compatibility and restored from a verified backup when a
 database rollback is genuinely required.
 
-## Outbox scheduling and readiness
+## Email worker, timed jobs and readiness
 
-Each application process runs the outbox worker once per minute. In production,
-also configure an independent scheduler to call `POST /api/internal/outbox`
-with `Authorization: Bearer $CRON_SECRET` as a recovery path. Monitor the
-worker heartbeat and failed queue items.
+By default (`SWE_PROCESS_ROLE=all`) the application container also sends queued
+email within seconds (the worker) and runs the timed jobs: payment holds and
+reminders, waitlists, event reminders, retention and backup alerts (the beat). To run them separately, set
+`SWE_PROCESS_ROLE=web` on the application container and start two more
+containers from the same image with the commands `worker` and `beat`. They
+listen on loopback only and need no published port:
+
+```bash
+docker run -d --name swevents-worker --restart unless-stopped \
+  --env-file /secure/path/swevents.env \
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} worker
+docker run -d --name swevents-beat --restart unless-stopped \
+  --env-file /secure/path/swevents.env \
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} beat
+```
+
+Replace them with the application container on every upgrade. Monitor the
+worker and beat heartbeats and failed queue items under Super admin →
+Operations. `POST /api/internal/outbox` with `Authorization: Bearer
+$CRON_SECRET` runs every timed job once and then sends the queue; use it for
+manual recovery or from a cron service on a platform that cannot run the
+background roles.
 
 Use `/api/health` for dependency-free liveness. Use the bearer-protected
 `/api/health/db` endpoint for readiness. Never expose either bearer secret in

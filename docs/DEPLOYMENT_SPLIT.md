@@ -11,7 +11,7 @@ thin action/API proxies, so this is a Next.js deployment rather than a static SP
 | Host | Services |
 | --- | --- |
 | Netlify, `events.example.com` | Shared UI, server rendering, browser-origin API proxy, thin Server Action wrappers |
-| VPS, `api.events.example.com` | Guarded view/action API, Auth.js persistence, HTTP APIs, jobs and scheduler |
+| VPS, `api.events.example.com` | Guarded view/action API, Auth.js persistence, HTTP APIs, the email worker and the beat (timed jobs) |
 | VPS private Docker network | TLS PostgreSQL, TLS/password Redis, private Silo S3 storage |
 | External operator services | Authenticated SMTP relay, monitoring, encrypted off-server backup/PITR |
 
@@ -105,9 +105,9 @@ Auth.js secret with Netlify. MFA and station cookies follow the same rule.
 
 Uploads, controlled image delivery, exports, PDFs and normal APIs use frontend
 `/api/*`. Mutating browser calls require the canonical Origin; machine API calls
-retain their tenant-bound bearer validation. The proxy blocks internal scheduler,
-readiness and private peer routes. The scheduler calls the VPS internally every
-minute; it never depends on a Netlify scheduled function.
+retain their tenant-bound bearer validation. The proxy blocks the internal outbox,
+readiness and private peer routes. The worker and the beat run on the VPS; they
+never depend on a Netlify scheduled function.
 
 Ticket state streams connect straight to the API hostname so long-lived SSE does
 not occupy a Netlify function. Only ticket status/events routes return CORS for

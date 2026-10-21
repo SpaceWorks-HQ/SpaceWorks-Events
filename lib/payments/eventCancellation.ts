@@ -1,8 +1,9 @@
 import "server-only";
 
-import { OrderStatus, RsvpStatus } from "@prisma/client";
+import { OrderStatus, RsvpStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { noticeEach, noticeSubject, personEmail, uniqueEmails } from "@/lib/notices";
 import { PaymentOperationError, refundOrder } from "./operations";
 
 /**
@@ -45,6 +46,30 @@ export async function refundCancelledEvent(params: { eventId: string; organisati
   }
   await recordAuditEvent({ action: "EVENT_CANCELLED_REFUNDS", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Event", targetId: params.eventId, metadata: { orders: orders.length, refunded, failed } });
   return { refunded, failed };
+}
+
+/** Everyone with a place, a request or a waitlist spot (and buyers still paying or waiting to hear) on an event or date. */
+export async function peopleWithPlaces(tx: Prisma.TransactionClient, target: { eventId: string; } | { eventInstanceId: string; }) {
+  const [rsvps, orders] = await Promise.all([
+    tx.rSVP.findMany({
+      where: { ...target, status: { in: [RsvpStatus.CONFIRMED, RsvpStatus.PENDING_PAYMENT, RsvpStatus.WAITLISTED, RsvpStatus.PENDING_APPROVAL] } },
+      select: { guestEmail: true, user: { select: { email: true } } },
+    }),
+    tx.order.findMany({ where: { ...target, status: { in: [OrderStatus.PENDING, OrderStatus.REQUESTED] } }, select: { buyerEmail: true } }),
+  ]);
+  return uniqueEmails([...rsvps.map(personEmail), ...orders.map((order) => order.buyerEmail)]);
+}
+
+/** Tell everyone on an event that it was cancelled. Run in the transaction that cancels it, before anything is removed. */
+export async function notifyEventCancelled(tx: Prisma.TransactionClient, params: { eventId: string; title: string; reason?: string | null; }) {
+  return noticeEach(tx, await peopleWithPlaces(tx, { eventId: params.eventId }), {
+    subject: noticeSubject("Cancelled", params.title),
+    lines: [
+      `${params.title} has been cancelled by the organiser.`,
+      ...(params.reason?.trim() ? [params.reason.trim()] : []),
+      "If you paid, you'll get a separate email about your refund: card and UPI refunds can take 5 to 10 working days to appear. Nothing more will be charged.",
+    ],
+  });
 }
 
 /** Whether people have paid for (or are paying for) this event, so it must be cancelled rather than deleted. */

@@ -7,7 +7,7 @@ vi.mock("@/lib/permissions", () => ({ requireAuth: async () => ({ user: identity
 vi.mock("@/lib/reauth", () => ({ hasRecentAuthentication: async () => true }));
 vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: async () => false }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/lib/outbox", () => ({ enqueuePasswordReset: vi.fn() }));
+vi.mock("@/lib/outbox", () => ({ enqueuePasswordReset: vi.fn(), enqueueOperatorNotice: vi.fn() }));
 import { confirmPasswordReset } from "@/app/actions/password-reset";
 import { updateAccountPassword } from "@/app/actions/account";
 import { prisma } from "@/lib/db";

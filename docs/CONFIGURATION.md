@@ -49,7 +49,9 @@ Keep an HTTPS redirect from the old hostname to the new one for as long as invit
 | --- | --- | --- |
 | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Required | Stable base64 AES key shared by the build and every replica; 16, 24, or 32 decoded bytes |
 | `MFA_ENCRYPTION_KEY` | Required | Independent base64 key used to encrypt TOTP seeds; exactly 32 decoded bytes |
-| `CRON_SECRET` | Required | Bearer secret for the outbox scheduler, at least 32 characters |
+| `CRON_SECRET` | Required | Bearer secret for `POST /api/internal/outbox` (one full pass of timed jobs and email delivery, for cron services and recovery), at least 32 characters |
+| `SWE_PROCESS_ROLE` | Optional | `all` (default): serve requests, send email (worker) and run timed jobs (beat) in one process. `web`, `worker` or `beat`: one part only, for installs that run them as separate containers. The image's `worker` and `beat` commands set it |
+| `OUTBOX_POLL_MS` | Optional | How often the worker checks for queued email, in milliseconds (default 3000, 500 to 60000) |
 | `HEALTHCHECK_SECRET` | Required | Bearer secret for database readiness, at least 32 characters |
 
 Generate independent keys with `openssl rand -base64 32`. Rotating the Server Action key invalidates outstanding action forms. Rotating the MFA key without re-encrypting stored seeds prevents enrolled users from validating TOTP codes.

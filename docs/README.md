@@ -30,7 +30,7 @@ New here? Start with [Features](FEATURES.md) for what it does, then [Local devel
 | [Production operations](production-operations.md) | Deployments, probes, schedulers, backups, incidents, and privacy operations |
 | [Releases and container images](CONTAINER_IMAGES.md) | VERSION and GitHub Releases, the public multi-platform images on GitHub Packages, and how one image serves every installation |
 | [Netlify frontend + VPS backend](DEPLOYMENT_SPLIT.md) | Separate frontend workspace, private API gateway, setup and verification |
-| [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS and scheduler on one VPS; setup, checks, upgrades and backups |
+| [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS, email worker and beat on one VPS; setup, checks, upgrades and backups |
 | [Production Docker deployment](DEPLOYMENT_DOCKER.md) | Current single-host/container deployment, migrations, upgrades, and image limitations |
 | [Isolated staging deployment](DEPLOYMENT_STAGING.md) | Single-VM Docker Compose staging/test setup behind host Nginx |
 | [Helm chart](../charts/spaceworks-events/README.md) | Kubernetes installation, migration hook, secrets, probes, and ingress configuration |

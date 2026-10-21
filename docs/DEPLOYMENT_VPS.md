@@ -4,7 +4,7 @@
 
 Run Space Works Events on one Linux VPS with Docker Engine and Docker Compose.
 The production stack uses two images of its own: the **backend** (the API, the
-one-shot migrations, the email outbox worker and its recovery scheduler, live
+one-shot migrations, the email worker, the beat that runs timed jobs, live
 check-in and the operator tools) and the **frontend** (the website). PostgreSQL
 16, Redis 7, private Silo S3-compatible storage and Caddy HTTPS run from their
 standard images in the same Compose file. Node.js, PostgreSQL and Redis do not
@@ -75,7 +75,7 @@ records the configuration directory and the repository to update from.
 Like SpaceWorks, the stack runs a backend and a frontend image (see
 [Releases and container images](CONTAINER_IMAGES.md)), with PostgreSQL, Redis,
 Silo storage, one-shot migrations (the backend image's `migrate` role), the
-email scheduler and Caddy:
+email worker and the beat (its `worker` and `beat` roles) and Caddy:
 
 | Choice | Layout | Containers | DNS |
 | --- | --- | --- | --- |
@@ -272,9 +272,9 @@ and SMTP are runtime inputs, not build arguments.
 
 Compose waits for PostgreSQL and Redis health, creates the private storage
 bucket and application policy, and applies Prisma migrations before starting the
-app. Migration failure blocks app startup. Caddy and the scheduler wait for app
-health. Caddy obtains and renews the public TLS certificate; it needs working DNS
-and reachable ports 80/443. This can take a short time on first startup.
+app, the worker and the beat. Migration failure blocks their startup. Caddy
+waits for app health. Caddy obtains and renews the public TLS certificate; it
+needs working DNS and reachable ports 80/443. This can take a short time on first startup.
 
 The database rejects non-TLS TCP connections. Redis accepts TLS and password
 authentication only. The app verifies internal certificates through the private
@@ -307,8 +307,11 @@ email, upload an event cover, register for a private test event, and check that 
 ticket updates immediately when scanned. The proxy flushes streaming responses
 for live check-in and overwrites `X-Real-IP`, which is the header this deployment
 trusts. Review outbox heartbeat and failed delivery status in the operations area.
-The separate scheduler calls the protected outbox endpoint every minute; it needs
-no Cloudflare Worker or host cron.
+The `app` container only serves requests. The `worker` container sends queued
+email within seconds, and the `beat` container runs the timed jobs (payment
+holds and reminders, waitlists, event reminders, retention, backup alerts); both serve no traffic. The
+operations area shows a heartbeat for each. No Cloudflare Worker or host cron is
+needed.
 
 ## Upgrades and rollback
 
@@ -323,7 +326,8 @@ Run the one-liner again and choose **1) Update to the latest release** (or pass
 4. changes only the version and image names in `compose.env`, downloads the new
    images (or builds them for `--ref`) while the site keeps running, runs
    preflight, applies migrations and verifies the schema;
-5. recreates the services, waits for them to be healthy and runs the VPS checks;
+5. recreates the services (removing any the new release no longer runs, such as
+   the old `scheduler`), waits for them to be healthy and runs the VPS checks;
 6. points `current` at the new release and keeps the three newest releases and
    their images.
 
@@ -414,8 +418,8 @@ For an encrypted backup it asks you to paste the key (or pass `--identity FILE`)
 `vps-restore.sh offsite:<time>` first downloads that backup from the off-site
 bucket; the installer menu's **Backups → List off-site backups** shows the names.
 It shows what will be replaced and asks you to type `RESTORE`. It backs up the
-current database first, stops the app, Caddy and the scheduler, and replaces the
-database in one transaction. It then copies the backup's files back into Silo
+current database first, stops the app, the worker, the beat and Caddy, and
+replaces the database in one transaction. It then copies the backup's files back into Silo
 (newer files stay), runs migrations if the backup came from an older release,
 starts everything and runs the VPS checks.
 
@@ -533,7 +537,7 @@ logs can hold email and IP addresses, so read it before sharing.
 ## A separate frontend on Netlify
 
 Choose mode 2 in the installer and follow [Netlify frontend + Docker VPS backend](DEPLOYMENT_SPLIT.md).
-The same data services, private TLS, migrations, scheduler, backups and renewal
-procedures apply. `PUBLIC_HOST` is the VPS API hostname; `PUBLIC_ORIGIN`, `AUTH_URL`
+The same data services, private TLS, migrations, worker and beat, backups and
+renewal procedures apply. `PUBLIC_HOST` is the VPS API hostname; `PUBLIC_ORIGIN`, `AUTH_URL`
 and `NEXT_PUBLIC_BASE_URL` are the frontend HTTPS origin. Public variables require
 rebuilding the appropriate application image/workspace when changed.

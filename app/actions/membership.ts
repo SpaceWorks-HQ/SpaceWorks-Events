@@ -19,6 +19,9 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { hasRecentAuthentication } from "@/lib/reauth";
+import { EventStatus, OrderStatus } from "@prisma/client";
+import { peopleWithPlaces } from "@/lib/payments/eventCancellation";
+import { noticeEach, noticeSubject, uniqueEmails } from "@/lib/notices";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -158,7 +161,36 @@ export async function deleteOrganisation(input: unknown): Promise<ActionResult> 
     return { ok: false, error: "For security, sign in again before deleting an organisation." };
   }
 
+  // Deleting would erase the tickets and payment records of people who paid
+  // for something still to come: cancelling those events refunds them first.
+  const now = new Date();
+  const paidUpcoming = await prisma.order.count({
+    where: {
+      organisationId: org.id,
+      totalMinor: { gt: 0 },
+      status: { in: [OrderStatus.CONFIRMED, OrderStatus.PENDING, OrderStatus.REQUESTED] },
+      OR: [{ event: { endDateTime: { gt: now }, status: { not: EventStatus.CANCELLED } } }, { series: { status: { not: EventStatus.CANCELLED }, instances: { some: { endDateTime: { gt: now }, cancelledAt: null } } } }],
+    },
+  });
+  if (paidUpcoming > 0) {
+    return { ok: false, error: "People have paid for upcoming events. Cancel those events (or their dates) first, which refunds them." };
+  }
+
   const slug = org.slug;
+  // Guests of upcoming events and dates are told they won't go ahead.
+  await prisma.$transaction(async (tx) => {
+    const [events, dates] = await Promise.all([
+      tx.event.findMany({ where: { organisationId: org.id, status: EventStatus.PUBLISHED, endDateTime: { gt: now } }, select: { id: true, title: true } }),
+      tx.eventInstance.findMany({ where: { series: { organisationId: org.id, status: EventStatus.PUBLISHED }, endDateTime: { gt: now }, cancelledAt: null }, select: { id: true, series: { select: { title: true } } } }),
+    ]);
+    // One email per person per event or series, however many dates they booked.
+    const people = new Map<string, string[]>();
+    for (const event of events) people.set(event.title, await peopleWithPlaces(tx, { eventId: event.id }));
+    for (const date of dates) people.set(date.series.title, uniqueEmails([...(people.get(date.series.title) ?? []), ...(await peopleWithPlaces(tx, { eventInstanceId: date.id }))]));
+    for (const [title, emails] of people) {
+      await noticeEach(tx, emails, { subject: noticeSubject("Cancelled", title), lines: [`${title} has been cancelled: ${org.name} closed its account.`] });
+    }
+  }, { timeout: 60_000 });
   // Deliberately omit organisationId: deleting the organisation cascades its
   // scoped records, while this event must survive as an instance-level record.
   await recordAuditEvent({

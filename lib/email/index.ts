@@ -199,10 +199,14 @@ export async function sendEventInvitation(params: {
   organisationName: string;
   orgSlug: string;
   eventSlug: string;
+  /** Validated by the outbox: a series invite's date page. */
+  eventPath?: string;
   messageId?: string;
 }): Promise<void> {
   const { transporter, from } = await getEmailTransport();
-  const eventUrl = `${getBaseUrl()}/${encodeURIComponent(params.orgSlug)}/${encodeURIComponent(params.eventSlug)}`;
+  const eventUrl = params.eventPath
+    ? `${getBaseUrl()}${params.eventPath}`
+    : `${getBaseUrl()}/${encodeURIComponent(params.orgSlug)}/${encodeURIComponent(params.eventSlug)}`;
   const safeTitle = escapeHtml(params.eventTitle);
   const safeOrganisationName = escapeHtml(params.organisationName);
   const safeEventUrl = escapeHtml(eventUrl);
@@ -240,23 +244,32 @@ export async function sendReminder(params: {
   to: string;
   eventTitle: string;
   startsAtIso: string;
+  /** The event's own zone; the date is shown in it. */
+  timezone?: string;
+  location?: string;
+  /** The guest's ticket, built at send time (never stored in the queue). */
+  ticketUrl?: string;
   messageId?: string;
 }): Promise<void> {
   const { transporter, from } = await getEmailTransport();
 
-  const formattedDate = new Date(params.startsAtIso).toLocaleString();
+  const formattedDate = formatEventDateTime(new Date(params.startsAtIso), params.timezone ?? "UTC");
   const safeTitle = escapeHtml(params.eventTitle);
   const subjectTitle = headerText(params.eventTitle);
+  const location = params.location?.trim();
+  const ticketUrl = params.ticketUrl ? escapeHtml(params.ticketUrl) : null;
 
-  const html = emailLayout(`Upcoming Event Reminder: ${safeTitle}`, `
-            <h2 style="${HEADING_STYLE}">Upcoming Event Reminder</h2>
+  const html = emailLayout(`Reminder: ${safeTitle}`, `
+            <h2 style="${HEADING_STYLE}">See you soon</h2>
             <p style="${BODY_STYLE}">
               Hello,<br><br>
-              This is a reminder that the event <strong>${safeTitle}</strong> is starting soon!<br><br>
-              <strong>Start Time:</strong> ${formattedDate}
-            </p>`);
+              This is a reminder that <strong>${safeTitle}</strong> starts soon.<br><br>
+              <strong>When:</strong> ${escapeHtml(formattedDate)}${location ? `<br><strong>Where:</strong> ${escapeHtml(location)}` : ""}
+            </p>${ticketUrl ? `
+            <p style="margin:28px 0;"><a href="${ticketUrl}" style="${EMAIL_BUTTON_STYLE}">Open your ticket</a></p>
+            <p style="font-size:13px; color:${EMAIL_COLORS.inkMuted};">Show the ticket's QR code at the door. Can't make it? Cancel from the ticket so someone else can have your place.</p>` : ""}`);
 
-  const text = `Upcoming Event Reminder: ${params.eventTitle}\n\nHello,\n\nThis is a reminder that "${params.eventTitle}" is starting at ${formattedDate}.\n\nBest regards,\nSpace Works Events`;
+  const text = `Reminder: ${params.eventTitle}\n\nHello,\n\nThis is a reminder that "${params.eventTitle}" starts at ${formattedDate}.${location ? `\nWhere: ${location}` : ""}${params.ticketUrl ? `\n\nYour ticket: ${params.ticketUrl}\nCan't make it? Cancel from the ticket so someone else can have your place.` : ""}\n\nSpace Works Events`;
 
   if (!transporter) {
     console.log("[EMAIL MOCK] event reminder queued");
@@ -267,7 +280,7 @@ export async function sendReminder(params: {
     messageId: params.messageId,
     from,
     to: params.to,
-    subject: `Reminder: ${subjectTitle} is starting soon`,
+    subject: `Reminder: ${subjectTitle} starts soon`,
     text,
     html,
   });

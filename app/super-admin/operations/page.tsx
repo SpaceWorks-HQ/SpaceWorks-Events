@@ -27,7 +27,7 @@ function safeErrorSummary(value: string | null) {
 
 export default async function SuperAdminOperationsPage() {
   await requireSuperAdminMfa();
-  const { prerequisites, backupProvider, backupFresh, backupRetentionDays, reportedBackupAt, lastRestoreDrill, outbox, failedCount, expiredTokens, schedulerFresh, schedulerHeartbeat, oldestPending, failedMessages, serverBackup, serverBackupProblem } = await loadSuperAdminOperationsView();
+  const { prerequisites, backupProvider, backupFresh, backupRetentionDays, reportedBackupAt, lastRestoreDrill, outbox, failedCount, expiredTokens, schedulerFresh, schedulerHeartbeat, beatFresh, beatHeartbeat, oldestPending, failedMessages, serverBackup, serverBackupProblem } = await loadSuperAdminOperationsView();
   const time = (value: string | null) => (value ? `${new Date(value).toLocaleString()} (${ageLabel(new Date(value))})` : "none yet");
   return (
     <div className="flex flex-col gap-6">
@@ -65,7 +65,7 @@ export default async function SuperAdminOperationsPage() {
         <AdminPanel title="Service prerequisites">
           <div className="flex flex-col items-start gap-2">
             <StatusChip ok={prerequisites.redis} ready="Redis configured" missing="Redis missing — production writes will fail closed" />
-            <StatusChip ok={prerequisites.scheduler} ready="Outbox scheduler secret configured" missing="Outbox scheduler secret missing" />
+            <StatusChip ok={prerequisites.scheduler} ready="Recovery endpoint secret configured" missing="Recovery endpoint secret (CRON_SECRET) missing" />
             <StatusChip ok={prerequisites.readiness} ready="Readiness probe protected" missing="Readiness probe secret missing" />
             <StatusChip ok={prerequisites.smtp} ready="Transactional email configured" missing="Transactional email not configured" />
           </div>
@@ -81,16 +81,19 @@ export default async function SuperAdminOperationsPage() {
             <Chip tone={expiredTokens > 0 ? "warning" : "success"}>{`${expiredTokens} expired verification token${expiredTokens === 1 ? "" : "s"}`}</Chip>
           </div>
           <div className="flex flex-wrap gap-2">
-            <StatusChip ok={schedulerFresh} ready="Outbox scheduler healthy" missing="Outbox scheduler stale or unknown" />
+            <StatusChip ok={schedulerFresh} ready="Email worker healthy" missing="Email worker stale or unknown" />
             {schedulerHeartbeat ? <Chip tone="outline">{`Last batch: ${schedulerHeartbeat.lastSent} sent, ${schedulerHeartbeat.lastFailed} failed`}</Chip> : null}
+            <StatusChip ok={beatFresh} ready="Beat (timed jobs) healthy" missing="Beat (timed jobs) stale or unknown" />
+            {beatHeartbeat && beatHeartbeat.lastFailed > 0 ? <Chip tone="warning">{`${beatHeartbeat.lastFailed} job${beatHeartbeat.lastFailed === 1 ? "" : "s"} failed in the last run`}</Chip> : null}
           </div>
+          <p className="text-caption text-ink-muted">The worker sends queued email within seconds; the beat expires payment holds, sends reminders and cleans up. Without them, holds stay open and email waits in the queue.</p>
           <p className="text-sm text-ink-secondary">
-            Last scheduler success: {schedulerHeartbeat?.lastSucceededAt ? `${schedulerHeartbeat.lastSucceededAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastSucceededAt)})` : "not recorded"}.
+            Last worker success: {schedulerHeartbeat?.lastSucceededAt ? `${schedulerHeartbeat.lastSucceededAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastSucceededAt)})` : "not recorded"}.
           </p>
           <p className="text-sm text-ink-secondary">
-            Last scheduler start: {schedulerHeartbeat?.lastStartedAt ? `${schedulerHeartbeat.lastStartedAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastStartedAt)})` : "not recorded"}.
+            Last worker start: {schedulerHeartbeat?.lastStartedAt ? `${schedulerHeartbeat.lastStartedAt.toLocaleString()} (${ageLabel(schedulerHeartbeat.lastStartedAt)})` : "not recorded"}.
           </p>
-          {schedulerHeartbeat?.lastError ? <p className="text-sm text-danger-fg">Last scheduler error: {safeErrorSummary(schedulerHeartbeat.lastError)}</p> : null}
+          {schedulerHeartbeat?.lastError ? <p className="text-sm text-danger-fg">Last worker error: {safeErrorSummary(schedulerHeartbeat.lastError)}</p> : null}
           <p className="text-sm text-ink-secondary">Oldest queued message: {oldestPending ? `${oldestPending.createdAt.toLocaleString()} (${ageLabel(oldestPending.createdAt)})` : "none"}.</p>
           <div className="mt-1 border-t border-line pt-4">
             <InstanceOperationsControls />
