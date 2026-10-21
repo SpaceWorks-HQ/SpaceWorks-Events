@@ -13,6 +13,7 @@ import { purgeExpiredOperationalData } from "@/lib/retention";
 import { runPaymentMaintenance } from "@/lib/payments/maintenance";
 import { fillWaitlists } from "@/lib/payments/operations";
 import { sendEventReminders } from "@/lib/eventReminders";
+import { logOpsError } from "@/lib/opsAlerts";
 
 /**
  * What this Node.js process does besides serving requests, from
@@ -79,10 +80,10 @@ export async function runScheduledJobs(options: { now?: Date; force?: boolean; l
     options.lastRun?.set(job.name, now.getTime());
     try {
       results[job.name] = await job.run(now);
-    } catch {
+    } catch (error) {
       failures += 1;
       results[job.name] = null;
-      console.error(`[beat] ${job.name} failed`);
+      logOpsError(`[beat] ${job.name} failed`, { level: "error", source: "beat", title: `Scheduled job "${job.name}" failed`, error });
     }
   }
   return { results, failures };
@@ -150,7 +151,7 @@ function startWorkerLoop() {
       }
     } catch (error) {
       // Failure metadata is persisted separately without exception text.
-      console.error("[worker] delivery pass failed");
+      logOpsError("[worker] delivery pass failed", { level: "error", source: "worker", title: "Email delivery pass failed", error });
       await recordHeartbeatFailure(OUTBOX_SCHEDULER_HEARTBEAT_KEY, error).catch(() => undefined);
     }
   });

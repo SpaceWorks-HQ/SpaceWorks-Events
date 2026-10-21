@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportClientError } from "@/lib/reportClientError.client";
 
 // Rendered without the app stylesheet, so brand colours are explicit here
 // (Warm Cream page, Deep Ink text, Maker Teal action with a cream label).
@@ -12,6 +13,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
   useEffect(() => {
     if (process.env.NODE_ENV === "development") console.error("[ui] global error", error);
     else console.error("[ui] global error");
+    reportClientError("global", error);
   }, [error]);
   return (
     <html lang="en">

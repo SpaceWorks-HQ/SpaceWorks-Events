@@ -13,6 +13,7 @@ import { describeOperationalError } from "@/lib/redactSensitiveText";
 import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 import { asPaymentEmailPayload, deliverPaymentEmail, PAYMENT_EMAIL_KIND } from "@/lib/payments/email";
 import { sendAs } from "@/lib/email/transporter";
+import { reportOpsAlert } from "@/lib/opsAlerts";
 
 type OutboxClient = Prisma.TransactionClient | typeof prisma;
 
@@ -642,6 +643,13 @@ export async function deliverOutboxBatch(limit = 20) {
           },
         });
       }
+      reportOpsAlert({
+        level: terminal ? "error" : "warning",
+        source: "email",
+        title: terminal ? "Email delivery failed permanently" : "Email delivery failed; will retry",
+        error,
+        context: { kind: message.kind, attempt: attempts },
+      });
       failed += 1;
     }
   }

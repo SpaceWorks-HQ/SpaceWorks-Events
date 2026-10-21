@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
+import { reportClientError } from "@/lib/reportClientError.client";
 import { Button } from "@/components/ui/button";
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
     if (process.env.NODE_ENV === "development") console.error("[ui] route error", error);
     else console.error("[ui] route error");
+    reportClientError("route", error);
   }, [error]);
   return (
     <div className="mx-auto flex max-w-[520px] flex-col items-center gap-4 px-4 py-16 text-center">

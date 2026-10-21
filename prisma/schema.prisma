@@ -1493,6 +1493,11 @@ model InstanceSetting {
   backupRetentionDays   Int?
   /// Organisations may sell tickets only while this is on.
   paidEventsEnabled     Boolean  @default(false)
+  /// Incoming-webhook URL (e.g. Mattermost) for operational alerts. The URL
+  /// embeds its own credential, so it is encrypted and write-only.
+  opsWebhookUrlEncrypted String?
+  opsWebhookEnabled      Boolean  @default(false)
+  opsWebhookIncludeWarnings Boolean @default(true)
   updatedAt             DateTime @updatedAt
 }
 

@@ -7,7 +7,8 @@ import { prisma } from "@/lib/db";
 import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
 import { requireSuperAdminMfa } from "@/lib/permissions";
 import { recordAuditEvent } from "@/lib/audit";
-import { encryptInstanceConfigSecret } from "@/lib/instanceConfigSecrets";
+import { decryptInstanceConfigSecret, encryptInstanceConfigSecret } from "@/lib/instanceConfigSecrets";
+import { invalidateOpsAlertSettings, parseOpsWebhookUrl, sendOpsWebhookTestMessage } from "@/lib/opsAlerts";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
 
@@ -116,4 +117,72 @@ export async function saveInstanceServiceSettings(input: unknown): Promise<Actio
   revalidatePath("/super-admin/settings");
   revalidatePath("/super-admin/operations");
   return { ok: true };
+}
+
+const opsWebhookSettingsSchema = z.object({
+  enabled: z.boolean(),
+  includeWarnings: z.boolean(),
+  url: z.string().trim().max(2048).optional(),
+  removeUrl: z.boolean().optional(),
+});
+const opsWebhookTestSchema = z.object({ url: z.string().trim().max(2048).optional() });
+const INVALID_WEBHOOK_URL = process.env.NODE_ENV === "production"
+  ? "Enter a valid https:// webhook URL."
+  : "Enter a valid http(s):// webhook URL.";
+
+/** Save the operational alert webhook. The URL is write-only and encrypted. */
+export async function saveOpsWebhookSettings(input: unknown): Promise<ActionResult> {
+  const session = await requireSuperAdminMfa();
+  if (await isActionRateLimited("action", session.user.id)) return { ok: false, error: "Too many requests. Try again shortly." };
+  const parsed = opsWebhookSettingsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid alert webhook settings." };
+  const { enabled, includeWarnings, removeUrl } = parsed.data;
+  const url = parsed.data.url ? parseOpsWebhookUrl(parsed.data.url) : null;
+  if (parsed.data.url && !url) return { ok: false, error: INVALID_WEBHOOK_URL };
+
+  const existing = await prisma.instanceSetting.findUnique({ where: { id: INSTANCE_SETTINGS_ID }, select: { opsWebhookUrlEncrypted: true } });
+  const hasUrl = Boolean(url) || (!removeUrl && Boolean(existing?.opsWebhookUrlEncrypted));
+  if (enabled && !hasUrl) return { ok: false, error: "Add a webhook URL before turning alerts on." };
+
+  const urlUpdate = url
+    ? { opsWebhookUrlEncrypted: encryptInstanceConfigSecret(url) }
+    : removeUrl ? { opsWebhookUrlEncrypted: null } : {};
+  const flags = { opsWebhookEnabled: enabled && hasUrl, opsWebhookIncludeWarnings: includeWarnings };
+  await prisma.instanceSetting.upsert({
+    where: { id: INSTANCE_SETTINGS_ID },
+    create: { id: INSTANCE_SETTINGS_ID, ...flags, ...urlUpdate },
+    update: { ...flags, ...urlUpdate },
+  });
+  invalidateOpsAlertSettings();
+  await recordAuditEvent({
+    action: "OPS_WEBHOOK_SETTINGS_UPDATED", actorUserId: session.user.id, targetType: "InstanceSetting", targetId: INSTANCE_SETTINGS_ID,
+    metadata: { enabled: flags.opsWebhookEnabled, includeWarnings, urlChanged: Boolean(url), urlRemoved: Boolean(removeUrl && !url) },
+  });
+  revalidatePath("/super-admin/settings");
+  return { ok: true };
+}
+
+/** Post a test message to the entered URL, or to the saved one. */
+export async function sendOpsWebhookTest(input: unknown): Promise<ActionResult> {
+  const session = await requireSuperAdminMfa();
+  if (await isActionRateLimited("action", session.user.id)) return { ok: false, error: "Too many requests. Try again shortly." };
+  const parsed = opsWebhookTestSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: INVALID_WEBHOOK_URL };
+  let url = parsed.data.url ? parseOpsWebhookUrl(parsed.data.url) : null;
+  if (parsed.data.url && !url) return { ok: false, error: INVALID_WEBHOOK_URL };
+  if (!url) {
+    const existing = await prisma.instanceSetting.findUnique({ where: { id: INSTANCE_SETTINGS_ID }, select: { opsWebhookUrlEncrypted: true } });
+    if (!existing?.opsWebhookUrlEncrypted) return { ok: false, error: "Enter a webhook URL to test." };
+    try {
+      url = decryptInstanceConfigSecret(existing.opsWebhookUrlEncrypted);
+    } catch {
+      return { ok: false, error: "The saved webhook URL could not be read. Enter it again." };
+    }
+  }
+  const result = await sendOpsWebhookTestMessage(url);
+  await recordAuditEvent({
+    action: "OPS_WEBHOOK_TEST_SENT", actorUserId: session.user.id, targetType: "InstanceSetting", targetId: INSTANCE_SETTINGS_ID,
+    metadata: { delivered: result.ok, savedUrl: !parsed.data.url },
+  });
+  return result.ok ? { ok: true } : { ok: false, error: result.error };
 }
