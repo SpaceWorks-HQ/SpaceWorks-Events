@@ -98,9 +98,9 @@ For the machine API, resolve the organisation from the bearer credential, check
 an explicit scope, and return a deliberately minimal DTO.
 
 Keep source files (TypeScript/TSX/MJS, tests included) at or under 300 lines,
-not counting blank lines and comments (ESLint `max-lines`, a warning until
-existing long files are split). Split long modules into focused parts behind
-the original import path, as `lib/outbox.ts` now is. Generated files are exempt.
+not counting blank lines and comments (ESLint `max-lines`, an error). Split
+long modules into focused parts behind the original import path, as
+`lib/outbox.ts` and `lib/rsvpCore.ts` are. Generated files are exempt.
 
 At minimum, validate targeted changes with lint, TypeScript, and the relevant
 test suite. For authorization, mutation, public-route, operational, API, or
@@ -153,10 +153,14 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
   changes small, typed, and consistent with the established UI: Tailwind CSS, Radix
   primitives and lucide icons via `components/ui/*` (see `docs/DESIGN.md`).
 - Source files (TypeScript, TSX and MJS, tests included) stay at or under 300
-  lines, not counting blank lines and comments. ESLint `max-lines` enforces it:
-  a warning for now while existing long files are split, an error after that.
-  Split a long module into focused parts behind its original import path, as
-  `lib/outbox.ts` re-exports `lib/outbox/{payloads,enqueue,context,deliver}.ts`.
+  lines, not counting blank lines and comments. ESLint `max-lines` enforces it
+  as an error, so CI fails past 300. Split a long module into focused parts
+  behind its original import path, as `lib/outbox.ts` re-exports
+  `lib/outbox/{payloads,enqueue,context,deliver}.ts`. A "use server" file keeps
+  every exported action defined in it (the frontend registry keys actions by
+  file and export name): move helpers and schemas into a sibling folder without
+  the directive, and if that isn't enough, keep the export as a thin async
+  wrapper around a body moved there (see `app/actions/checkin.ts`).
   Generated files (`lib/frontend/registry.ts`, `frontend/catalog.json`) are
   exempt.
 - Use Server Components by default. Add `"use client"` only for browser state,
