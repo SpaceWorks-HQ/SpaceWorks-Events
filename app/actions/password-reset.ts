@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { isSuperAdminEmail } from "@/lib/superAdminEmail";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
@@ -49,8 +50,9 @@ export async function requestPasswordReset(
     select: { id: true, passwordHash: true },
   });
 
-  // Always return success to prevent email enumeration
-  if (!user || !user.passwordHash) {
+  // Always return success to prevent email enumeration. The super admin's
+  // password is reset only from the server, so no link is ever emailed for it.
+  if (!user || !user.passwordHash || isSuperAdminEmail(email)) {
     return { ok: true, data: { sent: true } };
   }
 

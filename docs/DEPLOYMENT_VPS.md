@@ -297,9 +297,11 @@ the schema contract, authenticated Redis over TLS, access to the storage bucket
 and bearer-protected `/api/health/db`. It never prints credentials or response
 bodies. The storage initializer explicitly disables anonymous bucket access.
 
-Open `https://events.example.com/login`, create an account with the configured
-`SUPER_ADMIN_EMAIL`, verify its inbox, enable authenticator MFA, and enter
-`/super-admin`. A fresh TOTP step-up is required there. Under **Settings**, verify
+Set the super-admin password with `sudo bash scripts/vps-recover.sh`: it
+creates the `SUPER_ADMIN_EMAIL` account the first time and prints a one-hour
+link to set its password. That address can't sign up, use forgot password or
+change its password in the app; run the same script again to reset it. Sign in,
+enable authenticator MFA, and enter `/super-admin`. A fresh TOTP step-up is required there. Under **Settings**, verify
 SMTP and optionally configure Google SSO. Do not use the demo seed on production.
 
 Before taking registrations, verify a real confirmation email and password-reset

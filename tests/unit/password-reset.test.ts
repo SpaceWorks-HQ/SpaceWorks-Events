@@ -91,4 +91,12 @@ describe("requestPasswordReset", () => {
       tx.verificationToken.create.mock.invocationCallOrder[0],
     );
   });
+
+  it("never emails the super admin a reset link, and answers exactly as for anyone else", async () => {
+    vi.stubEnv("SUPER_ADMIN_EMAIL", "Admin@Example.com");
+    await expect(requestPasswordReset({ email: "admin@example.com" })).resolves.toEqual({ ok: true, data: { sent: true } });
+    vi.unstubAllEnvs();
+    expect(tx.verificationToken.create).not.toHaveBeenCalled();
+    expect(enqueueResetMock).not.toHaveBeenCalled();
+  });
 });

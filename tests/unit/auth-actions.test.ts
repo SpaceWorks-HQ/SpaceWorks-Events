@@ -55,6 +55,15 @@ describe("password account creation", () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 
+  it("never creates the super-admin account from sign-up, and answers as for anyone else", async () => {
+    vi.stubEnv("SUPER_ADMIN_EMAIL", "admin@example.test");
+    await expect(signUpWithPassword({ name: "Admin", email: "ADMIN@example.test", password: "new-password" }))
+      .resolves.toEqual({ ok: true, data: { email: "admin@example.test" } });
+    vi.unstubAllEnvs();
+    expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.userCreate).not.toHaveBeenCalled();
+  });
+
   it("creates the user and verification outbox record in one transaction", async () => {
     await expect(signUpWithPassword({ name: "Person", email: "PERSON@example.test", password: "new-password" }))
       .resolves.toEqual({ ok: true, data: { email: "person@example.test" } });

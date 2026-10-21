@@ -30,9 +30,11 @@ export async function requireAuth(): Promise<Session & { user: { id: string; }; 
   return session as Session & { user: { id: string; }; };
 }
 
+
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
+
 
 /**
  * Instance-wide super-admin gate.

@@ -15,6 +15,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/permissions", () => ({ requireAuth: mocks.requireAuth }));
+vi.mock("@/lib/superAdminEmail", () => ({
+  isSuperAdminEmail: (email: string) => email === "admin@example.com",
+  SUPER_ADMIN_PASSWORD_HINT: "Set on the server.",
+}));
 vi.mock("@/lib/reauth", () => ({ hasRecentAuthentication: mocks.recent }));
 vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: mocks.rateLimit }));
 vi.mock("@/lib/audit", () => ({ recordAuditEvent: vi.fn() }));
@@ -64,6 +68,12 @@ describe("account password actions", () => {
     expect(mocks.compare).not.toHaveBeenCalled();
     expect(mocks.auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "ACCOUNT_PASSWORD_ADDED" }) }));
     expect(mocks.notice).toHaveBeenCalledWith(expect.anything(), [expect.any(String)], expect.objectContaining({ subject: "A password was added to your account" }));
+  });
+
+  it("refuses the super admin, whose password is set only on the server", async () => {
+    mocks.userFind.mockResolvedValue({ email: "admin@example.com", passwordHash: "old-hash" });
+    await expect(updateAccountPassword({ currentPassword: "current-password", newPassword: "new-password", confirmPassword: "new-password" })).resolves.toEqual({ ok: false, error: "Set on the server." });
+    expect(mocks.userUpdate).not.toHaveBeenCalled();
   });
 
   it("requires a fresh Google sign-in before adding a password", async () => {
