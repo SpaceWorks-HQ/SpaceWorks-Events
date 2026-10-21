@@ -287,6 +287,20 @@ export function logOpsError(line: string, alert: OpsAlert) {
   reportOpsAlert(alert);
 }
 
+/**
+ * A browser navigating away mid-stream makes Next.js log these. They are not
+ * server faults, so they never reach the channel. ECONNRESET is deliberately
+ * not listed: SMTP or database resets are real problems.
+ */
+const CLIENT_DISCONNECT = /destination stream closed early|^ResponseAborted$|^aborted$/i;
+
+export function isClientDisconnectNoise(args: unknown[]): boolean {
+  return args.some((arg) => {
+    if (arg instanceof Error) return CLIENT_DISCONNECT.test(arg.message) || CLIENT_DISCONNECT.test(arg.name);
+    return typeof arg === "string" && /destination stream closed early/i.test(arg);
+  });
+}
+
 function consoleAlert(level: "error" | "warning", args: unknown[]): OpsAlert {
   const error = args.find((arg): arg is Error => arg instanceof Error);
   const text = args
@@ -314,6 +328,7 @@ export function installOpsAlertForwarding() {
       original(...args);
       if (deliveryScope().getStore()) return;
       try {
+        if (isClientDisconnectNoise(args)) return;
         const alert = consoleAlert(level, args);
         // Give onRequestError a moment to report the same error with route
         // context first; the shared fingerprint then collapses this copy.

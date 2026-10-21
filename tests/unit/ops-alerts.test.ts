@@ -9,6 +9,7 @@ import {
   deliverOpsAlert,
   formatOpsAlert,
   installOpsAlertForwarding,
+  isClientDisconnectNoise,
   invalidateOpsAlertSettings,
   logOpsError,
   parseOpsWebhookUrl,
@@ -165,6 +166,31 @@ describe("console forwarding", () => {
       expect(texts.some((text) => text.includes("OAuthCallbackError"))).toBe(true);
       expect(texts.some((text) => text.includes("Authentication failed"))).toBe(false);
       expect(spy).toHaveBeenCalledWith("[rsvp] guest submission failed");
+    } finally {
+      console.error = original;
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("client disconnect noise", () => {
+  it("ignores aborted client streams but keeps real connection resets", () => {
+    expect(isClientDisconnectNoise([new Error("The destination stream closed early.")])).toBe(true);
+    expect(isClientDisconnectNoise(["⨯", Object.assign(new Error("aborted"), { code: "ECONNRESET" })])).toBe(true);
+    expect(isClientDisconnectNoise([Object.assign(new Error("x"), { name: "ResponseAborted" })])).toBe(true);
+    expect(isClientDisconnectNoise([Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" })])).toBe(false);
+    expect(isClientDisconnectNoise(["[rsvp] guest submission failed"])).toBe(false);
+  });
+
+  it("does not forward a disconnect logged to console.error", async () => {
+    vi.useFakeTimers();
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const original = console.error;
+    try {
+      installOpsAlertForwarding();
+      console.error(new Error("The destination stream closed early."));
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       console.error = original;
       spy.mockRestore();
