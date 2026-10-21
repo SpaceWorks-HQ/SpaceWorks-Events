@@ -40,7 +40,10 @@ Never commit `.env` or real secrets.
 
 1. Read [AGENTS.md](AGENTS.md). It covers the Next.js 16 rules, product boundaries
    and the security model every change must keep.
-2. Keep each change focused, and match the surrounding code's style.
+2. Keep each change focused, and match the surrounding code's style. Keep source
+   files (TypeScript, TSX and MJS, tests included) at or under 300 lines, not
+   counting blank lines and comments; ESLint warns past that. Split a long module
+   into focused parts behind its original import path.
 3. Run at least:
 
    ```bash

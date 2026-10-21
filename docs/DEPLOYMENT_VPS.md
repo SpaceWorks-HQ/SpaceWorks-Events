@@ -34,6 +34,9 @@ with the transport and privacy requirements of this Events application. Use
 - An authenticated SMTP relay and a verified sending domain with SPF, DKIM and
   DMARC. Outgoing mail uses this relay; the stack does not operate a public mail
   server. Confirm that the VPS permits outbound SMTP on your relay's TLS port.
+- Outbound HTTPS to `api.pwnedpasswords.com`, so new passwords can be checked
+  against known breaches. Without it the check quietly lets every password
+  through; set `PWNED_PASSWORDS_CHECK=false` on air-gapped hosts.
 - Encrypted host disks and an encrypted, off-server backup destination. A single
   VPS is a single failure domain; Docker volumes alone are not backups or
   automatic point-in-time recovery.
@@ -300,8 +303,10 @@ bodies. The storage initializer explicitly disables anonymous bucket access.
 Set the super-admin password with `sudo bash scripts/vps-recover.sh`: it
 creates the `SUPER_ADMIN_EMAIL` account the first time and prints a one-hour
 link to set its password. That address can't sign up, use forgot password or
-change its password in the app; run the same script again to reset it. Sign in,
-enable authenticator MFA, and enter `/super-admin`. A fresh TOTP step-up is required there. Under **Settings**, verify
+change its password in the app; run the same script again to reset it. Sign in with
+the email and password and enter `/super-admin`; there is no separate step-up.
+We recommend enabling authenticator MFA from `/account/security`, which is then
+asked for at every sign-in. Under **Settings**, verify
 SMTP and optionally configure Google SSO. Do not use the demo seed on production.
 
 Before taking registrations, verify a real confirmation email and password-reset

@@ -26,7 +26,8 @@ Dynamic segments are shown as `:name` for readability.
 | `/:orgSlug/ids/:programmeSlug` | Member ID join form (sign-in required; only while the programme is active with requests open) and the requester's own status |
 | `/verify/:token` | Public member ID check (QR target): Valid / Expired show name, photo, programme, organisation, ID number and valid-until; Revoked shows status only; pending, rejected and unknown tokens share one "Card not found". `noindex`, `no-referrer`, rate limited per IP |
 | `/join/org/:token` | Accept an organisation invitation |
-| `/login` | Password and Google sign-in/signup |
+| `/login` | Password and Google sign-in/signup; asks for an authenticator code, or an emailed six-digit code for a new device or after repeated failures |
+| `/verify-mfa` | Authenticated: organisation staff who signed in without an authenticator code (Google) confirm one; sets a 12-hour proof cookie and returns to a safe `next` path. Staff without an authenticator go to `/account/security?mfa=required`; anyone else goes straight on |
 | `/verify-email` | Consume a one-time email-verification link and activate a password account |
 | `/reset-password` | Password-reset request and completion |
 | `/account` | Authenticated account profile settings |
@@ -54,13 +55,13 @@ Dynamic segments are shown as `:name` for readability.
 | `/dashboard/:orgSlug/event/:eventId/check-in` | Online/offline check-in station; organisation admin or exact event `CHECK_IN` grant |
 | `/dashboard/:orgSlug/series/:seriesId` | Recurring-series management |
 
-Dashboard pages require authentication and enforce membership/role permissions on the server.
+Dashboard pages require authentication and enforce membership/role permissions on the server. Organisation staff must also have an authenticator app: without one they are sent to `/account/security?mfa=required`, and without an authenticator check in this session to `/verify-mfa` (unless `STAFF_MFA_REQUIRED=false`).
 
 ## Super-admin pages
 
 The `/super-admin` area includes overview, activity, audit log, auth, email, events, invites, monitoring, operations, organisations (with a detail page per organisation), security, settings, storage, and users (with a detail page per user at `/super-admin/users/:userId`). The Auth page includes the instance-wide new-account creation control. `/super-admin/settings` manages SMTP, Google SSO, the paid events switch (off by default), displayed backup posture, and the operational alerts webhook; secrets (including the webhook URL) entered there are write-only. Access requires the authenticated email configured in `SUPER_ADMIN_EMAIL`; other users receive a not-found response.
 
-Every super-admin page additionally requires a current TOTP verification, and each `page.tsx` calls `requireSuperAdminMfa()` itself because layout checks do not re-run on client navigation (`tests/unit/super-admin-page-guards.test.ts` enforces this). Users without a valid 10-minute step-up proof are sent to `/super-admin-mfa`; authenticator MFA must be enrolled first from `/account/security`.
+The super admin signs in with email and password; there is no separate authenticator step-up. Each `page.tsx` calls `requireSuperAdminMfa()` itself, which now checks super-admin access only, because layout checks do not re-run on client navigation (`tests/unit/super-admin-page-guards.test.ts` enforces this).
 
 ## Public and application APIs
 

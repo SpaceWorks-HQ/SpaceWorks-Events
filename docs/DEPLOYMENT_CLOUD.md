@@ -244,9 +244,10 @@ npx wrangler tail                     # expect "health 200" and "outbox 200" eac
    and prints a one-hour link to set its password; run it again to reset the
    password. The super-admin address can't sign up, use forgot password or
    change its password in the app.
-2. Sign in, open `/account/security`, and enrol an authenticator app. Save
-   the recovery codes.
-3. Open `/super-admin`, complete the fresh TOTP step-up, and review
+2. Sign in with the email and password. We recommend you then open
+   `/account/security` and enrol an authenticator app, which is then asked for
+   at every sign-in. Save the recovery codes.
+3. Open `/super-admin` (there is no separate step-up) and review
    **Settings**: send a test email, and optionally configure Google SSO
    (callback `https://events.YOUR-DOMAIN/api/auth/callback/google`).
 

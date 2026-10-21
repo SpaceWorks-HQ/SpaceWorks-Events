@@ -6,6 +6,7 @@ import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { isSuperAdminEmail } from "@/lib/superAdminEmail";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPassword } from "@/lib/pwnedPasswords";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
@@ -115,6 +116,7 @@ export async function confirmPasswordReset(
   }
   const tokenHash = hashToken(token);
 
+  if (await isBreachedPassword(password)) return { ok: false, error: BREACHED_PASSWORD_MESSAGE, fieldErrors: { password: [BREACHED_PASSWORD_MESSAGE] } };
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "email" = ${email} FOR UPDATE`;

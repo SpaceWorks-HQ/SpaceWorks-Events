@@ -6,7 +6,7 @@ import { OutboxStatus } from "@prisma/client";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Real database, encryption, outbox, webhook delivery and SMTP. Only the
-// super-admin MFA step-up cookie and the per-admin action limiter are mocked.
+// super-admin check and the per-admin action limiter are mocked.
 const env = vi.hoisted(() => {
   process.env.MFA_ENCRYPTION_KEY ||= Buffer.alloc(32, 7).toString("base64");
   process.env.TRUSTED_PROXY_IP_HEADER = "x-forwarded-for";

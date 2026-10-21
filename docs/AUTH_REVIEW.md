@@ -6,6 +6,14 @@ TOTP/recovery-code consumption, Google identity linking, super-admin step-up,
 protected-route gates, auth input handling, and relevant dependency advisories.
 Existing unrelated work in the checkout was preserved.
 
+> Later change: the super-admin TOTP step-up (`/super-admin-mfa` and its
+> 10-minute proof) has since been removed. The super admin now signs in with
+> email and password, set only from the server, under the same sign-in
+> protections as everyone else. Organisation staff must use an authenticator
+> app instead, confirmed per session at sign-in or on `/verify-mfa`. See
+> [Security model](SECURITY.md) for the current controls. The notes below
+> describe the system as reviewed on 2026-09-14.
+
 ## Changes
 
 - Credential verification now enforces normalized account and IP limits before
@@ -75,6 +83,7 @@ production TLS or an external identity/email provider.
 - A TOTP accepted for sign-in cannot be reused for super-admin step-up. Wait for
   the next code. Google sign-in continues to rely on Google's MFA policy, while
   super-admin access still requires the application's separate TOTP proof.
+  (Superseded: see the note at the top.)
 - Previously persisted Google OAuth tokens are not automatically purged by this
   change. Review historical account-token retention before deployment.
 - Live Google consent/callback behavior and real SMTP acceptance/inbox delivery

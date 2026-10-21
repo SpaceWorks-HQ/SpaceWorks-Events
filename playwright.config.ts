@@ -32,7 +32,8 @@ export default defineConfig({
       url: `${testBaseUrl}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
-      env: fakePayments ? { PAYMENTS_FAKE_PROVIDER_URL: fakeProviderUrl } : {},
+      // Fresh browsers sign in seeded staff: the sign-in protections have their own unit and integration tests.
+      env: { STAFF_MFA_REQUIRED: "false", LOGIN_NEW_DEVICE_CHECK: "false", PWNED_PASSWORDS_CHECK: "false", ...(fakePayments ? { PAYMENTS_FAKE_PROVIDER_URL: fakeProviderUrl } : {}) },
     },
     ...(!fakePayments ? [] : [{
       command: `node tests/e2e/fake-payment-provider.mjs`,

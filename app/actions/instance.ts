@@ -17,9 +17,9 @@ const RATE_LIMITED = "Too many requests. Try again shortly.";
 const MANUAL_DELIVERY_BATCH = 50;
 
 /**
- * Every maintenance control on the operations page shares these steps: fresh
- * super-admin MFA (redirects to the step-up page when stale, outside the
- * try so the redirect is not swallowed), a per-admin rate limit, the mutation
+ * Every maintenance control on the operations page shares these steps: the
+ * super-admin check (it may redirect, so it runs outside the try and the
+ * redirect is not swallowed), a per-admin rate limit, the mutation
  * with its audit event, and a refresh of the super-admin pages that show the
  * changed counts. Database or audit failures become a UI-safe error instead of
  * an unhandled exception in the client transition.

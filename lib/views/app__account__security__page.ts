@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/permissions";
 import { isSuperAdminEmail } from "@/lib/superAdminEmail";
+import { isStaff, isStaffMfaRequired } from "@/lib/staffMfa";
 import { SECURITY_ACTIVITY_ACTIONS, SECURITY_ACTIVITY_LIMIT } from "@/lib/accountSecurity";
 
 export async function loadAccountSecurityView() {
@@ -22,5 +23,7 @@ export async function loadAccountSecurityView() {
   const providers = [...new Set(accounts.map((account) => account.provider))];
   // The super admin's password is set on the server, not here.
   const passwordOnServer = isSuperAdminEmail(user.email);
-  return { hasPassword, passwordOnServer, user: { mfaEnabledAt: user.mfaEnabledAt }, providers, activity };
+  // Organisation staff must set up an authenticator before using any dashboard.
+  const authenticatorRequired = !user.mfaEnabledAt && isStaffMfaRequired() && !passwordOnServer && (await isStaff(userId));
+  return { hasPassword, passwordOnServer, authenticatorRequired, user: { mfaEnabledAt: user.mfaEnabledAt }, providers, activity };
 }

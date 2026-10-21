@@ -30,5 +30,7 @@ export default defineConfig({
     fileParallelism: false,
     sequence: { concurrent: false },
     testTimeout: 20_000,
+    // The sign-in protections are off unless a test turns one on (see vitest.config.mts).
+    env: { STAFF_MFA_REQUIRED: "false", LOGIN_NEW_DEVICE_CHECK: "false", PWNED_PASSWORDS_CHECK: "false" },
   },
 });

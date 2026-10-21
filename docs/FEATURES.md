@@ -8,11 +8,14 @@
 - Account area with Profile (name, photo, email status, Light/Dark/System appearance), Registrations (your upcoming and past tickets with cancel, certificates, and a personal JSON data export that never includes passwords, security codes or ticket links), Organisations (memberships and roles, event co-organiser roles, pending co-organiser invites, and leaving an organisation, blocked for the only owner), and Security (password, two-step verification, sign-in methods, recent security activity, sign out everywhere).
 - Optional Google OAuth.
 - Password-reset requests delivered through the transactional outbox.
-- Authenticator-app MFA for credential accounts, including recovery codes.
+- Authenticator-app MFA, including recovery codes.
+- Organisation staff (any organisation role, or an event or series co-organiser) must use an authenticator app. Until one is set up they are sent to Account security; after that, each session needs an authenticator check, given at the password sign-in or, after Google sign-in, on `/verify-mfa` (valid 12 hours). Attendees and the super admin are exempt. `STAFF_MFA_REQUIRED=false` turns this off for local development and tests.
+- Sign-in protections: an address with 20 failed sign-ins in an hour is blocked for the rest of that hour; an account with 5 failures in 15 minutes needs a code emailed to it, and at 15 failures codes are refused too; a password sign-in from a device the account hasn't used before (after its first) needs a six-digit emailed code (10 minutes, single use) unless an authenticator code was given; and a sign-in from a new device sends a "New sign-in to your account" email. Recent security activity lists new-device sign-ins and confirmed authenticator codes.
+- Sign-up, password reset and password change refuse passwords found in Have I Been Pwned, checked by k-anonymity (only the first five characters of the password's SHA-1 are sent). If the service can't be reached, the password is accepted.
 - Account pages at `/account`, `/account/registrations`, `/account/organisations`, and `/account/security`. The personal data export (`GET /api/exports/account`) returns only the signed-in user's own allow-listed data as JSON, is limited to five downloads per hour, and is audited as `ACCOUNT_DATA_EXPORTED`. Leaving an organisation removes only your own membership, is refused for the sole owner, and is audited as `ORGANISATION_MEMBER_LEFT`.
 - JWT session-version invalidation after sensitive account operations.
 
-Google OAuth users rely on the Google account's MFA policy; the application TOTP prompt applies to password authentication.
+Google OAuth users rely on the Google account's MFA policy; the application TOTP prompt and the new-device code apply to password authentication. Organisation staff who sign in with Google still confirm an authenticator code on `/verify-mfa`.
 
 ## Organisations and permissions
 
@@ -119,11 +122,10 @@ Only eligible confirmed attendees receive a scannable ticket by default. Organis
 
 ## Administration and operations
 
-- Instance-wide super-admin area restricted by `SUPER_ADMIN_EMAIL`, with its own top bar instead of the dashboard sidebar. Every super-admin page checks super-admin access and the MFA step-up itself.
+- Instance-wide super-admin area restricted by `SUPER_ADMIN_EMAIL`, with its own top bar instead of the dashboard sidebar. Every super-admin page checks super-admin access itself. The super admin signs in with email and password, with no separate authenticator step-up; its password is set only from the server, and the sign-in protections still apply.
 - Super-admin control to disable new password and Google account creation while preserving existing-user sign-in.
 - Super-admin instance settings for SMTP delivery, Google SSO, and display-only backup posture; instance-managed service secrets are encrypted at rest and never displayed after saving.
 - Read-only super-admin insights: 30-day activity and growth (signups, organisations, events, registrations, check-ins, feedback, broadcasts), email outbox health by message kind and recent broadcasts (subject and audience only), security posture (MFA adoption, owners/admins without MFA, unverified accounts, sign-in methods, sensitive audit actions, machine API clients with credential lifecycle but never secrets), storage breakdowns, and per-user and per-organisation support pages. Tokens, password and credential hashes, registration answers, storage keys, and message bodies are never shown.
-- Separate TOTP step-up verification for super-admin access; verification lasts 10 minutes and requires an enrolled authenticator.
 - Organisation, user, event, invitation, authentication, monitoring, operations, storage, and searchable audit-log views.
 - Public liveness and secret-protected database readiness endpoints.
 - Outbox delivery within seconds from a separate worker, timed jobs from a beat, retries, retention cleanup, worker and beat heartbeat monitoring, and safe failed-email diagnostics.

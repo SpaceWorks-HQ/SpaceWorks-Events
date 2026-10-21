@@ -26,6 +26,9 @@ export type Bucket =
   | "ticketEvents"
   | "shortLink"
   | "paymentWebhook"
+  | "loginFailureIp"
+  | "loginFailureAccount"
+  | "loginCode"
   | "paymentSettings"
   | "paymentStatus"
   | "ticketCheckout"
@@ -67,6 +70,13 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   paymentSettings: { max: 30, windowMs: 60 * 60_000 },
   // Return-page status reads, per order: the webhook is the authority.
   paymentStatus: { max: 6, windowMs: 60_000 },
+  // Failed sign-ins (counted only, see recordFailure): an address with this
+  // many in an hour is blocked from signing in until the hour is up.
+  loginFailureIp: { max: 20, windowMs: 60 * 60_000 },
+  // An account with this many in 15 minutes needs an emailed code even with the right password.
+  loginFailureAccount: { max: 5, windowMs: 15 * 60_000 },
+  // Sign-in codes emailed to one account.
+  loginCode: { max: 5, windowMs: 60 * 60_000 },
   // "Pay now" on a pending order or ticket, per IP.
   ticketCheckout: { max: 20, windowMs: 60_000 },
   // Browser crash reports forwarded to the operator alert webhook.
@@ -204,4 +214,44 @@ export async function checkRateLimitById(bucket: Bucket, id: string): Promise<bo
     if (process.env.NODE_ENV === "production" && !allowTestMemoryFallback()) return false;
     return checkRateLimitMemory(bucket, id);
   }
+}
+
+/**
+ * Failure counters: `recordFailure` counts one, `failureCount` reads without
+ * counting. Over its bucket's `max` within the window means "too many".
+ */
+export async function recordFailure(bucket: Bucket, id: string): Promise<number> {
+  const redis = getRedisClient();
+  const k = keyFor(bucket, id);
+  const { windowMs } = limits[bucket];
+  if (redis) {
+    try {
+      return Number(await redis.eval(
+        "local c = redis.call('INCR', KEYS[1]); if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]); end; return c",
+        1, k, String(windowMs),
+      ));
+    } catch {
+      console.warn("[rateLimit] Redis failure count failed");
+    }
+  }
+  checkRateLimitMemory(bucket, id);
+  return memoryStore.get(k)?.count ?? 0;
+}
+
+export async function failureCount(bucket: Bucket, id: string): Promise<number> {
+  const redis = getRedisClient();
+  const k = keyFor(bucket, id);
+  if (redis) {
+    try {
+      return Number(await redis.get(k) ?? 0);
+    } catch {
+      console.warn("[rateLimit] Redis failure read failed");
+    }
+  }
+  const entry = memoryStore.get(k);
+  return entry && Date.now() < entry.resetAt ? entry.count : 0;
+}
+
+export function isOverLimit(bucket: Bucket, count: number) {
+  return count >= limits[bucket].max;
 }

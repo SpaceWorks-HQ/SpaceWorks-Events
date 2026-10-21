@@ -87,8 +87,8 @@ describe("super-admin maintenance actions", () => {
     expect(mocks.revalidate).not.toHaveBeenCalled();
   });
 
-  it("lets the MFA step-up redirect propagate instead of reporting it as a failure", async () => {
-    const redirect = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/super-admin-mfa;307;" });
+  it("lets the super-admin check's redirect propagate instead of reporting it as a failure", async () => {
+    const redirect = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;replace;/login;307;" });
     mocks.requireSuperAdminMfa.mockRejectedValue(redirect);
     await expect(retryFailedOutboxMessages()).rejects.toBe(redirect);
     expect(mocks.outboxUpdate).not.toHaveBeenCalled();

@@ -234,6 +234,7 @@ model User {
 
   accounts          Account[]
   sessions          Session[]
+  devices           UserDevice[]
   memberships       Membership[]
   rsvps             RSVP[]
   orgInvitesCreated OrganisationInvite[] @relation("OrgInviteCreatedBy")
@@ -278,6 +279,25 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// A browser this account signed in from with a password. A sign-in from a
+/// device it hasn't used before needs an emailed code (unless an
+/// authenticator code was given) and sends a "new sign-in" alert.
+model UserDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  /// SHA-256 of the random id the browser keeps; the id itself is never stored.
+  deviceHash String
+  /// A short description of the browser, for the alert and the account page.
+  userAgent  String   @default("")
+  lastIp     String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceHash])
 }
 
 model VerificationToken {

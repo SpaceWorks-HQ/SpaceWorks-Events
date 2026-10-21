@@ -1,9 +1,8 @@
 import type { Membership, MembershipRole } from "@prisma/client";
 import { notFound, redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { hasValidSuperAdminMfaProof, SUPER_ADMIN_MFA_COOKIE } from "@/lib/superAdminMfa";
+import { requireStaffMfa, staffMfaSatisfied } from "@/lib/staffMfa";
 import type { Session } from "next-auth";
 
 
@@ -11,11 +10,14 @@ export async function getMembership(
   userId: string,
   organisationId: string,
 ): Promise<Membership | null> {
-  return prisma.membership.findUnique({
+  const membership = await prisma.membership.findUnique({
     where: {
       userId_organisationId: { userId, organisationId },
     },
   });
+  // Staff powers wait until the signed-in member has passed an authenticator check.
+  if (membership && !(await staffMfaSatisfied(userId))) return null;
+  return membership;
 }
 
 /** Read from the database for mutation gates; session JWTs can be stale. */
@@ -68,21 +70,12 @@ export async function requireSuperAdmin(): Promise<
 }
 
 /**
- * Require a fresh, separate TOTP challenge for the instance-wide admin panel.
- * The proof is a short-lived, signed HttpOnly cookie bound to the current user
- * and session version, so account/session revocation invalidates it immediately.
+ * The instance admin panel's gate. The super admin signs in with email and
+ * password only (the password is set only from the server); the sign-in's
+ * own checks still apply: new-device email codes, lockouts and IP blocking.
  */
 export async function requireSuperAdminMfa() {
-  const session = await requireSuperAdmin();
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { mfaEnabledAt: true, sessionVersion: true },
-  });
-  const proof = (await cookies()).get(SUPER_ADMIN_MFA_COOKIE)?.value;
-  if (!user?.mfaEnabledAt || !hasValidSuperAdminMfaProof(proof, session.user.id, user.sessionVersion)) {
-    redirect("/super-admin-mfa");
-  }
-  return session;
+  return requireSuperAdmin();
 }
 
 export type OrgAccessContext = {
@@ -101,6 +94,7 @@ export async function requireOrgRole(
   });
   if (!org) redirect("/dashboard");
 
+  await requireStaffMfa(session.user.id, `/dashboard/${orgSlug}`);
   const membership = await getMembership(session.user.id, org.id);
   if (!membership) redirect("/dashboard");
   if (!hasRoleAtLeast(membership.role, minRole)) {
@@ -125,6 +119,7 @@ export async function requireOrgDashboardAccess(orgSlug: string): Promise<Omit<O
   const session = await requireAuth();
   const org = await prisma.organisation.findUnique({ where: { slug: orgSlug } });
   if (!org) redirect("/dashboard");
+  await requireStaffMfa(session.user.id, `/dashboard/${orgSlug}`);
   const membership = await getMembership(session.user.id, org.id);
   if (membership) return { organisation: { id: org.id, slug: org.slug, name: org.name }, membership, userId: session.user.id, isCollaborator: false };
   const grant = await prisma.eventCollaborator.findFirst({ where: { userId: session.user.id, OR: [{ event: { organisationId: org.id } }, { series: { organisationId: org.id } }] }, select: { id: true } });

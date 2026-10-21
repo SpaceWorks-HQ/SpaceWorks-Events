@@ -20,6 +20,9 @@ Blank values (for example `SMTP_HOST=""` left over from `.env.example`) are trea
 | `AUTH_GOOGLE_ID` | Legacy fallback | Google OAuth client ID; configure new instances in Super admin → Settings |
 | `AUTH_GOOGLE_SECRET` | Legacy fallback | Google OAuth client secret; configure new instances in Super admin → Settings |
 | `SUPER_ADMIN_EMAIL` | Recommended | Sole email allowed into the instance administration area. Its password is set only from the server (`scripts/vps-recover.sh` or `docker/vps/recover-super-admin.mjs`): the app refuses its sign-up, never emails it a reset link and hides its password form |
+| `STAFF_MFA_REQUIRED` | Optional | On unless set to `false`. Organisation staff (any membership or co-organiser grant) must set up an authenticator app and confirm it each session. `false` is for local development and tests only |
+| `LOGIN_NEW_DEVICE_CHECK` | Optional | On unless set to `false`. A password sign-in from a device the account hasn't used before needs a code emailed to the account. `false` is for tests only |
+| `PWNED_PASSWORDS_CHECK` | Optional | On unless set to `false`. New passwords are refused when found in Have I Been Pwned (k-anonymity; needs outbound HTTPS to `api.pwnedpasswords.com`). `false` for air-gapped installs and tests |
 
 ### Deployment example
 
@@ -58,7 +61,7 @@ Keep an HTTPS redirect from the old hostname to the new one for as long as invit
 
 Generate independent keys with `openssl rand -base64 32`. Rotating the Server Action key invalidates outstanding action forms. Rotating the MFA key without re-encrypting stored seeds prevents enrolled users from validating TOTP codes.
 
-**`MFA_ENCRYPTION_KEY` mismatch or rotation.** The server validates only the key's format at startup, so a replica with a different key still starts and passes health checks — it does not crash-loop — but on that replica every use of a value encrypted with the original key fails: outbox delivery fails and is retried until the outbox gives up, Google sign-in fails, alerts are not sent, and TOTP verification fails (including the super-admin step-up needed to fix settings). Behind a load balancer this looks intermittent. Detect it with the same environment the application receives:
+**`MFA_ENCRYPTION_KEY` mismatch or rotation.** The server validates only the key's format at startup, so a replica with a different key still starts and passes health checks — it does not crash-loop — but on that replica every use of a value encrypted with the original key fails: outbox delivery fails and is retried until the outbox gives up, Google sign-in fails, alerts are not sent, and TOTP verification fails. Behind a load balancer this looks intermittent. Detect it with the same environment the application receives:
 
 ```bash
 node --env-file=/secure/path/swevents.env scripts/check-instance-secrets.mjs
@@ -79,7 +82,7 @@ It reports which stored values cannot be decrypted, never printing them, and exi
 
 Do not expose the application directly while trusting a client-controlled forwarding header.
 
-Rate-limit windows are defined in code (`lib/rateLimit.ts`), not configured by environment. Recent buckets: `dataExport` (5 personal data exports per user per hour), `ticketStatus` (120 ticket status reads per IP per minute), `ticketEvents` (60 ticket event-stream connections per IP per minute), and `shortLink` (30 short-link lookups per IP per minute). The ticket buckets are generous because attendees at one venue often share a NAT address.
+Rate-limit windows are defined in code (`lib/rateLimit.ts`), not configured by environment. Recent buckets: `dataExport` (5 personal data exports per user per hour), `ticketStatus` (120 ticket status reads per IP per minute), `ticketEvents` (60 ticket event-stream connections per IP per minute), `shortLink` (30 short-link lookups per IP per minute), `loginFailureIp` (20 failed sign-ins per address per hour, then that address is blocked), `loginFailureAccount` (5 failed sign-ins per account in 15 minutes, then an emailed code is needed), and `loginCode` (5 sign-in codes emailed per account per hour). Without a trusted proxy header every client reads as "unknown", and "unknown" is never blocked. The ticket buckets are generous because attendees at one venue often share a NAT address.
 
 The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/event-stream` response. Any reverse proxy in front of the application must not buffer it (for nginx, `proxy_buffering off`; the route also sends `X-Accel-Buffering: no`) and must allow idle reads of at least 30 seconds.
 
@@ -91,7 +94,7 @@ The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/even
 | `SMTP_*` | Optional fallback | SMTP settings; configure new instances in Super admin → Settings. When `SMTP_SERVICE`/`SMTP_HOST` is set without `SMTP_ALLOW_UNAUTHENTICATED=1`, `production:check` requires `SMTP_USER` and `SMTP_PASSWORD` |
 | `OUTBOX_RETENTION_DAYS` | Optional | Retention for non-capability sent/failed outbox history; defaults to 30 (capability-bearing rows are deleted immediately after delivery or terminal failure) |
 
-Configure SMTP, Google SSO, paid events, backup status, and operational alerts under **Super admin → Settings**. SMTP and Google client secrets and the alert webhook URL are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
+Configure SMTP, Google SSO, paid events, backup status, and operational alerts under **Super admin → Settings**. SMTP and Google client secrets and the alert webhook URL are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and can be changed only by the super admin. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
 
 ### Panel settings and environment fallbacks
 

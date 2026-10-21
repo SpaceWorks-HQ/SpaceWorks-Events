@@ -38,6 +38,8 @@ if (process.argv[2] === "serve-frontend") {
     BACKEND_ORIGIN: "http://127.0.0.1:3200", NEXT_PUBLIC_BACKEND_ORIGIN: monolith ? "" : "http://127.0.0.1:3200",
     AUTH_SECRET: hex(), MFA_ENCRYPTION_KEY: key(), NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: key(), FRONTEND_ACTIONS_KEY: key(), FRONTEND_GATEWAY_SECRET: hex(),
     HEALTHCHECK_SECRET: hex(), CRON_SECRET: hex(), SUPER_ADMIN_EMAIL: "admin@example.test",
+    // Browser tests sign in seeded staff from fresh browsers: the sign-in protections are covered by unit and integration tests.
+    STAFF_MFA_REQUIRED: "false", LOGIN_NEW_DEVICE_CHECK: "false", PWNED_PASSWORDS_CHECK: "false",
     TRUSTED_PROXY_IP_HEADER: "x-real-ip", FRONTEND_TRUSTED_IP_HEADER: "x-real-ip",
     EMAIL_FROM: "Test <test@example.test>", SMTP_HOST: "127.0.0.1", SMTP_PORT: "9", SMTP_USER: "disposable", SMTP_PASSWORD: hex(),
     S3_BUCKET: "disposable-test", S3_REGION: "us-east-1",
