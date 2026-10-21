@@ -248,7 +248,7 @@ export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId:
       data: {
         kind: "operator-notice",
         availableAt: new Date(Date.now() + UNDO_TTL_MS),
-        payload: { to, subject: noticeSubject("Registration removed", title), lines: [`The organiser removed your registration for ${title}, so your ticket no longer works.`, "If you think this is a mistake, reply to the organiser's emails or contact them directly."], undoId: undo.id },
+        payload: { to, organisationId: org.id, subject: noticeSubject("Registration removed", title), lines: [`The organiser removed your registration for ${title}, so your ticket no longer works.`, "If you think this is a mistake, reply to the organiser's emails or contact them directly."], undoId: undo.id },
       },
     });
   }

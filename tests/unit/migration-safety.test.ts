@@ -129,6 +129,13 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('"payAtDesk" BOOLEAN NOT NULL DEFAULT false');
   });
 
+  it("adds organisation email settings as a new table with standard ports only", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261030000000_organisation_email/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain('"smtpPort" IN (25, 465, 587, 2525)');
+    expect(sql).toContain('ON DELETE CASCADE');
+  });
+
   it("adds the event reminder marker as a nullable column with no rewrites", () => {
     const sql = readFileSync(resolve(root, "prisma/migrations/20261029000000_event_reminders/migration.sql"), "utf8");
     expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);

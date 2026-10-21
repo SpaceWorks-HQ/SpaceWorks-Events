@@ -20,9 +20,12 @@ export function uniqueEmails(values: Array<string | null | undefined>) {
 }
 
 /** The same short plain notice to each address (no links that grant access). */
-export async function noticeEach(client: Client, emails: string[], notice: { subject: string; lines: string[]; }) {
+export async function noticeEach(client: Client, emails: string[], notice: { subject: string; lines: string[]; organisationId?: string; }) {
   for (const to of emails) {
-    await enqueueOperatorNotice(client, { to, subject: shorten(notice.subject), lines: notice.lines.slice(0, 10).map((line) => shorten(line, 1000)) });
+    await enqueueOperatorNotice(client, {
+      to, subject: shorten(notice.subject), lines: notice.lines.slice(0, 10).map((line) => shorten(line, 1000)),
+      ...(notice.organisationId ? { organisationId: notice.organisationId } : {}),
+    });
   }
   return emails.length;
 }
@@ -52,7 +55,7 @@ export async function noticeOrganisersOnce(client: Client, organisationId: strin
     });
     if (recent === 0) due.push(to);
   }
-  return noticeEach(client, due, { ...notice, subject });
+  return noticeEach(client, due, { ...notice, subject, organisationId });
 }
 
 /** Someone asked to join an approval-only event or date: its organisers hear, at most every half hour. */

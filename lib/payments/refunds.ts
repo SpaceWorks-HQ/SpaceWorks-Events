@@ -145,6 +145,7 @@ async function noticeRefundFailed(client: Prisma.TransactionClient | typeof pris
   if (!refund) return;
   const { payment } = refund;
   await noticeEach(client, await organiserEmails(client, payment.organisationId), {
+    organisationId: payment.organisationId,
     subject: `A refund failed: order ${payment.order.reference}`,
     lines: [
       `The payment provider refused a refund of ${formatMoney(refund.amountMinor, payment.currency)} on order ${payment.order.reference} (${payment.order.buyerEmail}).`,

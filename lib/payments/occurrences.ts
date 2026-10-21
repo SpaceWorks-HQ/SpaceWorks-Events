@@ -67,6 +67,7 @@ export async function cancelOccurrence(params: { organisationId: string; seriesI
     // retry can never lose the notices. A retry that finds the date already
     // cancelled has told them.
     const told = current.cancelledAt ? 0 : await noticeEach(tx, await peopleWithPlaces(tx, { eventInstanceId: date.id }), {
+      organisationId: params.organisationId,
       subject: noticeSubject("Cancelled", label),
       lines: [
         `${label} has been cancelled by the organiser.`,

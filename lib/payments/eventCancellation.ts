@@ -61,8 +61,9 @@ export async function peopleWithPlaces(tx: Prisma.TransactionClient, target: { e
 }
 
 /** Tell everyone on an event that it was cancelled. Run in the transaction that cancels it, before anything is removed. */
-export async function notifyEventCancelled(tx: Prisma.TransactionClient, params: { eventId: string; title: string; reason?: string | null; }) {
+export async function notifyEventCancelled(tx: Prisma.TransactionClient, params: { organisationId: string; eventId: string; title: string; reason?: string | null; }) {
   return noticeEach(tx, await peopleWithPlaces(tx, { eventId: params.eventId }), {
+    organisationId: params.organisationId,
     subject: noticeSubject("Cancelled", params.title),
     lines: [
       `${params.title} has been cancelled by the organiser.`,

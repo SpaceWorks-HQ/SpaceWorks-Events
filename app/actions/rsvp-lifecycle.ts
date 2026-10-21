@@ -268,6 +268,7 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     if (result.count === 1 && to) {
       await enqueueRsvpStatusNotification(tx, {
         to,
+        organisationId: org.id,
         eventTitle: ctx.event?.title ?? ctx.instance!.series.title,
         approved: false,
         recipientName: attendeeName(rsvp),

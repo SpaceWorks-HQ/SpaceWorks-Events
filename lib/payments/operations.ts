@@ -85,7 +85,7 @@ export async function declineRequestedOrder(params: { orderId: string; organisat
     if (!order || order.status !== OrderStatus.REQUESTED) throw new PaymentOperationError("This request was changed by someone else.");
     await tx.order.update({ where: { id: order.id }, data: { status: OrderStatus.CANCELLED } });
     await tx.rSVP.updateMany({ where: { orderId: order.id }, data: { status: RsvpStatus.REJECTED } });
-    await enqueueRsvpStatusNotification(tx, { to: order.buyerEmail, eventTitle: subjectTitle(order), approved: false, recipientName: order.buyerName || undefined });
+    await enqueueRsvpStatusNotification(tx, { to: order.buyerEmail, organisationId: params.organisationId, eventTitle: subjectTitle(order), approved: false, recipientName: order.buyerName || undefined });
     await recordAuditEvent({ action: "ORDER_DECLINED", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "Order", targetId: order.id, client: tx });
   });
 }
