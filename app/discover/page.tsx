@@ -16,7 +16,7 @@ import { paginationWindow } from "@/lib/pagination";
 export const metadata: Metadata = {
   title: "Discover Events",
   description:
-    "Free events from the communities on Space Works Events. Register in seconds, no account needed.",
+    "Events from the communities on Space Works Events. Register in seconds, no account needed.",
 };
 
 const PAGE_SIZE = 12;
@@ -231,7 +231,7 @@ export default async function DiscoverPage({
         <div className="flex flex-col items-start gap-6 rounded-[16px] bg-sw-citron p-6 text-sw-ink sm:p-8 md:flex-row md:items-center">
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <h2 className="text-h3 text-sw-ink">Running something?</h2>
-            <p className="max-w-[640px] text-body text-sw-ink">Set up your organisation and publish your first free event in a few minutes.</p>
+            <p className="max-w-[640px] text-body text-sw-ink">Set up your organisation and publish your first event in a few minutes.</p>
           </div>
           <Button asChild variant="primary" size="lg" className="shrink-0">
             <Link href={getStartedHref}>Start organising</Link>

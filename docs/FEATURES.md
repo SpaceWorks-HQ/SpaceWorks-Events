@@ -81,6 +81,16 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 
 Only eligible confirmed attendees receive a scannable ticket by default. Organisers can explicitly handle exceptional status cases where supported by the check-in workflow.
 
+## Paid tickets
+
+See [Paid tickets](PAYMENTS.md) for setup. Off until the super admin turns paid events on.
+
+- Each organisation connects its own Razorpay or Stripe account (owner only, keys write-only and encrypted, its own webhook address, test mode). Buyers pay on the provider's page; the money goes straight to the organisation with no platform fee.
+- Ticket types: fixed or pay-what-you-want prices, capacity, sales windows, per-order limits, group tickets, booking fees, pay at the desk, and visibility (public, access code, members only). Extras, promo codes, single-date tickets and passes for series.
+- Seats are held for 30 minutes at checkout; approval requests and waitlist places get a 24-hour payment link with one reminder.
+- Refund policies (none, full or a percentage until a cut-off), refunds in part or in full, buyer self-cancellation within the policy, ticket transfers, settle by hand or complimentary, PDF receipts with the organisation's registered details, chargeback tracking, and full refunds when an event or date is cancelled.
+- Money reporting: the event and series Money cards, the organisation's takings, an orders CSV, the PDF report's Money section, the `orders:read` API, and orders in the buyer's data export.
+
 ## Member IDs
 
 - ID card programmes per organisation (inspired by Aarannu): a public join form with custom questions (text, choice, date, email, phone) and an optional photo, or import from a CSV file or a public Google Sheet with a column-mapping step, preview and de-duplication by email.
@@ -116,7 +126,7 @@ Only eligible confirmed attendees receive a scannable ticket by default. Organis
 ## Discovery and public pages
 
 - Landing, About, and Features pages, organisation pages, event pages, and recurring-instance pages.
-- Privacy policy (`/privacy`) and terms of use (`/terms`) describing what the product actually does: guest registrations and custom questions, roles and API access, third-party services (Google Maps, Gravatar), cookies and offline rosters, organiser emails, retention windows, the free-events-only rule, organiser duties, check-in stations, and certificates. Deployments should review them against their own jurisdiction and providers.
+- Privacy policy (`/privacy`) and terms of use (`/terms`) describing what the product actually does: guest registrations and custom questions, roles and API access, third-party services (Google Maps, Gravatar), cookies and offline rosters, organiser emails, retention windows, free events and paid tickets (the organiser is the seller), organiser duties, check-in stations, and certificates. Deployments should review them against their own jurisdiction and providers.
 - Public-event discovery with paginated, database-bounded search.
 - Search by event title, tags, and organisation name.
 - Public sitemap and crawler controls; ticket and administrative paths are not intended for indexing.

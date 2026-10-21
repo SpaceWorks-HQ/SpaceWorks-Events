@@ -50,7 +50,7 @@ export const doorPoints = [
 ];
 
 export const promises = [
-  { title: "Charge your guests", body: "There are no tickets for sale, no payments and no fees. Every event here is free to attend." },
+  { title: "Take a cut of your tickets", body: "Free events stay free. If you sell tickets, buyers pay your own Razorpay or Stripe account: no platform fee, and the money never passes through us." },
   { title: "Show ads or track people", body: "No ad trackers. Private ticket and invite links are stripped before any analytics." },
   { title: "Keep your data hostage", body: "Your community’s data lives on your server. Export your guest list whenever you like." },
   { title: "Make your guests sign up", body: "People can register as guests with just a name and email. Accounts are optional." },
@@ -75,8 +75,9 @@ export const openLinks = [
 ];
 
 export const faqs = [
-  { q: "Is Space Works Events free?", a: "Yes. It is built only for free events: there is nothing to buy and nothing to sell. If you host it yourself, you only pay for your own server." },
-  { q: "Who is it for?", a: "Makerspaces, hackerspaces, workshops, build nights, campus clubs and any community that runs free events, usually with a small team of volunteers." },
+  { q: "Is Space Works Events free?", a: "Yes, to organise and to use. Events are free by default. If you sell tickets, buyers pay your own Razorpay or Stripe account directly, with no platform fee on top. If you host it yourself, you only pay for your own server." },
+  { q: "Can I sell tickets?", a: "Yes, when the site\u2019s administrator turns paid events on. Connect your own Razorpay or Stripe account, set prices, promo codes and a refund policy, and the money goes straight to you. Buyers get a receipt, and refunds go back the way they paid." },
+  { q: "Who is it for?", a: "Makerspaces, hackerspaces, workshops, build nights, campus clubs and any community that runs events, free or ticketed, usually with a small team of volunteers." },
   { q: "Do my guests need an account?", a: "No. Guests can register with a name and email and get their ticket by email. They can create an account later if they want one." },
   { q: "Can I run it on my own server?", a: "Yes. One command on a Linux server installs everything: the website and API, PostgreSQL, Redis, file storage and HTTPS. You only bring a domain and an SMTP provider for email. Docker images and a Helm chart are there if you prefer." },
   { q: "Is it open source?", a: "Yes. The code is public on GitHub under the AGPL-3.0 licence. Anyone can read it, report bugs, suggest ideas and send improvements." },

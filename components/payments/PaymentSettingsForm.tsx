@@ -13,8 +13,8 @@ import type { PaymentSettingsStatus } from "@/lib/payments/settings";
 type Provider = "RAZORPAY" | "STRIPE";
 type Notice = { tone: "success" | "danger"; text: string; } | null;
 
-const RAZORPAY_EVENTS = "payment_link.paid, payment.captured, refund.processed, refund.failed";
-const STRIPE_EVENTS = "checkout.session.completed, checkout.session.async_payment_succeeded, refund.created, refund.updated, charge.refunded";
+const RAZORPAY_EVENTS = "payment_link.paid, payment.captured, refund.processed, refund.failed, payment.dispute.created, payment.dispute.under_review, payment.dispute.action_required, payment.dispute.won, payment.dispute.lost, payment.dispute.closed";
+const STRIPE_EVENTS = "checkout.session.completed, checkout.session.async_payment_succeeded, refund.created, refund.updated, charge.refunded, charge.dispute.created, charge.dispute.updated, charge.dispute.closed";
 
 function CopyValue({ value, label }: { value: string; label: string; }) {
   const [copied, setCopied] = useState(false);
