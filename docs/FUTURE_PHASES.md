@@ -11,6 +11,7 @@ This page contains only work that is not currently implemented. Current behavior
 - Add automated SAST, secret scanning, container scanning, and a documented vulnerability-disclosure policy.
 - Commission an independent penetration test and threat-model review before handling sensitive or regulated data.
 - Add optional step-up authentication for especially destructive organiser and super-admin operations.
+- Split the remaining source files over 300 lines, then make the ESLint `max-lines` rule an error instead of a warning.
 
 ## Privacy and account lifecycle
 

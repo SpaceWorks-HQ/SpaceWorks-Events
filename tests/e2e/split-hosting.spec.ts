@@ -1,6 +1,5 @@
-import { createCipheriv, randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
-import * as OTPAuth from "otpauth";
 import { PrismaClient } from "@prisma/client";
 import { expect, test } from "@playwright/test";
 import { encodeWire, decodeWire } from "../../lib/frontend/codec";
@@ -78,7 +77,7 @@ test.describe("separate frontend and backend", () => {
     expect(rejected.headers()["access-control-allow-origin"]).toBeUndefined();
     expect((await context.request.get(`${process.env.BACKEND_ORIGIN}/dashboard`, { maxRedirects: 0 })).status()).toBe(404);
   });
-  test("forwards the fresh super-admin MFA cookie and keeps settings secrets on the VPS", async ({ page, context }) => {
+  test("opens the super-admin panel with email and password and keeps settings secrets on the VPS", async ({ page, context }) => {
     const admin = await prisma.user.create({ data: { email: process.env.SUPER_ADMIN_EMAIL!, name: "Split admin", passwordHash: await bcrypt.hash("disposable-admin-password", 12), emailVerified: new Date() } });
     try {
       await context.setExtraHTTPHeaders({ "x-real-ip": "192.0.2.250" });
@@ -87,22 +86,7 @@ test.describe("separate frontend and backend", () => {
       await page.locator('input[type="password"]:visible').fill("disposable-admin-password");
       await page.getByRole("button", { name: "Sign in", exact: true }).click();
       await expect(page).toHaveURL(/\/dashboard$/);
-      // Enable a disposable seed after login so the fresh step-up consumes its
-      // first code through the frontend Server Action and cookie bridge.
-      const secret = new OTPAuth.Secret({ size: 20 });
-      const iv = randomBytes(12);
-      const cipher = createCipheriv("aes-256-gcm", Buffer.from(process.env.MFA_ENCRYPTION_KEY!, "base64"), iv);
-      const encrypted = Buffer.concat([cipher.update(secret.base32), cipher.final()]);
-      const seed = ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), encrypted.toString("base64url")].join(".");
-      await prisma.user.update({ where: { id: admin.id }, data: { mfaEnabledAt: new Date(), mfaSecretEncrypted: seed } });
-      await page.goto("/super-admin/settings");
-      await expect(page).toHaveURL(/\/super-admin-mfa$/);
-      const totp = new OTPAuth.TOTP({ issuer: "Space Works Events", label: admin.email!, algorithm: "SHA1", digits: 6, period: 30, secret });
-      await page.getByRole("textbox", { name: "Six-digit authenticator code" }).fill(totp.generate());
-      await page.getByRole("button", { name: "Verify and continue" }).click();
-      await expect(page).toHaveURL(/\/super-admin$/);
-      const proof = (await context.cookies()).find((cookie) => cookie.name === "swe.super-admin-mfa.v1");
-      expect(Boolean(proof?.httpOnly && proof.path === "/super-admin" && proof.sameSite === "Strict")).toBe(true);
+      // The super admin needs no authenticator step: the panel opens straight away.
       await prisma.instanceSetting.upsert({ where: { id: "global" }, create: { id: "global", smtpPasswordEncrypted: "fixture-ciphertext" }, update: { smtpPasswordEncrypted: "fixture-ciphertext" } });
       for (const path of ["", "/settings", "/operations", "/auth", "/activity", "/audit", "/email", "/events", "/invites", "/monitoring", "/orgs", "/security", "/storage", "/users", `/users/${admin.id}`, `/orgs/${organisationId}`]) {
         const response = await page.goto(`/super-admin${path}`);

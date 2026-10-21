@@ -256,11 +256,6 @@
       "id": "app__page:loadView"
     },
     {
-      "module": "lib/views/app__super-admin-mfa__page",
-      "name": "loadSuperAdminMfaView",
-      "id": "app__super-admin-mfa__page:loadSuperAdminMfaView"
-    },
-    {
       "module": "lib/views/app__super-admin__activity__page",
       "name": "loadSuperAdminActivityView",
       "id": "app__super-admin__activity__page:loadSuperAdminActivityView"
@@ -354,6 +349,11 @@
       "module": "lib/views/app__ticket__token__page",
       "name": "loadTicketView",
       "id": "app__ticket__token__page:loadTicketView"
+    },
+    {
+      "module": "lib/views/app__verify-mfa__page",
+      "name": "loadVerifyMfaView",
+      "id": "app__verify-mfa__page:loadVerifyMfaView"
     },
     {
       "module": "lib/views/app__verify__token__page",
@@ -908,6 +908,11 @@
       "id": "membership:deleteOrganisation"
     },
     {
+      "module": "app/actions/mfa-step-up",
+      "name": "verifyStepUpMfa",
+      "id": "mfa-step-up:verifyStepUpMfa"
+    },
+    {
       "module": "app/actions/orders",
       "name": "updateOrderAttendee",
       "id": "orders:updateOrderAttendee"
@@ -1151,11 +1156,6 @@
       "module": "app/actions/shortLink",
       "name": "regenerateEventShortLink",
       "id": "shortLink:regenerateEventShortLink"
-    },
-    {
-      "module": "app/actions/super-admin-mfa",
-      "name": "verifySuperAdminMfa",
-      "id": "super-admin-mfa:verifySuperAdminMfa"
     },
     {
       "module": "app/actions/ticket-types",

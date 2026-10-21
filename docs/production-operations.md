@@ -53,7 +53,7 @@ Apply these with `npm run db:deploy` before rolling out the matching application
 
 ## Instance-managed services
 
-Use `/super-admin/settings` with a fresh super-admin TOTP proof to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source.
+Sign in as the super admin and use `/super-admin/settings` to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source.
 
 The backup fields do not run, retain, or restore backups. Keep those controls with the database provider and record successful backups and restore drills in the instance operations area.
 

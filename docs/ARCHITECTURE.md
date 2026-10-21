@@ -54,11 +54,13 @@ External applications authenticate under `/api/v1` with tenant-bound `ApiClient`
 
 `Organisation` is the tenant boundary. Events, series, invitations, assets, and audit events resolve through an organisation. `Membership` connects a user to a tenant with an owner, admin, or member role. Permission helpers and action-specific checks enforce access before mutation.
 
+Organisation staff (any membership or event/series co-organiser grant) must also pass an authenticator check in the current session (`lib/staffMfa.ts`). Staff pages redirect to `/account/security?mfa=required` or `/verify-mfa`, and the staff checks in actions (`getMembership`, `canAccessEvent`, `canViewEventDashboard`) return no access until then. The check is either a TOTP code at the password sign-in (carried in the session token) or the signed `swe.mfa-proof.v1` cookie set by `/verify-mfa` (`lib/mfaProof.ts`). Password sign-in protections (address and account failure limits, emailed new-device codes, new-sign-in alerts) live in `lib/loginSecurity.ts`; the breached-password check in `lib/pwnedPasswords.ts`.
+
 The super-admin boundary is separate: access requires an authenticated email matching `SUPER_ADMIN_EMAIL`, and unauthorized requests behave as not found.
 
 ## Main data areas
 
-- Identity: `User`, `Account`, `Session`, and `VerificationToken`.
+- Identity: `User`, `Account`, `Session`, `VerificationToken` (also holds hashed sign-in codes), and `UserDevice` (a SHA-256 of each browser's random id, a short browser description, and the last IP).
 - Tenancy: `Organisation`, `Membership`, and `OrganisationInvite`.
 - Events: `Event` (including `listedPublicly` for listed approval-required events and an optional unique `shortCode`), `EventInvite`, `EventSeries`, `SeriesInvite`, and `EventInstance`.
 - Registration: `RSVP`, registration forms, fields (with help text, placeholder, and validated `settings` JSON), and typed answers.
@@ -72,7 +74,7 @@ Refer to `prisma/schema.prisma` for the authoritative fields, constraints, index
 
 ## Background and scheduled work
 
-Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. Background work runs in two roles, both in `lib/outboxWorker.ts` and selected per process by `SWE_PROCESS_ROLE`:
+Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. `lib/outbox.ts` is a facade over `lib/outbox/` (`payloads`, `enqueue`, `context`, `deliver`). Background work runs in two roles, both in `lib/outboxWorker.ts` and selected per process by `SWE_PROCESS_ROLE`:
 
 - The **worker** polls the outbox every `OUTBOX_POLL_MS` (default 3 seconds), claims and sends batches of 50 until the queue is empty, and retries failures. It records the `outbox-scheduler` heartbeat.
 - The **beat** checks every 15 seconds which timed jobs are due and runs them: payment maintenance (hold expiry, refunds, payment-link reminders) and waitlist filling every minute, event reminders (a day before each event or series date, once per guest) and backup alerts every 5 minutes, and the retention purge every hour. Its jobs queue email for the worker. It records the `beat` heartbeat.
@@ -85,7 +87,7 @@ When an RSVP transitions to checked in, `commitCheckInProjection` (`lib/checkInM
 
 ## Instance service configuration
 
-Super-admins with a current TOTP step-up can configure SMTP, Google SSO, and backup posture at `/super-admin/settings`. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
+The super admin can configure SMTP, Google SSO, and backup posture at `/super-admin/settings`. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
 
 ## Storage
 

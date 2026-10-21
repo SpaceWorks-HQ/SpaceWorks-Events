@@ -6,6 +6,7 @@ import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { isSuperAdminEmail } from "@/lib/superAdminEmail";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPassword } from "@/lib/pwnedPasswords";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
@@ -45,6 +46,7 @@ export async function signUpWithPassword(
   // tool. Answer like any other sign-up so the address isn't revealed.
   if (isSuperAdminEmail(email)) return { ok: true, data: { email } };
 
+  if (await isBreachedPassword(password)) return { ok: false, error: BREACHED_PASSWORD_MESSAGE, fieldErrors: { password: [BREACHED_PASSWORD_MESSAGE] } };
   const passwordHash = await bcrypt.hash(password, 12);
   const existing = await prisma.user.findUnique({
     where: { email },

@@ -5,6 +5,13 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // The 300-line rule (AGENTS.md): split long modules behind their import path.
+  // A warning while the existing long files are split; then an error.
+  {
+    files: ["**/*.{ts,tsx,mjs,js}"],
+    ignores: ["lib/frontend/registry.ts"],
+    rules: { "max-lines": ["warn", { max: 300, skipBlankLines: true, skipComments: true }] },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

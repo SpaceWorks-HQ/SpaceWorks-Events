@@ -152,8 +152,11 @@ Also call `GET /api/health/db` from the monitoring system with the
 `Authorization` header set to `Bearer $HEALTHCHECK_SECRET`. Do not place that
 bearer value in a URL.
 
-After the first sign-in, enroll authenticator MFA for the super-admin account,
-then verify or replace the bootstrap SMTP fallback and configure optional
+Set the super-admin password from the server with
+`docker/vps/recover-super-admin.mjs` (the app refuses that address's sign-up
+and password reset). After the first sign-in, we recommend enrolling
+authenticator MFA for the super-admin account; there is no separate step-up for
+`/super-admin`. Then verify or replace the bootstrap SMTP fallback and configure optional
 Google SSO under `/super-admin/settings`. Test email delivery before accepting
 registrations. Keep the environment SMTP credentials in the deployment secret
 store as a disaster-recovery fallback.

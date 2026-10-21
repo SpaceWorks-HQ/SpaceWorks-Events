@@ -32,7 +32,7 @@ Space Works Events is deployed fresh; it does not read state written by a Yuyu i
 
 - **Machine API tokens** use the `swe_v1_` prefix. `yuyu_v1_` tokens are rejected; create new API clients.
 - **Check-in station PINs** are encrypted under the HKDF info `swe-check-in-station-pin-v2`. Stored Yuyu station PINs no longer decrypt; set station PINs again.
-- **Browser keys** were renamed from `yuyu.`/`yuyu:` to `swe.`/`swe:`: the check-in station cookie (`swe.check-in-station.v2`), the colour-mode cookie and storage key (`swe.color-mode`, `swe:color-mode`), saved RSVP state (`swe:rsvp:*`) and the check-in desk's badge settings (`swe:checkin:id-card:*`). Browsers start with defaults. The Auth.js session and super-admin MFA cookie names are unchanged.
+- **Browser keys** were renamed from `yuyu.`/`yuyu:` to `swe.`/`swe:`: the check-in station cookie (`swe.check-in-station.v2`), the colour-mode cookie and storage key (`swe.color-mode`, `swe:color-mode`), saved RSVP state (`swe:rsvp:*`) and the check-in desk's badge settings (`swe:checkin:id-card:*`). Browsers start with defaults. The Auth.js session cookie names are unchanged. The staff authenticator proof cookie is `swe.mfa-proof.v1`.
 - **Redis** publishes live check-in updates on `swe:ticket-checkin:<rsvpId>`. Do not share a Redis instance between a Yuyu and a Space Works Events deployment.
 - **Outbox email** `Message-ID`s are `<swe-<id>@outbox.invalid>`.
 
@@ -45,8 +45,9 @@ When replacing the current hostname, update the two canonical URL variables, OAu
 - Publish privacy, cookie, acceptable-use, retention, and incident-response policies.
 - Define organiser data export approvals, account export/delete handling, retention periods, and a subprocessor register.
 - Run periodic restore drills, access reviews, dependency scans, load tests, and security tests.
-- Require high-risk organisers to enable authenticator MFA from `/account/security`; Google-based users must also be covered by the organisation's Google MFA policy. Super-admin access additionally requires a fresh TOTP step-up and cannot be used until application MFA is enrolled. Session revocation is available from the same page.
-- Set `TRUSTED_PROXY_IP_HEADER` to the one client-IP header your CDN overwrites; do not expose the application directly to the internet behind an arbitrary forwarded header.
+- Organisation staff must set up authenticator MFA from `/account/security` and confirm it each session; keep `STAFF_MFA_REQUIRED`, `LOGIN_NEW_DEVICE_CHECK` and `PWNED_PASSWORDS_CHECK` unset (on) in production. The super admin signs in with email and password set from the server, with no separate step-up; enabling authenticator MFA on that account is recommended. Session revocation is available from the same page.
+- Set `TRUSTED_PROXY_IP_HEADER` to the one client-IP header your CDN overwrites; do not expose the application directly to the internet behind an arbitrary forwarded header. A client whose request lacks that header reads as "unknown", and the per-address sign-in block never applies to it.
+- Allow outbound HTTPS to `api.pwnedpasswords.com` so the breached-password check works; it lets passwords through when the service can't be reached.
 - Preserve `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` across every container serving a release. Rotating it invalidates outstanding Server Action forms.
 
 ## Cover-image safety

@@ -8,6 +8,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/permissions";
 import { isSuperAdminEmail, SUPER_ADMIN_PASSWORD_HINT } from "@/lib/superAdminEmail";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPassword } from "@/lib/pwnedPasswords";
 import { hasRecentAuthentication } from "@/lib/reauth";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
@@ -127,6 +128,7 @@ export async function updateAccountPassword(
     };
   }
 
+  if (await isBreachedPassword(parsed.data.newPassword)) return { ok: false, error: BREACHED_PASSWORD_MESSAGE };
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const changed = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.updateMany({

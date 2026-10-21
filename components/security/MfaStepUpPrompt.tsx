@@ -6,9 +6,10 @@ import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
-import { verifySuperAdminMfa } from "@/app/actions/super-admin-mfa";
+import { verifyStepUpMfa } from "@/app/actions/mfa-step-up";
 
-export function SuperAdminMfaPrompt() {
+/** Staff who signed in without an authenticator code (Google) confirm one before the dashboard. */
+export function MfaStepUpPrompt({ next }: { next: string; }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -22,12 +23,12 @@ export function SuperAdminMfaPrompt() {
           event.preventDefault();
           startTransition(async () => {
             setError(null);
-            const result = await verifySuperAdminMfa({ code });
+            const result = await verifyStepUpMfa({ code });
             if (!result.ok) {
               setError(result.error);
               return;
             }
-            router.replace("/super-admin");
+            router.replace(next);
             router.refresh();
           });
         }}
@@ -36,8 +37,8 @@ export function SuperAdminMfaPrompt() {
           <ShieldCheck className="size-6" />
         </span>
         <div className="flex flex-col gap-2">
-          <h1 className="text-h1 text-ink">Verify super-admin access</h1>
-          <p className="text-body-ui text-ink-secondary">Enter a current code from your authenticator app. This separate verification expires after 10 minutes.</p>
+          <h1 className="text-h1 text-ink">Confirm it&apos;s you</h1>
+          <p className="text-body-ui text-ink-secondary">Organisation dashboards need a code from your authenticator app. You&apos;ll be asked again after 12 hours.</p>
         </div>
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
         <Field label="Six-digit authenticator code" required>
@@ -53,7 +54,6 @@ export function SuperAdminMfaPrompt() {
         <Button type="submit" variant="primary" size="lg" fullWidth loading={pending} loadingLabel="Verifying…" disabled={code.length !== 6}>
           Verify and continue
         </Button>
-        <p className="text-caption text-ink-muted">MFA is required for this panel. Set it up from Account security if it is not enabled.</p>
       </form>
     </div>
   );

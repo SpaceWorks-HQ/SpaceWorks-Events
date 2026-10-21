@@ -18,6 +18,9 @@ Copy `.env.example` to `.env` for local development. For the default free-tier p
 | `AUTH_GOOGLE_ID` | Legacy fallback | Google OAuth client ID; configure new instances in Super admin → Settings |
 | `AUTH_GOOGLE_SECRET` | Legacy fallback | Google OAuth client secret; configure new instances in Super admin → Settings |
 | `SUPER_ADMIN_EMAIL` | Recommended | Sole email allowed into the instance administration area. Its password is set only from the server (`scripts/vps-recover.sh` or `docker/vps/recover-super-admin.mjs`): the app refuses its sign-up, never emails it a reset link and hides its password form |
+| `STAFF_MFA_REQUIRED` | Optional | On unless set to `false`. Organisation staff (any membership or co-organiser grant) must set up an authenticator app and confirm it each session. `false` is for local development and tests only |
+| `LOGIN_NEW_DEVICE_CHECK` | Optional | On unless set to `false`. A password sign-in from a device the account hasn't used before needs a code emailed to the account. `false` is for tests only |
+| `PWNED_PASSWORDS_CHECK` | Optional | On unless set to `false`. New passwords are refused when found in Have I Been Pwned (k-anonymity; needs outbound HTTPS to `api.pwnedpasswords.com`). `false` for air-gapped installs and tests |
 
 ### Deployment example
 
@@ -69,7 +72,7 @@ Generate independent keys with `openssl rand -base64 32`. Rotating the Server Ac
 
 Do not expose the application directly while trusting a client-controlled forwarding header.
 
-Rate-limit windows are defined in code (`lib/rateLimit.ts`), not configured by environment. Recent buckets: `dataExport` (5 personal data exports per user per hour), `ticketStatus` (120 ticket status reads per IP per minute), `ticketEvents` (60 ticket event-stream connections per IP per minute), and `shortLink` (30 short-link lookups per IP per minute). The ticket buckets are generous because attendees at one venue often share a NAT address.
+Rate-limit windows are defined in code (`lib/rateLimit.ts`), not configured by environment. Recent buckets: `dataExport` (5 personal data exports per user per hour), `ticketStatus` (120 ticket status reads per IP per minute), `ticketEvents` (60 ticket event-stream connections per IP per minute), `shortLink` (30 short-link lookups per IP per minute), `loginFailureIp` (20 failed sign-ins per address per hour, then that address is blocked), `loginFailureAccount` (5 failed sign-ins per account in 15 minutes, then an emailed code is needed), and `loginCode` (5 sign-in codes emailed per account per hour). Without a trusted proxy header every client reads as "unknown", and "unknown" is never blocked. The ticket buckets are generous because attendees at one venue often share a NAT address.
 
 The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/event-stream` response. Any reverse proxy in front of the application must not buffer it (for nginx, `proxy_buffering off`; the route also sends `X-Accel-Buffering: no`) and must allow idle reads of at least 30 seconds.
 
@@ -81,7 +84,7 @@ The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/even
 | `SMTP_*` | Legacy fallback | SMTP settings; configure new instances in Super admin → Settings |
 | `OUTBOX_RETENTION_DAYS` | Optional | Retention for non-capability sent/failed outbox history; defaults to 30 (capability-bearing rows are deleted immediately after delivery or terminal failure) |
 
-Configure SMTP, Google SSO, and backup status under **Super admin → Settings**. SMTP and Google client secrets are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Environment values remain supported as migration fallbacks. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
+Configure SMTP, Google SSO, and backup status under **Super admin → Settings**. SMTP and Google client secrets are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and can be changed only by the super admin. Environment values remain supported as migration fallbacks. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
 
 ## Object storage
 

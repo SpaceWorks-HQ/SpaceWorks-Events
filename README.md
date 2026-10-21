@@ -72,7 +72,9 @@ Grouped the way an organiser's week actually goes.
 
 ### Run it safely
 
-- A separate **super admin** area behind authenticator-app **MFA** step-up, with instance settings and read-only insights.
+- Organisation staff must use an authenticator app (**MFA**), checked each session.
+- Sign-in protections: failure limits, an emailed code for a new device, new-sign-in alerts, and a breached-password check.
+- A separate **super admin** area, whose password is set only from the server, with instance settings and read-only insights.
 - Organisation isolation, role checks, audit events, rate limits, CSP nonces and private object storage.
 - A tenant-bound **machine API** with scoped, rotating credentials. See [Machine API v1](docs/API.md).
 - Personal data export, light and dark modes, and accessible defaults throughout.

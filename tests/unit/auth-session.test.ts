@@ -3,6 +3,14 @@ import type { NextAuthConfig } from "next-auth";
 import type { CredentialsConfig } from "next-auth/providers/credentials";
 
 const mocks = vi.hoisted(() => ({ config: null as unknown, find: vi.fn(), accountFind: vi.fn(), compare: vi.fn(), limit: vi.fn(), registrationEnabled: vi.fn(), consume: vi.fn(), recovery: vi.fn() }));
+const guard = vi.hoisted(() => ({
+  blocked: vi.fn(), failed: vi.fn(), attack: vi.fn(), locked: vi.fn(), known: vi.fn(), send: vi.fn(), consume: vi.fn(), remember: vi.fn(), check: vi.fn(),
+}));
+vi.mock("@/lib/loginSecurity", () => ({
+  isAddressBlocked: guard.blocked, noteFailedSignIn: guard.failed, accountUnderAttack: guard.attack, accountLocked: guard.locked,
+  knownDevice: guard.known, sendSignInCode: guard.send, consumeSignInCode: guard.consume, rememberSignIn: guard.remember,
+  newDeviceCheckEnabled: guard.check, deviceHash: (id?: string) => (id ? `hash-${id}` : null),
+}));
 vi.mock("next-auth", () => ({
   default: (factory: unknown) => { mocks.config = factory; return {}; },
   CredentialsSignin: class extends Error {},
@@ -24,6 +32,13 @@ beforeEach(async () => {
   mocks.find.mockResolvedValue({ id: "user_1", email: "person@example.test", emailVerified: new Date(), passwordHash: "hash", sessionVersion: 2 });
   mocks.accountFind.mockResolvedValue(null);
   mocks.registrationEnabled.mockResolvedValue(true);
+  guard.blocked.mockResolvedValue(false);
+  guard.attack.mockResolvedValue(false);
+  guard.locked.mockResolvedValue(false);
+  guard.known.mockResolvedValue({ known: true, firstDevice: false });
+  guard.send.mockResolvedValue(true);
+  guard.consume.mockResolvedValue(false);
+  guard.check.mockReturnValue(true);
 });
 const jwt = (args: unknown) => config.callbacks!.jwt!(args as Parameters<NonNullable<NonNullable<NextAuthConfig["callbacks"]>["jwt"]>>[0]);
 const authorize = (raw: Record<string, string>) => {
@@ -91,3 +106,51 @@ describe("authentication boundary", () => {
     } as Parameters<typeof callback>[0])).resolves.toBe("/login?error=account_creation_disabled");
   });
 });
+
+describe("sign-in protections", () => {
+  const rejectsWith = async (raw: Record<string, string>, code: string) => {
+    await expect(authorize(raw)).rejects.toMatchObject({ code });
+  };
+
+  it("blocks an address with too many recent failures before any password work", async () => {
+    guard.blocked.mockResolvedValue(true);
+    await rejectsWith({ email: "person@example.test", password: "password" }, "too_many_attempts");
+    expect(mocks.compare).not.toHaveBeenCalled();
+  });
+
+  it("counts a wrong password against the address and the account", async () => {
+    mocks.compare.mockResolvedValue(false);
+    expect(await authorize({ email: "person@example.test", password: "wrong" })).toBeNull();
+    expect(guard.failed).toHaveBeenCalledWith("unknown", "person@example.test");
+  });
+
+  it("emails a code for a device the account hasn't used, then signs in with it", async () => {
+    guard.known.mockResolvedValue({ known: false, firstDevice: false });
+    await rejectsWith({ email: "person@example.test", password: "password", device: "a".repeat(64) }, "email_code_required");
+    expect(guard.send).toHaveBeenCalledWith({ id: "user_1", email: "person@example.test" });
+    expect(guard.remember).not.toHaveBeenCalled();
+
+    expect(await authorize({ email: "person@example.test", password: "password", device: "a".repeat(64), emailCode: "000000" })).toBeNull();
+    guard.consume.mockResolvedValue(true);
+    expect(await authorize({ email: "person@example.test", password: "password", device: "a".repeat(64), emailCode: "123456" })).toMatchObject({ id: "user_1", mfaVerified: false });
+    expect(guard.remember).toHaveBeenCalledWith(expect.objectContaining({ userId: "user_1", hash: `hash-${"a".repeat(64)}`, firstDevice: false }));
+  });
+
+  it("trusts an account's very first device, and asks for a code after repeated failures even on a known one", async () => {
+    guard.known.mockResolvedValue({ known: false, firstDevice: true });
+    expect(await authorize({ email: "person@example.test", password: "password" })).toMatchObject({ id: "user_1" });
+    guard.known.mockResolvedValue({ known: true, firstDevice: false });
+    guard.attack.mockResolvedValue(true);
+    await rejectsWith({ email: "person@example.test", password: "password" }, "email_code_required");
+  });
+
+  it("takes an authenticator code instead of an emailed one, and marks the session as verified", async () => {
+    mocks.find.mockResolvedValue({ id: "user_1", email: "person@example.test", emailVerified: new Date(), passwordHash: "hash", sessionVersion: 2, mfaSecretEncrypted: "sealed" });
+    mocks.consume.mockResolvedValue(true);
+    guard.known.mockResolvedValue({ known: false, firstDevice: false });
+    expect(await authorize({ email: "person@example.test", password: "password", totp: "123456" })).toMatchObject({ id: "user_1", mfaVerified: true });
+    expect(guard.send).not.toHaveBeenCalled();
+    expect(await jwt({ token: {}, user: { id: "user_1", sessionVersion: 2, mfaVerified: true } })).toMatchObject({ mfaVerified: true });
+  });
+});
+
