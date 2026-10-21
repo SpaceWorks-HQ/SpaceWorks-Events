@@ -6,7 +6,7 @@ export async function loadEmailsPanel({ ctx }: { ctx: EventDashboardContext; }) 
   ctx = await loadEventDashboard(ctx.organisation.slug, ctx.event.id);
 
   const { event, permissions, organisation, now } = ctx;
-  if (!permissions.canManageRegistrations) notFound();
+  if (!permissions.canSendEmails) notFound();
   const [records, counts, branding] = await Promise.all([
     prisma.eventBroadcast.findMany({
       where: { eventId: event.id },

@@ -10,7 +10,7 @@ export async function loadAnalyticsPanel({ ctx }: { ctx: EventDashboardContext; 
   ctx = await loadEventDashboard(ctx.organisation.slug, ctx.event.id);
 
   const { event, permissions, now } = ctx;
-  if (!permissions.canManageRegistrations) notFound();
+  if (!permissions.canViewAnalytics) notFound();
 
   const [counts, feedback, signupDates] = await Promise.all([loadRsvpStatusCounts(event.id), loadFeedbackCount(event.id), loadAllSignupDates(event.id)]);
   const ended = event.endDateTime < now;

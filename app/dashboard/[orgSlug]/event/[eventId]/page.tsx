@@ -41,7 +41,7 @@ export default async function EventManagePage({ params }: Props) {
         stats={stats}
         actions={
           <>
-            {permissions.isAdmin && event.endDateTime < ctx.now ? <EventReportDownloadButton href={`/api/reports/event/${event.id}`} /> : null}
+            {permissions.canDownloadReports && event.endDateTime < ctx.now ? <EventReportDownloadButton href={`/api/reports/event/${event.id}`} /> : null}
             <Button asChild variant="secondary">
               <Link href={publicPath}>
                 View page

@@ -24,6 +24,7 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 - Organisation profile, slug, description, and logo management.
 - Member role changes and removals with owner-protection rules.
 - Expiring, revocable organisation invitation links.
+- Event and series co-organisers with exact grants: `EDIT_DETAILS` (page content, tickets and pricing), `MANAGE_REGISTRATIONS` (the guest list, approvals, manual guests, edits and removals, payment operations, the attendee CSV and registration numbers), `MANAGE_INVITATIONS` (the invite list), `CHECK_IN` (the check-in desk and badges) and `PUBLISH_AND_SCHEDULE` (the programme). Publishing, short links, the Details and registration forms, emails, feedback, reports and deleting stay with owners and admins (see [Permissions](PERMISSIONS.md)).
 - Organisation deletion and audited administrative changes.
 
 ## Events

@@ -42,6 +42,7 @@ export function GuestsPeople({
   truncated,
   registrationFields,
   ticketTypes = [],
+  canUndoCheckIn = true,
 }: {
   organisationSlug: string;
   target: GuestListTarget;
@@ -54,6 +55,8 @@ export function GuestsPeople({
   registrationFields: RegistrationFieldRow[];
   /** Events that sell tickets: what a manually added guest can be given. */
   ticketTypes?: Array<{ id: string; name: string; priceMinor: number; currency: string; }>;
+  /** Undo check-in is a CHECK_IN operation, separate from managing registrations. */
+  canUndoCheckIn?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -104,7 +107,7 @@ export function GuestsPeople({
       }
     },
     edit: (guest) => setEditGuest(guest),
-    undoCheckIn: eventId ? (guest) => setUndoGuest(guest) : undefined,
+    undoCheckIn: eventId && canUndoCheckIn ? (guest) => setUndoGuest(guest) : undefined,
     remove: (guest) => setRemoveGuest(guest),
     // Orders on an event, or on a series date or pass, are refunded the same way.
     payment: (guest) => setPaymentGuest(guest),

@@ -1,7 +1,7 @@
 import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { prisma } from "@/lib/db";
-import { canManageEvents, getMembership } from "@/lib/permissions";
+import { canManageRegistrationsFor } from "@/lib/eventAccess";
 import { PaymentOperationError } from "@/lib/payments/operations";
 import type { ActionResult } from "../org";
 
@@ -37,8 +37,8 @@ export async function loadRsvpContext(
   });
   if (!org) return { error: "Organisation not found." as const };
 
-  const membership = await getMembership(userId, org.id);
-  if (!canManageEvents(membership)) {
+  // Organisation OWNER/ADMIN, or the exact MANAGE_REGISTRATIONS grant on the event or series.
+  if (!(await canManageRegistrationsFor({ userId, organisationId: org.id, eventId, eventInstanceId }))) {
     return { error: "You do not have permission to manage attendees." as const };
   }
 
