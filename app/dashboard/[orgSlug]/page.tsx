@@ -9,7 +9,7 @@ import { CreateEventDialog } from "@/components/event/CreateEventDialog";
 import { CreateSeriesDialog } from "@/components/series/CreateSeriesDialog";
 import { PageHeader } from "@/components/ui/display";
 import { LiveEventPanel, NextUpCard, StatRow } from "@/components/dashboard/home/HomeSections";
-import { OrgBanner, OrgEventList, OrgInsightsPanel, OrgMiniCalendar, OrgSeriesPanel, OrgSettingsLink, OrgSetup, OrgTeamPanel, orgHref } from "@/components/dashboard/org/OrgSections";
+import { OrgBanner, OrgEventList, OrgInsightsPanel, OrgMiniCalendar, OrgRevenuePanel, OrgSeriesPanel, OrgSettingsLink, OrgSetup, OrgTeamPanel, orgHref } from "@/components/dashboard/org/OrgSections";
 
 import type { Metadata } from "next";
 
@@ -147,6 +147,7 @@ export default async function OrgDashboardPage({
             action={null}
           />
           {data.insights ? <OrgInsightsPanel insights={data.insights} /> : null}
+          {data.revenue ? <OrgRevenuePanel organisationSlug={organisation.slug} revenue={data.revenue} /> : null}
           <OrgTeamPanel members={data.members} membersHref={`${base}/members`} canInvite={canManageMembers(membership)} />
         </aside>
       </div>

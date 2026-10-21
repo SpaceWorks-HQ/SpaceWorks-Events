@@ -2,6 +2,8 @@ import "server-only";
 
 import type { EventPrivacyType, RegistrationFieldType, RsvpStatus, SponsorTier } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { loadRevenue } from "@/lib/payments/revenue";
+import type { RevenueSummary } from "@/lib/payments/revenueMetrics";
 
 export { createEventReportPdf } from "@/lib/eventReportPdf";
 
@@ -76,6 +78,8 @@ export type EventReportMetrics = ReportRsvpMetrics & {
   waitlist?: { joined: number; promoted: number } | null;
   /** Short-link visits, or null when the event has no short link. */
   shortLinkVisits?: number | null;
+  /** Takings: the tickets sold for this event (or, for a date, that date's own tickets). */
+  money?: RevenueSummary | null;
 };
 
 export function calculateReportRsvpMetrics(rsvps: ReportRsvp[]): ReportRsvpMetrics {
@@ -277,6 +281,7 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
     coOrganiserCount: event._count.collaborators,
     waitlist: { joined: event.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: event.rsvps.filter((rsvp) => rsvp.promotedAt).length },
     shortLinkVisits: event.shortCode ? event.shortLinkClickDays.reduce((sum, day) => sum + day.count, 0) : null,
+    money: await loadRevenue({ eventId: event.id }, event.timezone),
     ...calculateReportRsvpMetrics(event.rsvps),
   };
 }
@@ -335,6 +340,7 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
     checkInSources: countCheckInSources(checkedIn.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)),
     coOrganiserCount: instance.series._count.collaborators,
     waitlist: { joined: instance.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: instance.rsvps.filter((rsvp) => rsvp.promotedAt).length },
+    money: await loadRevenue({ eventInstanceId: instance.id }, instance.series.timezone),
     ...calculateReportRsvpMetrics(instance.rsvps),
   };
 }

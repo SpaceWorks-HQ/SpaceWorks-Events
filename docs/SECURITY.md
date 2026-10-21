@@ -96,6 +96,7 @@ This page documents implemented controls and security boundaries. It is not a su
   is category-only. Attendee answers and ticket capabilities require the exact
   registration-management permission; the check-in surface requires the
   separate exact check-in permission.
+- Machine order responses (`orders:read`) carry totals only: no buyer names or emails, order links, receipts, card details or payment provider IDs. The organiser's orders CSV and the event PDF are audited (`ORDERS_EXPORTED`, report downloads).
 - Machine participant responses intentionally exclude contact data, registration answers, user IDs, and ticket/check-in/certificate capabilities. Attendance filtering does not reveal check-in data; the nullable check-in timestamp requires the separate `participants:attendance:read` scope and an explicit `include=attendance` request.
 - Asset buckets are private; only generated organisation-bound WebP derivatives
   are delivered through the application key allowlist. Uploads are signature-

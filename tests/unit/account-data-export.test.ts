@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   rsvps: vi.fn(),
   responses: vi.fn(),
   collaborators: vi.fn(),
+  orders: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ auth: mocks.auth }));
@@ -22,6 +23,7 @@ vi.mock("@/lib/db", () => ({ prisma: {
   rSVP: { findMany: mocks.rsvps },
   eventFeedbackResponse: { findMany: mocks.responses },
   eventCollaborator: { findMany: mocks.collaborators },
+  order: { findMany: mocks.orders },
 } }));
 
 import { GET } from "@/app/api/exports/account/route";
@@ -37,6 +39,8 @@ const SECRETS = {
   access_token: "oauth-access-token",
   refresh_token: "oauth-refresh-token",
   id_token: "oauth-id-token",
+  orderAccessToken: "order-access-token-value",
+  externalPaymentId: "pay_provider_secretish",
 };
 
 /** Source rows polluted with secret columns, as if a loader over-selected. */
@@ -71,6 +75,19 @@ function pollutedSource(): AccountExportSource {
       answers: [{ fieldLabel: "Rating", valueText: null, valueBool: null, valueNumber: 5, valueDate: null }],
     }],
     collaborations: [{ permissions: ["CHECK_IN"], createdAt: new Date("2030-02-05T00:00:00Z"), event: { title: "Engines Meetup", organisation: { name: "Analytical Society" } }, series: null }],
+    orders: [{
+      reference: "SW-1001",
+      status: "PAID",
+      currency: "INR",
+      totalMinor: BigInt(150000),
+      createdAt: new Date("2030-02-01T00:00:00Z"),
+      accessToken: SECRETS.orderAccessToken,
+      organisation: { name: "Analytical Society" },
+      event: { title: "Engines Meetup" },
+      series: null,
+      lines: [{ description: "General", quantity: 2, totalMinor: BigInt(150000) }],
+      payments: [{ status: "PAID_ONLINE", amountMinor: BigInt(150000), paidAt: new Date("2030-02-01T00:01:00Z"), methodSummary: "Visa •••• 4242", externalPaymentId: SECRETS.externalPaymentId, refunds: [{ amountMinor: BigInt(50000), status: "SUCCEEDED", createdAt: new Date("2030-02-10T00:00:00Z") }] }],
+    }],
   };
   return source as unknown as AccountExportSource;
 }
@@ -98,11 +115,18 @@ describe("account data export shaping", () => {
     });
     expect(data.feedback[0]).toMatchObject({ certificateIssued: true, answers: [{ question: "Rating", answer: 5 }] });
     expect(data.eventCollaborations[0]).toMatchObject({ event: "Engines Meetup", type: "event", permissions: ["CHECK_IN"] });
+    expect(data.orders[0]).toMatchObject({
+      reference: "SW-1001",
+      event: "Engines Meetup",
+      total: "1500.00",
+      items: [{ description: "General", quantity: 2, amount: "1500.00" }],
+      payments: [{ status: "PAID_ONLINE", amount: "1500.00", method: "Visa •••• 4242", refunds: [{ amount: "500.00", status: "SUCCEEDED" }] }],
+    });
   });
 
   it("never copies secrets, hashes, or bearer tokens into the file", () => {
     const json = JSON.stringify(buildAccountDataExport(pollutedSource()));
-    for (const value of [SECRETS.passwordHash, SECRETS.mfaSecretEncrypted, SECRETS.recoveryCodeHashes[0], SECRETS.checkInToken, SECRETS.certificateToken, SECRETS.access_token, SECRETS.refresh_token, SECRETS.id_token]) {
+    for (const value of [SECRETS.passwordHash, SECRETS.mfaSecretEncrypted, SECRETS.recoveryCodeHashes[0], SECRETS.checkInToken, SECRETS.certificateToken, SECRETS.access_token, SECRETS.refresh_token, SECRETS.id_token, SECRETS.orderAccessToken, SECRETS.externalPaymentId]) {
       expect(json).not.toContain(value);
     }
     for (const key of ["passwordHash", "mfaSecret", "recoveryCode", "sessionVersion", "checkInToken", "certificateToken", "access_token", "refresh_token", "id_token"]) {
@@ -122,6 +146,7 @@ describe("account data export route", () => {
     mocks.rsvps.mockResolvedValue([]);
     mocks.responses.mockResolvedValue([]);
     mocks.collaborators.mockResolvedValue([]);
+    mocks.orders.mockResolvedValue([]);
   });
 
   it("requires a signed-in user and reads nothing otherwise", async () => {

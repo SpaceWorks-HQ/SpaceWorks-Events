@@ -2,6 +2,7 @@ import "server-only";
 
 import type { EventPermission, MembershipRole, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { minorToDecimalString } from "@/lib/payments/money";
 
 /**
  * Per-collection safety cap. A personal export is the user's own data, so the
@@ -44,6 +45,18 @@ export type AccountExportSource = {
     createdAt: Date;
     event: { title: string; organisation: { name: string } } | null;
     series: { title: string; organisation: { name: string } } | null;
+  }>;
+  orders: Array<{
+    reference: string;
+    status: string;
+    currency: string;
+    totalMinor: bigint;
+    createdAt: Date;
+    organisation: { name: string };
+    event: { title: string } | null;
+    series: { title: string } | null;
+    lines: Array<{ description: string; quantity: number; totalMinor: bigint }>;
+    payments: Array<{ status: string; amountMinor: bigint; paidAt: Date | null; methodSummary: string | null; refunds: Array<{ amountMinor: bigint; status: string; createdAt: Date }> }>;
   }>;
 };
 
@@ -122,11 +135,32 @@ export function buildAccountDataExport(source: AccountExportSource, generatedAt:
         addedAt: collaboration.createdAt.toISOString(),
       }];
     }),
+    orders: cap(source.orders).map((order) => {
+      const amount = (minor: bigint) => minorToDecimalString(minor, order.currency);
+      return {
+        reference: order.reference,
+        event: order.event?.title ?? order.series?.title ?? null,
+        organisation: order.organisation.name,
+        status: order.status,
+        placedAt: order.createdAt.toISOString(),
+        currency: order.currency,
+        total: amount(order.totalMinor),
+        items: order.lines.map((line) => ({ description: line.description, quantity: line.quantity, amount: amount(line.totalMinor) })),
+        payments: order.payments.map((payment) => ({
+          status: payment.status,
+          amount: amount(payment.amountMinor),
+          paidAt: iso(payment.paidAt),
+          method: payment.methodSummary,
+          refunds: payment.refunds.map((refund) => ({ amount: amount(refund.amountMinor), status: refund.status, requestedAt: refund.createdAt.toISOString() })),
+        })),
+      };
+    }),
     truncated: {
       memberships: source.memberships.length > ACCOUNT_EXPORT_LIMIT,
       registrations: source.registrations.length > ACCOUNT_EXPORT_LIMIT,
       feedback: source.feedback.length > ACCOUNT_EXPORT_LIMIT,
       eventCollaborations: source.collaborations.length > ACCOUNT_EXPORT_LIMIT,
+      orders: source.orders.length > ACCOUNT_EXPORT_LIMIT,
     },
   };
 }
@@ -142,7 +176,7 @@ const answerSelect = { valueText: true, valueBool: true, valueNumber: true, valu
  */
 export async function loadAccountExportSource(userId: string): Promise<AccountExportSource | null> {
   const take = ACCOUNT_EXPORT_LIMIT + 1;
-  const [user, signInProviders, memberships, registrations, feedback, collaborations] = await Promise.all([
+  const [user, signInProviders, memberships, registrations, feedback, collaborations, orders] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
       select: { name: true, email: true, emailVerified: true, createdAt: true, mfaEnabledAt: true },
@@ -190,7 +224,25 @@ export async function loadAccountExportSource(userId: string): Promise<AccountEx
         series: { select: { title: true, organisation: { select: { name: true } } } },
       },
     }),
+    // Orders the user placed while signed in. The order link and provider IDs stay out.
+    prisma.order.findMany({
+      where: { buyerUserId: userId },
+      orderBy: { createdAt: "desc" },
+      take,
+      select: {
+        reference: true,
+        status: true,
+        currency: true,
+        totalMinor: true,
+        createdAt: true,
+        organisation: { select: { name: true } },
+        event: { select: { title: true } },
+        series: { select: { title: true } },
+        lines: { select: { description: true, quantity: true, totalMinor: true } },
+        payments: { select: { status: true, amountMinor: true, paidAt: true, methodSummary: true, refunds: { select: { amountMinor: true, status: true, createdAt: true } } } },
+      },
+    }),
   ]);
   if (!user) return null;
-  return { user, signInProviders, memberships, registrations, feedback, collaborations };
+  return { user, signInProviders, memberships, registrations, feedback, collaborations, orders };
 }

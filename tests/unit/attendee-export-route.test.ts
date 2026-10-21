@@ -72,7 +72,7 @@ describe("full attendee CSV export route", () => {
     expect(response.headers.get("content-disposition")).toMatch(/^attachment; filename="attendees_Test_Event_\d{4}-\d{2}-\d{2}\.csv"$/);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-    await expect(response.text()).resolves.toContain("Ada Lovelace,ada@example.test,CONFIRMED,2030-01-02T03:04:05.000Z,,https://events.example.test/ticket/secret-token,Analytical Engines");
+    await expect(response.text()).resolves.toContain("Ada Lovelace,ada@example.test,CONFIRMED,2030-01-02T03:04:05.000Z,,https://events.example.test/ticket/secret-token,,,,,Analytical Engines");
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "ATTENDEE_LIST_EXPORTED", organisationId: "org_1", targetId: "event_1" }));
     expect(mocks.rsvps).toHaveBeenCalledTimes(2);
   });

@@ -1,4 +1,4 @@
-import { EventPrivacyType, EventStatus } from "@prisma/client";
+import { EventPrivacyType, EventStatus, OrderStatus } from "@prisma/client";
 import { z } from "zod";
 
 export const apiResourceIdSchema = z.string().trim().min(1).max(128);
@@ -53,9 +53,27 @@ export const participantDtoSchema = z.object({
   checkedInAt: z.string().datetime().nullable().optional(),
 }).strict();
 
+/** Money as a major-unit decimal string ("1500.00"); no buyer contact data or provider IDs. */
+export const orderDtoSchema = z.object({
+  id: z.string(),
+  reference: z.string(),
+  status: z.nativeEnum(OrderStatus),
+  currency: z.string(),
+  total: z.string(),
+  paid: z.string(),
+  refunded: z.string(),
+  tickets: z.number().int(),
+  testMode: z.boolean(),
+  placedAt: z.string().datetime(),
+}).strict();
+
 export const eventResponseSchema = z.object({ data: eventDtoSchema }).strict();
 export const eventsResponseSchema = z.object({
   data: z.array(eventDtoSchema),
+  pagination: z.object({ nextCursor: z.string().nullable() }).strict(),
+}).strict();
+export const ordersResponseSchema = z.object({
+  data: z.array(orderDtoSchema),
   pagination: z.object({ nextCursor: z.string().nullable() }).strict(),
 }).strict();
 export const participantsResponseSchema = z.object({

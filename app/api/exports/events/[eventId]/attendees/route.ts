@@ -2,6 +2,7 @@ import { EventPermission } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import { buildCsv } from "@/lib/csv";
+import { minorToDecimalString } from "@/lib/payments/money";
 import { prisma } from "@/lib/db";
 import { getMembership, isOrgAdmin } from "@/lib/permissions";
 import { getRequestOrigin } from "@/lib/publicUrl";
@@ -79,7 +80,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        controller.enqueue(encoder.encode(`\uFEFF${buildCsv([["Name", "Email", "Status", "Registration Date", "Checked In At", "Ticket URL", ...fields.map((field) => field.label)]])}\n`));
+        controller.enqueue(encoder.encode(`\uFEFF${buildCsv([["Name", "Email", "Status", "Registration Date", "Checked In At", "Ticket URL", "Ticket", "Order", "Order status", "Order total", ...fields.map((field) => field.label)]])}\n`));
         let cursor: string | undefined;
 
         while (true) {
@@ -90,6 +91,8 @@ export async function GET(_request: Request, context: RouteContext) {
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: {
               user: { select: { name: true, email: true } },
+              ticketType: { select: { name: true } },
+              order: { select: { reference: true, status: true, totalMinor: true, currency: true } },
               answers: { select: { fieldId: true, valueText: true, valueBool: true, valueNumber: true, valueDate: true } },
             },
           });
@@ -104,6 +107,10 @@ export async function GET(_request: Request, context: RouteContext) {
               rsvp.createdAt.toISOString(),
               rsvp.checkedInAt?.toISOString() ?? "",
               `${origin}/ticket/${rsvp.checkInToken}`,
+              rsvp.ticketType?.name ?? "",
+              rsvp.order?.reference ?? "",
+              rsvp.order?.status ?? "",
+              rsvp.order ? `${rsvp.order.currency} ${minorToDecimalString(rsvp.order.totalMinor, rsvp.order.currency)}` : "",
               ...fields.map((field) => answers.get(field.id) ?? ""),
             ];
           });

@@ -10,6 +10,7 @@ import { arrivalWindows, busiestDay, percentOf, signupTimeline } from "@/compone
 // The PDF and the Analytics tab share one implementation.
 export { arrivalWindows };
 import type { EventReportMetrics, ReportQuestion } from "@/lib/eventReport";
+import { hasRevenue } from "@/lib/payments/revenueMetrics";
 import { formatDate, formatDateBlock, formatDayLong, formatTime, formatTimeRange, formatTimeZoneName } from "@/lib/format/datetime";
 import { getAccentTokens } from "@/lib/theme/accent";
 import { safeTimeZone } from "@/lib/timeZone";
@@ -600,6 +601,39 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
     }
   }
 
+  // ---------- Money ----------
+
+  const money = metrics.money;
+  if (money && hasRevenue(money)) {
+    // Currency codes rather than symbols: the report's fonts may not carry every sign.
+    const amount = (minor: number) => `${money.currency} ${new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(minor / 100)}`;
+    section("Money", "Money", money.testOnly
+      ? "Every payment was a test, so no real money moved."
+      : metrics.targetType === "occurrence" ? "Tickets bought for this date. Passes cover several dates and are in the series' own figures." : "What tickets brought in, after refunds.");
+    const refunds = money.refundedMinor + money.refundPendingMinor;
+    const rows: Array<[string, string]> = [
+      ["Collected", `${amount(money.collectedMinor)} from ${plural(money.orders.paid, "paid order")}`],
+      ["Refunded", `${amount(refunds)}${money.refundPendingMinor > 0 ? `, ${amount(money.refundPendingMinor)} still on its way` : ""}`],
+      ["Net", amount(money.netMinor)],
+    ];
+    if (money.discountMinor > 0) rows.push(["Promo discounts", amount(money.discountMinor)]);
+    if (money.feesMinor > 0) rows.push(["Booking fees", amount(money.feesMinor)]);
+    if (money.addOnsMinor > 0) rows.push(["Extras", amount(money.addOnsMinor)]);
+    if (money.orders.complimentary > 0) rows.push(["Complimentary", `${plural(money.orders.complimentary, "order")}, worth ${amount(money.complimentaryValueMinor)}`]);
+    if (money.owedAtDeskMinor > 0) rows.push(["Still owed at the desk", amount(money.owedAtDeskMinor)]);
+    if (money.automaticRefundMinor > 0) rows.push(["Late or duplicate payments returned", amount(money.automaticRefundMinor)]);
+    if (money.disputes.open > 0 || money.disputes.lost > 0) rows.push(["Chargebacks", `${money.disputes.open} open (${amount(money.disputes.openMinor)}), ${money.disputes.lost} lost (${amount(money.disputes.lostMinor)})`]);
+    facts(rows);
+    if (money.byTicket.length) {
+      subheading("By ticket", "Takings for each ticket, before refunds.");
+      facts(money.byTicket.map((row) => [row.name, `${amount(row.revenueMinor)} · ${plural(row.tickets, "ticket")}`]));
+    }
+    if (money.byMethod.length) {
+      subheading("How people paid");
+      facts(money.byMethod.map((row) => [row.label, `${amount(row.amountMinor)} · ${plural(row.payments, "payment")}`]));
+    }
+  }
+
   // ---------- Programme ----------
 
   const sessions = metrics.sessions ?? [];
@@ -736,7 +770,7 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
   drawText(page, "About this report", aboutX, y - 32, T.heading(13));
   const generated = `Report generated on ${formatDayLong(now, tz, new Date(0))} at ${formatTime(now, tz)} ${formatTimeZoneName(now, tz)}`;
   drawText(page, generated, aboutX, y - 52, T.strong(10));
-  const about = `Numbers reflect what Space Works Events recorded at that moment. Times are in ${formatTimeZoneName(metrics.startDateTime, tz)} (${tz}). This report holds counts only: no guest is named, and no email address, phone number, ticket or written answer is included. Keep it with your event records, or share it with your team, partners and sponsors.`;
+  const about = `Numbers reflect what Space Works Events recorded at that moment. Times are in ${formatTimeZoneName(metrics.startDateTime, tz)} (${tz}). This report holds counts and totals only: no guest is named, and no email address, phone number, ticket or written answer is included. Keep it with your event records, or share it with your team, partners and sponsors.`;
   const aboutLines = wrap(about, T.body(9.5), PAGE[0] - MARGIN - 18 - aboutX);
   aboutLines.slice(0, 5).forEach((line, index) => drawText(page, line, aboutX, y - 74 - index * 14, T.body(9.5)));
   y -= 152;
@@ -745,7 +779,7 @@ export async function createEventReportPdf(metrics: EventReportMetrics, now = ne
 
   pages.forEach((current, index) => {
     current.drawLine({ start: { x: MARGIN, y: 52 }, end: { x: PAGE[0] - MARGIN, y: 52 }, thickness: 0.75, color: C.border });
-    drawText(current, "Space Works Events  ·  Counts only, no guest is named", MARGIN, 28, T.body(8, C.textMuted));
+    drawText(current, "Space Works Events  ·  Counts and totals only, no guest is named", MARGIN, 28, T.body(8, C.textMuted));
     const label = `Page ${index + 1} of ${pages.length}`;
     drawText(current, label, PAGE[0] - MARGIN - textWidth(label, T.strong(8, C.textMuted)), 28, T.strong(8, C.textMuted));
   });
