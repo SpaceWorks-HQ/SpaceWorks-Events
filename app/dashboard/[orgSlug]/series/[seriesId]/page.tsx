@@ -4,6 +4,8 @@ import { SeriesInvitePanel } from "@/components/invites/SeriesInvitePanel";
 import { GuestsPeople } from "@/components/event-dashboard/panels/GuestsPeople";
 import { ScheduleManager } from "@/components/schedule/ScheduleManager";
 import { SeriesDatesManager } from "@/components/series/SeriesDatesManager";
+import { MoneyCard } from "@/components/event-dashboard/analytics/AnalyticsSections";
+import { hasRevenue } from "@/lib/payments/revenueMetrics";
 import { TicketTypesManager } from "@/components/event-dashboard/settings/TicketTypesManager";
 import { AddOnsManager } from "@/components/event-dashboard/settings/AddOnsManager";
 import { PromoCodesManager, RefundPolicyControl, TransfersControl } from "@/components/event-dashboard/settings/PromoCodesManager";
@@ -24,7 +26,7 @@ function eventDateInput(date: Date, timeZone: string) {
 }
 
 export default async function SeriesManagePage({ params }: Props) {
-  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup, dates, tickets } = await loadSeriesManageView({ params });
+  const { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup, dates, tickets, revenue } = await loadSeriesManageView({ params });
   return (
     <div className="flex flex-col gap-8">
       <PageHeader title={series.title} description="Manage this recurring event and its upcoming occurrences." />
@@ -81,6 +83,8 @@ export default async function SeriesManagePage({ params }: Props) {
           ) : null}
         </section>
       ) : null}
+
+      {revenue && hasRevenue(revenue) ? <MoneyCard revenue={revenue} title="Money across the series" exportHref={`/api/exports/series/${series.id}/orders`} /> : null}
 
       {canDownloadReports ? (
         <section aria-labelledby="series-reports-title" className="flex flex-col gap-3">

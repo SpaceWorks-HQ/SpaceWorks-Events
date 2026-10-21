@@ -20,6 +20,7 @@ import { monthGrid, monthKey, parseMonth, shiftMonth, toDotLevels, turnout, week
 import { describeRecurrence } from "@/lib/format/recurrence";
 import { getAccentTokens } from "@/lib/theme/accent";
 import { safeTimeZone } from "@/lib/timeZone";
+import { loadOrganisationRevenue } from "@/lib/payments/revenue";
 
 /*
  * Data for one organisation's workspace (app/dashboard/[orgSlug]/page.tsx).
@@ -67,7 +68,11 @@ export type OrgDashboard = {
   setup: { hasProfile: boolean; hasEvent: boolean; hasTeam: boolean; hasPublished: boolean; } | null;
   /** Organisers only: the best-attended recent events and how many people come back. */
   insights: OrgInsights | null;
+  /** Organisers only: money taken over the same window, per currency. */
+  revenue: OrgRevenue | null;
 };
+
+export type OrgRevenue = { windowDays: number; currencies: Awaited<ReturnType<typeof loadOrganisationRevenue>>; };
 
 export type OrgInsights = {
   windowDays: number;
@@ -357,9 +362,12 @@ export async function getOrgDashboard(input: {
       returning: returningShare([...byEvent.values()]),
     };
   }
+  const takings = canManage ? await loadOrganisationRevenue(organisation.id, { since: new Date(now.getTime() - INSIGHT_DAYS * DAY_MS), timeZone: "UTC", now }) : [];
+  const revenue: OrgRevenue | null = takings.length ? { windowDays: INSIGHT_DAYS, currencies: takings } : null;
 
   return {
     insights,
+    revenue,
     members,
     needsYou,
     next,

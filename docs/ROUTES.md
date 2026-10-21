@@ -85,6 +85,7 @@ Every super-admin page additionally requires a current TOTP verification, and ea
 | `/api/auth/*` | Auth.js | Session, provider, callback, and credential endpoints |
 | `GET /api/v1/events` | Machine bearer credential + `events:read` | Paginated tenant event metadata |
 | `GET /api/v1/events/:eventId` | Machine bearer credential + `events:read` | Tenant-scoped event metadata |
+| `GET /api/v1/events/:eventId/orders` | Machine bearer credential + `orders:read` | Paginated order totals for one event; no buyer contact data, links or provider IDs |
 | `GET /api/v1/events/:eventId/participants` | Machine bearer credential + `participants:read` | Paginated minimal confirmed-participant roster, with attendance filtering; `include=attendance` also requires `participants:attendance:read` |
 
 Opaque ticket and certificate URLs are bearer capabilities. Do not log them or place them in analytics payloads.

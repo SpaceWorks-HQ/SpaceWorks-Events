@@ -1,3 +1,4 @@
+import { loadRevenue } from "@/lib/payments/revenue";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
 import { loadAllSignupDates, loadFeedbackCount } from "@/lib/eventDashboard/overview";
@@ -99,7 +100,8 @@ export async function loadAnalyticsPanel({ ctx }: { ctx: EventDashboardContext; 
     ? { code: shortLink.shortCode, series: clickSeries(shortLink.shortLinkClickDays.map((row) => ({ day: row.day.toISOString().slice(0, 10), count: row.count })), localDateKey(now, event.timezone)) }
     : null;
 
-  return { event, permissions, now, counts, feedback, signupDates, ended, steps, checkedIn, summary, parts, capacity, turnout, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks };
+  const revenue = await loadRevenue({ eventId: event.id }, event.timezone, now);
+  return { event, permissions, now, counts, feedback, signupDates, ended, steps, checkedIn, summary, parts, capacity, turnout, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks, revenue };
 }
 
 import { notFound } from "next/navigation";

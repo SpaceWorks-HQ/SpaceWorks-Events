@@ -2,14 +2,15 @@ import { loadAnalyticsPanel } from "@/lib/views/components__event-dashboard__pan
 import { EventReportDownloadButton } from "@/components/reports/EventReportDownloadButton";
 import { EmptyState } from "@/components/ui/display";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
-import { ArrivalsCard, CheckInMethodsCard, FunnelCard, KeyNumbers, QuestionsCard, ShortLinkCard, StatusMixCard, TimelineCard, WaitlistCard } from "../analytics/AnalyticsSections";
+import { ArrivalsCard, CheckInMethodsCard, FunnelCard, KeyNumbers, MoneyCard, QuestionsCard, ShortLinkCard, StatusMixCard, TimelineCard, WaitlistCard } from "../analytics/AnalyticsSections";
+import { hasRevenue } from "@/lib/payments/revenueMetrics";
 import { NoPermission } from "./shared";
 
 /** Analytics tab: registration numbers are organisation-admin only, like the RSVP actions and the PDF report. */
 export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext; }) {
   const { permissions } = ctx;
   if (!permissions.canManageRegistrations) return <NoPermission>You do not have permission to see registration numbers for this event.</NoPermission>;
-  const { event, counts, ended, steps, summary, parts, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks } = await loadAnalyticsPanel({ ctx });
+  const { event, counts, ended, steps, summary, parts, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks, revenue } = await loadAnalyticsPanel({ ctx });
   const charted = questions.filter((question) => question.answered > 0);
   return (
     <div className="flex flex-col gap-6">
@@ -23,6 +24,7 @@ export async function AnalyticsPanel({ ctx }: { ctx: EventDashboardContext; }) {
       ) : (
         <>
           <KeyNumbers items={keyNumbers} />
+          {revenue && hasRevenue(revenue) ? <MoneyCard revenue={revenue} exportHref={`/api/exports/events/${event.id}/orders`} /> : null}
           <FunnelCard steps={steps} summary={summary} />
           <div className="grid gap-5 lg:grid-cols-2">
             <StatusMixCard parts={parts} />

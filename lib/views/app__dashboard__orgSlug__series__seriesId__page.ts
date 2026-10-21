@@ -7,6 +7,7 @@ import { canViewEventDashboard } from "@/lib/eventAccess";
 import { percentOf } from "@/components/event-dashboard/analytics/metrics";
 import { seatTakingWhere } from "@/lib/payments/holds";
 import { loadTicketSettings } from "@/lib/payments/ticketSettings";
+import { loadRevenue } from "@/lib/payments/revenue";
 import { attendeeOrder, attendeeOrderSelect } from "@/lib/eventDashboard/data";
 type Props = { params: Promise<{ orgSlug: string; seriesId: string; }>; };
 const MAX_BROWSER_ATTENDEES = 250;
@@ -106,5 +107,7 @@ export async function loadSeriesManageView({ params }: Props) {
     const totalCame = rows.reduce((sum, row) => sum + row.came, 0);
     rollup = { rows, averageTurnout: percentOf(totalCame, totalGoing), totalCame };
   }
-  return { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup, dates, tickets };
+  // Takings across every date and pass, for those who manage registrations.
+  const revenue = canManageRegistrations ? await loadRevenue({ eventSeriesId: series.id }, series.timezone, now) : null;
+  return { series, isAdmin, organisation, canManageInvites, invites, canManageSchedule, canDownloadReports, finishedInstances, firstInstanceId, canManageRegistrations, now, attendees, attendeesTruncated, rollup, dates, tickets, revenue };
 }

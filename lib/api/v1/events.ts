@@ -7,8 +7,10 @@ import {
   eventDtoSchema,
   eventResponseSchema,
   eventsResponseSchema,
+  ordersResponseSchema,
   participantsResponseSchema,
 } from "@/lib/api/v1/schemas";
+import { minorToDecimalString } from "@/lib/payments/money";
 import type { ParticipantAttendance } from "@/lib/api/v1/schemas";
 
 const eventSelect = {
@@ -126,6 +128,44 @@ export async function listApiParticipants(
       displayName: row.user?.name?.trim() || row.guestName?.trim() || "Participant",
       registeredAt: row.createdAt.toISOString(),
       ...(includeAttendance ? { checkedInAt: row.checkedInAt?.toISOString() ?? null } : {}),
+    })),
+    pagination: { nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null },
+  });
+}
+
+/** An event's orders, newest first, as totals only: no buyer contact data, no links or provider IDs. */
+export async function listApiOrders(organisationId: string, eventId: string, limit: number, cursor: ApiCursor | null) {
+  const event = await prisma.event.findFirst({ where: { id: eventId, organisationId }, select: { id: true } });
+  if (!event) return null;
+  const rows = await prisma.order.findMany({
+    where: {
+      eventId: event.id,
+      ...(cursor ? { OR: [{ createdAt: { lt: new Date(cursor.timestamp) } }, { createdAt: new Date(cursor.timestamp), id: { lt: cursor.id } }] } : {}),
+    },
+    select: {
+      id: true, reference: true, status: true, currency: true, totalMinor: true, testMode: true, createdAt: true,
+      _count: { select: { rsvps: true } },
+      payments: { where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE"] } }, select: { amountMinor: true, refunds: { where: { status: "SUCCEEDED" }, select: { amountMinor: true } } } },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: limit + 1,
+  });
+  const hasMore = rows.length > limit;
+  const page = rows.slice(0, limit);
+  const last = page.at(-1);
+  const zero = BigInt(0);
+  return ordersResponseSchema.parse({
+    data: page.map((row) => ({
+      id: row.id,
+      reference: row.reference,
+      status: row.status,
+      currency: row.currency,
+      total: minorToDecimalString(row.totalMinor, row.currency),
+      paid: minorToDecimalString(row.payments.reduce((sum, payment) => sum + payment.amountMinor, zero), row.currency),
+      refunded: minorToDecimalString(row.payments.flatMap((payment) => payment.refunds).reduce((sum, refund) => sum + refund.amountMinor, zero), row.currency),
+      tickets: row._count.rsvps,
+      testMode: row.testMode,
+      placedAt: row.createdAt.toISOString(),
     })),
     pagination: { nextCursor: hasMore && last ? encodeCursor(last.createdAt, last.id) : null },
   });
