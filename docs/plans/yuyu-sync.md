@@ -81,10 +81,30 @@ The owner approved items 1 to 4 and deferred the mobile API. All of them are por
    - Hardened after review: alert text has mentions, line breaks and backticks neutralised, and runs of 20+ characters redacted (ticket and transfer tokens are 24). Browser crash reports have their own budget of 5 alerts a minute.
 4. **CI** (`b4db91c`, `a2ac77b`): both e2e steps trust `cf-connecting-ip`; the smoke test prints container logs on failure and checks that sharp loads.
 
+## Second sync (`feat/yuyu-sync-2`, 22 Oct 2026)
+
+Yuyu added 8 commits on 21 Oct. All were ported except `e668935` (Yuyu's branching policy):
+
+- **Co-organiser permissions** (`b442ae3`, docs `a143721`). One capability object (`lib/eventDashboard/capabilities.ts`) drives the dashboard and its view readers.
+  - `MANAGE_REGISTRATIONS` reaches the guest list and RSVP actions through `canManageRegistrationsFor`, matching payment operations.
+  - `dev` adds a ticket flag (`EDIT_DETAILS`), and `docs/PERMISSIONS.md` has rows for tickets, payment operations and revenue.
+  - The attendee CSV now goes through `canAccessEvent`, so a collaborator also needs a confirmed authenticator.
+  - Upstream's e2e spec isn't ported: it signs co-organisers in without the staff authenticator `dev` requires.
+- **Email drafts with autosave** (`aab425f`, `4133c6f`), with migration `20261102000000_event_broadcast_drafts`. Emails stay owner/admin only.
+- **Re-accept a declined registration** (`f05c65a`, tests `50f0f53` and `a4f412b`).
+  - A free registration is confirmed, or waitlisted when full.
+  - A paid request goes back through the payment flow (`lib/payments/operations/reaccept.ts`): it is offered its places with a payment link, or waitlisted as a request, and is never confirmed without payment.
+  - The e2e spec isn't ported.
+
+Done from the follow-ups:
+
+- **Alert webhook:** it must resolve to a public address (`lib/opsWebhookAddress.ts`). It is checked on save and before every post, and `OPS_WEBHOOK_ALLOW_PRIVATE=1` allows a LAN chat server.
+- **Secrets check:** `scripts/check-instance-secrets.mjs` also checks each organisation's mail server password, chat channel credentials, payment keys and station PINs.
+- **Weekly Yuyu check:** it skips commits named on "cherry picked from Yuyu <hash>" lines in `dev` and those listed in `.github/yuyu-reviewed.txt`, and lists each commit once.
+
 ## Follow-ups
 
-- **Mobile API** (`/api/mobile/v1`): its own project, rebuilt on `dev`'s paid-event flows.
-- The alert webhook test (`sendOpsWebhookTest`) accepts any https URL, including private addresses, and reports the HTTP status, so a super admin could use it to probe internal hosts. It needs super-admin MFA. Consider the organisation SMTP's public-address check, with an explicit opt-in for a LAN Mattermost.
-- `scripts/check-instance-secrets.mjs` checks the instance secrets and MFA seeds only. It could also check the per-organisation secrets (payment keys, organisation SMTP), which use their own subkey.
+- **Mobile API** (`/api/mobile/v1`): its own project, rebuilt on `dev`'s paid-event flows. It is listed as deferred in `.github/yuyu-reviewed.txt`.
+- **E2E coverage:** the co-organiser and re-accept browser specs need the staff authenticator in the e2e setup.
 
 Left out on purpose: the redesign e2e suite, and Yuyu's docs and policy commits.
