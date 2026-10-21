@@ -68,7 +68,7 @@ The owner approved items 1 to 4 and deferred the mobile API. All of them are por
 1. **Event publication** (`9829c15`, `214e3ab`), with the repair migration renamed `20261031000100_realign_event_publication`.
 2. **Instance settings** (`d377284`, `6c3c4b7`, `8a45d80`). Adapted to `dev`:
    - The platform transport is `getPlatformTransport` in `lib/email/transporter.ts`. Per-organisation sending is unchanged.
-   - The fail-safe for an unreadable Google secret is inside `getGoogleSsoSettings`, so `lib/auth.ts` and the login page are untouched.
+   - The fail-safe for an unreadable Google secret is inside `getGoogleSsoSettings`, which `lib/auth.ts` already calls. There is no super-admin authenticator step-up on `dev`, and none is brought back.
    - Upstream's page changes went into `dev`'s view readers (`lib/views/app__super-admin__*`).
    - An organisation that sends through its own server no longer depends on the platform transport being usable.
    - The Settings page's direct test send is `sendSettingsTestEmail`. `dev`'s existing outbox test send on Operations stays.
@@ -77,13 +77,12 @@ The owner approved items 1 to 4 and deferred the mobile API. All of them are por
    - Beat job failures alert too.
    - The webhook column is on the split gateway's forbidden-field list.
    - The settings view reader returns only the webhook host.
+   - After `feat/login-security` merged, the Auth.js logger reports sign-in failures with their error type. `dev` already had upstream's login-page copy change.
    - Hardened after review: alert text has mentions, line breaks and backticks neutralised, and runs of 20+ characters redacted (ticket and transfer tokens are 24). Browser crash reports have their own budget of 5 alerts a minute.
 4. **CI** (`b4db91c`, `a2ac77b`): both e2e steps trust `cf-connecting-ip`; the smoke test prints container logs on failure and checks that sharp loads.
 
 ## Follow-ups
 
-- **Auth.js failure alerts:** route the Auth.js `logger.error` in `lib/auth.ts` through `logOpsError` (upstream `db9524d`) once `feat/login-security` merges.
-- **Login copy:** show "Sign in with your email and password" when Google is off, and drop "New here?" while sign-ups are closed (upstream `d377284`). This is in the login page, so it also waits for `feat/login-security`.
 - **Mobile API** (`/api/mobile/v1`): its own project, rebuilt on `dev`'s paid-event flows.
 - The alert webhook test (`sendOpsWebhookTest`) accepts any https URL, including private addresses, and reports the HTTP status, so a super admin could use it to probe internal hosts. It needs super-admin MFA. Consider the organisation SMTP's public-address check, with an explicit opt-in for a LAN Mattermost.
 - `scripts/check-instance-secrets.mjs` checks the instance secrets and MFA seeds only. It could also check the per-organisation secrets (payment keys, organisation SMTP), which use their own subkey.
