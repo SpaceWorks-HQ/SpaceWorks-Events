@@ -11,6 +11,7 @@ import { requireSuperAdminMfa } from "@/lib/permissions";
 import { recordAuditEvent } from "@/lib/audit";
 import { decryptInstanceConfigSecret, encryptInstanceConfigSecret, InstanceSecretUnreadableError } from "@/lib/instanceConfigSecrets";
 import { invalidateOpsAlertSettings, parseOpsWebhookUrl, reportOpsAlert, sendOpsWebhookTestMessage } from "@/lib/opsAlerts";
+import { isAllowedOpsWebhook, PRIVATE_WEBHOOK_ERROR } from "@/lib/opsWebhookAddress";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
 
@@ -241,6 +242,7 @@ export async function saveOpsWebhookSettings(input: unknown): Promise<ActionResu
   const { enabled, includeWarnings, removeUrl } = parsed.data;
   const url = parsed.data.url ? parseOpsWebhookUrl(parsed.data.url) : null;
   if (parsed.data.url && !url) return { ok: false, error: INVALID_WEBHOOK_URL };
+  if (url && !(await isAllowedOpsWebhook(url))) return { ok: false, error: PRIVATE_WEBHOOK_ERROR };
 
   const existing = await prisma.instanceSetting.findUnique({ where: { id: INSTANCE_SETTINGS_ID }, select: { opsWebhookUrlEncrypted: true } });
   const hasUrl = Boolean(url) || (!removeUrl && Boolean(existing?.opsWebhookUrlEncrypted));

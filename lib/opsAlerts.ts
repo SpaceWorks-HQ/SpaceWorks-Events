@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import { decryptInstanceConfigSecret } from "@/lib/instanceConfigSecrets";
 import { INSTANCE_SETTINGS_ID } from "@/lib/instanceSettings";
 import { describeOperationalError, redactSensitiveText } from "@/lib/redactSensitiveText";
+import { isAllowedOpsWebhook, PRIVATE_WEBHOOK_ERROR } from "@/lib/opsWebhookAddress";
 
 /**
  * Operational alerts posted to a super-admin configured incoming webhook
@@ -262,6 +263,8 @@ export type OpsWebhookResult = { ok: true } | { ok: false; error: string };
 
 async function post(url: string, text: string): Promise<OpsWebhookResult> {
   return deliveryScope().run(true, async () => {
+    // Checked on every post (deliveries and the test), not only when saved.
+    if (!(await isAllowedOpsWebhook(url))) return { ok: false, error: PRIVATE_WEBHOOK_ERROR };
     try {
       const response = await fetch(url, {
         method: "POST",
