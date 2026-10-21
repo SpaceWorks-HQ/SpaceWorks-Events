@@ -227,29 +227,30 @@ import { restoreRsvp as endpoint223 } from "@/app/actions/rsvp-admin";
 import { cancelRsvp as endpoint224 } from "@/app/actions/rsvp-cancel";
 import { approveRsvp as endpoint225 } from "@/app/actions/rsvp-lifecycle";
 import { rejectRsvp as endpoint226 } from "@/app/actions/rsvp-lifecycle";
-import { promoteFromWaitlist as endpoint227 } from "@/app/actions/rsvp-lifecycle";
-import { submitRsvp as endpoint228 } from "@/app/actions/rsvp";
-import { saveScheduleItem as endpoint229 } from "@/app/actions/schedule";
-import { setScheduleDelay as endpoint230 } from "@/app/actions/schedule";
-import { beginMfaEnrollment as endpoint231 } from "@/app/actions/security";
-import { confirmMfaEnrollment as endpoint232 } from "@/app/actions/security";
-import { disableMfa as endpoint233 } from "@/app/actions/security";
-import { revokeAllSessions as endpoint234 } from "@/app/actions/security";
-import { createEventSeries as endpoint235 } from "@/app/actions/series";
-import { updateEventSeriesMeta as endpoint236 } from "@/app/actions/series";
-import { deleteEventSeries as endpoint237 } from "@/app/actions/series";
-import { setSeriesDateCapacity as endpoint238 } from "@/app/actions/series";
-import { cancelSeriesDate as endpoint239 } from "@/app/actions/series";
-import { createEventShortLink as endpoint240 } from "@/app/actions/shortLink";
-import { regenerateEventShortLink as endpoint241 } from "@/app/actions/shortLink";
-import { saveTicketType as endpoint242 } from "@/app/actions/ticket-types";
-import { archiveTicketType as endpoint243 } from "@/app/actions/ticket-types";
-import { createPromoCode as endpoint244 } from "@/app/actions/ticket-types";
-import { archivePromoCode as endpoint245 } from "@/app/actions/ticket-types";
-import { saveRefundPolicy as endpoint246 } from "@/app/actions/ticket-types";
-import { saveAddOn as endpoint247 } from "@/app/actions/ticket-types";
-import { archiveAddOn as endpoint248 } from "@/app/actions/ticket-types";
-import { saveTransferPolicy as endpoint249 } from "@/app/actions/ticket-types";
+import { reacceptRsvp as endpoint227 } from "@/app/actions/rsvp-lifecycle";
+import { promoteFromWaitlist as endpoint228 } from "@/app/actions/rsvp-lifecycle";
+import { submitRsvp as endpoint229 } from "@/app/actions/rsvp";
+import { saveScheduleItem as endpoint230 } from "@/app/actions/schedule";
+import { setScheduleDelay as endpoint231 } from "@/app/actions/schedule";
+import { beginMfaEnrollment as endpoint232 } from "@/app/actions/security";
+import { confirmMfaEnrollment as endpoint233 } from "@/app/actions/security";
+import { disableMfa as endpoint234 } from "@/app/actions/security";
+import { revokeAllSessions as endpoint235 } from "@/app/actions/security";
+import { createEventSeries as endpoint236 } from "@/app/actions/series";
+import { updateEventSeriesMeta as endpoint237 } from "@/app/actions/series";
+import { deleteEventSeries as endpoint238 } from "@/app/actions/series";
+import { setSeriesDateCapacity as endpoint239 } from "@/app/actions/series";
+import { cancelSeriesDate as endpoint240 } from "@/app/actions/series";
+import { createEventShortLink as endpoint241 } from "@/app/actions/shortLink";
+import { regenerateEventShortLink as endpoint242 } from "@/app/actions/shortLink";
+import { saveTicketType as endpoint243 } from "@/app/actions/ticket-types";
+import { archiveTicketType as endpoint244 } from "@/app/actions/ticket-types";
+import { createPromoCode as endpoint245 } from "@/app/actions/ticket-types";
+import { archivePromoCode as endpoint246 } from "@/app/actions/ticket-types";
+import { saveRefundPolicy as endpoint247 } from "@/app/actions/ticket-types";
+import { saveAddOn as endpoint248 } from "@/app/actions/ticket-types";
+import { archiveAddOn as endpoint249 } from "@/app/actions/ticket-types";
+import { saveTransferPolicy as endpoint250 } from "@/app/actions/ticket-types";
 
 export const viewReaders = Object.freeze({
   "app__about__page:loadView": endpoint0,
@@ -481,27 +482,28 @@ export const backendActions = Object.freeze({
   "rsvp-cancel:cancelRsvp": endpoint224,
   "rsvp-lifecycle:approveRsvp": endpoint225,
   "rsvp-lifecycle:rejectRsvp": endpoint226,
-  "rsvp-lifecycle:promoteFromWaitlist": endpoint227,
-  "rsvp:submitRsvp": endpoint228,
-  "schedule:saveScheduleItem": endpoint229,
-  "schedule:setScheduleDelay": endpoint230,
-  "security:beginMfaEnrollment": endpoint231,
-  "security:confirmMfaEnrollment": endpoint232,
-  "security:disableMfa": endpoint233,
-  "security:revokeAllSessions": endpoint234,
-  "series:createEventSeries": endpoint235,
-  "series:updateEventSeriesMeta": endpoint236,
-  "series:deleteEventSeries": endpoint237,
-  "series:setSeriesDateCapacity": endpoint238,
-  "series:cancelSeriesDate": endpoint239,
-  "shortLink:createEventShortLink": endpoint240,
-  "shortLink:regenerateEventShortLink": endpoint241,
-  "ticket-types:saveTicketType": endpoint242,
-  "ticket-types:archiveTicketType": endpoint243,
-  "ticket-types:createPromoCode": endpoint244,
-  "ticket-types:archivePromoCode": endpoint245,
-  "ticket-types:saveRefundPolicy": endpoint246,
-  "ticket-types:saveAddOn": endpoint247,
-  "ticket-types:archiveAddOn": endpoint248,
-  "ticket-types:saveTransferPolicy": endpoint249,
+  "rsvp-lifecycle:reacceptRsvp": endpoint227,
+  "rsvp-lifecycle:promoteFromWaitlist": endpoint228,
+  "rsvp:submitRsvp": endpoint229,
+  "schedule:saveScheduleItem": endpoint230,
+  "schedule:setScheduleDelay": endpoint231,
+  "security:beginMfaEnrollment": endpoint232,
+  "security:confirmMfaEnrollment": endpoint233,
+  "security:disableMfa": endpoint234,
+  "security:revokeAllSessions": endpoint235,
+  "series:createEventSeries": endpoint236,
+  "series:updateEventSeriesMeta": endpoint237,
+  "series:deleteEventSeries": endpoint238,
+  "series:setSeriesDateCapacity": endpoint239,
+  "series:cancelSeriesDate": endpoint240,
+  "shortLink:createEventShortLink": endpoint241,
+  "shortLink:regenerateEventShortLink": endpoint242,
+  "ticket-types:saveTicketType": endpoint243,
+  "ticket-types:archiveTicketType": endpoint244,
+  "ticket-types:createPromoCode": endpoint245,
+  "ticket-types:archivePromoCode": endpoint246,
+  "ticket-types:saveRefundPolicy": endpoint247,
+  "ticket-types:saveAddOn": endpoint248,
+  "ticket-types:archiveAddOn": endpoint249,
+  "ticket-types:saveTransferPolicy": endpoint250,
 });

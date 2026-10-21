@@ -15,7 +15,7 @@ import { attendeeEmail, lockOrder, onlineAccount, PaymentOperationError, subject
  * order holds them for a day with one pending payment and the buyer is
  * emailed a link. The checkout page opens only when they click Pay.
  */
-async function offerInTransaction(tx: Prisma.TransactionClient, params: { orderId: string; organisationId: string; provider: "RAZORPAY" | "STRIPE"; testMode: boolean; actorUserId: string | null; now: Date; }) {
+export async function offerInTransaction(tx: Prisma.TransactionClient, params: { orderId: string; organisationId: string; provider: "RAZORPAY" | "STRIPE"; testMode: boolean; actorUserId: string | null; now: Date; }) {
   await lockOrder(tx, params.orderId);
   const order = await tx.order.findFirst({
     where: { id: params.orderId, organisationId: params.organisationId },

@@ -16,7 +16,7 @@ import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { deleteRsvp, restoreRsvp } from "@/app/actions/rsvp-admin";
 import { PaymentDialog } from "@/components/attendees/PaymentDialog";
-import { approveRsvp, promoteFromWaitlist, rejectRsvp } from "@/app/actions/rsvp-lifecycle";
+import { approveRsvp, promoteFromWaitlist, reacceptRsvp, rejectRsvp } from "@/app/actions/rsvp-lifecycle";
 import { undoCheckIn } from "@/app/actions/checkin";
 import { GuestRow, type GuestRowActions } from "@/components/event-dashboard/guests/GuestRow";
 import {
@@ -80,7 +80,7 @@ export function GuestsPeople({
   const range = pageRange(visible.length, page, PAGE_SIZE);
   const pageRows = visible.slice(range.page * PAGE_SIZE, range.page * PAGE_SIZE + PAGE_SIZE);
 
-  function run(guest: AttendeeRow, action: () => Promise<ActionResult>, success: string) {
+  function run<R extends ActionResult>(guest: AttendeeRow, action: () => Promise<R>, success: string | ((res: R) => string)) {
     setBusyId(guest.id);
     startTransition(async () => {
       const res = await action();
@@ -89,7 +89,7 @@ export function GuestsPeople({
         showToast(res.error, "error");
         return;
       }
-      showToast(success, "success");
+      showToast(typeof success === "string" ? success : success(res), "success");
       router.refresh();
     });
   }
@@ -98,6 +98,11 @@ export function GuestsPeople({
     approve: (guest) => run(guest, () => approveRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), "Approved"),
     decline: (guest) => run(guest, () => rejectRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), "Declined"),
     promote: (guest) => run(guest, () => promoteFromWaitlist({ organisationSlug, rsvpId: guest.id, ...scope }), "Spot given"),
+    reaccept: (guest) => run(guest, () => reacceptRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), (res) => {
+      const status = "data" in res ? res.data?.status : undefined;
+      if (status === "PAYMENT_REQUESTED") return "Re-accepted. They've been sent a payment link; their ticket confirms once they pay.";
+      return status === "WAITLISTED" ? "Re-accepted. The event is full, so they're on the waitlist." : "Re-accepted";
+    }),
     copyTicket: async (guest) => {
       try {
         await navigator.clipboard.writeText(guest.ticketUrl);

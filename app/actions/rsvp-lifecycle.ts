@@ -12,6 +12,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { declineRequestedOrder, offerRequestedOrder } from "@/lib/payments/operations";
 import { attendeeEmail, attendeeName, loadRsvpContext, paidRequest, paymentOperation, revalidateRsvpPaths } from "./rsvp-lifecycle/helpers";
+import { reacceptRsvpFor, type ReacceptStatus } from "./rsvp-lifecycle/reaccept";
 
 export async function approveRsvp(input: unknown): Promise<ActionResult> {
   const session = await auth();
@@ -191,6 +192,13 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     eventInstanceId: instance.id,
   });
   return { ok: true };
+}
+
+/** Reverses a decline; a paid registration goes back through the payment flow. */
+export async function reacceptRsvp(input: unknown): Promise<ActionResult<{ status: ReacceptStatus; }>> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
+  return reacceptRsvpFor(session.user.id, input);
 }
 
 export async function promoteFromWaitlist(input: unknown): Promise<ActionResult> {

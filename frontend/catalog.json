@@ -1139,6 +1139,11 @@
     },
     {
       "module": "app/actions/rsvp-lifecycle",
+      "name": "reacceptRsvp",
+      "id": "rsvp-lifecycle:reacceptRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-lifecycle",
       "name": "promoteFromWaitlist",
       "id": "rsvp-lifecycle:promoteFromWaitlist"
     },
