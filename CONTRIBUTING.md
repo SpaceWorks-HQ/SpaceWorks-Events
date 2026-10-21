@@ -75,9 +75,10 @@ Never commit `.env` or real secrets.
 
 Space Works Events is derived from [Yuyu](https://github.com/twilighty-abhi/yuyu)
 and shares its Git history. Every Monday the **Yuyu upstream check** workflow
-fetches Yuyu's branches. If any of them has commits that `dev` lacks, it opens
-or updates the issue "Yuyu upstream has commits to review" with the list, and
-closes the issue once nothing is left. To port them:
+fetches Yuyu's branches. If any of them has commits that `dev` has not ported
+or reviewed, it opens or updates the issue "Yuyu upstream has commits to review"
+with the list (each commit once), and closes the issue once nothing is left. To
+port them:
 
 1. Branch from `dev` as `fix/yuyu-sync-<date>` and add the remote:
    `git remote add upstream https://github.com/twilighty-abhi/yuyu.git && git fetch upstream`.
@@ -85,6 +86,14 @@ closes the issue once nothing is left. To port them:
    UI and copy changes into the Space Works design ([docs/DESIGN.md](docs/DESIGN.md)).
 3. Never take Yuyu branding, analytics or product-boundary changes as they are.
    Open the pull request against `dev` as usual.
+4. Name each ported commit in its message, as `(cherry picked from Yuyu <hash>)`
+   (several hashes may follow, joined by "and"). `git cherry-pick -x` writes
+   `(cherry picked from commit <hash>)`, which counts too. The check skips every
+   Yuyu commit named this way once it is in `dev`, so keep those lines when
+   squashing.
+5. A commit you review and decide not to port (already covered, Yuyu-only, or
+   deferred) goes in [`.github/yuyu-reviewed.txt`](.github/yuyu-reviewed.txt)
+   with its reason, so it stops being listed.
 
 Yuyu does a lot of its newest work on branches other than `main` (such as
 `v1-design-overhaul`), so the check looks at every branch.

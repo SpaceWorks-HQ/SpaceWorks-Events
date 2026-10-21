@@ -1,7 +1,7 @@
 # Weekly check of Yuyu (https://github.com/twilighty-abhi/yuyu), the project
 # Space Works Events is derived from. When any upstream branch has commits that
-# dev does not contain, it opens (or updates) one issue listing them, so fixes,
-# security patches especially, can be ported. Porting stays a reviewed, manual
+# dev has not ported or reviewed, it opens (or updates) one issue listing them,
+# so fixes, security patches especially, can be ported. Porting stays a reviewed, manual
 # step: see "Syncing from Yuyu" in CONTRIBUTING.md.
 name: Yuyu upstream check
 on:
@@ -30,22 +30,42 @@ jobs:
           set -euo pipefail
           git remote add upstream https://github.com/twilighty-abhi/yuyu.git
           git fetch --quiet --no-tags upstream '+refs/heads/*:refs/remotes/upstream/*'
+          # Yuyu commits dev already accounts for: named on a "cherry picked from
+          # Yuyu <hash>" line in dev's history (ported), or listed with a reason
+          # in .github/yuyu-reviewed.txt (reviewed and not ported). Short hashes
+          # match as prefixes.
+          known=$( { git log HEAD --format=%B | grep -i 'cherry picked from' | grep -oE '\b[0-9a-f]{7,40}\b' || true; grep -oE '^[0-9a-f]{7,40}' .github/yuyu-reviewed.txt || true; } | sort -u)
+          is_known() {
+            local prefix
+            for prefix in $known; do [[ $1 == "$prefix"* ]] && return 0; done
+            return 1
+          }
           report=''
-          for ref in $(git for-each-ref --format='%(refname:short)' refs/remotes/upstream); do
-            count=$(git rev-list --count "HEAD..$ref")
-            [ "$count" = 0 ] && continue
-            report+=$'\n'"### \`${ref#upstream/}\`: $count new commit(s)"$'\n\n'
-            report+=$(git log --no-merges --date=short --format='- [`%h`](https://github.com/twilighty-abhi/yuyu/commit/%H) %ad %s' "HEAD..$ref" | head -n 50)
+          # Each commit is listed once, under main first, then the first other
+          # branch that has it (upstream/HEAD is only an alias).
+          declare -A listed=()
+          refs="upstream/main $(git for-each-ref --format='%(refname:short)' refs/remotes/upstream | grep -vxE 'upstream(/HEAD|/main)?' || true)"
+          for ref in $refs; do
+            git rev-parse --verify --quiet "$ref" >/dev/null || continue
+            pending=()
+            for hash in $(git rev-list --no-merges "HEAD..$ref"); do
+              [ -n "${listed[$hash]:-}" ] && continue
+              listed[$hash]=1
+              is_known "$hash" || pending+=("$hash")
+            done
+            [ "${#pending[@]}" = 0 ] && continue
+            report+=$'\n'"### \`${ref#upstream/}\`: ${#pending[@]} commit(s) to review"$'\n\n'
+            report+=$(git log --no-walk=unsorted --date=short --format='- [`%h`](https://github.com/twilighty-abhi/yuyu/commit/%H) %ad %s' "${pending[@]:0:50}")
             report+=$'\n'
           done
           title='Yuyu upstream has commits to review'
           existing=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
           if [ -z "$report" ]; then
-            echo 'dev contains every Yuyu commit.'
-            [ -z "$existing" ] || gh issue close "$existing" --comment 'dev now contains every Yuyu commit.'
+            echo 'dev contains, has ported or has reviewed every Yuyu commit.'
+            [ -z "$existing" ] || gh issue close "$existing" --comment 'dev now contains, has ported or has reviewed every Yuyu commit.'
             exit 0
           fi
-          body="Yuyu has commits that \`dev\` does not contain. Review them and port what applies, starting with security and bug fixes, on a \`fix/yuyu-sync-<date>\` branch (see \"Syncing from Yuyu\" in CONTRIBUTING.md).
+          body="Yuyu has commits that \`dev\` has not ported or reviewed yet. Review them and port what applies, starting with security and bug fixes, on a \`fix/yuyu-sync-<date>\` branch (see \"Syncing from Yuyu\" in CONTRIBUTING.md). Commits named on a \"cherry picked from Yuyu <hash>\" line in \`dev\`, or listed in \`.github/yuyu-reviewed.txt\`, are left out.
           $report
           _Updated by the weekly Yuyu upstream check._"
           if [ -n "$existing" ]; then
