@@ -147,98 +147,101 @@ import { deleteFeedbackField as endpoint143 } from "@/app/actions/feedback-form"
 import { setNewUserRegistrationEnabled as endpoint144 } from "@/app/actions/instance-settings";
 import { setPaidEventsEnabled as endpoint145 } from "@/app/actions/instance-settings";
 import { saveInstanceServiceSettings as endpoint146 } from "@/app/actions/instance-settings";
-import { deliverInstanceOutbox as endpoint147 } from "@/app/actions/instance";
-import { sendInstanceTestEmail as endpoint148 } from "@/app/actions/instance";
-import { purgeExpiredVerificationTokens as endpoint149 } from "@/app/actions/instance";
-import { retryFailedOutboxMessages as endpoint150 } from "@/app/actions/instance";
-import { recordBackupRestoreVerification as endpoint151 } from "@/app/actions/instance";
-import { acceptOrganisationInvite as endpoint152 } from "@/app/actions/invite-acceptance";
-import { acceptEventCollaboratorInvite as endpoint153 } from "@/app/actions/invite-acceptance";
-import { addEventInvite as endpoint154 } from "@/app/actions/invites";
-import { removeEventInvite as endpoint155 } from "@/app/actions/invites";
-import { addSeriesInvite as endpoint156 } from "@/app/actions/invites";
-import { removeSeriesInvite as endpoint157 } from "@/app/actions/invites";
-import { uploadOrganisationLogo as endpoint158 } from "@/app/actions/media";
-import { uploadEventPageLogo as endpoint159 } from "@/app/actions/media";
-import { uploadAccountProfileImage as endpoint160 } from "@/app/actions/media";
-import { joinIdProgramme as endpoint161 } from "@/app/actions/member-id-join";
-import { createIdProgramme as endpoint162 } from "@/app/actions/member-ids";
-import { updateIdProgramme as endpoint163 } from "@/app/actions/member-ids";
-import { deleteIdProgramme as endpoint164 } from "@/app/actions/member-ids";
-import { saveIdProgrammeFields as endpoint165 } from "@/app/actions/member-ids";
-import { saveIdProgrammeDesign as endpoint166 } from "@/app/actions/member-ids";
-import { uploadIdProgrammeWatermark as endpoint167 } from "@/app/actions/member-ids";
-import { addIdMember as endpoint168 } from "@/app/actions/member-ids";
-import { updateIdMember as endpoint169 } from "@/app/actions/member-ids";
-import { uploadIdMemberPhoto as endpoint170 } from "@/app/actions/member-ids";
-import { deleteIdMember as endpoint171 } from "@/app/actions/member-ids";
-import { setIdMemberStatus as endpoint172 } from "@/app/actions/member-ids";
-import { renewIdMembers as endpoint173 } from "@/app/actions/member-ids";
-import { emailIdCards as endpoint174 } from "@/app/actions/member-ids";
-import { emailIdCard as endpoint175 } from "@/app/actions/member-ids";
-import { readIdImportSource as endpoint176 } from "@/app/actions/member-ids";
-import { commitIdImport as endpoint177 } from "@/app/actions/member-ids";
-import { updateMemberRole as endpoint178 } from "@/app/actions/membership";
-import { removeMember as endpoint179 } from "@/app/actions/membership";
-import { deleteOrganisation as endpoint180 } from "@/app/actions/membership";
-import { updateOrderAttendee as endpoint181 } from "@/app/actions/orders";
-import { cancelMyOrder as endpoint182 } from "@/app/actions/orders";
-import { transferOrderTicket as endpoint183 } from "@/app/actions/orders";
-import { createOrgInvite as endpoint184 } from "@/app/actions/org-invites";
-import { revokeOrgInvite as endpoint185 } from "@/app/actions/org-invites";
-import { createOrganisation as endpoint186 } from "@/app/actions/org";
-import { updateOrganisation as endpoint187 } from "@/app/actions/org";
-import { checkSlugAvailability as endpoint188 } from "@/app/actions/org";
-import { saveOrganisationEmail as endpoint189 } from "@/app/actions/organisation-email";
-import { sendOrganisationTestEmail as endpoint190 } from "@/app/actions/organisation-email";
-import { stopOwnEmailServer as endpoint191 } from "@/app/actions/organisation-email";
-import { requestPasswordReset as endpoint192 } from "@/app/actions/password-reset";
-import { confirmPasswordReset as endpoint193 } from "@/app/actions/password-reset";
-import { refundPaidOrder as endpoint194 } from "@/app/actions/payment-operations";
-import { settlePaidOrder as endpoint195 } from "@/app/actions/payment-operations";
-import { sendOrderPaymentLink as endpoint196 } from "@/app/actions/payment-operations";
-import { correctOfflinePayment as endpoint197 } from "@/app/actions/payment-operations";
-import { addTicketGuest as endpoint198 } from "@/app/actions/payment-operations";
-import { savePaymentSettings as endpoint199 } from "@/app/actions/payment-settings";
-import { disconnectPaymentProvider as endpoint200 } from "@/app/actions/payment-settings";
-import { testPaymentConnection as endpoint201 } from "@/app/actions/payment-settings";
-import { saveReceiptDetails as endpoint202 } from "@/app/actions/payment-settings";
-import { checkPromoCode as endpoint203 } from "@/app/actions/promo";
-import { unlockTickets as endpoint204 } from "@/app/actions/promo";
-import { upsertEventRegistrationField as endpoint205 } from "@/app/actions/registration-form";
-import { deleteEventRegistrationField as endpoint206 } from "@/app/actions/registration-form";
-import { reorderEventRegistrationFields as endpoint207 } from "@/app/actions/registration-form";
-import { addManualRsvp as endpoint208 } from "@/app/actions/rsvp-admin";
-import { updateRsvpRegistration as endpoint209 } from "@/app/actions/rsvp-admin";
-import { deleteRsvp as endpoint210 } from "@/app/actions/rsvp-admin";
-import { restoreRsvp as endpoint211 } from "@/app/actions/rsvp-admin";
-import { cancelRsvp as endpoint212 } from "@/app/actions/rsvp-cancel";
-import { approveRsvp as endpoint213 } from "@/app/actions/rsvp-lifecycle";
-import { rejectRsvp as endpoint214 } from "@/app/actions/rsvp-lifecycle";
-import { promoteFromWaitlist as endpoint215 } from "@/app/actions/rsvp-lifecycle";
-import { submitRsvp as endpoint216 } from "@/app/actions/rsvp";
-import { saveScheduleItem as endpoint217 } from "@/app/actions/schedule";
-import { setScheduleDelay as endpoint218 } from "@/app/actions/schedule";
-import { beginMfaEnrollment as endpoint219 } from "@/app/actions/security";
-import { confirmMfaEnrollment as endpoint220 } from "@/app/actions/security";
-import { disableMfa as endpoint221 } from "@/app/actions/security";
-import { revokeAllSessions as endpoint222 } from "@/app/actions/security";
-import { createEventSeries as endpoint223 } from "@/app/actions/series";
-import { updateEventSeriesMeta as endpoint224 } from "@/app/actions/series";
-import { deleteEventSeries as endpoint225 } from "@/app/actions/series";
-import { setSeriesDateCapacity as endpoint226 } from "@/app/actions/series";
-import { cancelSeriesDate as endpoint227 } from "@/app/actions/series";
-import { createEventShortLink as endpoint228 } from "@/app/actions/shortLink";
-import { regenerateEventShortLink as endpoint229 } from "@/app/actions/shortLink";
-import { verifySuperAdminMfa as endpoint230 } from "@/app/actions/super-admin-mfa";
-import { saveTicketType as endpoint231 } from "@/app/actions/ticket-types";
-import { archiveTicketType as endpoint232 } from "@/app/actions/ticket-types";
-import { createPromoCode as endpoint233 } from "@/app/actions/ticket-types";
-import { archivePromoCode as endpoint234 } from "@/app/actions/ticket-types";
-import { saveRefundPolicy as endpoint235 } from "@/app/actions/ticket-types";
-import { saveAddOn as endpoint236 } from "@/app/actions/ticket-types";
-import { archiveAddOn as endpoint237 } from "@/app/actions/ticket-types";
-import { saveTransferPolicy as endpoint238 } from "@/app/actions/ticket-types";
+import { sendSettingsTestEmail as endpoint147 } from "@/app/actions/instance-settings";
+import { saveOpsWebhookSettings as endpoint148 } from "@/app/actions/instance-settings";
+import { sendOpsWebhookTest as endpoint149 } from "@/app/actions/instance-settings";
+import { deliverInstanceOutbox as endpoint150 } from "@/app/actions/instance";
+import { sendInstanceTestEmail as endpoint151 } from "@/app/actions/instance";
+import { purgeExpiredVerificationTokens as endpoint152 } from "@/app/actions/instance";
+import { retryFailedOutboxMessages as endpoint153 } from "@/app/actions/instance";
+import { recordBackupRestoreVerification as endpoint154 } from "@/app/actions/instance";
+import { acceptOrganisationInvite as endpoint155 } from "@/app/actions/invite-acceptance";
+import { acceptEventCollaboratorInvite as endpoint156 } from "@/app/actions/invite-acceptance";
+import { addEventInvite as endpoint157 } from "@/app/actions/invites";
+import { removeEventInvite as endpoint158 } from "@/app/actions/invites";
+import { addSeriesInvite as endpoint159 } from "@/app/actions/invites";
+import { removeSeriesInvite as endpoint160 } from "@/app/actions/invites";
+import { uploadOrganisationLogo as endpoint161 } from "@/app/actions/media";
+import { uploadEventPageLogo as endpoint162 } from "@/app/actions/media";
+import { uploadAccountProfileImage as endpoint163 } from "@/app/actions/media";
+import { joinIdProgramme as endpoint164 } from "@/app/actions/member-id-join";
+import { createIdProgramme as endpoint165 } from "@/app/actions/member-ids";
+import { updateIdProgramme as endpoint166 } from "@/app/actions/member-ids";
+import { deleteIdProgramme as endpoint167 } from "@/app/actions/member-ids";
+import { saveIdProgrammeFields as endpoint168 } from "@/app/actions/member-ids";
+import { saveIdProgrammeDesign as endpoint169 } from "@/app/actions/member-ids";
+import { uploadIdProgrammeWatermark as endpoint170 } from "@/app/actions/member-ids";
+import { addIdMember as endpoint171 } from "@/app/actions/member-ids";
+import { updateIdMember as endpoint172 } from "@/app/actions/member-ids";
+import { uploadIdMemberPhoto as endpoint173 } from "@/app/actions/member-ids";
+import { deleteIdMember as endpoint174 } from "@/app/actions/member-ids";
+import { setIdMemberStatus as endpoint175 } from "@/app/actions/member-ids";
+import { renewIdMembers as endpoint176 } from "@/app/actions/member-ids";
+import { emailIdCards as endpoint177 } from "@/app/actions/member-ids";
+import { emailIdCard as endpoint178 } from "@/app/actions/member-ids";
+import { readIdImportSource as endpoint179 } from "@/app/actions/member-ids";
+import { commitIdImport as endpoint180 } from "@/app/actions/member-ids";
+import { updateMemberRole as endpoint181 } from "@/app/actions/membership";
+import { removeMember as endpoint182 } from "@/app/actions/membership";
+import { deleteOrganisation as endpoint183 } from "@/app/actions/membership";
+import { updateOrderAttendee as endpoint184 } from "@/app/actions/orders";
+import { cancelMyOrder as endpoint185 } from "@/app/actions/orders";
+import { transferOrderTicket as endpoint186 } from "@/app/actions/orders";
+import { createOrgInvite as endpoint187 } from "@/app/actions/org-invites";
+import { revokeOrgInvite as endpoint188 } from "@/app/actions/org-invites";
+import { createOrganisation as endpoint189 } from "@/app/actions/org";
+import { updateOrganisation as endpoint190 } from "@/app/actions/org";
+import { checkSlugAvailability as endpoint191 } from "@/app/actions/org";
+import { saveOrganisationEmail as endpoint192 } from "@/app/actions/organisation-email";
+import { sendOrganisationTestEmail as endpoint193 } from "@/app/actions/organisation-email";
+import { stopOwnEmailServer as endpoint194 } from "@/app/actions/organisation-email";
+import { requestPasswordReset as endpoint195 } from "@/app/actions/password-reset";
+import { confirmPasswordReset as endpoint196 } from "@/app/actions/password-reset";
+import { refundPaidOrder as endpoint197 } from "@/app/actions/payment-operations";
+import { settlePaidOrder as endpoint198 } from "@/app/actions/payment-operations";
+import { sendOrderPaymentLink as endpoint199 } from "@/app/actions/payment-operations";
+import { correctOfflinePayment as endpoint200 } from "@/app/actions/payment-operations";
+import { addTicketGuest as endpoint201 } from "@/app/actions/payment-operations";
+import { savePaymentSettings as endpoint202 } from "@/app/actions/payment-settings";
+import { disconnectPaymentProvider as endpoint203 } from "@/app/actions/payment-settings";
+import { testPaymentConnection as endpoint204 } from "@/app/actions/payment-settings";
+import { saveReceiptDetails as endpoint205 } from "@/app/actions/payment-settings";
+import { checkPromoCode as endpoint206 } from "@/app/actions/promo";
+import { unlockTickets as endpoint207 } from "@/app/actions/promo";
+import { upsertEventRegistrationField as endpoint208 } from "@/app/actions/registration-form";
+import { deleteEventRegistrationField as endpoint209 } from "@/app/actions/registration-form";
+import { reorderEventRegistrationFields as endpoint210 } from "@/app/actions/registration-form";
+import { addManualRsvp as endpoint211 } from "@/app/actions/rsvp-admin";
+import { updateRsvpRegistration as endpoint212 } from "@/app/actions/rsvp-admin";
+import { deleteRsvp as endpoint213 } from "@/app/actions/rsvp-admin";
+import { restoreRsvp as endpoint214 } from "@/app/actions/rsvp-admin";
+import { cancelRsvp as endpoint215 } from "@/app/actions/rsvp-cancel";
+import { approveRsvp as endpoint216 } from "@/app/actions/rsvp-lifecycle";
+import { rejectRsvp as endpoint217 } from "@/app/actions/rsvp-lifecycle";
+import { promoteFromWaitlist as endpoint218 } from "@/app/actions/rsvp-lifecycle";
+import { submitRsvp as endpoint219 } from "@/app/actions/rsvp";
+import { saveScheduleItem as endpoint220 } from "@/app/actions/schedule";
+import { setScheduleDelay as endpoint221 } from "@/app/actions/schedule";
+import { beginMfaEnrollment as endpoint222 } from "@/app/actions/security";
+import { confirmMfaEnrollment as endpoint223 } from "@/app/actions/security";
+import { disableMfa as endpoint224 } from "@/app/actions/security";
+import { revokeAllSessions as endpoint225 } from "@/app/actions/security";
+import { createEventSeries as endpoint226 } from "@/app/actions/series";
+import { updateEventSeriesMeta as endpoint227 } from "@/app/actions/series";
+import { deleteEventSeries as endpoint228 } from "@/app/actions/series";
+import { setSeriesDateCapacity as endpoint229 } from "@/app/actions/series";
+import { cancelSeriesDate as endpoint230 } from "@/app/actions/series";
+import { createEventShortLink as endpoint231 } from "@/app/actions/shortLink";
+import { regenerateEventShortLink as endpoint232 } from "@/app/actions/shortLink";
+import { verifySuperAdminMfa as endpoint233 } from "@/app/actions/super-admin-mfa";
+import { saveTicketType as endpoint234 } from "@/app/actions/ticket-types";
+import { archiveTicketType as endpoint235 } from "@/app/actions/ticket-types";
+import { createPromoCode as endpoint236 } from "@/app/actions/ticket-types";
+import { archivePromoCode as endpoint237 } from "@/app/actions/ticket-types";
+import { saveRefundPolicy as endpoint238 } from "@/app/actions/ticket-types";
+import { saveAddOn as endpoint239 } from "@/app/actions/ticket-types";
+import { archiveAddOn as endpoint240 } from "@/app/actions/ticket-types";
+import { saveTransferPolicy as endpoint241 } from "@/app/actions/ticket-types";
 
 export const viewReaders = Object.freeze({
   "app__about__page:loadView": endpoint0,
@@ -390,96 +393,99 @@ export const backendActions = Object.freeze({
   "instance-settings:setNewUserRegistrationEnabled": endpoint144,
   "instance-settings:setPaidEventsEnabled": endpoint145,
   "instance-settings:saveInstanceServiceSettings": endpoint146,
-  "instance:deliverInstanceOutbox": endpoint147,
-  "instance:sendInstanceTestEmail": endpoint148,
-  "instance:purgeExpiredVerificationTokens": endpoint149,
-  "instance:retryFailedOutboxMessages": endpoint150,
-  "instance:recordBackupRestoreVerification": endpoint151,
-  "invite-acceptance:acceptOrganisationInvite": endpoint152,
-  "invite-acceptance:acceptEventCollaboratorInvite": endpoint153,
-  "invites:addEventInvite": endpoint154,
-  "invites:removeEventInvite": endpoint155,
-  "invites:addSeriesInvite": endpoint156,
-  "invites:removeSeriesInvite": endpoint157,
-  "media:uploadOrganisationLogo": endpoint158,
-  "media:uploadEventPageLogo": endpoint159,
-  "media:uploadAccountProfileImage": endpoint160,
-  "member-id-join:joinIdProgramme": endpoint161,
-  "member-ids:createIdProgramme": endpoint162,
-  "member-ids:updateIdProgramme": endpoint163,
-  "member-ids:deleteIdProgramme": endpoint164,
-  "member-ids:saveIdProgrammeFields": endpoint165,
-  "member-ids:saveIdProgrammeDesign": endpoint166,
-  "member-ids:uploadIdProgrammeWatermark": endpoint167,
-  "member-ids:addIdMember": endpoint168,
-  "member-ids:updateIdMember": endpoint169,
-  "member-ids:uploadIdMemberPhoto": endpoint170,
-  "member-ids:deleteIdMember": endpoint171,
-  "member-ids:setIdMemberStatus": endpoint172,
-  "member-ids:renewIdMembers": endpoint173,
-  "member-ids:emailIdCards": endpoint174,
-  "member-ids:emailIdCard": endpoint175,
-  "member-ids:readIdImportSource": endpoint176,
-  "member-ids:commitIdImport": endpoint177,
-  "membership:updateMemberRole": endpoint178,
-  "membership:removeMember": endpoint179,
-  "membership:deleteOrganisation": endpoint180,
-  "orders:updateOrderAttendee": endpoint181,
-  "orders:cancelMyOrder": endpoint182,
-  "orders:transferOrderTicket": endpoint183,
-  "org-invites:createOrgInvite": endpoint184,
-  "org-invites:revokeOrgInvite": endpoint185,
-  "org:createOrganisation": endpoint186,
-  "org:updateOrganisation": endpoint187,
-  "org:checkSlugAvailability": endpoint188,
-  "organisation-email:saveOrganisationEmail": endpoint189,
-  "organisation-email:sendOrganisationTestEmail": endpoint190,
-  "organisation-email:stopOwnEmailServer": endpoint191,
-  "password-reset:requestPasswordReset": endpoint192,
-  "password-reset:confirmPasswordReset": endpoint193,
-  "payment-operations:refundPaidOrder": endpoint194,
-  "payment-operations:settlePaidOrder": endpoint195,
-  "payment-operations:sendOrderPaymentLink": endpoint196,
-  "payment-operations:correctOfflinePayment": endpoint197,
-  "payment-operations:addTicketGuest": endpoint198,
-  "payment-settings:savePaymentSettings": endpoint199,
-  "payment-settings:disconnectPaymentProvider": endpoint200,
-  "payment-settings:testPaymentConnection": endpoint201,
-  "payment-settings:saveReceiptDetails": endpoint202,
-  "promo:checkPromoCode": endpoint203,
-  "promo:unlockTickets": endpoint204,
-  "registration-form:upsertEventRegistrationField": endpoint205,
-  "registration-form:deleteEventRegistrationField": endpoint206,
-  "registration-form:reorderEventRegistrationFields": endpoint207,
-  "rsvp-admin:addManualRsvp": endpoint208,
-  "rsvp-admin:updateRsvpRegistration": endpoint209,
-  "rsvp-admin:deleteRsvp": endpoint210,
-  "rsvp-admin:restoreRsvp": endpoint211,
-  "rsvp-cancel:cancelRsvp": endpoint212,
-  "rsvp-lifecycle:approveRsvp": endpoint213,
-  "rsvp-lifecycle:rejectRsvp": endpoint214,
-  "rsvp-lifecycle:promoteFromWaitlist": endpoint215,
-  "rsvp:submitRsvp": endpoint216,
-  "schedule:saveScheduleItem": endpoint217,
-  "schedule:setScheduleDelay": endpoint218,
-  "security:beginMfaEnrollment": endpoint219,
-  "security:confirmMfaEnrollment": endpoint220,
-  "security:disableMfa": endpoint221,
-  "security:revokeAllSessions": endpoint222,
-  "series:createEventSeries": endpoint223,
-  "series:updateEventSeriesMeta": endpoint224,
-  "series:deleteEventSeries": endpoint225,
-  "series:setSeriesDateCapacity": endpoint226,
-  "series:cancelSeriesDate": endpoint227,
-  "shortLink:createEventShortLink": endpoint228,
-  "shortLink:regenerateEventShortLink": endpoint229,
-  "super-admin-mfa:verifySuperAdminMfa": endpoint230,
-  "ticket-types:saveTicketType": endpoint231,
-  "ticket-types:archiveTicketType": endpoint232,
-  "ticket-types:createPromoCode": endpoint233,
-  "ticket-types:archivePromoCode": endpoint234,
-  "ticket-types:saveRefundPolicy": endpoint235,
-  "ticket-types:saveAddOn": endpoint236,
-  "ticket-types:archiveAddOn": endpoint237,
-  "ticket-types:saveTransferPolicy": endpoint238,
+  "instance-settings:sendSettingsTestEmail": endpoint147,
+  "instance-settings:saveOpsWebhookSettings": endpoint148,
+  "instance-settings:sendOpsWebhookTest": endpoint149,
+  "instance:deliverInstanceOutbox": endpoint150,
+  "instance:sendInstanceTestEmail": endpoint151,
+  "instance:purgeExpiredVerificationTokens": endpoint152,
+  "instance:retryFailedOutboxMessages": endpoint153,
+  "instance:recordBackupRestoreVerification": endpoint154,
+  "invite-acceptance:acceptOrganisationInvite": endpoint155,
+  "invite-acceptance:acceptEventCollaboratorInvite": endpoint156,
+  "invites:addEventInvite": endpoint157,
+  "invites:removeEventInvite": endpoint158,
+  "invites:addSeriesInvite": endpoint159,
+  "invites:removeSeriesInvite": endpoint160,
+  "media:uploadOrganisationLogo": endpoint161,
+  "media:uploadEventPageLogo": endpoint162,
+  "media:uploadAccountProfileImage": endpoint163,
+  "member-id-join:joinIdProgramme": endpoint164,
+  "member-ids:createIdProgramme": endpoint165,
+  "member-ids:updateIdProgramme": endpoint166,
+  "member-ids:deleteIdProgramme": endpoint167,
+  "member-ids:saveIdProgrammeFields": endpoint168,
+  "member-ids:saveIdProgrammeDesign": endpoint169,
+  "member-ids:uploadIdProgrammeWatermark": endpoint170,
+  "member-ids:addIdMember": endpoint171,
+  "member-ids:updateIdMember": endpoint172,
+  "member-ids:uploadIdMemberPhoto": endpoint173,
+  "member-ids:deleteIdMember": endpoint174,
+  "member-ids:setIdMemberStatus": endpoint175,
+  "member-ids:renewIdMembers": endpoint176,
+  "member-ids:emailIdCards": endpoint177,
+  "member-ids:emailIdCard": endpoint178,
+  "member-ids:readIdImportSource": endpoint179,
+  "member-ids:commitIdImport": endpoint180,
+  "membership:updateMemberRole": endpoint181,
+  "membership:removeMember": endpoint182,
+  "membership:deleteOrganisation": endpoint183,
+  "orders:updateOrderAttendee": endpoint184,
+  "orders:cancelMyOrder": endpoint185,
+  "orders:transferOrderTicket": endpoint186,
+  "org-invites:createOrgInvite": endpoint187,
+  "org-invites:revokeOrgInvite": endpoint188,
+  "org:createOrganisation": endpoint189,
+  "org:updateOrganisation": endpoint190,
+  "org:checkSlugAvailability": endpoint191,
+  "organisation-email:saveOrganisationEmail": endpoint192,
+  "organisation-email:sendOrganisationTestEmail": endpoint193,
+  "organisation-email:stopOwnEmailServer": endpoint194,
+  "password-reset:requestPasswordReset": endpoint195,
+  "password-reset:confirmPasswordReset": endpoint196,
+  "payment-operations:refundPaidOrder": endpoint197,
+  "payment-operations:settlePaidOrder": endpoint198,
+  "payment-operations:sendOrderPaymentLink": endpoint199,
+  "payment-operations:correctOfflinePayment": endpoint200,
+  "payment-operations:addTicketGuest": endpoint201,
+  "payment-settings:savePaymentSettings": endpoint202,
+  "payment-settings:disconnectPaymentProvider": endpoint203,
+  "payment-settings:testPaymentConnection": endpoint204,
+  "payment-settings:saveReceiptDetails": endpoint205,
+  "promo:checkPromoCode": endpoint206,
+  "promo:unlockTickets": endpoint207,
+  "registration-form:upsertEventRegistrationField": endpoint208,
+  "registration-form:deleteEventRegistrationField": endpoint209,
+  "registration-form:reorderEventRegistrationFields": endpoint210,
+  "rsvp-admin:addManualRsvp": endpoint211,
+  "rsvp-admin:updateRsvpRegistration": endpoint212,
+  "rsvp-admin:deleteRsvp": endpoint213,
+  "rsvp-admin:restoreRsvp": endpoint214,
+  "rsvp-cancel:cancelRsvp": endpoint215,
+  "rsvp-lifecycle:approveRsvp": endpoint216,
+  "rsvp-lifecycle:rejectRsvp": endpoint217,
+  "rsvp-lifecycle:promoteFromWaitlist": endpoint218,
+  "rsvp:submitRsvp": endpoint219,
+  "schedule:saveScheduleItem": endpoint220,
+  "schedule:setScheduleDelay": endpoint221,
+  "security:beginMfaEnrollment": endpoint222,
+  "security:confirmMfaEnrollment": endpoint223,
+  "security:disableMfa": endpoint224,
+  "security:revokeAllSessions": endpoint225,
+  "series:createEventSeries": endpoint226,
+  "series:updateEventSeriesMeta": endpoint227,
+  "series:deleteEventSeries": endpoint228,
+  "series:setSeriesDateCapacity": endpoint229,
+  "series:cancelSeriesDate": endpoint230,
+  "shortLink:createEventShortLink": endpoint231,
+  "shortLink:regenerateEventShortLink": endpoint232,
+  "super-admin-mfa:verifySuperAdminMfa": endpoint233,
+  "ticket-types:saveTicketType": endpoint234,
+  "ticket-types:archiveTicketType": endpoint235,
+  "ticket-types:createPromoCode": endpoint236,
+  "ticket-types:archivePromoCode": endpoint237,
+  "ticket-types:saveRefundPolicy": endpoint238,
+  "ticket-types:saveAddOn": endpoint239,
+  "ticket-types:archiveAddOn": endpoint240,
+  "ticket-types:saveTransferPolicy": endpoint241,
 });

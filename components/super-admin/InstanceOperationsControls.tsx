@@ -63,7 +63,7 @@ export function InstanceOperationsControls() {
         Send test email
       </Button>
       <Button disabled={pending} variant="secondary" onClick={() => run(retryFailedOutboxMessages, (data) => (data?.retried ? `${plural(data.retried, "failed message", "failed messages")} requeued for delivery.` : "No failed email to retry."))}>
-        Retry failed email
+        Retry failed email (last 7 days)
       </Button>
       <Button disabled={pending} variant="secondary" onClick={() => run(purgeExpiredVerificationTokens, (data) => (data?.deleted ? `${plural(data.deleted, "expired token", "expired tokens")} removed.` : "No expired tokens to remove."))}>
         Purge expired tokens

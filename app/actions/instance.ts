@@ -82,10 +82,14 @@ export async function purgeExpiredVerificationTokens(): Promise<ActionResult<{ d
  * `attempts` is reset so a requeued message gets the normal retry schedule
  * instead of failing terminally again on its first transient error.
  */
+const RETRY_FAILED_MAX_AGE_MS = 7 * 24 * 60 * 60_000;
+
 export async function retryFailedOutboxMessages(): Promise<ActionResult<{ retried: number }>> {
   return runMaintenance("Could not requeue failed email. Try again.", async (actorUserId) => {
+    // Older failures (e.g. broadcasts from before an outage) would arrive days
+    // late; they are left for retention cleanup instead of being resent.
     const result = await prisma.outboxMessage.updateMany({
-      where: { status: OutboxStatus.FAILED },
+      where: { status: OutboxStatus.FAILED, createdAt: { gte: new Date(Date.now() - RETRY_FAILED_MAX_AGE_MS) } },
       data: { status: OutboxStatus.PENDING, availableAt: new Date(), attempts: 0, lockedAt: null, lastError: null },
     });
     await recordAuditEvent({

@@ -42,7 +42,11 @@ describe("super-admin maintenance actions", () => {
     const before = Date.now();
     await expect(retryFailedOutboxMessages()).resolves.toEqual({ ok: true, data: { retried: 3 } });
     const call = mocks.outboxUpdate.mock.calls[0]![0];
-    expect(call.where).toEqual({ status: "FAILED" });
+    expect(call.where.status).toBe("FAILED");
+    // Only failures from the last 7 days are resent.
+    const cutoff = call.where.createdAt.gte.getTime();
+    expect(Date.now() - cutoff).toBeGreaterThanOrEqual(7 * 24 * 60 * 60_000 - 1_000);
+    expect(Date.now() - cutoff).toBeLessThan(7 * 24 * 60 * 60_000 + 60_000);
     expect(call.data).toMatchObject({ status: "PENDING", attempts: 0, lockedAt: null, lastError: null });
     expect(call.data.availableAt).toBeInstanceOf(Date);
     expect(call.data.availableAt.getTime()).toBeGreaterThanOrEqual(before);
