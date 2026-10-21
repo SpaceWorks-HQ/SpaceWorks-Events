@@ -106,6 +106,11 @@
       "id": "app__dashboard__orgSlug__settings__api__page:loadApiAccessView"
     },
     {
+      "module": "lib/views/app__dashboard__orgSlug__settings__chat__page",
+      "name": "loadChatSettingsView",
+      "id": "app__dashboard__orgSlug__settings__chat__page:loadChatSettingsView"
+    },
+    {
       "module": "lib/views/app__dashboard__orgSlug__settings__email__page",
       "name": "loadOrganisationEmailView",
       "id": "app__dashboard__orgSlug__settings__email__page:loadOrganisationEmailView"
@@ -511,6 +516,26 @@
       "module": "app/actions/certificate",
       "name": "previewCertificate",
       "id": "certificate:previewCertificate"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "addChatChannel",
+      "id": "chat-channels:addChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "updateChatChannel",
+      "id": "chat-channels:updateChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "removeChatChannel",
+      "id": "chat-channels:removeChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "testChatChannel",
+      "id": "chat-channels:testChatChannel"
     },
     {
       "module": "app/actions/checkin-station",

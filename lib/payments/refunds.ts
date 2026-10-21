@@ -4,6 +4,7 @@ import { PaymentRefundStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
 import { noticeEach, organiserEmails } from "@/lib/notices";
+import { notifyChat } from "@/lib/chat/notify";
 import { PaymentsUnavailable, type OnlineProvider } from "./http";
 import { formatMoney } from "./money";
 import type { RefundNotification } from "./providers/types";
@@ -144,6 +145,7 @@ async function noticeRefundFailed(client: Prisma.TransactionClient | typeof pris
   });
   if (!refund) return;
   const { payment } = refund;
+  await notifyChat(client, payment.organisationId, "refund", `A refund of ${formatMoney(refund.amountMinor, payment.currency)} on order ${payment.order.reference} failed: the payment provider refused it. Refund again from the guest list.`);
   await noticeEach(client, await organiserEmails(client, payment.organisationId), {
     organisationId: payment.organisationId,
     subject: `A refund failed: order ${payment.order.reference}`,

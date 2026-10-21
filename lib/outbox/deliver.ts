@@ -16,6 +16,8 @@ import { describeOperationalError } from "@/lib/redactSensitiveText";
 import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 import { asPaymentEmailPayload, deliverPaymentEmail, PAYMENT_EMAIL_KIND } from "@/lib/payments/email";
 import { sendAs } from "@/lib/email/transporter";
+import { asChatMessagePayload, deliverChatMessage } from "@/lib/chat/deliver";
+import { CHAT_MESSAGE_KIND } from "@/lib/chat/notify";
 import { EVENT_REMINDER_KIND, PermanentOutboxError, asCollaboratorInvitePayload, asEmailVerificationPayload, asEventBroadcastPayload, asEventBroadcastTestPayload, asEventInvitePayload, asEventReminderPayload, asOperatorNoticePayload, asPasswordResetPayload, asRsvpConfirmationPayload, asRsvpStatusPayload, asSignInCodePayload, containsCapability, isExpired, messageId, retryDelayMs } from "./payloads";
 import { attendeeName, broadcastEventSelect, broadcastVariablesFor, calendarEvent, getCurrentRsvp, messageOrganisation } from "./context";
 
@@ -234,6 +236,15 @@ export async function deliverOutboxBatch(limit = 20) {
           ticketUrl: broadcastTicketUrl(rsvp.checkInToken),
           messageId: stableMessageId,
         });
+      } else if (message.kind === CHAT_MESSAGE_KIND) {
+        const payload = asChatMessagePayload(message.payload);
+        if (!payload) throw new PermanentOutboxError();
+        const outcome = await deliverChatMessage(payload);
+        if (outcome === "permanent") throw new PermanentOutboxError();
+        if (outcome === "dropped") {
+          await prisma.outboxMessage.deleteMany({ where: { id: message.id, status: OutboxStatus.PROCESSING, lockedAt: claimTime } });
+          continue;
+        }
       } else if (message.kind === "operator-notice") {
         const payload = asOperatorNoticePayload(message.payload);
         if (!payload) throw new PermanentOutboxError();

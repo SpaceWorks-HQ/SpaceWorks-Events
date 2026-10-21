@@ -4,6 +4,7 @@ import { MembershipRole, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getBroadcastBaseUrl } from "@/lib/eventBroadcast";
 import { enqueueOperatorNotice } from "@/lib/outbox";
+import { notifyChat } from "@/lib/chat/notify";
 import { noticeSubject, shorten } from "@/lib/noticeText";
 
 export { noticeSubject, shorten, titleWith, whenLabel } from "@/lib/noticeText";
@@ -66,6 +67,7 @@ export async function noticeOrganisersOfRequest(client: Client, target: { eventI
     : await client.eventInstance.findUnique({ where: { id: target.eventInstanceId }, select: { series: { select: { id: true, title: true, organisationId: true, organisation: { select: { slug: true } } } } } })
         .then((date) => date && { title: date.series.title, organisationId: date.series.organisationId, path: `/dashboard/${date.series.organisation.slug}/series/${date.series.id}` });
   if (!owner) return 0;
+  await notifyChat(client, owner.organisationId, "request", `New request to join ${owner.title}. Review it in the guest list: ${getBroadcastBaseUrl()}${owner.path}`);
   return noticeOrganisersOnce(client, owner.organisationId, {
     subject: noticeSubject("New requests", owner.title),
     lines: [

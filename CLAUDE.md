@@ -63,7 +63,11 @@ new-device codes, new-sign-in alerts) and the breached-password check; the
 super-admin access check in every super-admin page (email and password set
 from the server, no separate step-up); write-only,
 encrypted instance SMTP/Google settings; tenant-bound machine API credentials;
-image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`;
+image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`,
+sent through the organisation's own SMTP server or under its name (account
+email always from the platform); per-organisation chat notifications
+(`lib/chat/`: encrypted webhook/bot secrets, fixed hosts or a pinned public
+address for Mattermost, queued with the outbox);
 server-generated ID cards (`lib/badge/`, org-isolated, storage-key-only
 images); the one-line curl VPS installer (`install.sh`, `scripts/*vps*`: asks
 everything before changing the host, never regenerates secrets, rolls back failed

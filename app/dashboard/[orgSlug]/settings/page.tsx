@@ -1,6 +1,6 @@
 import { loadOrgSettingsView } from "@/lib/views/app__dashboard__orgSlug__settings__page";
 import Link from "next/link";
-import { CreditCard, ExternalLink, KeyRound, Mail } from "lucide-react";
+import { CreditCard, ExternalLink, KeyRound, Mail, MessageSquare } from "lucide-react";
 import { EditOrgForm } from "@/components/org/EditOrgForm";
 import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { DeleteOrganisationButton } from "@/components/dashboard/DeleteOrganisationButton";
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const sectionCard = "rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export default async function OrgSettingsPage({ params }: Props) {
-  const { org, isOwner, canDelete, totalApiClients, activeApiClients, payments, email } = await loadOrgSettingsView({ params });
+  const { org, isOwner, canDelete, totalApiClients, activeApiClients, payments, email, chatChannels } = await loadOrgSettingsView({ params });
   return (
     <div className="flex flex-col gap-7">
       <OrgPageHeader
@@ -121,6 +121,22 @@ export default async function OrgSettingsPage({ params }: Props) {
             </div>
           </section>
         ) : null}
+
+        <section id="chat" aria-labelledby="chat-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+          <div className="min-w-0 flex-1">
+            <h2 id="chat-title" className="text-h4 text-ink">Chat notifications</h2>
+            <p className="mt-0.5 text-body-ui text-ink-muted">Tell your team&apos;s Slack, Discord, Mattermost, Telegram or WhatsApp about registrations, requests, payments and refunds.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Chip tone={chatChannels > 0 ? "success" : "neutral"}>{chatChannels > 0 ? `${chatChannels} connected` : "None connected"}</Chip>
+            <Button asChild variant="secondary">
+              <Link href={`/dashboard/${org.slug}/settings/chat`}>
+                <MessageSquare aria-hidden className="size-4" />
+                Manage chats
+              </Link>
+            </Button>
+          </div>
+        </section>
 
         {canDelete ? (
           <section

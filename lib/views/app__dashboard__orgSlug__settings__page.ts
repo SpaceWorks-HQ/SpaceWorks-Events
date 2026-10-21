@@ -46,5 +46,7 @@ export async function loadOrgSettingsView({ params }: Props) {
     : null;
   const email = { useOwnServer: emailRow?.useOwnServer ?? false };
 
-  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients, payments, email };
+  const chatChannels = await prisma.chatChannel.count({ where: { organisationId: organisation.id } });
+
+  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients, payments, email, chatChannels };
 }
