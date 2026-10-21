@@ -60,7 +60,8 @@ Next.js 16 behavior may differ from older versions. Before changing framework AP
 - Each `app/super-admin/**/page.tsx` must call `await requireSuperAdminMfa()` itself; a unit test enforces it. Do not add a root `app/loading.tsx`: it makes public pages stream a 200 before `notFound()`/`redirect()` run (see [Architecture](ARCHITECTURE.md)).
 - Without S3 configuration, local assets can remain as database blobs.
 - Email requires an SMTP service or host. Use a local mail catcher if you need to inspect messages.
-- Google login appears when Google SSO has both a client ID and secret, either from the super-admin instance settings or the legacy environment fallback. To use instance settings locally, first create the configured super-admin account and enroll TOTP from `/account/security`.
+- Google login appears when Google SSO has both a client ID and secret, either from the super-admin instance settings or the legacy environment fallback. To use instance settings locally, first set the super-admin password with `node --env-file=.env docker/vps/recover-super-admin.mjs <SUPER_ADMIN_EMAIL>` and sign in; the app refuses that address's sign-up and password reset.
+- Organisation staff need an authenticator app, a password sign-in from a new browser needs a code emailed to the account, and new passwords are checked against Have I Been Pwned. For local development without a mail catcher or network access, set `STAFF_MFA_REQUIRED=false`, `LOGIN_NEW_DEVICE_CHECK=false` or `PWNED_PASSWORDS_CHECK=false` in `.env`. Leave the first two on in production; turn the breached-password check off only on air-gapped installs.
 - SMTP, Google SSO, and displayed backup posture can be configured at `/super-admin/settings`; legacy environment values remain useful for bootstrapping and unattended deployments.
 
 ## Before opening a pull request

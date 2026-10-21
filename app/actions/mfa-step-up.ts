@@ -3,16 +3,17 @@
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/permissions";
+import { requireAuth } from "@/lib/permissions";
 import { decryptMfaSecret, consumeMfaCode } from "@/lib/mfa";
-import { createSuperAdminMfaProof, SUPER_ADMIN_MFA_COOKIE, SUPER_ADMIN_MFA_MAX_AGE_SECONDS } from "@/lib/superAdminMfa";
+import { createMfaProof, MFA_PROOF_COOKIE, MFA_PROOF_MAX_AGE_SECONDS } from "@/lib/mfaProof";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import type { ActionResult } from "./org";
 
 const schema = z.object({ code: z.string().trim().regex(/^\d{6}$/, "Enter a six-digit authenticator code.") });
 
-export async function verifySuperAdminMfa(input: unknown): Promise<ActionResult> {
-  const session = await requireSuperAdmin();
+/** After a sign-in without an authenticator code (Google), staff confirm one here. */
+export async function verifyStepUpMfa(input: unknown): Promise<ActionResult> {
+  const session = await requireAuth();
   if (await isActionRateLimited("auth", session.user.id)) {
     return { ok: false, error: "Too many attempts. Please try again later." };
   }
@@ -24,7 +25,7 @@ export async function verifySuperAdminMfa(input: unknown): Promise<ActionResult>
     select: { email: true, mfaSecretEncrypted: true, mfaEnabledAt: true, sessionVersion: true },
   });
   if (!user?.email || !user.mfaEnabledAt || !user.mfaSecretEncrypted) {
-    return { ok: false, error: "Authenticator MFA must be enabled before accessing super admin." };
+    return { ok: false, error: "Set up an authenticator app in Account security first." };
   }
 
   let valid = false;
@@ -35,17 +36,16 @@ export async function verifySuperAdminMfa(input: unknown): Promise<ActionResult>
   }
   if (!valid) return { ok: false, error: "Invalid authenticator code." };
 
-  const proof = createSuperAdminMfaProof(session.user.id, user.sessionVersion);
-  (await cookies()).set(SUPER_ADMIN_MFA_COOKIE, proof, {
+  (await cookies()).set(MFA_PROOF_COOKIE, createMfaProof(session.user.id, user.sessionVersion), {
     httpOnly: true,
-    sameSite: "strict",
+    sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
-    path: "/super-admin",
-    maxAge: SUPER_ADMIN_MFA_MAX_AGE_SECONDS,
+    path: "/",
+    maxAge: MFA_PROOF_MAX_AGE_SECONDS,
     priority: "high",
   });
   await prisma.auditEvent.create({
-    data: { action: "SUPER_ADMIN_MFA_VERIFIED", actorUserId: session.user.id, targetType: "User", targetId: session.user.id },
+    data: { action: "MFA_STEP_UP_VERIFIED", actorUserId: session.user.id, targetType: "User", targetId: session.user.id },
   });
   return { ok: true };
 }

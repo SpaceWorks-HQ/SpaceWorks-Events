@@ -120,11 +120,11 @@ back through the frontend API proxy. Preserve streaming flushes in Caddy/CDNs.
 Before accepting registrations, verify public HTTPS on both hosts and run the
 VPS checks. Then exercise these flows through the frontend domain:
 
-1. Create and verify an account, sign in/out, password reset, session revocation and MFA. Confirm cookies are HttpOnly and Secure in HTTPS production.
+1. Create and verify an account, sign in/out, password reset, session revocation and MFA, including the emailed code for a new browser and the staff authenticator check on `/verify-mfa`. Confirm cookies are HttpOnly and Secure in HTTPS production.
 2. Create an organisation and event, edit settings, upload a cover and badge image, and verify another tenant cannot read or mutate them.
 3. Publish a page, RSVP, open/download its ticket and scan it from a staff session. Confirm the attendee sees live check-in without reloading, including after reconnect.
 4. Send a real verification/broadcast email; check canonical frontend links, private image delivery and the independent VPS outbox heartbeat.
-5. Exercise invitation, feedback/certificate, exports and super-admin MFA navigation; direct private peer/readiness/scheduler paths on the frontend must return 404.
+5. Exercise invitation, feedback/certificate, exports and super-admin navigation; direct private peer/readiness/scheduler paths on the frontend must return 404.
 6. Complete the off-server backup and isolated restore drill in the VPS guide.
 
 Run `npm run test:e2e:split` for two actual Next.js production servers with

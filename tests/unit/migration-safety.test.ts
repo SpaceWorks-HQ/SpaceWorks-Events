@@ -141,4 +141,11 @@ describe("production migration safety contracts", () => {
     expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
     expect(sql).toContain('ADD COLUMN     "reminderSentAt" TIMESTAMP(3);');
   });
+
+  it("adds known devices as a new table, removed with their account", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261031000000_user_devices/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain('ON DELETE CASCADE');
+    expect(sql).toContain('"deviceHash" ~ \'^[a-f0-9]{64}$\'');
+  });
 });

@@ -10,9 +10,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # Space Works Events agent guide
 
+`CLAUDE.md` is an exact copy of this file, so every coding agent reads the same
+rules. Edit `AGENTS.md`, then copy it over `CLAUDE.md`; a unit test
+(`tests/unit/agent-guidance.test.ts`) fails when they differ.
+
 ## Project at a glance
 
-Space Works Events is a self-hosted, multi-tenant platform for organizing and running free events, built by Space Works (derived from Yuyu by Abhiram N J; see `NOTICE`). It does not support paid events, ticket sales, payments, refunds, or event revenue. Event registration and attendance are always free for attendees. It uses Next.js 16 App
+Space Works Events is a self-hosted, multi-tenant platform for organizing and running free events, built by Space Works (derived from Yuyu by Abhiram N J; see `NOTICE`). Events are free by default. When the super admin turns paid events on, organisations sell tickets through their own Razorpay or Stripe account, with promo codes, passes, refunds, receipts and revenue reporting (see `docs/plans/paid-events.md`). It uses Next.js 16 App
 Router, React 19, TypeScript, PostgreSQL with Prisma 6, Auth.js v5, Tailwind
 CSS 4 with Radix primitives, Redis, S3-compatible private storage, Nodemailer,
 Vitest, and Playwright. Deployment supports Docker standalone output, the Render free-tier Blueprint
@@ -41,6 +45,73 @@ Read the relevant page in `docs/` before changing an unfamiliar product area:
 
 `prisma/schema.prisma` is authoritative for data model details. Do not infer a
 field, constraint, or cascade from a component alone.
+
+## Fast orientation
+
+Space Works Events is a production-oriented, self-hosted multi-tenant event
+platform by Space Works, following the Space Works brand (see "Design system"
+below and `docs/DESIGN.md`). The
+most sensitive current scenarios are organisation isolation and role checks;
+event privacy and RSVP capacity; opaque ticket, certificate, invitation, and
+password-reset links; event short links that never reveal hidden events; the
+realtime ticket check-in endpoints (`/api/ticket/:token/{status,events}`,
+check-in state only, channels keyed by RSVP id); the personal data export and
+leave-organisation actions (own data and membership only); required
+authenticator MFA for organisation staff, checked each session (`/verify-mfa`,
+`lib/staffMfa.ts`); password sign-in protections (failure limits, emailed
+new-device codes, new-sign-in alerts) and the breached-password check; the
+super-admin access check in every super-admin page (email and password set
+from the server, no separate step-up); write-only,
+encrypted instance SMTP/Google settings; tenant-bound machine API credentials;
+image safety; outbox email delivery with an absolute `NEXT_PUBLIC_BASE_URL`;
+server-generated ID cards (`lib/badge/`, org-isolated, storage-key-only
+images); the one-line curl VPS installer (`install.sh`, `scripts/*vps*`: asks
+everything before changing the host, never regenerates secrets, rolls back failed
+updates or auto-deploys via a self-hosted runner; nightly age-encrypted backups with
+off-site copies and a status file the app reads read-only (`/status`, never the
+backups themselves); operator tools for settings changes, super-admin recovery,
+support bundles and uninstall; HTTPS by Caddy, its LAN CA or an existing proxy;
+bundled PostgreSQL, Redis and Silo or an external S3 bucket; `split` layout by default,
+website and API containers on two hostnames); public release images
+(`.github/workflows/release.yml`: `spaceworks-events-backend`, which also runs
+the `migrate` and VPS-tool roles, and `spaceworks-events-frontend`; one image for
+every installation, so nothing installation-specific may be compiled in, and
+the placeholder origins are swapped by `scripts/docker-entrypoint.sh`; GitHub
+Releases only when `VERSION` changes);
+and Docker/Render/Helm
+deployment with PostgreSQL (Supabase), Redis
+(Upstash), S3 (Cloudflare R2), and SMTP (Brevo on port 2525).
+
+Before changing framework behaviour, consult the relevant Next.js 16 guide in
+`node_modules/next/dist/docs/`. Before changing an unfamiliar domain, consult
+the matching document in `docs/` and the Prisma schema. Never expose or copy
+values from `.env`; use `.env.example` for configuration names.
+
+For instance settings, preserve this ordering: database values override legacy
+environment fallbacks; secrets are encrypted at rest and never returned to the
+browser; backup fields only record posture and do not control provider backups.
+For the machine API, resolve the organisation from the bearer credential, check
+an explicit scope, and return a deliberately minimal DTO.
+
+Keep source files (TypeScript/TSX/MJS, tests included) at or under 300 lines,
+not counting blank lines and comments (ESLint `max-lines`, a warning until
+existing long files are split). Split long modules into focused parts behind
+the original import path, as `lib/outbox.ts` now is. Generated files are exempt.
+
+At minimum, validate targeted changes with lint, TypeScript, and the relevant
+test suite. For authorization, mutation, public-route, operational, API, or
+deployment changes, follow the stronger checks under Verification below and in
+`docs/TESTING.md`. Other sessions may edit the tree in parallel: commit with
+explicit paths only, and commit the user manual only when asked.
+
+Every new feature goes on its own branch (`feat/<short-name>`, or
+`fix/<short-name>` for a bug fix) created from `dev`, and lands in `dev`
+through a pull request once checks pass. Only @Shaan-Shoukath merges to `main`
+(branch protection); never push to `main`. Don't push or delete branches
+unless asked. See "Branching" below.
+
+For local review data, `DEMO_PASSWORD=... node --env-file=.env
+scripts/seed-demo.mjs` seeds a demo organiser, organisation and event.
 
 ## Repository map
 
@@ -77,6 +148,13 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
 - Inspect nearby code and existing tests before introducing a pattern. Keep
   changes small, typed, and consistent with the established UI: Tailwind CSS, Radix
   primitives and lucide icons via `components/ui/*` (see `docs/DESIGN.md`).
+- Source files (TypeScript, TSX and MJS, tests included) stay at or under 300
+  lines, not counting blank lines and comments. ESLint `max-lines` enforces it:
+  a warning for now while existing long files are split, an error after that.
+  Split a long module into focused parts behind its original import path, as
+  `lib/outbox.ts` re-exports `lib/outbox/{payloads,enqueue,context,deliver}.ts`.
+  Generated files (`lib/frontend/registry.ts`, `frontend/catalog.json`) are
+  exempt.
 - Use Server Components by default. Add `"use client"` only for browser state,
   effects, event handlers, or browser APIs.
 - Read the relevant current Next.js 16 guide in `node_modules/next/dist/docs/`
@@ -106,10 +184,26 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
 - `Organisation` is the tenant boundary. Every dashboard read or mutation must
   resolve the organisation server-side and verify membership plus the required
   `OWNER`/`ADMIN`/`MEMBER` permission. UI visibility is never authorization.
-- Super-admin access is distinct from organisation access. Keep its
-  `SUPER_ADMIN_EMAIL` check, fresh TOTP step-up, generic not-found behaviour,
-  and audit coverage intact. Every `app/super-admin/**/page.tsx` must call
-  `await requireSuperAdminMfa()` itself, because layout checks do not re-run on
+- Organisation staff (any membership role, or an event/series co-organiser
+  grant) must use an authenticator app and pass a check each session, at the
+  password sign-in or on `/verify-mfa` (`lib/staffMfa.ts`, `lib/mfaProof.ts`).
+  Staff checks in actions (`getMembership`, `canAccessEvent`,
+  `canViewEventDashboard`) return no access until then, and staff pages
+  redirect through `requireStaffMfa`. Attendees and the super admin are exempt.
+  Do not bypass these helpers; `STAFF_MFA_REQUIRED=false` is for local
+  development and tests only.
+- Keep the password sign-in protections in `lib/loginSecurity.ts` (address and
+  account failure limits, emailed new-device codes, new-sign-in alerts) and the
+  breached-password check in `lib/pwnedPasswords.ts` (sign-up, reset, change).
+  Sign-in codes are stored only hashed; only a SHA-256 of a device id is kept.
+- Super-admin access is distinct from organisation access. It opens with email
+  and password, with no separate authenticator step-up; the super admin's
+  password is set only from the server (`scripts/vps-recover.sh`,
+  `docker/vps/recover-super-admin.mjs`) and the app refuses its sign-up,
+  forgot-password and password changes. Keep its `SUPER_ADMIN_EMAIL` check,
+  generic not-found behaviour, and audit coverage intact. Every
+  `app/super-admin/**/page.tsx` must call `await requireSuperAdminMfa()` (now a
+  super-admin access check only) itself, because layout checks do not re-run on
   client navigation; `tests/unit/super-admin-page-guards.test.ts` enforces it.
   Super-admin insights stay read-only, capped, and parameterised, and never
   load secrets, tokens, answers, or message bodies. Instance-managed SMTP/Google secrets are
@@ -136,7 +230,7 @@ come from `components/brand/SpaceWorksLogo.tsx` (masters in
 - Event short codes resolve only for published events with a released
   website, and unknown, unreleased, and rate-limited codes share the
   unknown-organisation 404 so a code never reveals a hidden event's slug.
-- Treat ticket, certificate, invite, password-reset, MFA, `CRON_SECRET`, and
+- Treat ticket, certificate, invite, password-reset, sign-in code, MFA, `CRON_SECRET`, and
   readiness values as secrets/bearer capabilities. Never log, expose, test
   with, or place them in audit metadata, URLs in diagnostics, or analytics.
 - Do not read, print, commit, or copy `.env` values. Use `.env.example` for

@@ -14,7 +14,9 @@ Fast Vitest tests cover validation and isolated domain/security behavior. Watch 
 
 Machine API coverage includes bearer parsing and hashing, credential state, strict DTOs, cursor validation, scope behavior, and forbidden-field regression checks.
 
-Other security-relevant unit suites include `super-admin-page-guards` (fails if any `app/super-admin/**/page.tsx` omits `await requireSuperAdminMfa()`), the live-ticket suites (`ticket-check-in-events`, `ticket-check-in-publish`, `ticket-check-in-routes`, `ticket-check-in-watcher`, `use-ticket-check-in`), `account-data-export` and `account-organisations-actions`, `short-link-actions` and `short-link-resolve`, `broadcast-designs`, `event-publishing`, `safe-http-url`, and `image-validation`.
+Other security-relevant unit suites include `super-admin-page-guards` (fails if any `app/super-admin/**/page.tsx` omits `await requireSuperAdminMfa()`), the live-ticket suites (`ticket-check-in-events`, `ticket-check-in-publish`, `ticket-check-in-routes`, `ticket-check-in-watcher`, `use-ticket-check-in`), `account-data-export` and `account-organisations-actions`, `short-link-actions` and `short-link-resolve`, `broadcast-designs`, `event-publishing`, `safe-http-url`, `image-validation`, `mfa-proof` and `mfa-step-up-action` (the staff authenticator proof cookie and `/verify-mfa` action), and `pwned-passwords` (k-anonymity request, padding, fail-open behaviour).
+
+The Vitest, Playwright and split-hosting runs set `STAFF_MFA_REQUIRED`, `LOGIN_NEW_DEVICE_CHECK` and `PWNED_PASSWORDS_CHECK` to `false`, so suites do not need authenticator codes, emailed sign-in codes or network access to Have I Been Pwned. Tests of those protections turn them back on with `vi.stubEnv`.
 
 ### PostgreSQL integration tests
 
@@ -28,7 +30,7 @@ capacity, and feedback persistence. `TEST_DATABASE_URL` is mandatory so the
 suite cannot silently inherit the application's ambient `DATABASE_URL`. Keep
 the named database disposable and never point it at production.
 
-The machine API integration suite additionally exercises persisted credential hashes, cross-tenant event access, participant privacy, and bounded collections. The short-link suite covers owner/admin-only creation, cross-tenant rejection, idempotent and concurrent creation, regeneration, the unique index, and resolution for every non-published status.
+The machine API integration suite additionally exercises persisted credential hashes, cross-tenant event access, participant privacy, and bounded collections. The short-link suite covers owner/admin-only creation, cross-tenant rejection, idempotent and concurrent creation, regeneration, the unique index, and resolution for every non-published status. The `login-security` suite covers first-device trust and new-device alerts, single-use hashed sign-in codes, per-account and per-address failure counting (never blocking an "unknown" address), and the staff authenticator rule, including the exemptions for attendees and the super admin.
 
 ### Coverage
 

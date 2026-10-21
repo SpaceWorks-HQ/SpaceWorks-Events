@@ -3,6 +3,7 @@ import "server-only";
 import { EventPermission } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getMembership, isOrgAdmin } from "@/lib/permissions";
+import { staffMfaSatisfied } from "@/lib/staffMfa";
 
 export async function canAccessEvent(params: {
   userId: string;
@@ -26,7 +27,7 @@ export async function canAccessEvent(params: {
     },
     select: { id: true },
   });
-  return Boolean(grant);
+  return Boolean(grant) && (await staffMfaSatisfied(params.userId));
 }
 
 export async function canViewEventDashboard(params: {
@@ -46,5 +47,5 @@ export async function canViewEventDashboard(params: {
     where: { userId: params.userId, ...(params.eventId ? { eventId: params.eventId } : { eventSeriesId: params.eventSeriesId }) },
     select: { id: true },
   });
-  return Boolean(grant);
+  return Boolean(grant) && (await staffMfaSatisfied(params.userId));
 }

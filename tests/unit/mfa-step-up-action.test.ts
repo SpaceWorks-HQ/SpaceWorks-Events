@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  requireSuperAdmin: vi.fn(),
+  requireAuth: vi.fn(),
   rateLimit: vi.fn(),
   userFind: vi.fn(),
   auditCreate: vi.fn(),
@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   cookieSet: vi.fn(),
 }));
 
-vi.mock("@/lib/permissions", () => ({ requireSuperAdmin: mocks.requireSuperAdmin }));
+vi.mock("@/lib/permissions", () => ({ requireAuth: mocks.requireAuth }));
 vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: mocks.rateLimit }));
 vi.mock("@/lib/db", () => ({ prisma: {
   user: { findUnique: mocks.userFind },
@@ -21,18 +21,18 @@ vi.mock("@/lib/mfa", () => ({
   decryptMfaSecret: mocks.decrypt,
   consumeMfaCode: mocks.verify,
 }));
-vi.mock("@/lib/superAdminMfa", () => ({
-  createSuperAdminMfaProof: mocks.createProof,
-  SUPER_ADMIN_MFA_COOKIE: "mfa-proof",
-  SUPER_ADMIN_MFA_MAX_AGE_SECONDS: 600,
+vi.mock("@/lib/mfaProof", () => ({
+  createMfaProof: mocks.createProof,
+  MFA_PROOF_COOKIE: "mfa-proof",
+  MFA_PROOF_MAX_AGE_SECONDS: 43200,
 }));
 vi.mock("next/headers", () => ({ cookies: vi.fn().mockResolvedValue({ set: mocks.cookieSet }) }));
 
-import { verifySuperAdminMfa } from "@/app/actions/super-admin-mfa";
+import { verifyStepUpMfa } from "@/app/actions/mfa-step-up";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.requireSuperAdmin.mockResolvedValue({ user: { id: "admin_1", email: "admin@example.test" } });
+  mocks.requireAuth.mockResolvedValue({ user: { id: "admin_1", email: "admin@example.test" } });
   mocks.rateLimit.mockResolvedValue(false);
   mocks.userFind.mockResolvedValue({
     email: "admin@example.test",
@@ -45,10 +45,10 @@ beforeEach(() => {
   mocks.createProof.mockReturnValue("signed-proof");
 });
 
-describe("super-admin MFA action", () => {
+describe("MFA step-up action", () => {
   it("applies the strict authentication limit before verifying a code", async () => {
     mocks.rateLimit.mockResolvedValue(true);
-    await expect(verifySuperAdminMfa({ code: "123456" })).resolves.toEqual({
+    await expect(verifyStepUpMfa({ code: "123456" })).resolves.toEqual({
       ok: false,
       error: "Too many attempts. Please try again later.",
     });
@@ -56,13 +56,13 @@ describe("super-admin MFA action", () => {
     expect(mocks.userFind).not.toHaveBeenCalled();
   });
 
-  it("sets a short-lived HttpOnly proof only after successful TOTP verification", async () => {
-    await expect(verifySuperAdminMfa({ code: "123456" })).resolves.toEqual({ ok: true });
+  it("sets an HttpOnly proof only after successful TOTP verification", async () => {
+    await expect(verifyStepUpMfa({ code: "123456" })).resolves.toEqual({ ok: true });
     expect(mocks.cookieSet).toHaveBeenCalledWith("mfa-proof", "signed-proof", expect.objectContaining({
       httpOnly: true,
-      sameSite: "strict",
-      maxAge: 600,
-      path: "/super-admin",
+      sameSite: "lax",
+      maxAge: 43200,
+      path: "/",
     }));
     expect(mocks.auditCreate).toHaveBeenCalledOnce();
   });
