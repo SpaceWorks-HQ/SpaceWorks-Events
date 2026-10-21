@@ -67,7 +67,7 @@ Generate independent keys with `openssl rand -base64 32`. Rotating the Server Ac
 node --env-file=/secure/path/swevents.env scripts/check-instance-secrets.mjs
 ```
 
-It reports which stored values cannot be decrypted, never printing them, and exits non-zero (it is also included in the `migrator` image and can run in the Helm migration job with `migration.checkInstanceSecrets=true`). Fix it by restoring the original key on every replica and job. If the original key is lost, set one new key everywhere, re-enter the SMTP password, Google client secret, and alert webhook in Super admin → Settings, and have enrolled users re-enrol MFA (recovery codes are hashed, not encrypted, and still work).
+It checks the panel's SMTP password, Google client secret and alert webhook, enrolled authenticator seeds, and every organisation's mail server password, chat channel credentials, payment keys and check-in station PINs. It reports how many of each cannot be decrypted, never printing values or identifiers, and exits non-zero (it is also included in the `migrator` image and can run in the Helm migration job with `migration.checkInstanceSecrets=true`). Fix it by restoring the original key on every replica and job. If the original key is lost, set one new key everywhere, re-enter the SMTP password, Google client secret, and alert webhook in Super admin → Settings, and have enrolled users re-enrol MFA (recovery codes are hashed, not encrypted, and still work).
 
 ## Redis and request trust
 
