@@ -1,23 +1,14 @@
 "use server";
 
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
-import { auth } from "@/lib/auth";
-import { gateCheckInForStatus, parseCheckInPayload } from "@/lib/checkIn";
+import { gateCheckInForStatus } from "@/lib/checkIn";
 import { prisma } from "@/lib/db";
-import { EventPermission } from "@prisma/client";
-import { canAccessEvent } from "@/lib/eventAccess";
 import {
   attendeeLookupSchema,
-  checkInByRsvpIdSchema,
   checkInByTokenSchema,
-  offlineCheckInRosterSchema,
-  syncOfflineCheckInsSchema,
   undoCheckInSchema,
 } from "@/lib/validators";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
-import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { commitCheckInProjection, commitUndoCheckInProjection } from "@/lib/checkInMutations";
 import {
   getCheckInDetails,
@@ -25,8 +16,15 @@ import {
   type CheckInDetail,
   type RegistrationDetail,
 } from "@/lib/checkInDetails";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
+import { attendeeLabel, requireOrgMemberForEvent, resolveRsvpForToken, revalidateAfterCheckIn } from "./checkin/access";
+import {
+  checkInByRsvpId as checkInByRsvpIdAction,
+  previewCheckInByRsvpId as previewCheckInByRsvpIdAction,
+} from "./checkin/byRsvpId";
+import {
+  downloadOfflineCheckInRoster as downloadOfflineCheckInRosterAction,
+  syncOfflineCheckIns as syncOfflineCheckInsAction,
+} from "./checkin/offline";
 
 export type CheckInResultData = {
   rsvpId: string;
@@ -44,116 +42,6 @@ export type CheckInResultData = {
 export type CheckInPreviewData = CheckInResultData & {
   gate: { ok: true; } | { ok: false; reason: string; needsForce: boolean; blocked?: boolean; };
 };
-
-function revalidateAfterCheckIn(
-  orgSlug: string,
-  rsvp: {
-    eventId: string | null;
-    event: { slug: string; } | null;
-    eventInstanceId: string | null;
-  },
-) {
-  if (rsvp.eventId && rsvp.event) {
-    revalidatePath(`/dashboard/${orgSlug}/event/${rsvp.eventId}`);
-    revalidatePath(`/dashboard/${orgSlug}/event/${rsvp.eventId}/check-in`);
-    revalidatePath(`/${orgSlug}/${rsvp.event.slug}`);
-  }
-  if (rsvp.eventInstanceId) {
-    revalidatePath(`/${orgSlug}/i/${rsvp.eventInstanceId}`);
-  }
-  revalidatePath(`/${orgSlug}`);
-}
-
-async function requireOrgMemberForEvent(
-  organisationSlug: string,
-  eventId: string,
-) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return { ok: false as const, error: "You must be signed in." };
-  }
-  if (await isActionRateLimited("checkin", session.user.id)) {
-    return { ok: false as const, error: "Too many check-in requests. Please try again shortly." };
-  }
-  const org = await prisma.organisation.findUnique({
-    where: { slug: organisationSlug },
-  });
-  if (!org) return { ok: false as const, error: "Organisation not found." };
-
-  if (!(await canAccessEvent({ userId: session.user.id, organisationId: org.id, eventId, permission: EventPermission.CHECK_IN }))) {
-    return { ok: false as const, error: "You do not have permission to operate check-in." };
-  }
-
-  const event = await prisma.event.findFirst({
-    where: { id: eventId, organisationId: org.id },
-  });
-  if (!event) return { ok: false as const, error: "Event not found." };
-
-  return {
-    ok: true as const,
-    event,
-    orgSlug: org.slug,
-    actorUserId: session.user.id,
-  };
-}
-
-function attendeeLabel(r: {
-  user: { name: string | null; email: string | null; } | null;
-  guestName?: string | null;
-  guestEmail: string | null;
-}) {
-  const name = r.user?.name?.trim();
-  if (name) return name;
-  const gn = r.guestName?.trim();
-  if (gn) return gn;
-  const email = r.user?.email ?? r.guestEmail;
-  return email ?? "Guest";
-}
-
-async function resolveRsvpForToken(
-  organisationSlug: string,
-  eventId: string,
-  rawInput: string,
-) {
-  const ctx = await requireOrgMemberForEvent(organisationSlug, eventId);
-  if (!ctx.ok) return { ok: false as const, error: ctx.error };
-
-  const token = parseCheckInPayload(rawInput);
-  if (!token) {
-    return { ok: false as const, error: "Could not read a ticket code from that input." };
-  }
-
-  const rsvp = await prisma.rSVP.findFirst({
-    where: { checkInToken: token },
-    include: {
-      user: { select: { name: true, email: true } },
-      answers: { include: { field: { select: { key: true, label: true } } } },
-      event: { select: { id: true, organisationId: true, slug: true } },
-      eventInstance: {
-        include: { series: { select: { organisationId: true } } },
-      },
-    },
-  });
-
-  if (!rsvp) {
-    return { ok: false as const, error: "No matching ticket found." };
-  }
-
-  const orgId = ctx.event.organisationId;
-  if (rsvp.eventId && rsvp.event) {
-    if (rsvp.event.organisationId !== orgId || rsvp.eventId !== ctx.event.id) {
-      return { ok: false as const, error: "This ticket is not for this event." };
-    }
-  } else if (rsvp.eventInstanceId && rsvp.eventInstance) {
-    // This station is for one standalone event. A series occurrence must be
-    // checked in from its own dedicated workflow, never merely by org match.
-    return { ok: false as const, error: "This ticket is not for this event." };
-  } else {
-    return { ok: false as const, error: "Invalid registration." };
-  }
-
-  return { ok: true as const, ctx, rsvp };
-}
 
 export async function previewCheckInByToken(
   input: unknown,
@@ -356,117 +244,13 @@ export type OfflineCheckInRosterRow = LookupRow & {
 export async function downloadOfflineCheckInRoster(
   input: unknown,
 ): Promise<ActionResult<{ generatedAt: string; rows: OfflineCheckInRosterRow[]; }>> {
-  const parsed = offlineCheckInRosterSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: "Invalid offline roster request." };
-  }
-
-  const { organisationSlug, eventId } = parsed.data;
-  const ctx = await requireOrgMemberForEvent(organisationSlug, eventId);
-  if (!ctx.ok) return { ok: false, error: ctx.error };
-
-  const rsvps = await prisma.rSVP.findMany({
-    where: { eventId: ctx.event.id, status: { in: ["CONFIRMED", "WAITLISTED", "PENDING_APPROVAL"] } },
-    include: {
-      user: { select: { name: true, email: true } },
-      answers: { include: { field: { select: { key: true, label: true } } } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-
-  return {
-    ok: true,
-    data: {
-      generatedAt: new Date().toISOString(),
-      rows: rsvps.map((r) => ({
-        rsvpId: r.id,
-        ticketToken: r.checkInToken,
-        displayName: attendeeLabel(r),
-        email: r.user?.email ?? r.guestEmail,
-        status: r.status,
-        checkedInAt: r.checkedInAt?.toISOString() ?? null,
-        checkInDetails: getCheckInDetails(r.answers),
-        registrationDetails: getRegistrationDetails(r.answers),
-      })),
-    },
-  };
+  return downloadOfflineCheckInRosterAction(input);
 }
 
 export async function syncOfflineCheckIns(
   input: unknown,
 ): Promise<ActionResult<{ syncedIds: string[]; alreadyCheckedInIds: string[]; failed: { rsvpId: string; error: string; }[]; }>> {
-  const parsed = syncOfflineCheckInsSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: "Invalid offline check-in queue." };
-  }
-
-  const { organisationSlug, eventId, checkIns } = parsed.data;
-  const ctx = await requireOrgMemberForEvent(organisationSlug, eventId);
-  if (!ctx.ok) return { ok: false, error: ctx.error };
-
-  const rsvps = await prisma.rSVP.findMany({
-    where: { eventId: ctx.event.id, id: { in: checkIns.map((checkIn) => checkIn.rsvpId) } },
-    select: { id: true, status: true, checkedInAt: true },
-  });
-  const rsvpById = new Map(rsvps.map((rsvp) => [rsvp.id, rsvp]));
-  const syncedIds: string[] = [];
-  const alreadyCheckedInIds: string[] = [];
-  const failed: { rsvpId: string; error: string; }[] = [];
-  const seenRsvpIds = new Set<string>();
-
-  for (const checkIn of checkIns) {
-    if (seenRsvpIds.has(checkIn.rsvpId)) {
-      failed.push({ rsvpId: checkIn.rsvpId, error: "Duplicate offline check-in entry." });
-      continue;
-    }
-    seenRsvpIds.add(checkIn.rsvpId);
-    const rsvp = rsvpById.get(checkIn.rsvpId);
-    if (!rsvp) {
-      failed.push({ rsvpId: checkIn.rsvpId, error: "RSVP not found for this event." });
-      continue;
-    }
-    const gate = gateCheckInForStatus(rsvp.status, checkIn.force);
-    if (!gate.ok) {
-      failed.push({ rsvpId: checkIn.rsvpId, error: gate.reason });
-      continue;
-    }
-    const checkedInAt = new Date(checkIn.checkedInAt);
-    const earliest = ctx.event.startDateTime.getTime() - 24 * 60 * 60_000;
-    const latest = Math.min(Date.now() + 5 * 60_000, ctx.event.endDateTime.getTime() + 60 * 60_000);
-    if (checkedInAt.getTime() < earliest || checkedInAt.getTime() > latest) {
-      failed.push({ rsvpId: checkIn.rsvpId, error: "Offline check-in time is outside the event operating window." });
-      continue;
-    }
-    if (rsvp.checkedInAt) {
-      alreadyCheckedInIds.push(rsvp.id);
-      continue;
-    }
-    const committed = await commitCheckInProjection({
-      rsvpId: rsvp.id,
-      actorUserId: ctx.actorUserId,
-      source: "offline-sync",
-      checkedInAt,
-      force: checkIn.force,
-    });
-    if (committed.state === "checked-in") {
-      syncedIds.push(rsvp.id);
-    } else if (committed.state === "already-checked-in") {
-      alreadyCheckedInIds.push(rsvp.id);
-    } else {
-      const currentGate = committed.state === "ineligible" ? gateCheckInForStatus(committed.status, checkIn.force) : null;
-      failed.push({
-        rsvpId: rsvp.id,
-        error: committed.state === "missing" ? "RSVP not found for this event." : currentGate?.ok ? "Check-in could not be completed." : currentGate!.reason,
-      });
-    }
-  }
-
-  if (syncedIds.length > 0) {
-    revalidatePath(`/dashboard/${ctx.orgSlug}/event/${ctx.event.id}`);
-    revalidatePath(`/dashboard/${ctx.orgSlug}/event/${ctx.event.id}/check-in`);
-  }
-
-  return { ok: true, data: { syncedIds, alreadyCheckedInIds, failed } };
+  return syncOfflineCheckInsAction(input);
 }
 
 export async function lookupAttendeesForCheckIn(
@@ -523,150 +307,11 @@ export async function lookupAttendeesForCheckIn(
 export async function previewCheckInByRsvpId(
   input: unknown,
 ): Promise<ActionResult<CheckInPreviewData>> {
-  const parsed = checkInByRsvpIdSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Invalid input.",
-      fieldErrors: flattenZodErrors(parsed.error),
-    };
-  }
-
-  const { organisationSlug, eventId, rsvpId, force } = parsed.data;
-  const ctx = await requireOrgMemberForEvent(organisationSlug, eventId);
-  if (!ctx.ok) return { ok: false, error: ctx.error };
-
-  const rsvp = await prisma.rSVP.findFirst({
-    where: { id: rsvpId, eventId: ctx.event.id },
-    include: {
-      user: { select: { name: true, email: true } },
-      answers: { include: { field: { select: { key: true, label: true } } } },
-    },
-  });
-  if (!rsvp) return { ok: false, error: "RSVP not found." };
-
-  return {
-    ok: true,
-    data: {
-      rsvpId: rsvp.id,
-      displayName: attendeeLabel(rsvp),
-      email: rsvp.user?.email ?? rsvp.guestEmail,
-      status: rsvp.status,
-      alreadyCheckedIn: Boolean(rsvp.checkedInAt),
-      checkedInAt: rsvp.checkedInAt?.toISOString() ?? null,
-      checkInQrToken: rsvp.checkInToken,
-      checkInDetails: getCheckInDetails(rsvp.answers),
-      registrationDetails: getRegistrationDetails(rsvp.answers),
-      gate: gateCheckInForStatus(rsvp.status, Boolean(force)),
-    },
-  };
+  return previewCheckInByRsvpIdAction(input);
 }
 
 export async function checkInByRsvpId(
   input: unknown,
 ): Promise<ActionResult<CheckInResultData>> {
-  const parsed = checkInByRsvpIdSchema.safeParse(input);
-
-  if (!parsed.success) {
-    return {
-      ok: false,
-      error: "Invalid input.",
-      fieldErrors: flattenZodErrors(parsed.error),
-    };
-  }
-
-  const { organisationSlug, eventId, rsvpId, force } = parsed.data;
-  const ctx = await requireOrgMemberForEvent(organisationSlug, eventId);
-  if (!ctx.ok) return { ok: false, error: ctx.error };
-
-  const rsvp = await prisma.rSVP.findFirst({
-    where: { id: rsvpId, eventId: ctx.event.id },
-    include: {
-      user: { select: { name: true, email: true } },
-      answers: { include: { field: { select: { key: true, label: true } } } },
-      event: { select: { slug: true } },
-      eventInstance: { select: { id: true } },
-    },
-  });
-  if (!rsvp) return { ok: false, error: "RSVP not found." };
-
-  const gate = gateCheckInForStatus(rsvp.status, Boolean(force));
-  if (!gate.ok) {
-    if (gate.blocked) {
-      return { ok: false, error: gate.reason };
-    }
-    return {
-      ok: false,
-      error: gate.reason,
-      needsForce: true,
-    };
-  }
-
-  if (rsvp.checkedInAt) {
-    return {
-      ok: true,
-      data: {
-        rsvpId: rsvp.id,
-        displayName: attendeeLabel(rsvp),
-        email: rsvp.user?.email ?? rsvp.guestEmail,
-        status: rsvp.status,
-        alreadyCheckedIn: true,
-        checkedInAt: rsvp.checkedInAt.toISOString(),
-        checkInQrToken: rsvp.checkInToken,
-        checkInDetails: getCheckInDetails(rsvp.answers),
-        registrationDetails: getRegistrationDetails(rsvp.answers),
-      },
-    };
-  }
-
-  const now = new Date();
-  const committed = await commitCheckInProjection({
-    rsvpId: rsvp.id,
-    actorUserId: ctx.actorUserId,
-    source: "online",
-    checkedInAt: now,
-    force: Boolean(force),
-  });
-  if (committed.state !== "checked-in") {
-    if (committed.state === "missing") return { ok: false, error: "RSVP not found." };
-    if (committed.state === "ineligible") {
-      const currentGate = gateCheckInForStatus(committed.status, Boolean(force));
-      return { ok: false, error: currentGate.ok ? "Check-in could not be completed." : currentGate.reason };
-    }
-    return {
-      ok: true,
-      data: {
-        rsvpId: rsvp.id,
-        displayName: attendeeLabel(rsvp),
-        email: rsvp.user?.email ?? rsvp.guestEmail,
-        status: rsvp.status,
-        alreadyCheckedIn: true,
-        checkedInAt: committed.checkedInAt.toISOString(),
-        checkInQrToken: rsvp.checkInToken,
-        checkInDetails: getCheckInDetails(rsvp.answers),
-        registrationDetails: getRegistrationDetails(rsvp.answers),
-      },
-    };
-  }
-
-  revalidateAfterCheckIn(ctx.orgSlug, {
-    eventId: rsvp.eventId,
-    event: rsvp.event,
-    eventInstanceId: rsvp.eventInstanceId,
-  });
-
-  return {
-    ok: true,
-    data: {
-      rsvpId: rsvp.id,
-      displayName: attendeeLabel(rsvp),
-      email: rsvp.user?.email ?? rsvp.guestEmail,
-      status: rsvp.status,
-      alreadyCheckedIn: false,
-      checkedInAt: now.toISOString(),
-      checkInQrToken: rsvp.checkInToken,
-      checkInDetails: getCheckInDetails(rsvp.answers),
-      registrationDetails: getRegistrationDetails(rsvp.answers),
-    },
-  };
+  return checkInByRsvpIdAction(input);
 }

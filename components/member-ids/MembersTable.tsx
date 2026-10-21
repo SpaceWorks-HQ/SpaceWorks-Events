@@ -3,51 +3,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { Check, Copy, Download, Mail, MoreHorizontal, Pencil, RefreshCw, RotateCcw, Slash, Trash2, UserPlus, X } from "lucide-react";
-import { addIdMember, deleteIdMember, emailIdCard, emailIdCards, renewIdMembers, setIdMemberStatus, updateIdMember, uploadIdMemberPhoto } from "@/app/actions/member-ids";
-import { Button, IconButton } from "@/components/ui/button";
-import { Checkbox, CheckboxField } from "@/components/ui/choice";
-import { ConfirmDialog, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
-import { Avatar, Callout, EmptyState } from "@/components/ui/display";
-import { Dropdown, Field, Input, SearchInput, Textarea } from "@/components/ui/field";
-import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Check, Copy, Mail, RefreshCw, UserPlus } from "lucide-react";
+import { deleteIdMember, emailIdCards, renewIdMembers, setIdMemberStatus } from "@/app/actions/member-ids";
+import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/dialog";
+import { Callout, EmptyState } from "@/components/ui/display";
+import { Field, SearchInput, Textarea } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
-import { emailQueuedNotice, type CardState, type FieldType, type MemberStatus } from "@/lib/memberIds/core";
+import { emailQueuedNotice } from "@/lib/memberIds/core";
 import { fetchDownload } from "./download";
-import { MemberStatusPill } from "./StatusPill";
+import { MemberDialog } from "./MembersTable/MemberDialog";
+import { MemberRowsTable } from "./MembersTable/MemberRowsTable";
+import { ACTION_COPY, FILTERS, type FormField, type MemberRow, type StatusAction } from "./MembersTable/shared";
 
-export type MemberRow = {
-  id: string;
-  name: string;
-  email: string | null;
-  photoUrl: string | null;
-  status: MemberStatus;
-  state: CardState;
-  idNumber: string | null;
-  validUntil: string | null;
-  values: Record<string, string>;
-  reason: string | null;
-  source: "FORM" | "IMPORT" | "MANUAL";
-};
-
-type FormField = { key: string; label: string; type: FieldType; required: boolean; options: string[] };
-type StatusAction = "approve" | "reject" | "revoke" | "reinstate";
-
-const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "PENDING", label: "Waiting" },
-  { id: "APPROVED", label: "Approved" },
-  { id: "REJECTED", label: "Rejected" },
-  { id: "REVOKED", label: "Revoked" },
-] as const;
-
-const ACTION_COPY: Record<StatusAction, { verb: string; done: (n: number) => string }> = {
-  approve: { verb: "Approve", done: (n) => `${n} ${n === 1 ? "card" : "cards"} approved and issued.` },
-  reject: { verb: "Reject", done: (n) => `${n} ${n === 1 ? "request" : "requests"} rejected.` },
-  revoke: { verb: "Revoke", done: (n) => `${n} ${n === 1 ? "card" : "cards"} revoked. Their check page now says Revoked.` },
-  reinstate: { verb: "Reinstate", done: (n) => `${n} ${n === 1 ? "card" : "cards"} reinstated.` },
-};
+export type { MemberRow } from "./MembersTable/shared";
 
 export function MembersTable({
   organisationSlug,
@@ -237,81 +206,22 @@ export function MembersTable({
               : "Members appear here once people join or an admin imports them."}
         </EmptyState>
       ) : (
-        <Table label="Members">
-          <THead>
-            <tr>
-              {canManage ? (
-                <TH className="w-10">
-                  <Checkbox aria-label="Select every member on this page" checked={allOnPage} onCheckedChange={(on) => setSelected(on ? new Set(rows.map((row) => row.id)) : new Set())} />
-                </TH>
-              ) : null}
-              <TH>Member</TH>
-              <TH>ID number</TH>
-              <TH>Status</TH>
-              <TH>Valid until</TH>
-              {canManage ? <TH className="text-right"><span className="sr-only">Actions</span></TH> : null}
-            </tr>
-          </THead>
-          <TBody>
-            {rows.map((row) => (
-              <TR key={row.id}>
-                {canManage ? (
-                  <TD className="w-10">
-                    <Checkbox aria-label={`Select ${row.name}`} checked={selected.has(row.id)} onCheckedChange={(on) => toggle(row.id, on === true)} />
-                  </TD>
-                ) : null}
-                <TD>
-                  <div className="flex min-w-[200px] items-center gap-3">
-                    <Avatar name={row.name} src={row.photoUrl} size="sm" />
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-ink">{row.name}</p>
-                      {row.email ? <p className="truncate text-caption text-ink-muted">{row.email}</p> : null}
-                    </div>
-                  </div>
-                </TD>
-                <TD className="whitespace-nowrap font-medium tabular-nums">{row.idNumber ?? <span className="text-ink-muted">Not issued</span>}</TD>
-                <TD>
-                  <div className="flex flex-col items-start gap-0.5">
-                    <MemberStatusPill state={row.state} size="sm" />
-                    {row.reason ? <span className="max-w-[220px] truncate text-caption text-ink-muted" title={row.reason}>{row.reason}</span> : null}
-                  </div>
-                </TD>
-                <TD className="whitespace-nowrap tabular-nums">{row.validUntil ?? <span className="text-ink-muted">—</span>}</TD>
-                {canManage ? (
-                  <TD className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      {row.status === "PENDING" ? (
-                        <Button size="sm" variant="secondary" disabled={busy} onClick={() => changeStatus("approve", [row.id])}>Approve</Button>
-                      ) : null}
-                      <Menu>
-                        <MenuTrigger asChild>
-                          <IconButton label={`Actions for ${row.name}`} size="sm" variant="quiet"><MoreHorizontal /></IconButton>
-                        </MenuTrigger>
-                        <MenuContent>
-                          {row.status === "PENDING" || row.status === "REJECTED" ? <MenuItem icon={<Check />} onSelect={() => changeStatus("approve", [row.id])}>Approve and issue</MenuItem> : null}
-                          {row.status === "PENDING" ? <MenuItem icon={<X />} onSelect={() => setReasonFor({ action: "reject", ids: [row.id] })}>Reject</MenuItem> : null}
-                          {row.status === "REVOKED" ? <MenuItem icon={<RotateCcw />} onSelect={() => changeStatus("reinstate", [row.id])}>Reinstate</MenuItem> : null}
-                          {row.status === "APPROVED" ? (
-                            <>
-                              <MenuItem icon={<Download />} onSelect={() => void downloadCard(row, "pdf")}>Download PDF</MenuItem>
-                              <MenuItem icon={<Download />} onSelect={() => void downloadCard(row, "png")}>Download PNG (front)</MenuItem>
-                              <MenuItem icon={<Mail />} onSelect={() => simple(() => emailIdCard({ ...ids, memberId: row.id }), () => `Card emailed to ${row.email ?? row.name}.`)}>Email card</MenuItem>
-                              <MenuItem icon={<RefreshCw />} onSelect={() => simple(() => renewIdMembers({ ...ids, memberIds: [row.id] }), () => `${row.name}'s card renewed from today.`)}>Renew</MenuItem>
-                            </>
-                          ) : null}
-                          <MenuItem icon={<Pencil />} onSelect={() => setEditing(row)}>Edit details and photo</MenuItem>
-                          <MenuSeparator />
-                          {row.status === "APPROVED" ? <MenuItem danger icon={<Slash />} onSelect={() => setReasonFor({ action: "revoke", ids: [row.id] })}>Revoke card</MenuItem> : null}
-                          <MenuItem danger icon={<Trash2 />} onSelect={() => setDeleting(row)}>Delete member</MenuItem>
-                        </MenuContent>
-                      </Menu>
-                    </div>
-                  </TD>
-                ) : null}
-              </TR>
-            ))}
-          </TBody>
-        </Table>
+        <MemberRowsTable
+          rows={rows}
+          canManage={canManage}
+          selected={selected}
+          setSelected={setSelected}
+          allOnPage={allOnPage}
+          toggle={toggle}
+          busy={busy}
+          ids={ids}
+          changeStatus={changeStatus}
+          simple={simple}
+          downloadCard={downloadCard}
+          setReasonFor={setReasonFor}
+          setEditing={setEditing}
+          setDeleting={setDeleting}
+        />
       )}
 
       {filter.pages > 1 ? (
@@ -384,94 +294,5 @@ export function MembersTable({
         />
       ) : null}
     </div>
-  );
-}
-
-function MemberDialog({
-  organisationSlug,
-  programmeId,
-  member,
-  fields,
-  onClose,
-  onSaved,
-}: {
-  organisationSlug: string;
-  programmeId: string;
-  member: MemberRow | null;
-  fields: FormField[];
-  onClose: () => void;
-  onSaved: (text: string) => void;
-}) {
-  const [name, setName] = useState(member?.name ?? "");
-  const [email, setEmail] = useState(member?.email ?? "");
-  const [values, setValues] = useState<Record<string, string>>(member?.values ?? {});
-  const [approve, setApprove] = useState(true);
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async (event: FormEvent) => {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    try {
-      const base = { organisationSlug, programmeId, name, email, values };
-      const result = member ? await updateIdMember({ ...base, memberId: member.id }) : await addIdMember({ ...base, approve });
-      if (!result.ok) return setError(result.error);
-      const memberId = member?.id ?? (result.ok && result.data && "id" in result.data ? result.data.id : null);
-      if (photo && memberId) {
-        const data = new FormData();
-        data.set("organisationSlug", organisationSlug);
-        data.set("programmeId", programmeId);
-        data.set("memberId", memberId);
-        data.set("file", photo);
-        const uploaded = await uploadIdMemberPhoto(data);
-        if (!uploaded.ok) return setError(`Details saved, but the photo didn't upload: ${uploaded.error}`);
-      }
-      onSaved(member ? `${name}'s details saved.` : approve ? `${name} added and their card issued.` : `${name} added, waiting for approval.`);
-    } catch {
-      setError("That didn't save. Check your connection and try again.");
-    } finally {
-      setPending(false);
-    }
-  };
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && !pending && onClose()}>
-      <DialogContent size="md">
-        <form onSubmit={save} className="flex min-h-0 flex-1 flex-col">
-          <DialogHeader title={member ? `Edit ${member.name}` : "Add a member"} description={member ? "Changes show on the card the next time it's downloaded." : "Add someone who didn't use the join form."} />
-          <DialogBody className="flex flex-col gap-4">
-            <Field label="Name on the card" required>
-              <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={120} />
-            </Field>
-            <Field label="Email" required helperText="Their card appears in the wallet of the account with this email.">
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} maxLength={320} />
-            </Field>
-            {fields.map((field) => (
-              <Field key={field.key} label={field.label} optional={!field.required}>
-                {field.type === "SELECT" ? (
-                  <Dropdown value={values[field.key] ?? ""} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })}>
-                    <option value="">Not set</option>
-                    {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
-                  </Dropdown>
-                ) : (
-                  <Input type={field.type === "DATE" ? "date" : field.type === "EMAIL" ? "email" : field.type === "PHONE" ? "tel" : "text"} value={values[field.key] ?? ""} maxLength={200} onChange={(event) => setValues({ ...values, [field.key]: event.target.value })} />
-                )}
-              </Field>
-            ))}
-            <Field label="Photo" optional helperText={member?.photoUrl ? "Choose a file to replace the current photo." : "JPEG, PNG or WebP, up to 5 MB."}>
-              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} className="block w-full text-[14px] text-ink-secondary file:mr-3 file:min-h-11 file:rounded-[10px] file:border file:border-line file:bg-panel file:px-4 file:font-semibold file:text-ink hover:file:bg-muted" />
-            </Field>
-            {!member ? <CheckboxField label="Approve and issue the card now" checked={approve} onCheckedChange={(on) => setApprove(on === true)} /> : null}
-            <div aria-live="polite">{error ? <Callout tone="danger" role="alert">{error}</Callout> : null}</div>
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="secondary" onClick={onClose} disabled={pending}>Cancel</Button>
-            <Button type="submit" variant="primary" loading={pending} loadingLabel="Saving…">{member ? "Save" : "Add member"}</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }

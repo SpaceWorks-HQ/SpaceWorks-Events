@@ -1,102 +1,18 @@
 "use server";
 
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { z } from "zod";
 import type { ActionResult } from "@/app/actions/org";
-import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { DEFAULT_CURRENCY, formatMoney, parseMoneyToMinor, providerMinimumMinor } from "@/lib/payments/money";
 import { isValidPromoCode, promoCodeDigest, promoCodeHint } from "@/lib/payments/promo";
 import { isAtLeastAsGenerous, type RefundPolicySnapshot } from "@/lib/payments/refundPolicy";
 import { configuredProvider } from "@/lib/payments/settings";
-import { EventPermission, type Prisma } from "@prisma/client";
-import { auth } from "@/lib/auth";
-import { canAccessEvent } from "@/lib/eventAccess";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
+import { access, revalidateOwner, setOwnerCurrency } from "./ticket-types/access";
+import { addOnSchema, archiveAddOnSchema, archivePromoSchema, archiveSchema, promoSchema, refundPolicySchema, saveSchema, transferSchema } from "./ticket-types/schemas";
 
 const MAX_TICKET_TYPES = 20;
 const ZERO = BigInt(0);
-
-/** An event, or a series (whose tickets, codes and policy cover its dates and passes). */
-const target = {
-  organisationSlug: z.string().trim().min(1).max(120),
-  eventId: z.string().trim().min(1).max(128).optional(),
-  seriesId: z.string().trim().min(1).max(128).optional(),
-};
-const oneTarget = (value: { eventId?: string; seriesId?: string; }) => Boolean(value.eventId) !== Boolean(value.seriesId);
-const optionalDate = z.string().datetime().nullable().optional();
-const saveSchema = z.object({
-  ...target,
-  ticketTypeId: z.string().trim().min(1).max(64).optional(),
-  name: z.string().trim().min(1, "Give the ticket a name.").max(80),
-  description: z.string().trim().max(500).default(""),
-  /** Typed price in major units, e.g. "499" or "499.50"; blank or 0 is free. */
-  price: z.string().trim().max(20).default(""),
-  capacity: z.number().int().min(1).max(1_000_000).nullable().optional(),
-  minPerOrder: z.number().int().min(1).max(100).default(1),
-  maxPerOrder: z.number().int().min(1).max(100).default(10),
-  salesStartAt: optionalDate,
-  salesEndAt: optionalDate,
-  /** Series only, when creating: one date's ticket, or a pass for every remaining date. */
-  kind: z.enum(["SINGLE", "PASS"]).default("SINGLE"),
-  /** Everyone; only with an access code; or only the organisation's members. */
-  visibility: z.enum(["PUBLIC", "CODE", "MEMBERS"]).default("PUBLIC"),
-  /** CODE: the access code; blank keeps the current one. Stored as a digest only. */
-  accessCode: z.string().trim().max(32).optional(),
-  /** FLEXIBLE: pay what you want, from the price (the minimum) upwards. */
-  pricing: z.enum(["FIXED", "FLEXIBLE"]).default("FIXED"),
-  suggested: z.string().trim().max(20).optional(),
-  maxPrice: z.string().trim().max(20).optional(),
-  /** A group ticket seats this many people. */
-  seatsPerTicket: z.number().int().min(1).max(20).default(1),
-  /** Booking fee per ticket, paid by the buyer; blank or 0 for none. */
-  fee: z.string().trim().max(20).optional(),
-  /** Buyers may reserve now and pay in person. */
-  payAtDesk: z.boolean().default(false),
-}).strict().refine(oneTarget, "Choose an event or a series.");
-const archiveSchema = z.object({ ...target, ticketTypeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
-
-/**
- * Ticket types, prices, promo codes and the refund policy belong to the
- * organisation's owners and admins, and to collaborators granted
- * EDIT_DETAILS on this event.
- */
-type Owner = { eventId: string; } | { eventSeriesId: string; };
-type Access = { organisation: { id: string; slug: string; }; userId: string; owner: Owner; currency: string | null; paths: string[]; };
-
-async function access(input: { organisationSlug: string; eventId?: string; seriesId?: string; }): Promise<Access | { error: string; }> {
-  const session = await auth();
-  if (!session?.user?.id) return { error: "You must be signed in." };
-  const userId = session.user.id;
-  const organisation = await prisma.organisation.findUnique({ where: { slug: input.organisationSlug }, select: { id: true, slug: true } });
-  const scope = input.eventId ? { eventId: input.eventId } : { eventSeriesId: input.seriesId };
-  if (!organisation || !(await canAccessEvent({ userId, organisationId: organisation.id, ...scope, permission: EventPermission.EDIT_DETAILS }))) {
-    return { error: "You don't have permission to change this event's tickets." };
-  }
-  if (await isActionRateLimited("action", userId)) return { error: "Too many ticket changes. Try again shortly." };
-  if (input.eventId) {
-    const event = await prisma.event.findFirst({ where: { id: input.eventId, organisationId: organisation.id }, select: { id: true, slug: true, currency: true } });
-    if (!event) return { error: "Event not found." };
-    return { organisation, userId, owner: { eventId: event.id }, currency: event.currency, paths: [`/${organisation.slug}/${event.slug}`, `/dashboard/${organisation.slug}/event/${event.id}`] };
-  }
-  const series = await prisma.eventSeries.findFirst({ where: { id: input.seriesId, organisationId: organisation.id }, select: { id: true, currency: true } });
-  if (!series) return { error: "Series not found." };
-  return { organisation, userId, owner: { eventSeriesId: series.id }, currency: series.currency, paths: [`/dashboard/${organisation.slug}/series/${series.id}`] };
-}
-
-function revalidateOwner(context: Access) {
-  for (const path of context.paths) revalidatePath(path);
-}
-
-/** Set the currency with the first ticket; the database locks it after that. */
-async function setOwnerCurrency(tx: Prisma.TransactionClient, owner: Owner, currency: string) {
-  if ("eventId" in owner) await tx.event.update({ where: { id: owner.eventId }, data: { currency } });
-  else await tx.eventSeries.update({ where: { id: owner.eventSeriesId }, data: { currency } });
-}
 
 export async function saveTicketType(input: unknown): Promise<ActionResult<{ id: string; }>> {
   const parsed = saveSchema.safeParse(input);
@@ -221,23 +137,6 @@ export async function archiveTicketType(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
-const promoSchema = z.object({
-  ...target,
-  code: z.string().trim().min(3, "Codes are 3 to 32 letters, numbers, - or _.").max(32, "Codes are 3 to 32 letters, numbers, - or _."),
-  kind: z.enum(["PERCENT", "FIXED"]),
-  appliesPer: z.enum(["TICKET", "ORDER"]).default("TICKET"),
-  percentOff: z.number().int().min(1).max(100).nullable().optional(),
-  /** Typed amount in major units, for a fixed discount. */
-  amountOff: z.string().trim().max(20).optional(),
-  ticketTypeId: z.string().trim().min(1).max(64).nullable().optional(),
-  minQuantity: z.number().int().min(1).max(100).default(1),
-  perOrderLimit: z.number().int().min(1).max(100).nullable().optional(),
-  maxRedemptions: z.number().int().min(1).max(1_000_000).nullable().optional(),
-  validFrom: optionalDate,
-  validUntil: optionalDate,
-}).strict().refine(oneTarget, "Choose an event or a series.");
-const archivePromoSchema = z.object({ ...target, promoCodeId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
-
 /**
  * Create a promo code. Only a digest of the code is stored, with a short
  * hint; a code is never edited, only archived and replaced.
@@ -296,14 +195,6 @@ export async function archivePromoCode(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
-const refundPolicySchema = z.object({
-  ...target,
-  kind: z.enum(["NONE", "FULL_UNTIL", "PERCENT_UNTIL"]),
-  hours: z.number().int().min(0).max(8760).nullable().optional(),
-  percent: z.number().int().min(1).max(99).nullable().optional(),
-  text: z.string().trim().max(1000).default(""),
-}).strict().refine(oneTarget, "Choose an event or a series.");
-
 /**
  * Set when buyers may cancel for a refund. Each order keeps the policy it
  * was sold under; once any paid order exists the policy may only become
@@ -347,18 +238,6 @@ export async function saveRefundPolicy(input: unknown): Promise<ActionResult> {
   revalidateOwner(context);
   return { ok: true };
 }
-
-const addOnSchema = z.object({
-  ...target,
-  addOnId: z.string().trim().min(1).max(64).optional(),
-  name: z.string().trim().min(1, "Give the extra a name.").max(80),
-  description: z.string().trim().max(300).default(""),
-  /** Typed price in major units; blank or 0 is free. */
-  price: z.string().trim().max(20).default(""),
-  capacity: z.number().int().min(1).max(1_000_000).nullable().optional(),
-  maxPerOrder: z.number().int().min(1).max(100).default(10),
-}).strict().refine(oneTarget, "Choose an event or a series.");
-const archiveAddOnSchema = z.object({ ...target, addOnId: z.string().trim().min(1).max(64) }).strict().refine(oneTarget, "Choose an event or a series.");
 
 /** Add or change an extra sold alongside tickets (a T-shirt, lunch, a donation). It takes no seat. */
 export async function saveAddOn(input: unknown): Promise<ActionResult<{ id: string; }>> {
@@ -404,12 +283,6 @@ export async function archiveAddOn(input: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
-const transferSchema = z.object({
-  ...target,
-  allowTransfers: z.boolean(),
-  cutoffHours: z.number().int().min(0).max(8760).default(24),
-}).strict().refine(oneTarget, "Choose an event or a series.");
-
 /** Whether ticket holders may give their tickets to someone else, and until how long before the start. */
 export async function saveTransferPolicy(input: unknown): Promise<ActionResult> {
   const parsed = transferSchema.safeParse(input);
@@ -423,4 +296,3 @@ export async function saveTransferPolicy(input: unknown): Promise<ActionResult> 
   revalidateOwner(context);
   return { ok: true };
 }
-
