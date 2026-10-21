@@ -3,7 +3,7 @@ import { LegalPage, type LegalSection } from "@/components/legal/LegalPage";
 
 export const metadata: Metadata = {
   title: "Terms of Use",
-  description: "The rules for organising, registering for and attending free events on this Space Works Events site.",
+  description: "The rules for organising, registering for, buying tickets to and attending events on this Space Works Events site.",
 };
 
 const sections: LegalSection[] = [
@@ -17,9 +17,15 @@ const sections: LegalSection[] = [
     ],
   },
   {
-    id: "free-events",
-    title: "Free events only",
-    body: "Space Works Events is built for free events. It does not sell tickets, take payments or charge fees, and organisers must not use it to collect payment or to sell or resell tickets. Any arrangement made outside Space Works Events, such as a donation or a membership fee, is between you and the organiser.",
+    id: "tickets-and-payments",
+    title: "Free events and paid tickets",
+    body: [
+      "Events are free unless the organiser sells tickets. Paid tickets are available only when the operator has turned them on for this site.",
+      "When you buy a ticket, you buy it from the organiser, not from the operator. You pay on the organiser's own Razorpay or Stripe checkout page, and the money goes to the organiser's account. The operator does not receive, hold or pass on ticket money and charges no booking fee of its own. Any booking fee shown is the organiser's.",
+      "Card, UPI and bank details are entered on the payment provider's page under its own terms. Space Works Events never sees them. You get a receipt by email, which shows the organiser's registered details.",
+      "Refunds follow the refund policy the organiser shows before you pay, and go back the way you paid. If the organiser cancels an event, everyone who paid is refunded in full. Ask the organiser about anything else to do with a payment. Disputes with your bank are between you, your bank and the organiser.",
+      "Tickets are for the person they were issued to. Transfer them only where the organiser allows it, through Space Works Events, and never resell them for more than you paid.",
+    ],
   },
   {
     id: "who-can-use-it",
@@ -51,6 +57,7 @@ const sections: LegalSection[] = [
       "Ask only for the information you need. Tell guests why you are asking, especially for sensitive details such as dietary or accessibility needs, and follow the privacy laws that apply to you. Get permission before publishing information or photos of speakers or other people.",
       "Use guest lists and exports only to run your events, keep them secure, and delete them when you no longer need them. Send emails only to people registered for your event, and only about that event.",
       "You are responsible for the safety and running of your event, including the venue, accessibility, any permits, and any separate code of conduct.",
+      "If you sell tickets, you are the seller. You need your own Razorpay or Stripe account in good standing, and you are responsible for your prices, any taxes and invoices, the receipt details you give, your refund policy, refunds you choose to make, and chargebacks. Describe what a ticket includes accurately. If you cancel an event, refund everyone who paid.",
     ],
   },
   {
@@ -117,7 +124,7 @@ export default function TermsPage() {
     <LegalPage
       current="terms"
       title="Terms of use"
-      updated="15 October 2026"
+      updated="21 October 2026"
       notice="These terms are a starting point for any Space Works Events site. Each operator must replace the bracketed placeholders with its legal name, contact details and governing law, add how disputes are handled, and should have them reviewed by a lawyer. They are not legal advice."
       sections={sections}
     />

@@ -6,7 +6,7 @@ export const LETTER = {
   intro: [
     "Space Works started as a room with workbenches and a kettle. People came to fix things, learn to solder and show each other what they were building.",
     "As the evenings grew, so did the admin. A sign-up form in one place, a spreadsheet in another, a guest list on paper at the door, and certificates made by hand the week after.",
-    "We wanted one place for all of it, built for free community events rather than ticket sales. So we built Space Works Events, and we run our own nights on it first.",
+    "We wanted one place for all of it, built for community events first, rather than for ticket sales. So we built Space Works Events, and we run our own nights on it first.",
   ],
   list: [
     "An event page in your community’s colours",

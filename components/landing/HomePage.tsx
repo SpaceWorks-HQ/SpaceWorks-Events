@@ -34,7 +34,7 @@ export function HomePage({ getStartedHref }: { getStartedHref: string }) {
               </Button>
             </div>
             <div className="flex flex-col gap-2">
-              <p className="text-caption text-ink-muted">Free to organise and free to attend, for every event.</p>
+              <p className="text-caption text-ink-muted">Free to organise. Free events stay free; ticket money goes straight to you.</p>
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 self-start text-label text-ink-secondary underline-offset-4 transition-colors hover:text-ink hover:underline">
                 <GitHubMark />
                 Open source on GitHub · {GITHUB_REPO}

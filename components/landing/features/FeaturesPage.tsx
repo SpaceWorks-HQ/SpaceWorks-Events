@@ -137,7 +137,7 @@ export function FeaturesPage({ getStartedHref }: { getStartedHref: string }) {
           <p className="text-overline text-ink-muted">Features</p>
           <h1 id="features-title" className="max-w-[900px] font-accent text-[30px] font-medium leading-[1.1] text-ink sm:text-[44px]">From invite to certificate.</h1>
           <p className="max-w-[720px] text-body-l text-ink-secondary">
-            Everything you need to run a free maker event. Space Works Events covers the whole day, from the first announcement to the last certificate, so your volunteers can focus on the people at the bench.
+            Everything you need to run a maker event, free or ticketed. Space Works Events covers the whole day, from the first announcement to the last certificate, so your volunteers can focus on the people at the bench.
           </p>
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="primary" size="lg">

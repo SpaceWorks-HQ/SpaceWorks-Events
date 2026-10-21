@@ -96,5 +96,7 @@ By contributing, you agree that your contributions are licensed under the
 
 ## Product boundaries
 
-Space Works Events is for **free** events. Contributions that add payments,
-ticket sales, ads or third-party trackers won't be accepted.
+Events are free by default. Paid tickets go straight to the organiser's own
+Razorpay or Stripe account (see `docs/PAYMENTS.md`); the platform never holds
+ticket money or takes a cut. Contributions that add ads, third-party trackers
+or a platform cut of ticket money won't be accepted.

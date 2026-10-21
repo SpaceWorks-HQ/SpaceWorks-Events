@@ -16,7 +16,7 @@ rules. Edit `AGENTS.md`, then copy it over `CLAUDE.md`; a unit test
 
 ## Project at a glance
 
-Space Works Events is a self-hosted, multi-tenant platform for organizing and running free events, built by Space Works (derived from Yuyu by Abhiram N J; see `NOTICE`). Events are free by default. When the super admin turns paid events on, organisations sell tickets through their own Razorpay or Stripe account, with promo codes, passes, refunds, receipts and revenue reporting (see `docs/plans/paid-events.md`). It uses Next.js 16 App
+Space Works Events is a self-hosted, multi-tenant platform for organizing and running events, free by default, built by Space Works (derived from Yuyu by Abhiram N J; see `NOTICE`). Events are free by default. When the super admin turns paid events on, organisations sell tickets through their own Razorpay or Stripe account, with promo codes, passes, refunds, receipts and revenue reporting (see `docs/plans/paid-events.md`). It uses Next.js 16 App
 Router, React 19, TypeScript, PostgreSQL with Prisma 6, Auth.js v5, Tailwind
 CSS 4 with Radix primitives, Redis, S3-compatible private storage, Nodemailer,
 Vitest, and Playwright. Deployment supports Docker standalone output, the Render free-tier Blueprint
@@ -28,7 +28,8 @@ events and RRULE-based series, custom RSVP forms and waitlists, event short
 links, QR tickets with live check-in updates and offline check-in, ID card /
 badge generation (server-saved designs, colour and logos, PDF/PNG and bulk
 sheets in `lib/badge/`), feedback and layered certificates, designed broadcast and
-transactional email, a personal account area (registrations, organisations,
+transactional email, optional paid tickets through each organisation's own
+Razorpay or Stripe account (`lib/payments/`, `docs/PAYMENTS.md`), a personal account area (registrations, organisations,
 data export), and a separate super-admin operations, insights, and
 instance-settings area, plus a tenant-bound machine API. Treat this as a production-oriented application:
 tenant isolation, privacy, and secure operations are core behaviour rather

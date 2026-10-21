@@ -9,7 +9,7 @@ import { SpaceWorksSection } from "./SpaceWorksSection";
 
 const story = [
   "Maker events run on goodwill. The person at the door is usually a volunteer, the budget is usually zero, and the guest list often lives in a spreadsheet next to the soldering irons.",
-  "Space Works Events brings the whole event into one place, from the event page and registrations to the door and the certificates, and keeps it free for everyone involved. No tickets to sell, no fees to take, nothing to upsell.",
+  "Space Works Events brings the whole event into one place, from the event page and registrations to the door and the certificates, and keeps it free to use. Free events stay free, and if you do sell tickets, the money goes straight to your own account: no fees taken, nothing to upsell.",
   "It can run on your own server, so your community keeps its own data.",
 ];
 
@@ -17,7 +17,7 @@ const principles: Array<{ title: string; body: string; icon: LucideIcon; tone: I
   { title: "Clear, warm and specific", body: "Plain words and one obvious next step on every screen. Never an admin console.", icon: Sparkles, tone: "citron" },
   { title: "The event leads", body: "Space Works Events stays quiet so your colours, cover and logo carry the page.", icon: Wrench, tone: "teal" },
   { title: "Simple for volunteers", body: "Nothing destructive happens without asking first, and the door works on any phone.", icon: HandHeart, tone: "sky" },
-  { title: "Free, and staying free", body: "Built only for free events. No payments, no fees, no ads.", icon: ShieldCheck, tone: "yellow" },
+  { title: "Free, and staying free", body: "Free to use, with no platform fees and no ads. Ticket money goes straight to your own account.", icon: ShieldCheck, tone: "yellow" },
   { title: "Your data stays yours", body: "Run it on your own server. Organisations are kept apart, and private links stay private.", icon: LockKeyhole, tone: "citron" },
   { title: "Accessible by default", body: "Readable contrast and real controls that work with a keyboard, a screen reader and a small phone.", icon: Accessibility, tone: "teal" },
 ];

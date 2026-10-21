@@ -23,8 +23,9 @@
 **Space Works Events is a free, open-source event platform from Space Works for maker and community
 events.** Publish an event page, take registrations, send live QR tickets, check people in at the door,
 print ID cards, run a member programme and follow up with feedback and certificates, all from one
-self-hosted app you control. It's for free events only: no payments, no ticket sales, no ads and no
-third-party trackers, and your guests' data stays in your own database. It's built on
+self-hosted app you control. Events are free by default; when you charge, tickets are paid straight to
+your own Razorpay or Stripe account with no platform fee. No ads, no third-party trackers, and your
+guests' data stays in your own database. It's built on
 [Yuyu](https://github.com/twilighty-abhi/yuyu) by Abhiram N J (see [Credits](#credits)).
 
 ## What you can do
@@ -43,6 +44,12 @@ Grouped the way an organiser's week actually goes.
 - Custom registration forms with ten question types, help text and "show only if" logic.
 - Capacity limits, waitlists and approvals, with undo when you remove someone by mistake.
 - Confirmation emails with a calendar invite, sent through a durable outbox.
+
+### Sell tickets (optional)
+
+- **Your own Razorpay or Stripe account**: buyers pay on the provider's page and the money goes straight to you, with no platform fee.
+- Ticket types with fixed or pay-what-you-want prices, group tickets, extras, promo codes, access codes, members-only tickets and series passes.
+- Refund policies, refunds and transfers, pay-at-the-desk, PDF receipts, chargeback alerts, and money reports with an orders CSV. See [Paid tickets](docs/PAYMENTS.md).
 
 ### Tickets and the door
 
@@ -369,7 +376,7 @@ Bug reports, ideas and pull requests are all welcome.
   not in a public issue.
 
 Read the [contributing guide](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before your first pull request.
-Contributions that add payments, ticket sales, ads or trackers won't be accepted.
+Contributions that add ads, third-party trackers or a platform cut of ticket money won't be accepted.
 
 ## Credits
 
