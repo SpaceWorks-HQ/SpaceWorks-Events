@@ -306,6 +306,7 @@ model Organisation {
   apiClients        ApiClient[]
   idProgrammes      IdProgramme[]
   paymentSettings   OrganisationPaymentSettings?
+  emailSettings     OrganisationEmailSettings?
   processedWebhookEvents ProcessedWebhookEvent[]
   orders            Order[]
   payments          Payment[]
@@ -316,6 +317,32 @@ model Organisation {
 /// the organiser; the platform never holds it. Secrets are AES-256-GCM
 /// ciphertext (lib/payments/secrets.ts), write-only, and never leave the
 /// server. Only the owner may view or change this row.
+/// How an organisation's event email is sent (tickets, reminders, broadcasts,
+/// receipts, notices). Account email (sign-up, forgot password) always uses the
+/// platform server. The SMTP password is encrypted and never shown again.
+model OrganisationEmailSettings {
+  organisationId        String    @id
+  /// The sender's name; empty uses the organisation's name.
+  fromName              String?
+  /// Where replies go; empty means replies go to the sending address.
+  replyTo               String?
+  /// Send through the organisation's own server (tested before it can be on).
+  useOwnServer          Boolean   @default(false)
+  fromAddress           String?
+  smtpHost              String?
+  smtpPort              Int?
+  /// Port 465: TLS from the start; otherwise STARTTLS is required.
+  smtpSecure            Boolean   @default(false)
+  smtpUser              String?
+  smtpPasswordEncrypted String?
+  /// The last successful connection test of the server settings as saved.
+  verifiedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
 model OrganisationPaymentSettings {
   organisationId                 String           @id
   /// The provider new checkouts use. Never OFFLINE.

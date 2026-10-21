@@ -41,5 +41,10 @@ export async function loadOrgSettingsView({ params }: Props) {
   const paymentProvider = configuredProvider(paymentRow);
   const payments = { provider: paymentProvider, testMode: paymentRow && paymentProvider ? isProviderTestMode(paymentRow, paymentProvider) : false };
 
-  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients, payments };
+  const emailRow = isOwner
+    ? await prisma.organisationEmailSettings.findUnique({ where: { organisationId: organisation.id }, select: { useOwnServer: true } })
+    : null;
+  const email = { useOwnServer: emailRow?.useOwnServer ?? false };
+
+  return { org, organisation, membership, isOwner, canDelete, totalApiClients, activeApiClients, payments, email };
 }

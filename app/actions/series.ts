@@ -294,7 +294,7 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
     if (series.status === EventStatus.PUBLISHED) {
       const upcoming = await tx.eventInstance.findMany({ where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null }, select: { id: true } });
       const people = uniqueEmails((await Promise.all(upcoming.map((date) => peopleWithPlaces(tx, { eventInstanceId: date.id })))).flat());
-      await noticeEach(tx, people, { subject: noticeSubject("Cancelled", series.title), lines: [`${series.title} has been cancelled by the organiser, with all its upcoming dates.`] });
+      await noticeEach(tx, people, { organisationId: org.id, subject: noticeSubject("Cancelled", series.title), lines: [`${series.title} has been cancelled by the organiser, with all its upcoming dates.`] });
     }
     await tx.eventSeries.delete({ where: { id: series.id } });
   });

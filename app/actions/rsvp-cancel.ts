@@ -86,11 +86,12 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     // Money was taken: refunds follow the order's policy, from the order page.
     if (current.order && current.order.payments.length > 0) return { error: "Paid tickets are cancelled from the order page, under the event's refund policy." };
     const title = rsvp.event?.title ?? rsvp.eventInstance!.series.title;
+    const organisationId = rsvp.event?.organisation.id ?? rsvp.eventInstance!.series.organisation.id;
     if (current.order?.status === "REQUESTED") {
       // A paid request is withdrawn as a whole; nothing was charged.
       await tx.order.update({ where: { id: current.order.id }, data: { status: "CANCELLED" } });
       await tx.rSVP.deleteMany({ where: { orderId: current.order.id } });
-      await noticeEach(tx, [current.order.buyerEmail], { subject: noticeSubject("Request withdrawn", title), lines: [`Your request to join ${title} was withdrawn. Nothing was charged.`] });
+      await noticeEach(tx, [current.order.buyerEmail], { organisationId, subject: noticeSubject("Request withdrawn", title), lines: [`Your request to join ${title} was withdrawn. Nothing was charged.`] });
       return { error: null };
     }
     if (current.order?.status === "PENDING") {
@@ -105,7 +106,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     const to = personEmail(current);
     if (to) {
       const what = current.status === "WAITLISTED" ? "left the waitlist for" : current.status === "PENDING_APPROVAL" ? "withdrawn your request to join" : "cancelled your place at";
-      await noticeEach(tx, [to], { subject: noticeSubject("Cancelled", title), lines: [`You've ${what} ${title}. Your ticket no longer works.`, "Changed your mind? Register again from the event page if places are still open."] });
+      await noticeEach(tx, [to], { organisationId, subject: noticeSubject("Cancelled", title), lines: [`You've ${what} ${title}. Your ticket no longer works.`, "Changed your mind? Register again from the event page if places are still open."] });
     }
     const privacyType = rsvp.event?.privacyType ?? rsvp.eventInstance?.series.privacyType;
     // A freed seat on an event, or on a date of a series that sells tickets,

@@ -45,6 +45,7 @@ Dynamic segments are shown as `:name` for readability.
 | `/dashboard/:orgSlug` | Organisation events and series |
 | `/dashboard/:orgSlug/settings` | Organisation settings |
 | `/dashboard/:orgSlug/settings/payments` | Owner only: connect the organisation's own Razorpay or Stripe account (write-only, encrypted keys), copy webhook addresses, test the connection |
+| `/dashboard/:orgSlug/settings/email` | Owner only: sender name and reply-to for the organisation's guest email, or its own SMTP server (tested before use, write-only encrypted password) |
 | `/dashboard/:orgSlug/members` | Members, roles, and invitations |
 | `/dashboard/:orgSlug/ids` | Member ID programmes (all members read; owners/admins create) |
 | `/dashboard/:orgSlug/ids/:programmeId` | Programme members (approve, reject, revoke, renew, email, download), import (CSV or public Google Sheet with column mapping), front/back card designer and settings; owners/admins only except the read-only member list |

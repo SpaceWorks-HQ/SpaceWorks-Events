@@ -345,13 +345,14 @@ export async function updateEvent(input: unknown): Promise<ActionResult> {
         },
       });
       if (data.status === EventStatus.CANCELLED && event.status !== EventStatus.CANCELLED) {
-        await notifyEventCancelled(tx, { eventId: event.id, title: data.title });
+        await notifyEventCancelled(tx, { organisationId: org.id, eventId: event.id, title: data.title });
       } else if (data.status === EventStatus.PUBLISHED && event.status === EventStatus.PUBLISHED && event.endDateTime > new Date()) {
         // Guests hear when the time or place changes, not about wording edits.
         const moved = data.startDateTime.getTime() !== event.startDateTime.getTime() || data.endDateTime.getTime() !== event.endDateTime.getTime() || data.timezone !== event.timezone;
         const relocated = (data.location ?? "") !== event.location || (data.isOnline ?? false) !== event.isOnline;
         if (moved || relocated) {
           await noticeEach(tx, await peopleWithPlaces(tx, { eventId: event.id }), {
+            organisationId: org.id,
             subject: noticeSubject("Updated", data.title),
             lines: [
               `The organiser changed ${moved && relocated ? "the time and place" : moved ? "the time" : "the place"} of ${data.title}.`,
@@ -455,7 +456,7 @@ export async function deleteEvent(input: unknown): Promise<ActionResult> {
   const slug = event.slug;
   try {
     await prisma.$transaction(async (tx) => {
-      if (event.status === EventStatus.PUBLISHED && event.endDateTime > new Date()) await notifyEventCancelled(tx, { eventId: event.id, title: event.title });
+      if (event.status === EventStatus.PUBLISHED && event.endDateTime > new Date()) await notifyEventCancelled(tx, { organisationId: org.id, eventId: event.id, title: event.title });
       await tx.event.delete({ where: { id: event.id } });
     });
     await recordAuditEvent({
@@ -722,7 +723,7 @@ export async function cancelEvent(input: unknown): Promise<ActionResult<{ refund
     if (event.status === EventStatus.CANCELLED) return 0;
     await tx.event.update({ where: { id: event.id }, data: { status: EventStatus.CANCELLED } });
     // Everyone is told here; buyers also hear about their refund.
-    const told = await notifyEventCancelled(tx, { eventId: event.id, title: event.title, reason: parsed.data.reason });
+    const told = await notifyEventCancelled(tx, { organisationId: org.id, eventId: event.id, title: event.title, reason: parsed.data.reason });
     await recordAuditEvent({ action: "EVENT_CANCELLED", actorUserId: session.user!.id, organisationId: org.id, targetType: "Event", targetId: event.id, client: tx });
     return told;
   });

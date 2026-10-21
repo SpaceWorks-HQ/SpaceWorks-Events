@@ -12,6 +12,7 @@ import { sendOperatorNotice } from "@/lib/email/operatorNotice";
 import { describeOperationalError } from "@/lib/redactSensitiveText";
 import { asMemberIdEmailPayload, deliverMemberIdCardEmail, MEMBER_ID_EMAIL_KIND } from "@/lib/memberIds/email";
 import { asPaymentEmailPayload, deliverPaymentEmail, PAYMENT_EMAIL_KIND } from "@/lib/payments/email";
+import { sendAs } from "@/lib/email/transporter";
 
 type OutboxClient = Prisma.TransactionClient | typeof prisma;
 
@@ -24,6 +25,8 @@ type RsvpConfirmationPayload = {
 
 type RsvpStatusPayload = {
   to: string;
+  /** Sent as this organisation when there is no ticket to work it out from (a decline). */
+  organisationId?: string;
   eventTitle: string;
   approved: boolean;
   checkInToken?: string;
@@ -55,7 +58,7 @@ type EmailVerificationPayload = {
   verificationUrl: string;
   expiresAt: string;
 };
-type CollaboratorInvitePayload = { to: string; eventTitle: string; inviteUrl: string; expiresAt?: string };
+type CollaboratorInvitePayload = { to: string; eventTitle: string; inviteUrl: string; expiresAt?: string; organisationId?: string };
 
 /** Per-recipient broadcast row. The template and ticket link are resolved at send time, so the queue never stores capabilities. */
 type EventBroadcastPayload = { to: string; broadcastId: string; rsvpId: string };
@@ -74,7 +77,7 @@ function asEventReminderPayload(value: Prisma.JsonValue): EventReminderPayload |
 }
 
 /** A short plain message to a super admin: the test email and backup alerts. It never carries links or secrets. */
-export type OperatorNoticePayload = { to: string; subject: string; lines: string[] };
+export type OperatorNoticePayload = { to: string; subject: string; lines: string[]; /** Sent as this organisation; none for platform notices. */ organisationId?: string };
 
 export async function enqueueOperatorNotice(client: OutboxClient, payload: OperatorNoticePayload) {
   return client.outboxMessage.create({ data: { kind: "operator-notice", payload: payload as Prisma.InputJsonValue } });
@@ -358,6 +361,34 @@ function asOperatorNoticePayload(value: Prisma.JsonValue): OperatorNoticePayload
     : null;
 }
 
+/** Account and security email always comes from the platform. */
+const PLATFORM_KINDS = new Set(["password-reset", "email-verification"]);
+
+/**
+ * Whose email a message is, so it goes out through that organisation's
+ * server or under its name. Messages that don't say are worked out from the
+ * registration, event, broadcast, payment or member they are about.
+ */
+async function messageOrganisation(kind: string, payload: Prisma.JsonValue): Promise<string | null> {
+  if (PLATFORM_KINDS.has(kind) || !payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const p = payload as Record<string, unknown>;
+  const text = (key: string) => (typeof p[key] === "string" && (p[key] as string).length <= 200 ? p[key] as string : null);
+  if (text("organisationId")) return text("organisationId");
+  const rsvpOwner = { event: { select: { organisationId: true } }, eventInstance: { select: { series: { select: { organisationId: true } } } } } as const;
+  const ofRsvp = (rsvp: { event: { organisationId: string; } | null; eventInstance: { series: { organisationId: string; }; } | null; } | null) => rsvp?.event?.organisationId ?? rsvp?.eventInstance?.series.organisationId ?? null;
+  if ((kind === "rsvp-confirmation" || kind === "rsvp-status") && text("checkInToken")) {
+    return ofRsvp(await prisma.rSVP.findUnique({ where: { checkInToken: text("checkInToken")! }, select: rsvpOwner }));
+  }
+  if (kind === EVENT_REMINDER_KIND && text("rsvpId")) return ofRsvp(await prisma.rSVP.findUnique({ where: { id: text("rsvpId")! }, select: rsvpOwner }));
+  if (kind === "event-invite" && text("orgSlug")) return (await prisma.organisation.findUnique({ where: { slug: text("orgSlug")! }, select: { id: true } }))?.id ?? null;
+  if (kind === "event-broadcast" && text("broadcastId")) return (await prisma.eventBroadcast.findUnique({ where: { id: text("broadcastId")! }, select: { event: { select: { organisationId: true } } } }))?.event.organisationId ?? null;
+  if (kind === "event-broadcast-test" && text("eventId")) return (await prisma.event.findUnique({ where: { id: text("eventId")! }, select: { organisationId: true } }))?.organisationId ?? null;
+  if (kind === PAYMENT_EMAIL_KIND && text("paymentId")) return (await prisma.payment.findUnique({ where: { id: text("paymentId")! }, select: { organisationId: true } }))?.organisationId ?? null;
+  if (kind === PAYMENT_EMAIL_KIND && text("orderId")) return (await prisma.order.findUnique({ where: { id: text("orderId")! }, select: { organisationId: true } }))?.organisationId ?? null;
+  if (kind === MEMBER_ID_EMAIL_KIND && text("memberId")) return (await prisma.idMember.findUnique({ where: { id: text("memberId")! }, select: { programme: { select: { organisationId: true } } } }))?.programme.organisationId ?? null;
+  return null;
+}
+
 /** Deliver a small batch. Run this from a protected scheduler, never a request path. */
 export async function deliverOutboxBatch(limit = 20) {
   // A worker may be interrupted after claiming a message. Return a stale claim
@@ -387,6 +418,8 @@ export async function deliverOutboxBatch(limit = 20) {
     if (claim.count !== 1) continue;
 
     try {
+      // Everything sent for this message goes out as its organisation (or the platform).
+      sendAs(await messageOrganisation(message.kind, message.payload).catch(() => null));
       const removeAfterDelivery = containsCapability(message.kind, message.payload);
       const stableMessageId = messageId(message.id);
       if (message.kind === "rsvp-confirmation") {
@@ -612,5 +645,6 @@ export async function deliverOutboxBatch(limit = 20) {
       failed += 1;
     }
   }
+  sendAs(null);
   return { sent, failed };
 }

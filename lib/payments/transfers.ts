@@ -77,6 +77,7 @@ export async function transferTicket(params: { orderToken: string; rsvpId: strin
     await enqueueRsvpConfirmation(tx, { to: email, eventTitle: subject?.title ?? "your event", status: RsvpStatus.CONFIRMED, checkInToken: firstToken! });
     if (previous) {
       await enqueueOperatorNotice(tx, {
+        organisationId: order.organisationId,
         to: previous,
         subject: `Your ticket was transferred: ${subject?.title ?? "your event"}`,
         lines: [`Your ticket for ${subject?.title ?? "the event"} now belongs to ${params.name.trim()}. Your old ticket link no longer works.`],

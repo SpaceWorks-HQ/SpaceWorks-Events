@@ -52,7 +52,7 @@ export async function createEventCollaboratorInvite(input: unknown): Promise<Act
         createdByUserId: session.user.id, expiresAt,
       }
     });
-    await enqueueCollaboratorInvite(tx, { to: parsed.data.email.toLowerCase(), eventTitle: exists.title, inviteUrl: `${origin}/join/event-collaborator/${token}`, expiresAt: expiresAt.toISOString() });
+    await enqueueCollaboratorInvite(tx, { organisationId: org.id, to: parsed.data.email.toLowerCase(), eventTitle: exists.title, inviteUrl: `${origin}/join/event-collaborator/${token}`, expiresAt: expiresAt.toISOString() });
     return created;
   });
   await recordAuditEvent({ action: "EVENT_COLLABORATOR_INVITED", actorUserId: session.user.id, organisationId: org.id, targetType: "EventCollaboratorInvite", targetId: invite.id });

@@ -44,6 +44,7 @@ export async function applyDisputeNotification(tx: Prisma.TransactionClient, con
   for (const to of await organisationOwnerEmails(tx, context.organisationId)) {
     await enqueueOperatorNotice(tx, {
       to,
+      organisationId: context.organisationId,
       subject: `Payment dispute ${LABELS[dispute.status]}: order ${payment.order.reference}`,
       lines: [
         `A dispute (chargeback) for ${amount} on order ${payment.order.reference} (${payment.order.buyerEmail}) was ${LABELS[dispute.status]} in ${provider}${values.reason ? `, reason: ${values.reason}` : ""}.`,
