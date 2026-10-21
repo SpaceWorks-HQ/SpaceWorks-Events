@@ -503,6 +503,21 @@
       "id": "broadcasts:sendEventBroadcastTest"
     },
     {
+      "module": "app/actions/broadcasts",
+      "name": "loadEventBroadcastDraft",
+      "id": "broadcasts:loadEventBroadcastDraft"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "saveEventBroadcastDraft",
+      "id": "broadcasts:saveEventBroadcastDraft"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "discardEventBroadcastDraft",
+      "id": "broadcasts:discardEventBroadcastDraft"
+    },
+    {
       "module": "app/actions/certificate",
       "name": "uploadCertificateBackground",
       "id": "certificate:uploadCertificateBackground"

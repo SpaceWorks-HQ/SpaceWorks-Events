@@ -39,7 +39,9 @@ export {
 } from "@/lib/validators/checkIn";
 export {
   broadcastAudienceSchema,
+  eventBroadcastDraftRefSchema,
   previewEventBroadcastSchema,
+  saveEventBroadcastDraftSchema,
   sendEventBroadcastSchema,
   sendEventBroadcastTestSchema,
 } from "@/lib/validators/broadcast";

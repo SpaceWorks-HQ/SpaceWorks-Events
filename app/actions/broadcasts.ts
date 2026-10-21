@@ -4,44 +4,21 @@ import { revalidatePath as nextRevalidatePath } from "next/cache";
 import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canManageEvents, getMembership } from "@/lib/permissions";
 import { broadcastAudienceSchema, previewEventBroadcastSchema, sendEventBroadcastSchema, sendEventBroadcastTestSchema } from "@/lib/validators";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, resolveBroadcastRecipients, sanitizeBroadcastHtml } from "@/lib/eventBroadcast";
+import { broadcastBrandFor, broadcastBrandSelect, broadcastEventUrl, resolveBroadcastRecipients } from "@/lib/eventBroadcast";
 import { broadcastHtmlToText, renderBroadcastHtml, renderBroadcastTemplate, sampleBroadcastVariables } from "@/lib/broadcastTemplate";
 import { buildBroadcastEmail } from "@/lib/email";
 import { enqueueEventBroadcastRecipients, enqueueEventBroadcastTest } from "@/lib/outbox";
 import { startOutboxWorker } from "@/lib/outboxWorker";
+import type { EventBroadcastDraftDto } from "@/lib/broadcastDraftAutosave";
+import { cleanBody, requireBroadcastContext } from "./broadcasts/context";
+import { discardEventBroadcastDraftForUser, loadEventBroadcastDraftForUser, saveEventBroadcastDraftForUser } from "./broadcasts/drafts";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
-
-type BroadcastContext =
-  | { ok: false; error: string; }
-  | { ok: true; org: { id: string; slug: string; }; event: { id: string; title: string; }; };
-
-/**
- * Broadcasts are organisation-admin operations, like every other RSVP
- * lifecycle action: they reveal who registered and email attendees in bulk.
- */
-async function requireBroadcastContext(userId: string, organisationSlug: string, eventId: string): Promise<BroadcastContext> {
-  const org = await prisma.organisation.findUnique({ where: { slug: organisationSlug }, select: { id: true, slug: true } });
-  if (!org) return { ok: false, error: "Organisation not found." };
-  const membership = await getMembership(userId, org.id);
-  if (!canManageEvents(membership)) return { ok: false, error: "You do not have permission to email attendees." };
-  const event = await prisma.event.findFirst({ where: { id: eventId, organisationId: org.id }, select: { id: true, title: true } });
-  if (!event) return { ok: false, error: "Event not found." };
-  return { ok: true, org, event };
-}
-
-/** Editor output is reduced to the supported subset; an empty result means the organiser only entered formatting. */
-function cleanBody(body: string): { ok: true; body: string; } | { ok: false; error: string; } {
-  const sanitized = sanitizeBroadcastHtml(body);
-  if (!broadcastHtmlToText(sanitized).trim()) return { ok: false, error: "The message is empty." };
-  return { ok: true, body: sanitized };
-}
 
 export async function countBroadcastRecipients(input: unknown): Promise<ActionResult<{ count: number; }>> {
   const session = await auth();
@@ -141,6 +118,8 @@ export async function sendEventBroadcast(input: unknown): Promise<ActionResult<{
         select: { id: true },
       });
       await enqueueEventBroadcastRecipients(tx, recipients.map((recipient) => ({ to: recipient.email, broadcastId: broadcast.id, rsvpId: recipient.rsvpId })));
+      // The composer is the sender's draft, so a successful send clears it with the send.
+      await tx.eventBroadcastDraft.deleteMany({ where: { eventId: context.event.id, userId } });
       return { broadcastId: broadcast.id, recipientCount: recipients.length };
     });
     if (!result) return { ok: false, error: "No registrations match the selected audience." };
@@ -211,4 +190,23 @@ export async function sendEventBroadcastTest(input: unknown): Promise<ActionResu
     console.error("[event broadcast] test queueing failed");
     return { ok: false, error: "Could not queue the test email. Please try again." };
   }
+}
+
+async function currentUserId() {
+  const session = await auth();
+  return session?.user?.id ?? null;
+}
+
+/** The signed-in organiser's own saved draft for the event (never a teammate's). */
+export async function loadEventBroadcastDraft(input: unknown): Promise<ActionResult<{ draft: EventBroadcastDraftDto | null; }>> {
+  return loadEventBroadcastDraftForUser(await currentUserId(), input);
+}
+
+/** Autosave and "Save draft". Rate limited, not audited. */
+export async function saveEventBroadcastDraft(input: unknown): Promise<ActionResult<{ updatedAt: string; }>> {
+  return saveEventBroadcastDraftForUser(await currentUserId(), input);
+}
+
+export async function discardEventBroadcastDraft(input: unknown): Promise<ActionResult<{ discarded: boolean; }>> {
+  return discardEventBroadcastDraftForUser(await currentUserId(), input);
 }
