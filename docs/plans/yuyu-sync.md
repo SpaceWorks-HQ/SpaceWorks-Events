@@ -89,12 +89,12 @@ Yuyu added 8 commits on 21 Oct. All were ported except `e668935` (Yuyu's branchi
   - `MANAGE_REGISTRATIONS` reaches the guest list and RSVP actions through `canManageRegistrationsFor`, matching payment operations.
   - `dev` adds a ticket flag (`EDIT_DETAILS`), and `docs/PERMISSIONS.md` has rows for tickets, payment operations and revenue.
   - The attendee CSV now goes through `canAccessEvent`, so a collaborator also needs a confirmed authenticator.
-  - Upstream's e2e spec isn't ported: it signs co-organisers in without the staff authenticator `dev` requires.
+  - Its e2e spec is ported. It found that the schedule page crashed for every organiser, because `eventForView` dropped `scheduleTracks`; that is fixed.
 - **Email drafts with autosave** (`aab425f`, `4133c6f`), with migration `20261102000000_event_broadcast_drafts`. Emails stay owner/admin only.
 - **Re-accept a declined registration** (`f05c65a`, tests `50f0f53` and `a4f412b`).
   - A free registration is confirmed, or waitlisted when full.
   - A paid request goes back through the payment flow (`lib/payments/operations/reaccept.ts`): it is offered its places with a payment link, or waitlisted as a request, and is never confirmed without payment.
-  - The e2e spec isn't ported.
+  - Its e2e spec is ported.
 
 Done from the follow-ups:
 
@@ -105,6 +105,5 @@ Done from the follow-ups:
 ## Follow-ups
 
 - **Mobile API** (`/api/mobile/v1`): its own project, rebuilt on `dev`'s paid-event flows. It is listed as deferred in `.github/yuyu-reviewed.txt`.
-- **E2E coverage:** the co-organiser and re-accept browser specs need the staff authenticator in the e2e setup.
 
 Left out on purpose: the redesign e2e suite, and Yuyu's docs and policy commits.
