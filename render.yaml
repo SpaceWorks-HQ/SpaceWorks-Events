@@ -38,6 +38,10 @@ services:
       # --- Runtime shape for the free instance ---
       - key: NODE_OPTIONS
         value: --max-old-space-size=384
+      # One free instance does everything: serves requests, sends email
+      # within seconds (worker) and runs the timed jobs (beat).
+      - key: SWE_PROCESS_ROLE
+        value: all
       - key: MIGRATE_ON_START
         value: "1"
 

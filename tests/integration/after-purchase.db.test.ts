@@ -201,7 +201,7 @@ describe.sequential("after purchase", { timeout: 30_000 }, () => {
 
     identity.id = owner;
     expect(await deleteEvent({ organisationSlug: orgSlug, eventId: event.id })).toMatchObject({ ok: false, error: expect.stringContaining("Cancel it instead") });
-    expect(await cancelEvent({ organisationSlug: orgSlug, eventId: event.id, reason: "Venue closed" })).toMatchObject({ ok: true, data: { refunded: 1, failed: 0, notified: 1 } });
+    expect(await cancelEvent({ organisationSlug: orgSlug, eventId: event.id, reason: "Venue closed" })).toMatchObject({ ok: true, data: { refunded: 1, failed: 0, notified: 3 } });
     // Running it again finishes nothing new.
     expect(await cancelEvent({ organisationSlug: orgSlug, eventId: event.id })).toMatchObject({ ok: true, data: { refunded: 0, notified: 0 } });
     identity.id = "";
@@ -211,6 +211,9 @@ describe.sequential("after purchase", { timeout: 30_000 }, () => {
     expect(paid.status).toBe(OrderStatus.CANCELLED);
     expect(await prisma.paymentRefund.findMany({ where: { payment: { orderId: paid.id } }, select: { amountMinor: true } })).toEqual([{ amountMinor: BigInt(49900) }]);
     expect((await orderOf("cancel-held")).holdExpiresAt!.getTime()).toBeLessThanOrEqual(Date.now());
-    expect(await prisma.outboxMessage.count({ where: { kind: "operator-notice", payload: { path: ["to"], equals: email("cancel-free") } } })).toBe(1);
+    // Everyone is told the event is off: free guests, buyers being refunded, and buyers still paying.
+    for (const who of ["cancel-free", "cancel-paid", "cancel-held"]) {
+      expect(await prisma.outboxMessage.count({ where: { kind: "operator-notice", payload: { path: ["to"], equals: email(who) } } })).toBe(1);
+    }
   });
 });

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   sessionDelete: vi.fn(),
   auditCreate: vi.fn(),
   transaction: vi.fn(),
+  notice: vi.fn(),
 }));
 
 vi.mock("@/lib/permissions", () => ({ requireAuth: mocks.requireAuth }));
@@ -19,6 +20,7 @@ vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: mocks.rateLimit }
 vi.mock("@/lib/audit", () => ({ recordAuditEvent: vi.fn() }));
 vi.mock("bcryptjs", () => ({ default: { compare: mocks.compare, hash: mocks.hash } }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/lib/notices", () => ({ noticeEach: mocks.notice }));
 
 const tx = {
   user: { update: mocks.userUpdate, updateMany: mocks.userUpdate },
@@ -53,6 +55,7 @@ describe("account password actions", () => {
     expect(mocks.compare).toHaveBeenCalledWith("current-password", "old-hash");
     expect(mocks.userUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ passwordHash: "new-hash", sessionVersion: { increment: 1 } }) }));
     expect(mocks.sessionDelete).toHaveBeenCalledWith({ where: { userId: "user_1" } });
+    expect(mocks.notice).toHaveBeenCalledWith(expect.anything(), [expect.any(String)], expect.objectContaining({ subject: "Your password was changed" }));
   });
 
   it("lets a recently authenticated Google-only user add a password", async () => {
@@ -60,6 +63,7 @@ describe("account password actions", () => {
     await expect(updateAccountPassword({ newPassword: "new-password", confirmPassword: "new-password" })).resolves.toEqual({ ok: true, data: { passwordSet: true } });
     expect(mocks.compare).not.toHaveBeenCalled();
     expect(mocks.auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: "ACCOUNT_PASSWORD_ADDED" }) }));
+    expect(mocks.notice).toHaveBeenCalledWith(expect.anything(), [expect.any(String)], expect.objectContaining({ subject: "A password was added to your account" }));
   });
 
   it("requires a fresh Google sign-in before adding a password", async () => {

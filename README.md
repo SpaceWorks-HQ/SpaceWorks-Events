@@ -132,9 +132,9 @@ database migrations and operator tools) and a **frontend** image (the website).
 The production Docker Compose stack runs them with **PostgreSQL 16**,
 **Redis 7**, private **[Silo](https://github.com/pgsty/silo)** object storage (the
 maintained, S3-compatible fork of the archived MinIO) for images and files,
-automatic public HTTPS with Caddy, database migrations and an email-queue
-scheduler. Only a domain and an authenticated SMTP relay are external; Render,
-Supabase, Upstash and Cloudflare are optional hosting choices.
+automatic public HTTPS with Caddy, database migrations, an email worker and a
+beat for timed jobs. Only a domain and an authenticated SMTP relay are external;
+Render, Supabase, Upstash and Cloudflare are optional hosting choices.
 
 ### Install in one line
 
@@ -232,8 +232,8 @@ For a Docker app with managed dependencies, use the
 ## Run it for free
 
 The optional cloud production setup runs on free plans. One Docker service on Render serves the app;
-everything else is a managed free tier, and a Cloudflare Worker keeps the instance awake and sends the
-email queue every minute.
+everything else is a managed free tier, and a Cloudflare Worker calls the app every minute to keep the
+instance awake, run the timed jobs and send the email queue.
 
 ```mermaid
 flowchart LR

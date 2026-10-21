@@ -18,6 +18,7 @@ import {
 import type { ActionResult } from "@/app/actions/org";
 import { flattenZodErrors } from "@/app/actions/utils";
 import { enqueueRsvpConfirmation } from "@/lib/outbox";
+import { noticeOrganisersOfRequest } from "@/lib/notices";
 import { isRegistrationClosed } from "@/lib/registrationCutoff";
 import { isPaidEventsEnabled } from "@/lib/instanceSettings";
 import { recordAuditEvent } from "@/lib/audit";
@@ -232,6 +233,7 @@ async function reserveRsvp(params: {
       status,
       checkInToken: rsvp.checkInToken,
     });
+    if (status === RsvpStatus.PENDING_APPROVAL) await noticeOrganisersOfRequest(tx, params.target);
     await params.afterCreate?.(tx, rsvp.id);
     const count = await tx.rSVP.count({ where: params.target });
     return { ...rsvp, status, count };

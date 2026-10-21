@@ -18,7 +18,8 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-import { hasPaidOrders } from "@/lib/payments/eventCancellation";
+import { hasPaidOrders, peopleWithPlaces } from "@/lib/payments/eventCancellation";
+import { noticeEach, noticeSubject, uniqueEmails } from "@/lib/notices";
 import { cancelOccurrence, setOccurrenceCapacity } from "@/lib/payments/occurrences";
 import { PaymentOperationError } from "@/lib/payments/operations";
 
@@ -214,6 +215,16 @@ export async function updateEventSeriesMeta(
   });
   if (!saved) return { ok: false, error: "Capacity cannot be lower than confirmed attendance for an occurrence." };
 
+  // Cancelling the series cancels each upcoming date: refunds, and an email to everyone on it.
+  if (data.status === EventStatus.CANCELLED && series.status !== EventStatus.CANCELLED) {
+    const upcoming = await prisma.eventInstance.findMany({ where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null }, select: { id: true }, orderBy: { startDateTime: "asc" } });
+    for (const date of upcoming) {
+      await cancelOccurrence({ organisationId: org.id, seriesId: series.id, instanceId: date.id, actorUserId: session.user.id, reason: "The series was cancelled." }).catch((error: unknown) => {
+        if (!(error instanceof PaymentOperationError)) throw error;
+      });
+    }
+  }
+
   await recordAuditEvent({
     action: "EVENT_SERIES_UPDATED",
     actorUserId: session.user.id,
@@ -278,7 +289,15 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
     select: { id: true },
   });
 
-  await prisma.eventSeries.delete({ where: { id: series.id } });
+  await prisma.$transaction(async (tx) => {
+    // People booked on upcoming dates are told the series won't go ahead.
+    if (series.status === EventStatus.PUBLISHED) {
+      const upcoming = await tx.eventInstance.findMany({ where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null }, select: { id: true } });
+      const people = uniqueEmails((await Promise.all(upcoming.map((date) => peopleWithPlaces(tx, { eventInstanceId: date.id })))).flat());
+      await noticeEach(tx, people, { subject: noticeSubject("Cancelled", series.title), lines: [`${series.title} has been cancelled by the organiser, with all its upcoming dates.`] });
+    }
+    await tx.eventSeries.delete({ where: { id: series.id } });
+  });
 
   await recordAuditEvent({
     action: "EVENT_SERIES_DELETED",

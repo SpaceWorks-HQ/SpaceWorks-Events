@@ -3,7 +3,8 @@ import "server-only";
 import { OrderStatus, PaymentStatus, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
-import { enqueueOperatorNotice } from "@/lib/outbox";
+import { noticeEach, noticeSubject, titleWith } from "@/lib/notices";
+import { peopleWithPlaces } from "./eventCancellation";
 import { seatTakingWhere } from "./holds";
 import { PaymentOperationError, refundOrder } from "./operations";
 import { lockSeriesDates } from "./targets";
@@ -53,22 +54,29 @@ export async function cancelOccurrence(params: { organisationId: string; seriesI
   const now = params.now ?? new Date();
   const date = await ownedDate(params.organisationId, params.seriesId, params.instanceId);
   if (date.endDateTime <= now) throw new PaymentOperationError("This date has already happened.");
-  const label = `${date.series.title}, ${date.startDateTime.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: date.series.timezone })}`;
+  const label = titleWith(date.series.title, date.startDateTime.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: date.series.timezone }));
 
-  const recipients = await prisma.$transaction(async (tx) => {
+  const notified = await prisma.$transaction(async (tx) => {
     await lockSeriesDates(tx, date.eventSeriesId, [date.id], now);
     const current = await tx.eventInstance.findUniqueOrThrow({ where: { id: date.id }, select: { cancelledAt: true } });
     if (!current.cancelledAt) {
       await tx.eventInstance.update({ where: { id: date.id }, data: { cancelledAt: now } });
       await recordAuditEvent({ action: "EVENT_INSTANCE_CANCELLED", actorUserId: params.actorUserId, organisationId: params.organisationId, targetType: "EventInstance", targetId: date.id, client: tx });
     }
-    const people = await tx.rSVP.findMany({
-      where: { eventInstanceId: date.id, status: { in: [RsvpStatus.CONFIRMED, RsvpStatus.PENDING_PAYMENT, RsvpStatus.WAITLISTED, RsvpStatus.PENDING_APPROVAL] } },
-      select: { guestEmail: true, user: { select: { email: true } } },
+    // Everyone is told before anything is removed, in this transaction, so a
+    // retry can never lose the notices. A retry that finds the date already
+    // cancelled has told them.
+    const told = current.cancelledAt ? 0 : await noticeEach(tx, await peopleWithPlaces(tx, { eventInstanceId: date.id }), {
+      subject: noticeSubject("Cancelled", label),
+      lines: [
+        `${label} has been cancelled by the organiser.`,
+        ...(params.reason ? [params.reason] : []),
+        "If you paid, your refund is on its way: card and UPI refunds can take 5 to 10 working days to appear. A pass keeps its other dates.",
+      ],
     });
     // Free registrations simply go; paid ones are handled with their orders below.
     await tx.rSVP.deleteMany({ where: { eventInstanceId: date.id, OR: [{ orderId: null }, { order: { totalMinor: ZERO } }] } });
-    return [...new Set(people.map((person) => person.user?.email?.trim() || person.guestEmail).filter((email): email is string => Boolean(email)))];
+    return told;
   });
 
   const orders = await prisma.order.findMany({
@@ -105,18 +113,7 @@ export async function cancelOccurrence(params: { organisationId: string; seriesI
     }
   }
 
-  for (const to of recipients) {
-    await enqueueOperatorNotice(prisma, {
-      to,
-      subject: `Cancelled: ${label}`,
-      lines: [
-        `${label} has been cancelled by the organiser.`,
-        ...(params.reason ? [params.reason] : []),
-        "If you paid, your refund is on its way: card and UPI refunds can take 5 to 10 working days to appear. A pass keeps its other dates.",
-      ],
-    });
-  }
-  return { orders: orders.length, refunded, failed, notified: recipients.length };
+  return { orders: orders.length, refunded, failed, notified };
 }
 
 /** A pass loses one date: refund that date's share of what's left on it, then remove its seats there. */

@@ -1196,6 +1196,8 @@ model RSVP {
   /// When the registration joined the waitlist, and when it was offered a
   /// place. Set by the rsvp_waitlist_dates trigger, for waitlist conversion.
   waitlistedAt    DateTime?
+  /// The beat emailed this guest's reminder (about a day before the start), once.
+  reminderSentAt  DateTime?
   promotedAt      DateTime?
 
   event             Event?                  @relation(fields: [eventId], references: [id], onDelete: Cascade)

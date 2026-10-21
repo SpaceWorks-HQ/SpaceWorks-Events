@@ -17,6 +17,7 @@ import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { enqueueEventInvite } from "@/lib/outbox";
+import { shorten } from "@/lib/notices";
 import { startOutboxWorker } from "@/lib/outboxWorker";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
@@ -179,11 +180,30 @@ export async function addSeriesInvite(input: unknown): Promise<ActionResult> {
   if (!series) return { ok: false, error: "Series not found." };
 
   try {
-    const invite = await prisma.seriesInvite.create({
-      data: {
-        eventSeriesId: series.id,
-        email: normalizeEmail(email),
-      },
+    // The email links the next date, where the invitee registers.
+    const next = await prisma.eventInstance.findFirst({
+      where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null },
+      orderBy: { startDateTime: "asc" },
+      select: { id: true },
+    });
+    const invite = await prisma.$transaction(async (tx) => {
+      const created = await tx.seriesInvite.create({
+        data: {
+          eventSeriesId: series.id,
+          email: normalizeEmail(email),
+        },
+      });
+      if (next) {
+        await enqueueEventInvite(tx, {
+          to: created.email,
+          eventTitle: shorten(series.title),
+          organisationName: org.name,
+          orgSlug: org.slug,
+          eventSlug: series.slug,
+          eventPath: `/${org.slug}/i/${next.id}`,
+        });
+      }
+      return created;
     });
     await recordAuditEvent({ action: "SERIES_INVITE_ADDED", actorUserId: session.user.id, organisationId: org.id, targetType: "SeriesInvite", targetId: invite.id });
     revalidatePath(`/dashboard/${org.slug}/series/${series.id}`);

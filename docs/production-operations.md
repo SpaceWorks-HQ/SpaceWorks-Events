@@ -20,9 +20,9 @@ The default production deployment is the
 [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render builds `render.yaml`'s
 Docker service on every commit that passes CI, the container applies
 migrations on start (`MIGRATE_ON_START=1`, through `DIRECT_URL`), and the
-Cloudflare Worker in `deploy/cloudflare-cron` is the independent per-minute
-outbox scheduler from step 4 below. Steps 1–2 are then automatic; still
-review migrations and take a backup before merging one.
+Cloudflare Worker in `deploy/cloudflare-cron` calls the outbox endpoint every
+minute (step 4 below), which keeps the free instance awake. Steps 1–2 are then
+automatic; still review migrations and take a backup before merging one.
 
 For a complete single-host stack, follow the
 [Docker VPS guide](DEPLOYMENT_VPS.md) and `compose.production.yml`. For an app
@@ -35,7 +35,7 @@ production topology. Kubernetes operators should use the
 1. Build and test the immutable image in CI. The [releases and container images guide](CONTAINER_IMAGES.md) covers automated publication of the application, migration and operator images.
 2. Run `npm run db:status`, then `npm run db:deploy` once as a release job using the migration database role. Run `npm run storage:migrate` when legacy database assets remain.
 3. Deploy application instances using a least-privileged runtime database role and production secrets from a secrets manager.
-4. Verify the in-process outbox worker has recorded a fresh heartbeat after deployment. Configure an independent scheduler to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET` as a recovery path; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.
+4. Verify the email worker and the beat have recorded fresh heartbeats after deployment (Super admin → Operations). Where the platform cannot keep them running, such as a sleeping free instance, configure a cron service to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET`; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.
 5. Verify readiness, error rate, email queue depth, database connections, and Redis health before shifting traffic.
 
 ### Recent schema migrations

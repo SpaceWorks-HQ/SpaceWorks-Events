@@ -128,4 +128,10 @@ describe("production migration safety contracts", () => {
     expect(sql).toContain('"allowTransfers" BOOLEAN NOT NULL DEFAULT false');
     expect(sql).toContain('"payAtDesk" BOOLEAN NOT NULL DEFAULT false');
   });
+
+  it("adds the event reminder marker as a nullable column with no rewrites", () => {
+    const sql = readFileSync(resolve(root, "prisma/migrations/20261029000000_event_reminders/migration.sql"), "utf8");
+    expect(sql).not.toMatch(/\bDROP\b|^\s*(UPDATE|DELETE)\b/im);
+    expect(sql).toContain('ADD COLUMN     "reminderSentAt" TIMESTAMP(3);');
+  });
 });

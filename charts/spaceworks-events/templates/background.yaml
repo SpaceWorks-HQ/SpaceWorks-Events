@@ -1,0 +1,86 @@
+{{- /*
+The email worker and the beat (timed jobs): the backend image in its `worker`
+and `beat` roles. Their pods carry their own app.kubernetes.io/name, so the
+web Deployment's selector and the Service never pick them up.
+*/}}
+{{- if .Values.background.enabled }}
+{{- range $role := list "worker" "beat" }}
+{{- $settings := index $.Values.background $role }}
+{{- $name := printf "%s-%s" (include "spaceworks-events.name" $) $role | trunc 63 | trimSuffix "-" }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-%s" (include "spaceworks-events.fullname" $) $role | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "spaceworks-events.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  replicas: {{ $settings.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  {{- if eq $role "beat" }}
+  # One beat at a time: its jobs are safe to overlap, but there is no need.
+  strategy:
+    type: Recreate
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/component: {{ $role }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ $role }}
+          image: "{{ $.Values.image.repository }}:{{ default $.Chart.AppVersion $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args: [{{ $role | quote }}]
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3000"
+          envFrom:
+            - secretRef:
+                name: {{ required "existingSecret is required" $.Values.existingSecret }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml $settings.resources | nindent 12 }}
+          # The role listens on loopback only, so probe from inside the container.
+          startupProbe:
+            exec:
+              command: ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

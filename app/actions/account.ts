@@ -10,6 +10,7 @@ import { requireAuth } from "@/lib/permissions";
 import { hasRecentAuthentication } from "@/lib/reauth";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
+import { noticeEach } from "@/lib/notices";
 import { flattenZodErrors } from "./utils";
 import type { ActionResult } from "./org";
 import { isUploadedImageUrl, isUserUploadUrl } from "@/lib/uploadUrl";
@@ -143,6 +144,9 @@ export async function updateAccountPassword(
         targetId: session.user.id,
       },
     });
+    await noticeEach(tx, [user.email!], user.passwordHash
+      ? { subject: "Your password was changed", lines: ["The password for your Space Works Events account was just changed, and every other session was signed out.", "If this wasn't you, reset your password from the sign-in page straight away and contact your administrator."] }
+      : { subject: "A password was added to your account", lines: ["You can now sign in to Space Works Events with your email address and password, as well as with Google.", "If this wasn't you, reset your password from the sign-in page straight away and contact your administrator."] });
     return true;
   });
   if (!changed) return { ok: false, error: "Account security changed. Sign in again and retry." };

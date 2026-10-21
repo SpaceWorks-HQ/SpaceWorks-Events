@@ -95,7 +95,7 @@ export async function declineRequestedOrder(params: { orderId: string; organisat
  * registration is confirmed; a paid request is offered a payment link. Only
  * the first in line is tried, so nobody is skipped for a smaller order.
  */
-export async function offerNextWaitlisted(target: SeatTarget, now = new Date()) {
+export async function offerNextWaitlisted(target: SeatTarget, now = new Date()): Promise<boolean> {
   let owner: { organisationId: string; privacyType: EventPrivacyType; title: string; seriesId: string | null; } | null = null;
   if ("eventId" in target) {
     const event = await prisma.event.findUnique({ where: { id: target.eventId }, select: { organisationId: true, privacyType: true, title: true } });
@@ -104,27 +104,60 @@ export async function offerNextWaitlisted(target: SeatTarget, now = new Date()) 
     const date = await prisma.eventInstance.findUnique({ where: { id: target.eventInstanceId }, select: { eventSeriesId: true, series: { select: { organisationId: true, privacyType: true, title: true } } } });
     owner = date ? { ...date.series, seriesId: date.eventSeriesId } : null;
   }
-  if (!owner || owner.privacyType === EventPrivacyType.APPROVAL_REQUIRED) return;
+  if (!owner || owner.privacyType === EventPrivacyType.APPROVAL_REQUIRED) return false;
   const { seriesId } = owner;
   const next = await prisma.rSVP.findFirst({
     where: { ...target, status: RsvpStatus.WAITLISTED },
     orderBy: { createdAt: "asc" },
     select: { id: true, orderId: true, eventId: true, eventInstanceId: true, ticketTypeId: true, checkInToken: true, guestEmail: true, user: { select: { email: true } }, order: { select: { status: true, totalMinor: true } } },
   });
-  if (!next) return;
+  if (!next) return false;
   if (next.order && next.order.totalMinor > ZERO) {
-    if (next.order.status !== OrderStatus.REQUESTED) return;
-    await offerRequestedOrder({ orderId: next.orderId!, organisationId: owner.organisationId, actorUserId: null, now }).catch(() => undefined);
-    return;
+    if (next.order.status !== OrderStatus.REQUESTED) return false;
+    return offerRequestedOrder({ orderId: next.orderId!, organisationId: owner.organisationId, actorUserId: null, now }).then(() => true, () => false);
   }
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     if ("eventId" in target) await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${target.eventId} FOR UPDATE`;
     else if (seriesId) await lockSeriesDates(tx, seriesId, [target.eventInstanceId], now);
-    if (!(await hasFreeSeats(tx, [next], now))) return;
+    if (!(await hasFreeSeats(tx, [next], now))) return false;
     const promoted = await tx.rSVP.updateMany({ where: { id: next.id, status: RsvpStatus.WAITLISTED }, data: { status: RsvpStatus.CONFIRMED } });
     const to = attendeeEmail(next);
     if (promoted.count === 1 && to) await enqueueRsvpStatusNotification(tx, { to, eventTitle: owner.title, approved: true, checkInToken: next.checkInToken });
+    return promoted.count === 1;
   });
+}
+
+/** Offer every free seat, in waitlist order, until the seats or the waitlist run out. Returns how many were offered. */
+export async function fillFromWaitlist(target: SeatTarget, now = new Date(), limit = 100) {
+  let offered = 0;
+  while (offered < limit && (await offerNextWaitlisted(target, now).catch(() => false))) offered += 1;
+  return offered;
+}
+
+/**
+ * The beat's safety net: free seats on upcoming events and dates go to their
+ * waitlists, after a capacity increase, a removed guest, or a promotion that
+ * failed after its commit.
+ */
+export async function fillWaitlists(now = new Date()) {
+  const waiting = await prisma.rSVP.groupBy({
+    by: ["eventId", "eventInstanceId"],
+    where: {
+      status: RsvpStatus.WAITLISTED,
+      OR: [
+        { event: { endDateTime: { gt: now }, privacyType: { not: EventPrivacyType.APPROVAL_REQUIRED } } },
+        { eventInstance: { endDateTime: { gt: now }, cancelledAt: null, series: { privacyType: { not: EventPrivacyType.APPROVAL_REQUIRED } } } },
+      ],
+    },
+    orderBy: [{ eventId: "asc" }, { eventInstanceId: "asc" }],
+    take: 200,
+  });
+  let offered = 0;
+  for (const row of waiting) {
+    const target = seatTargetOf(row);
+    if (target) offered += await fillFromWaitlist(target, now);
+  }
+  return { offered };
 }
 
 /**
@@ -331,7 +364,7 @@ export async function refundOrder(params: {
     return { onlineRefundIds, freed, refundedMinor: wanted };
   });
   for (const refundId of outcome.onlineRefundIds) await submitPendingRefund(refundId).catch(() => undefined);
-  for (const target of outcome.freed) await offerNextWaitlisted(target, now).catch(() => undefined);
+  for (const target of outcome.freed) await fillFromWaitlist(target, now);
   return { refundedMinor: outcome.refundedMinor };
 }
 

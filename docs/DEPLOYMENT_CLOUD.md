@@ -216,8 +216,9 @@ How the Blueprint fits the free plan:
 
 ### Scheduler Worker
 
-The free Render instance sleeps after 15 minutes without traffic, which also
-stops the in-process email worker. The Worker in
+The free Render instance runs everything in one process
+(`SWE_PROCESS_ROLE=all`). It sleeps after 15 minutes without traffic, which
+also stops its email worker and timed jobs. The Worker in
 [`deploy/cloudflare-cron`](../deploy/cloudflare-cron/README.md) runs every
 minute, wakes the app through `/api/health`, then calls
 `POST /api/internal/outbox` with `Authorization: Bearer $CRON_SECRET`.

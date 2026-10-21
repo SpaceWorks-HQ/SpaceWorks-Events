@@ -3,7 +3,9 @@ import "server-only";
 import { PaymentRefundStatus, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recordAuditEvent } from "@/lib/audit";
+import { noticeEach, organiserEmails } from "@/lib/notices";
 import { PaymentsUnavailable, type OnlineProvider } from "./http";
+import { formatMoney } from "./money";
 import type { RefundNotification } from "./providers/types";
 import { loadPaymentAccount } from "./settings";
 
@@ -81,6 +83,7 @@ export async function submitPendingRefund(refundId: string): Promise<"submitted"
     if (error instanceof PaymentsUnavailable && error.status && error.status >= 400 && error.status < 500 && error.status !== 409 && error.status !== 429) {
       await prisma.paymentRefund.updateMany({ where: { id: refund.id, status: PaymentRefundStatus.PENDING }, data: { status: PaymentRefundStatus.FAILED, settledAt: new Date() } });
       await recordAuditEvent({ action: "PAYMENT_REFUND_FAILED", organisationId: payment.organisationId, targetType: "PaymentRefund", targetId: refund.id });
+      await noticeRefundFailed(prisma, refund.id);
       return "failed";
     }
     return "skipped";
@@ -95,6 +98,7 @@ export async function submitPendingRefund(refundId: string): Promise<"submitted"
   });
   if (result.state === "FAILED") {
     await recordAuditEvent({ action: "PAYMENT_REFUND_FAILED", organisationId: payment.organisationId, targetType: "PaymentRefund", targetId: refund.id });
+    await noticeRefundFailed(prisma, refund.id);
     return "failed";
   }
   return "submitted";
@@ -128,5 +132,23 @@ export async function applyRefundNotification(tx: Prisma.TransactionClient, cont
   });
   if (notification.state === "FAILED") {
     await recordAuditEvent({ action: "PAYMENT_REFUND_FAILED", organisationId: context.organisationId, targetType: "PaymentRefund", targetId: refund.id, client: tx });
+    await noticeRefundFailed(tx, refund.id);
   }
+}
+
+/** A refund the provider refused: the organisation's owners and admins are told, so the buyer isn't left waiting. */
+async function noticeRefundFailed(client: Prisma.TransactionClient | typeof prisma, refundId: string) {
+  const refund = await client.paymentRefund.findUnique({
+    where: { id: refundId },
+    select: { amountMinor: true, payment: { select: { currency: true, organisationId: true, order: { select: { reference: true, buyerEmail: true } } } } },
+  });
+  if (!refund) return;
+  const { payment } = refund;
+  await noticeEach(client, await organiserEmails(client, payment.organisationId), {
+    subject: `A refund failed: order ${payment.order.reference}`,
+    lines: [
+      `The payment provider refused a refund of ${formatMoney(refund.amountMinor, payment.currency)} on order ${payment.order.reference} (${payment.order.buyerEmail}).`,
+      "Check your balance with the provider, then refund again from the guest list, or refund the buyer another way and record it there.",
+    ],
+  });
 }
