@@ -57,6 +57,18 @@ describe("alert text redaction", () => {
     expect(text).toContain("[redacted URL]");
   });
 
+  it("removes 24-character ticket, transfer and order tokens", () => {
+    for (const token of ["tz4a98xxat96iws9zmbrgj3a", "Qx7_2kLm9pZr-4Tb8VnW0cYe"]) {
+      expect(redactAlertText(`lookup failed for ${token}`)).not.toContain(token);
+    }
+  });
+
+  it("neutralises mentions, code-span breakouts and line breaks", () => {
+    const text = redactAlertText("@channel <!here> `x` first\nsecond");
+    expect(text).not.toMatch(/@channel|<!here>|`|\n/);
+    expect(text).toContain("first second");
+  });
+
   it("keeps file paths in stack frames readable and caps length", () => {
     expect(redactAlertText("at deliver (./lib/email/transporter.ts:42:7)")).toContain("lib/email/transporter.ts:42:7");
     expect(redactAlertText("x".repeat(20) + " ".repeat(1000), 50)).toHaveLength(50);
@@ -139,6 +151,13 @@ describe("alert delivery", () => {
   it("caps the number of alerts per minute", async () => {
     for (let i = 0; i < 40; i += 1) await deliverOpsAlert({ level: "error", source: "x", title: `distinct ${i}` });
     expect(fetchMock).toHaveBeenCalledTimes(30);
+  });
+
+  it("gives browser reports their own small budget, so they cannot crowd out server alerts", async () => {
+    for (let i = 0; i < 20; i += 1) await deliverOpsAlert({ level: "error", source: "browser", title: `crash ${i}` });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    await deliverOpsAlert({ level: "error", source: "request", title: "server error" });
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it("never throws when the webhook or the database fails", async () => {

@@ -182,13 +182,14 @@ describe("POST /api/client-errors (public)", () => {
     expect(text).not.toContain("ref=mail");
   });
 
-  it("rate limits reports per client IP (10 per minute)", async () => {
+  it("caps browser reports (10 per client IP, 5 alerts a minute per process)", async () => {
     for (let i = 0; i < 14; i++) {
       expect((await reportClientError(clientErrorRequest({ boundary: "global", message: `burst ${i} ${suffix}` }, { "x-forwarded-for": "198.51.100.12" }))).status).toBe(204);
     }
-    await waitFor(() => posts.length >= 10);
+    await waitFor(() => posts.length >= 1);
     await new Promise((r) => setTimeout(r, 300));
-    expect(posts.length).toBe(10);
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.length).toBeLessThanOrEqual(5);
   });
 });
 

@@ -38,6 +38,8 @@ type State = {
   windowStart: number;
   sentInWindow: number;
   dropped: number;
+  browserWindowStart?: number;
+  browserSentInWindow?: number;
   consoleForwarding?: boolean;
   unreadableLogged?: boolean;
 };
@@ -45,6 +47,8 @@ type State = {
 const SETTINGS_TTL_MS = 60_000;
 const DEDUPE_WINDOW_MS = 5 * 60_000;
 const MAX_ALERTS_PER_MINUTE = 30;
+/** Browser reports are unauthenticated, so they get their own small budget. */
+const MAX_BROWSER_ALERTS_PER_MINUTE = 5;
 const REQUEST_TIMEOUT_MS = 5_000;
 const MAX_TEXT = 600;
 
@@ -85,9 +89,16 @@ export function redactAlertText(value: string, max = MAX_TEXT): string {
     .replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi, "[redacted URL]")
     .replace(/\bBearer\s+[^\s"',]+/gi, "Bearer [redacted]")
     .replace(/\b(password|passwd|pwd|secret|token|key|code|signature|sig)=([^\s&"',]+)/gi, "$1=[redacted]")
-    // Opaque bearer capabilities (tickets, invites, resets, API keys) are long
-    // unbroken base64/hex runs; file paths keep their slashes and survive.
-    .replace(/[A-Za-z0-9_+=-]{32,}/g, "[redacted token]");
+    // Opaque bearer capabilities (ticket and order tokens are 24-character
+    // cuid2/base64url, member IDs 22) are unbroken runs; file paths keep their
+    // slashes and survive. Same threshold as sanitizeAlertPath.
+    .replace(/[A-Za-z0-9_+=-]{20,}/g, "[redacted token]")
+    // Text can come from anyone (browser reports, logged input): no line
+    // breaks, no code-span breakouts, and no @channel or <!here> mentions.
+    .replace(/[\r\n]+/g, " ")
+    .replace(/`/g, "'")
+    .replace(/@/g, "@\u200b")
+    .replace(/<!/g, "<\u200b!");
   return redacted.length > max ? `${redacted.slice(0, max - 1)}…` : redacted;
 }
 
@@ -204,6 +215,17 @@ function admit(alert: OpsAlert, now: number): string[] | null {
   if (previous) {
     previous.suppressed += 1;
     return null;
+  }
+  if (alert.source === "browser") {
+    // Varied crash reports must never use up the budget for server alerts.
+    if (s.browserWindowStart == null || now - s.browserWindowStart >= 60_000) {
+      s.browserWindowStart = now;
+      s.browserSentInWindow = 0;
+    }
+    if ((s.browserSentInWindow ?? 0) >= MAX_BROWSER_ALERTS_PER_MINUTE) return null;
+    s.browserSentInWindow = (s.browserSentInWindow ?? 0) + 1;
+    s.recent.set(key, { at: now, suppressed: 0 });
+    return [];
   }
   if (now - s.windowStart >= 60_000) {
     s.windowStart = now;

@@ -99,21 +99,22 @@ export async function organisationTransport(server: { organisationId: string; ho
  * otherwise the platform server, under the organisation's name and reply-to.
  */
 export async function getEmailTransport(): Promise<Sender> {
-  const platform = await getPlatformTransport();
   const organisationId = sendingScope.getStore()?.organisationId ?? null;
-  if (!organisationId) return platform;
+  if (!organisationId) return getPlatformTransport();
   const organisation = await prisma.organisation.findUnique({
     where: { id: organisationId },
     select: { name: true, emailSettings: { select: { fromName: true, replyTo: true, useOwnServer: true, fromAddress: true, smtpHost: true, smtpPort: true, smtpSecure: true, smtpUser: true, smtpPasswordEncrypted: true } } },
   });
-  if (!organisation) return platform;
+  if (!organisation) return getPlatformTransport();
   const settings = organisation.emailSettings;
   const name = displayName(settings?.fromName || organisation.name) || "Space Works Events";
   const replyTo = settings?.replyTo ?? null;
+  // An organisation's own server doesn't depend on the platform server being usable.
   if (settings?.useOwnServer && settings.smtpHost && settings.smtpPort && settings.fromAddress) {
     const transporter = await organisationTransport({ organisationId, host: settings.smtpHost, port: settings.smtpPort, secure: settings.smtpSecure, user: settings.smtpUser, passwordEncrypted: settings.smtpPasswordEncrypted });
     return { from: { name, address: settings.fromAddress }, transporter: withReplyTo(transporter, replyTo) };
   }
+  const platform = await getPlatformTransport();
   return {
     from: { name, address: senderAddress(typeof platform.from === "string" ? platform.from : platform.from.address) },
     transporter: platform.transporter ? withReplyTo(platform.transporter, replyTo) : null,
