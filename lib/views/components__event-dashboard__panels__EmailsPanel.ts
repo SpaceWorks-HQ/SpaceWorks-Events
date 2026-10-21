@@ -2,12 +2,13 @@ import { Prisma, type RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
+import { loadEventBroadcastDraftForUser } from "@/app/actions/broadcasts/drafts";
 export async function loadEmailsPanel({ ctx }: { ctx: EventDashboardContext; }) {
   ctx = await loadEventDashboard(ctx.organisation.slug, ctx.event.id);
 
-  const { event, permissions, organisation, now } = ctx;
+  const { event, permissions, organisation, now, userId } = ctx;
   if (!permissions.canManageRegistrations) notFound();
-  const [records, counts, branding] = await Promise.all([
+  const [records, counts, branding, savedDraft] = await Promise.all([
     prisma.eventBroadcast.findMany({
       where: { eventId: event.id },
       orderBy: { createdAt: "desc" },
@@ -16,7 +17,10 @@ export async function loadEmailsPanel({ ctx }: { ctx: EventDashboardContext; }) 
     }),
     loadRsvpStatusCounts(event.id),
     prisma.event.findUnique({ where: { id: event.id }, select: { coverImageUrl: true, page: { select: { accentColor: true } } } }),
+    // Only the signed-in organiser's own draft, through the composer's own access check.
+    loadEventBroadcastDraftForUser(userId, { organisationSlug: organisation.slug, eventId: event.id }),
   ]);
+  const draft = savedDraft.ok ? (savedDraft.data?.draft ?? null) : null;
   const brand = { accentColor: branding?.page?.accentColor ?? null, coverImageUrl: branding?.coverImageUrl ?? null };
   const statusCounts: Record<RsvpStatus, number> = {
     CONFIRMED: counts.confirmed,
@@ -47,7 +51,7 @@ export async function loadEmailsPanel({ ctx }: { ctx: EventDashboardContext; }) 
     return [row.id, { sent, waiting, failed, skipped: expired ? 0 : Math.max(0, row.recipientCount - sent - waiting - failed), expired }];
   }));
 
-  return { event, permissions, organisation, now, records, brand, statusCounts, delivery };
+  return { event, permissions, organisation, now, records, brand, statusCounts, delivery, draft };
 }
 
 import { notFound } from "next/navigation";

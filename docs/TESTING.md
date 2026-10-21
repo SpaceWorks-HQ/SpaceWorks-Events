@@ -30,7 +30,7 @@ capacity, and feedback persistence. `TEST_DATABASE_URL` is mandatory so the
 suite cannot silently inherit the application's ambient `DATABASE_URL`. Keep
 the named database disposable and never point it at production.
 
-The machine API integration suite additionally exercises persisted credential hashes, cross-tenant event access, participant privacy, and bounded collections. The short-link suite covers owner/admin-only creation, cross-tenant rejection, idempotent and concurrent creation, regeneration, the unique index, and resolution for every non-published status. The `login-security` suite covers first-device trust and new-device alerts, single-use hashed sign-in codes, per-account and per-address failure counting (never blocking an "unknown" address), and the staff authenticator rule, including the exemptions for attendees and the super admin.
+The machine API integration suite additionally exercises persisted credential hashes, cross-tenant event access, participant privacy, and bounded collections. The short-link suite covers owner/admin-only creation, cross-tenant rejection, idempotent and concurrent creation, regeneration, the unique index, and resolution for every non-published status. The `login-security` suite covers first-device trust and new-device alerts, single-use hashed sign-in codes, per-account and per-address failure counting (never blocking an "unknown" address), and the staff authenticator rule, including the exemptions for attendees and the super admin. The `broadcast-drafts` suite covers Emails-tab drafts: save, load and update of one private draft per organiser, cross-tenant and member denial, body sanitising and the send schema's length limits, the database subject bound, cascades on event and user deletion, and clearing by a real send (not a test send or a failed send).
 
 ### Coverage
 
@@ -60,7 +60,7 @@ npm run build
 npm run test:e2e:production
 ```
 
-Production mode prepares and starts `.next/standalone/server.js`, including public and static assets. The suite checks liveness, Auth.js polling limits, mobile navigation, login/crawler controls, confirmed tickets, waitlisted ticket rejection, feedback, JPEG certificates, and short-link redirects and not-found behaviour.
+Production mode prepares and starts `.next/standalone/server.js`, including public and static assets. The suite checks liveness, Auth.js polling limits, mobile navigation, login/crawler controls, confirmed tickets, waitlisted ticket rejection, feedback, JPEG certificates, and short-link redirects and not-found behaviour. `broadcast-drafts.spec.ts` checks that a custom email autosaves, guards leaving while unsaved, survives a reload, asks before a template replaces it, and is cleared by a real send after the undo window, and that **Discard draft…** removes it.
 
 ## Static and dependency checks
 
