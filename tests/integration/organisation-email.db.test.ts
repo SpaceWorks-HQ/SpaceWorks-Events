@@ -45,6 +45,8 @@ async function deliverTo(to: string) {
 
 beforeAll(async () => {
   vi.stubEnv("MFA_ENCRYPTION_KEY", process.env.MFA_ENCRYPTION_KEY || Buffer.alloc(32, 7).toString("base64"));
+  // CI may configure a mail "service"; this test needs a plain host to tell the servers apart.
+  vi.stubEnv("SMTP_SERVICE", "");
   vi.stubEnv("SMTP_HOST", "smtp.platform.test");
   vi.stubEnv("EMAIL_FROM", "Space Works Events <noreply@platform.test>");
   owner = (await prisma.user.create({ data: { name: "Owner", email: `owner-${suffix}@example.test`, emailVerified: new Date() } })).id;
