@@ -31,7 +31,7 @@ Ours: `origin/dev` at `bdb847c` (PR #35 merged).
 | --- | --- | --- | --- |
 | `9829c15` | **Publishing from the dashboard didn't release the event's page**, so the event stayed 404 publicly: no sign-ups, and its short link didn't resolve. Status and page release now change in one transaction. | **Bug present** (`publishEvent` in `app/actions/event.ts` only sets `status`). | Port. |
 | `214e3ab` | Follow-up: `saveEventPage` creates a missing page released when the event is published, and the data migration `realign_event_publication` repairs events already stuck. | **Bug present** (`isPublished: false` on create). | Port, with the migration renamed to follow `dev`'s latest (`20261031000100_…`). |
-| `d377284` | **Instance settings across deployments.** Saved SMTP replaces `SMTP_*` as a whole, so an env service or credentials no longer override a saved host. Blank env values count as unset (so `SMTP_HOST=""` from `.env.example` no longer breaks startup validation). Fields can be cleared. The sender is validated against header injection. Adds **Send test email**. A saved Google ID pairs only with a saved secret. An **unreadable secret** (the key differs or was rotated) disables Google instead of returning 500 on every page, with a named `InstanceSecretUnreadableError`, `scripts/check-instance-secrets.mjs` and an optional Helm migration check. Also: a CI-only TLS bypass for Mailpit, `production:check` no longer needs env SMTP, the super-admin overview uses UTC-safe date windows and gives real top-organisation counts, search and page params are validated, the pager knows when there's a next page, maintenance actions return safe errors, retry resets `attempts`, and the API stats panel is labelled per process. | **Bugs present.** `getEmailSettings`/`getGoogleSsoSettings` still mix the two sources field by field and throw on an unreadable secret. Invite tokens are already not loaded on `dev`. | Port, adapted: keep `dev`'s per-organisation transports (`lib/email/transporter.ts`) and change only the platform transport. To stay clear of `feat/login-security`, make the Google settings loader itself fail safe (log and return `null`) instead of editing `lib/auth.ts` and the login page. |
+| `d377284` | **Instance settings across deployments.** Saved SMTP replaces `SMTP_*` as a whole, so an env service or credentials no longer override a saved host. Blank env values count as unset (so `SMTP_HOST=""` from `.env.example` no longer breaks startup validation). Fields can be cleared. The sender is validated against header injection. Adds **Send test email**. A saved Google ID pairs only with a saved secret. An **unreadable secret** (the key differs or was rotated) disables Google instead of returning 500 on every page, with a named `InstanceSecretUnreadableError`, `scripts/check-instance-secrets.mjs` and an optional Helm migration check. Also: a CI-only TLS bypass for Mailpit, `production:check` no longer needs env SMTP, the super-admin overview uses UTC-safe date windows and gives real top-organisation counts, search and page params are validated, the pager knows when there's a next page, maintenance actions return safe errors, retry resets `attempts`, and the API stats panel is labelled per process. | **Bugs present.** `getEmailSettings`/`getGoogleSsoSettings` still mix the two sources field by field and throw on an unreadable secret. The super-admin invites view reader still loads invite tokens. | Port, adapted: keep `dev`'s per-organisation transports (`lib/email/transporter.ts`) and change only the platform transport. To stay clear of `feat/login-security`, make the Google settings loader itself fail safe (log and return `null`) instead of editing `lib/auth.ts` and the login page. |
 | `6c3c4b7` | **Retry failed email** requeues only failures from the last 7 days, so an outage doesn't resend week-old broadcasts. | Present. | Port. |
 | `ac64909` | Ops alerts: ignore client-disconnect stream noise. | n/a (needs section 3). | Port with section 3. |
 | `a16fba1` | Validator tests used a fixed date that is now in the past. | **Already fine.** `dev`'s fixtures don't use the fixed date. | Nothing. |
@@ -61,11 +61,28 @@ Ours: `origin/dev` at `bdb847c` (PR #35 merged).
 - Yuyu's "free events only" boundary. `dev` now has paid events.
 - Yuyu's `yuyu_v1_` API tokens, `yuyu.` cookies and storage keys, and Redis channels (see `docs/PRODUCTION_RELEASE.md`, "Breaking changes from Yuyu").
 
-## Proposed `feat/yuyu-sync` scope
+## Ported in `feat/yuyu-sync`
 
-1. Event publication fixes and the repair migration (`9829c15`, `214e3ab`).
-2. Instance settings reliability, the test email, retrying only recent failures, and the super-admin hardening (`d377284`, `6c3c4b7`, `8a45d80`), adapted to per-organisation email and without changes to `lib/auth.ts` or the login page.
-3. The operator alert webhook (`db9524d`, `216a88d`, `ac64909`), without the Auth.js logger hook.
-4. The CI fixes (`b4db91c`, part of `a2ac77b`).
+The owner approved items 1 to 4 and deferred the mobile API. All of them are ported, each as its own commit naming the upstream hash.
 
-Left out: the mobile API (its own project), the redesign e2e suite, and Yuyu's docs and policy commits.
+1. **Event publication** (`9829c15`, `214e3ab`), with the repair migration renamed `20261031000100_realign_event_publication`.
+2. **Instance settings** (`d377284`, `6c3c4b7`, `8a45d80`). Adapted to `dev`:
+   - The platform transport is `getPlatformTransport` in `lib/email/transporter.ts`. Per-organisation sending is unchanged.
+   - The fail-safe for an unreadable Google secret is inside `getGoogleSsoSettings`, so `lib/auth.ts` and the login page are untouched.
+   - Upstream's page changes went into `dev`'s view readers (`lib/views/app__super-admin__*`).
+   - The Settings page's direct test send is `sendSettingsTestEmail`. `dev`'s existing outbox test send on Operations stays.
+   - Found while porting: the invites view reader was sending organisation invite tokens to the frontend host. It no longer loads them, and the guard test now checks view readers as well as pages.
+3. **Operator alert webhook** (`db9524d`, `ac64909`, `216a88d`), migration `20261031000200_ops_alert_webhook`. Adapted to `dev`:
+   - Beat job failures alert too.
+   - The webhook column is on the split gateway's forbidden-field list.
+   - The settings view reader returns only the webhook host.
+4. **CI** (`b4db91c`, `a2ac77b`): both e2e steps trust `cf-connecting-ip`; the smoke test prints container logs on failure and checks that sharp loads.
+
+## Follow-ups
+
+- **Auth.js failure alerts:** route the Auth.js `logger.error` in `lib/auth.ts` through `logOpsError` (upstream `db9524d`) once `feat/login-security` merges.
+- **Login copy:** show "Sign in with your email and password" when Google is off, and drop "New here?" while sign-ups are closed (upstream `d377284`). This is in the login page, so it also waits for `feat/login-security`.
+- **Mobile API** (`/api/mobile/v1`): its own project, rebuilt on `dev`'s paid-event flows.
+- `scripts/check-instance-secrets.mjs` checks the instance secrets and MFA seeds only. It could also check the per-organisation secrets (payment keys, organisation SMTP), which use their own subkey.
+
+Left out on purpose: the redesign e2e suite, and Yuyu's docs and policy commits.
