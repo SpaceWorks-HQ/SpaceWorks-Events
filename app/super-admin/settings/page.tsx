@@ -7,6 +7,13 @@ import { PageHeader } from "@/components/ui/display";
 
 export default async function SuperAdminSettingsPage() {
   await requireSuperAdminMfa();
-  const { initial, paidEventsEnabled, opsWebhook } = await loadSuperAdminSettingsView();
-  return <div className="flex flex-col gap-6"><PageHeader title="Instance settings" description="Configure email delivery, Google sign-in, paid events, backup status, and operational alerts for this instance. Secrets are encrypted and never displayed." /><InstanceServiceSettingsForm initial={initial} /><PaidEventsControl initialEnabled={paidEventsEnabled} /><OpsWebhookSettingsForm initial={opsWebhook} /></div>;
+  const { initial, fallback, paidEventsEnabled, opsWebhook } = await loadSuperAdminSettingsView();
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader title="Instance settings" description="Configure email delivery, Google sign-in, paid events, backup status, and operational alerts for this instance. Secrets are encrypted and never displayed." />
+      <InstanceServiceSettingsForm initial={initial} fallback={fallback} />
+      <PaidEventsControl initialEnabled={paidEventsEnabled} />
+      <OpsWebhookSettingsForm initial={opsWebhook} />
+    </div>
+  );
 }

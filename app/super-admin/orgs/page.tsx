@@ -5,12 +5,12 @@ import { PageHeader } from "@/components/ui/display";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[]; }>;
 };
 
 export default async function SuperAdminOrgsPage({ searchParams }: Props) {
   await requireSuperAdminMfa();
-  const { q, orgs, page } = await loadSuperAdminOrgsView({ searchParams });
+  const { q, orgs, page, hasNext } = await loadSuperAdminOrgsView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Organisations" description="Every organisation on this instance, newest first." />
@@ -49,7 +49,7 @@ export default async function SuperAdminOrgsPage({ searchParams }: Props) {
         </TBody>
       </Table>
 
-      <AdminPager basePath="/super-admin/orgs" query={q} page={page} />
+      <AdminPager basePath="/super-admin/orgs" query={q} page={page} hasNext={hasNext} />
     </div>
   );
 }

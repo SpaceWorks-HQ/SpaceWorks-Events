@@ -54,7 +54,9 @@ Apply these with `npm run db:deploy` before rolling out the matching application
 
 ## Instance-managed services
 
-Use `/super-admin/settings` with a fresh super-admin TOTP proof to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source.
+Use `/super-admin/settings` with a fresh super-admin TOTP proof to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source. Panel settings are read from PostgreSQL at send and sign-in time, so they apply on every replica, in Docker, Helm, and plain Node deployments, without a restart or rebuild.
+
+`MFA_ENCRYPTION_KEY` must be identical on every replica and job, and stable. A replica with a different key stays healthy but cannot send email, sign in with Google, post alerts, or verify TOTP. Before rotating or re-deploying, run `node scripts/check-instance-secrets.mjs` (or set `migration.checkInstanceSecrets=true` in Helm); it never prints decrypted values.
 
 ### Operational alerts webhook
 
@@ -66,7 +68,7 @@ The same page holds an optional **Alerts webhook**: a Mattermost (or Slack-compa
 - browser crashes caught by the app error boundaries, through `POST /api/client-errors`;
 - an *Instance started* note each time a process boots, which marks deploys and restarts.
 
-The URL embeds its own credential, so it is encrypted like the SMTP password and only its host is shown. Use **Send test message** after saving. Alert text is redacted before it leaves the instance (URLs and connection strings, email addresses, bearer values, `token=`-style parameters, and long opaque strings), identical alerts are collapsed for five minutes with a repeat count afterwards, and each process sends at most 30 alerts a minute. Delivery is best effort with a 5-second timeout and never fails the request that raised it. With several replicas, expect one *Instance started* note per replica.
+The URL embeds its own credential, so it is encrypted like the SMTP password and only its host is shown. Use **Send test message** after saving. Alert text is redacted before it leaves the instance (URLs and connection strings, email addresses, bearer values, `token=`-style parameters, and long opaque strings), identical alerts are collapsed for five minutes with a repeat count afterwards, and each process sends at most 30 alerts a minute. Delivery is best effort with a 5-second timeout and never fails the request that raised it. With several replicas, expect one *Instance started* note per replica; each process re-reads the webhook setting at most every 60 seconds, so a change saved on one replica reaches the others within a minute. Every app process needs outbound HTTPS to the webhook host.
 
 The backup fields do not run, retain, or restore backups. Keep those controls with the database provider and record successful backups and restore drills in the instance operations area.
 

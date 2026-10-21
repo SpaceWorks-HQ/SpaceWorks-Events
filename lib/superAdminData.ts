@@ -1,8 +1,21 @@
 import "server-only";
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import type { DailyRow } from "@/lib/superAdminInsights";
 
+/**
+ * A JS Date as a UTC `timestamp without time zone` SQL value.
+ *
+ * Prisma stores DateTime columns as UTC wall-clock values in `timestamp(3)`
+ * columns, but binds raw-query Date parameters as `timestamptz`. Comparing the
+ * two makes Postgres reinterpret the column in the session TimeZone, which
+ * shifts every window by the server's UTC offset unless the database runs in
+ * UTC. Converting the parameter keeps the comparison in UTC and index-friendly.
+ */
+export function utcTimestamp(value: Date): Prisma.Sql {
+  return Prisma.sql`(${value}::timestamptz at time zone 'UTC')`;
+}
 
 export type ActivitySeries = (typeof ACTIVITY_SERIES)[number];
 
@@ -11,7 +24,8 @@ export type ActivitySeries = (typeof ACTIVITY_SERIES)[number];
  * one small row per (series, active day) comes back. Counts only; no rows,
  * people, or tokens are read.
  */
-export function loadDailyActivity(since: Date) {
+export function loadDailyActivity(sinceDate: Date) {
+  const since = utcTimestamp(sinceDate);
   return prisma.$queryRaw<DailyRow[]>`
     select 'signups' as series, to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') as day, count(*)::int as n from "User" where "createdAt" >= ${since} group by 2
     union all
@@ -32,7 +46,8 @@ export function loadDailyActivity(since: Date) {
 
 
 /** Per-day outbox volume: messages created, delivered (by sent time), and failed (by creation). */
-export function loadDailyEmail(since: Date) {
+export function loadDailyEmail(sinceDate: Date) {
+  const since = utcTimestamp(sinceDate);
   return prisma.$queryRaw<DailyRow[]>`
     select 'queued' as series, to_char(date_trunc('day', "createdAt"), 'YYYY-MM-DD') as day, count(*)::int as n from "OutboxMessage" where "createdAt" >= ${since} group by 2
     union all
@@ -43,7 +58,8 @@ export function loadDailyEmail(since: Date) {
 }
 
 /** Organisations with the most registrations created since `since` (event and series occurrences). */
-export function loadTopOrganisationsByRsvps(since: Date, limit = 10) {
+export function loadTopOrganisationsByRsvps(sinceDate: Date, limit = 10) {
+  const since = utcTimestamp(sinceDate);
   return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; rsvps: number; }>>`
     select o.id, o.name, o.slug, count(r.id)::int as rsvps
     from "RSVP" r
@@ -54,12 +70,13 @@ export function loadTopOrganisationsByRsvps(since: Date, limit = 10) {
     where r."createdAt" >= ${since}
     group by o.id, o.name, o.slug
     order by count(r.id) desc
-    limit ${limit}
+    limit ${Math.min(Math.max(Math.trunc(limit), 1), 50)}
   `;
 }
 
 /** Organisations that sent the most broadcasts since `since`, with total recipients. */
-export function loadTopOrganisationsByBroadcasts(since: Date, limit = 10) {
+export function loadTopOrganisationsByBroadcasts(sinceDate: Date, limit = 10) {
+  const since = utcTimestamp(sinceDate);
   return prisma.$queryRaw<Array<{ id: string; name: string; slug: string; broadcasts: number; recipients: number; }>>`
     select o.id, o.name, o.slug, count(b.id)::int as broadcasts, coalesce(sum(b."recipientCount"), 0)::int as recipients
     from "EventBroadcast" b
@@ -68,7 +85,7 @@ export function loadTopOrganisationsByBroadcasts(since: Date, limit = 10) {
     where b."createdAt" >= ${since}
     group by o.id, o.name, o.slug
     order by count(b.id) desc
-    limit ${limit}
+    limit ${Math.min(Math.max(Math.trunc(limit), 1), 50)}
   `;
 }
 

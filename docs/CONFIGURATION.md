@@ -4,6 +4,8 @@
 
 Copy `.env.example` to `.env` for local development. For the default free-tier production stack (Render, Supabase, Upstash, Cloudflare R2, Brevo), start from `.env.production.example` and follow [Free-tier cloud deployment](DEPLOYMENT_CLOUD.md). Production secrets must come from a secrets manager or the deployment platform, never from a committed file.
 
+Blank values (for example `SMTP_HOST=""` left over from `.env.example`) are treated as unset by the production startup check and by `npm run production:check`, so placeholders for panel-managed settings do not stop the server from starting.
+
 ## Core and authentication
 
 | Variable | Production | Purpose |
@@ -48,13 +50,21 @@ Keep an HTTPS redirect from the old hostname to the new one for as long as invit
 | Variable | Production | Purpose |
 | --- | --- | --- |
 | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Required | Stable base64 AES key shared by the build and every replica; 16, 24, or 32 decoded bytes |
-| `MFA_ENCRYPTION_KEY` | Required | Independent base64 key used to encrypt TOTP seeds; exactly 32 decoded bytes |
+| `MFA_ENCRYPTION_KEY` | Required | Independent base64 key used to encrypt TOTP seeds; exactly 32 decoded bytes. A domain-separated subkey also encrypts the SMTP password, Google client secret, and alert webhook URL saved in Super admin → Settings. Must be identical on every replica and job (app pods, migration job, any one-off container) and stable |
 | `CRON_SECRET` | Required | Bearer secret for `POST /api/internal/outbox` (one full pass of timed jobs and email delivery, for cron services and recovery), at least 32 characters |
 | `SWE_PROCESS_ROLE` | Optional | `all` (default): serve requests, send email (worker) and run timed jobs (beat) in one process. `web`, `worker` or `beat`: one part only, for installs that run them as separate containers. The image's `worker` and `beat` commands set it |
 | `OUTBOX_POLL_MS` | Optional | How often the worker checks for queued email, in milliseconds (default 3000, 500 to 60000) |
 | `HEALTHCHECK_SECRET` | Required | Bearer secret for database readiness, at least 32 characters |
 
 Generate independent keys with `openssl rand -base64 32`. Rotating the Server Action key invalidates outstanding action forms. Rotating the MFA key without re-encrypting stored seeds prevents enrolled users from validating TOTP codes.
+
+**`MFA_ENCRYPTION_KEY` mismatch or rotation.** The server validates only the key's format at startup, so a replica with a different key still starts and passes health checks — it does not crash-loop — but on that replica every use of a value encrypted with the original key fails: outbox delivery fails and is retried until the outbox gives up, Google sign-in fails, alerts are not sent, and TOTP verification fails (including the super-admin step-up needed to fix settings). Behind a load balancer this looks intermittent. Detect it with the same environment the application receives:
+
+```bash
+node --env-file=/secure/path/swevents.env scripts/check-instance-secrets.mjs
+```
+
+It reports which stored values cannot be decrypted, never printing them, and exits non-zero (it is also included in the `migrator` image and can run in the Helm migration job with `migration.checkInstanceSecrets=true`). Fix it by restoring the original key on every replica and job. If the original key is lost, set one new key everywhere, re-enter the SMTP password, Google client secret, and alert webhook in Super admin → Settings, and have enrolled users re-enrol MFA (recovery codes are hashed, not encrypted, and still work).
 
 ## Redis and request trust
 
@@ -77,11 +87,20 @@ The live ticket stream at `/api/ticket/:token/events` is a long-lived `text/even
 
 | Variable | Production | Purpose |
 | --- | --- | --- |
-| `EMAIL_FROM` | Legacy fallback | Verified sender identity; configure new instances in Super admin → Settings |
-| `SMTP_*` | Legacy fallback | SMTP settings; configure new instances in Super admin → Settings |
+| `EMAIL_FROM` | Optional fallback | Verified sender identity; configure new instances in Super admin → Settings |
+| `SMTP_*` | Optional fallback | SMTP settings; configure new instances in Super admin → Settings. When `SMTP_SERVICE`/`SMTP_HOST` is set without `SMTP_ALLOW_UNAUTHENTICATED=1`, `production:check` requires `SMTP_USER` and `SMTP_PASSWORD` |
 | `OUTBOX_RETENTION_DAYS` | Optional | Retention for non-capability sent/failed outbox history; defaults to 30 (capability-bearing rows are deleted immediately after delivery or terminal failure) |
 
-Configure SMTP, Google SSO, and backup status under **Super admin → Settings**. SMTP and Google client secrets are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Environment values remain supported as migration fallbacks. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
+Configure SMTP, Google SSO, paid events, backup status, and operational alerts under **Super admin → Settings**. SMTP and Google client secrets and the alert webhook URL are encrypted at rest with a domain-separated key derived from `MFA_ENCRYPTION_KEY`, are never displayed after saving, and require the super-admin fresh-TOTP step-up. Production SMTP connections require TLS with certificate verification: implicit TLS (`SMTP_SECURE=true`, usually port 465) or STARTTLS (`SMTP_SECURE=false`, port 587 or 2525). Render free web services block outbound ports 25, 465 and 587, so use Brevo on port 2525 there.
+
+### Panel settings and environment fallbacks
+
+- **Database overrides environment.** Panel values are read from the database at send and sign-in time on every replica, so a change applies on the next email or sign-in without a restart, redeploy, or rebuild. None of them is build-visible.
+- **SMTP is all-or-nothing.** Once SMTP (a service or a host) is saved in the panel, every `SMTP_*` variable is ignored: service, host, port, TLS, username, password, and the private-relay flag all come from the panel, and no single field falls back to the environment. Clear both Service and Host and save to return to the environment configuration. The sender address falls back on its own: the saved value, then `EMAIL_FROM`, then `Space Works Events <noreply@localhost>`. **Send test email** on the Settings page sends straight to your own super-admin address with the saved settings (15-second limit) and names the SMTP error; the one on Operations goes through the outbox. Organisations that use their own server (Organisation settings → Email) are not affected by these settings. In production, SMTP must be authenticated unless *Private unauthenticated relay* (or `SMTP_ALLOW_UNAUTHENTICATED=1`) is set; TLS 1.2+ with certificate verification is required except in CI/staging mode (`CI=true` with `ALLOW_INSECURE_PRODUCTION_TESTS=1`, e.g. Mailpit on port 1025).
+- **Google SSO** uses a saved client ID only with the saved secret. If that secret is missing or cannot be decrypted, Google sign-in is off rather than paired with an environment secret, and password sign-in keeps working. With no saved client ID, `AUTH_GOOGLE_ID`/`AUTH_GOOGLE_SECRET` (or the legacy `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`) apply, and the panel cannot switch those off; remove the variables instead. Register `${AUTH_URL}/api/auth/callback/google` with Google.
+- **Backup posture:** any saved backup field replaces the `BACKUP_*` values together; the last successful backup is entered in UTC.
+- **Not required in the environment.** Neither the startup check nor `npm run production:check` requires `EMAIL_FROM`, `SMTP_*`, or `AUTH_GOOGLE_*`; the preflight only notes when no SMTP fallback exists. Until SMTP is saved in the panel (or provided as a fallback), production email stays queued. Keeping an environment SMTP fallback is still recommended for bootstrap and disaster recovery (for example, a lost `MFA_ENCRYPTION_KEY`).
+- **Operational alerts** are configured only in the panel. Every application process posts them directly to the webhook (for example Mattermost) over outbound HTTPS, so app containers/pods need egress to the webhook host on port 443, in addition to SMTP (typically 465/587), PostgreSQL, Redis, and object storage. Browser crash reports reach the app at `/api/client-errors` and are forwarded the same way.
 
 ## Object storage
 

@@ -39,6 +39,7 @@ type State = {
   sentInWindow: number;
   dropped: number;
   consoleForwarding?: boolean;
+  unreadableLogged?: boolean;
 };
 
 const SETTINGS_TTL_MS = 60_000;
@@ -167,7 +168,13 @@ async function loadTarget(): Promise<Target | null> {
       select: { opsWebhookUrlEncrypted: true, opsWebhookEnabled: true, opsWebhookIncludeWarnings: true },
     });
     if (settings?.opsWebhookEnabled && settings.opsWebhookUrlEncrypted) {
-      value = { url: decryptInstanceConfigSecret(settings.opsWebhookUrlEncrypted), includeWarnings: settings.opsWebhookIncludeWarnings };
+      try {
+        value = { url: decryptInstanceConfigSecret(settings.opsWebhookUrlEncrypted), includeWarnings: settings.opsWebhookIncludeWarnings };
+      } catch {
+        // Nowhere to alert to, so say it once per process in the server log.
+        if (!s.unreadableLogged) console.error("[ops alerts] saved webhook URL cannot be decrypted with this MFA_ENCRYPTION_KEY; re-enter it in Super admin → Settings");
+        s.unreadableLogged = true;
+      }
     }
   } catch {
     // An unreachable database must not take alerting down with it, nor loop.

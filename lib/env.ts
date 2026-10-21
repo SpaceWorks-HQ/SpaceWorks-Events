@@ -73,18 +73,42 @@ export const envSchema = z.object({
   OUTBOX_RETENTION_DAYS: z.coerce.number().int().positive().max(365).optional(),
 });
 
+/**
+ * Treat blank values as unset. Environment files copied from `.env.example`
+ * commonly keep panel-managed fallbacks such as `SMTP_HOST=""` or
+ * `S3_ENDPOINT=""`; those must not fail optional `min(1)`/URL rules and stop a
+ * production server from starting.
+ */
+function environmentValues(source: NodeJS.ProcessEnv = process.env) {
+  return Object.fromEntries(
+    Object.entries(source).filter(([, value]) => typeof value === "string" && value.trim() !== ""),
+  );
+}
+
 // Optional display-only configuration for server-rendered operations pages.
 // Runtime startup validation is handled explicitly by validateRuntimeEnvironment.
-export const env = envSchema.safeParse(process.env).data;
+export const env = envSchema.safeParse(environmentValues()).data;
 
 function issueMessages(error: z.ZodError) {
   return error.issues.map((issue) => `${issue.path.join(".") || "environment"}: ${issue.message}`);
 }
 
-/** Validate only when a production server starts, never as an import side effect. */
+/**
+ * Validate only when a production server starts, never as an import side effect.
+ *
+ * SMTP (`EMAIL_FROM`, `SMTP_*`) and Google SSO (`AUTH_GOOGLE_*`) are deliberately
+ * not required: they can be configured in Super admin → Settings, which is read
+ * from the database at send/sign-in time and needs no restart. Their values are
+ * still format-checked when present. `MFA_ENCRYPTION_KEY` is required because it
+ * decrypts both MFA seeds and the panel's stored SMTP/Google/alert-webhook
+ * secrets; its rule matches lib/instanceConfigSecrets.ts (canonical base64, 32
+ * bytes). Whether the key can decrypt the stored values is checked separately by
+ * `scripts/check-instance-secrets.mjs`, because a mismatch must not crash-loop
+ * the server.
+ */
 export function validateRuntimeEnvironment() {
   if (process.env.NODE_ENV !== "production") return;
-  const parsed = envSchema.safeParse(process.env);
+  const parsed = envSchema.safeParse(environmentValues());
   const missing = ["AUTH_URL", "NEXT_PUBLIC_BASE_URL", "REDIS_URL", "CRON_SECRET", "HEALTHCHECK_SECRET", "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY", "MFA_ENCRYPTION_KEY", "TRUSTED_PROXY_IP_HEADER", "S3_BUCKET", "S3_REGION"]
     .filter((key) => !process.env[key]?.trim());
   if (Boolean(process.env.S3_ACCESS_KEY_ID) !== Boolean(process.env.S3_SECRET_ACCESS_KEY)) {

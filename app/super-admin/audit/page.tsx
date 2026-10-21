@@ -5,18 +5,18 @@ import { AuditTable } from "@/components/super-admin/AuditTable";
 import { PageHeader } from "@/components/ui/display";
 
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[]; }>;
 };
 
 export default async function SuperAdminAuditPage({ searchParams }: Props) {
   await requireSuperAdminMfa();
-  const { q, events, page } = await loadSuperAdminAuditView({ searchParams });
+  const { q, events, page, hasNext } = await loadSuperAdminAuditView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Audit log" description="Append-only security and application activity. Sensitive values are redacted before display." />
       <AdminSearchForm action="/super-admin/audit" label="Search action, actor email, org, or target type" defaultValue={q} />
       <AuditTable events={events} label="Audit log" />
-      <AdminPager basePath="/super-admin/audit" query={q} page={page} />
+      <AdminPager basePath="/super-admin/audit" query={q} page={page} hasNext={hasNext} />
     </div>
   );
 }

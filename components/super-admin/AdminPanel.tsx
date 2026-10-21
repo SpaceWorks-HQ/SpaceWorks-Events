@@ -5,6 +5,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardHeader, Chip } from "@/components/ui/display";
 import { Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
+import { ADMIN_MAX_PAGE } from "@/lib/superAdminInsights";
 
 /** A titled card used across the super-admin pages. */
 export function AdminPanel({ title, description, action, children, className }: { title?: ReactNode; description?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
@@ -63,20 +64,39 @@ export function AdminSearchForm({ action, label, defaultValue, children, submitL
   );
 }
 
-/** Prev · Page N · Next links that keep the current query. */
-export function AdminPager({ basePath, query, page, extra = "" }: { basePath: string; query: string; page: number; extra?: string }) {
+/**
+ * Prev · Page N · Next links that keep the current query. Pass `hasNext`
+ * (the page loaded one row more than it shows) so Next is disabled on the
+ * last page instead of leading to an empty one.
+ */
+export function AdminPager({ basePath, query, page, extra = "", hasNext = true }: { basePath: string; query: string; page: number; extra?: string; hasNext?: boolean }) {
   const href = (target: number) => `${basePath}?q=${encodeURIComponent(query)}${extra}&page=${target}`;
+  const disabledClasses = cn(buttonClasses({ variant: "secondary", size: "sm" }), "pointer-events-none opacity-50");
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center gap-2 text-body-ui">
-      <Link href={href(Math.max(0, page - 1))} className={buttonClasses({ variant: "secondary", size: "sm" })}>
-        <ChevronLeft aria-hidden className="size-4" />
-        Prev
-      </Link>
+      {page > 0 ? (
+        <Link href={href(page - 1)} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          <ChevronLeft aria-hidden className="size-4" />
+          Prev
+        </Link>
+      ) : (
+        <span aria-disabled="true" className={disabledClasses}>
+          <ChevronLeft aria-hidden className="size-4" />
+          Prev
+        </span>
+      )}
       <span className="px-2 text-ink-muted">Page {page + 1}</span>
-      <Link href={href(page + 1)} className={buttonClasses({ variant: "secondary", size: "sm" })}>
-        Next
-        <ChevronRight aria-hidden className="size-4" />
-      </Link>
+      {hasNext && page < ADMIN_MAX_PAGE ? (
+        <Link href={href(page + 1)} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          Next
+          <ChevronRight aria-hidden className="size-4" />
+        </Link>
+      ) : (
+        <span aria-disabled="true" className={disabledClasses}>
+          Next
+          <ChevronRight aria-hidden className="size-4" />
+        </span>
+      )}
     </nav>
   );
 }

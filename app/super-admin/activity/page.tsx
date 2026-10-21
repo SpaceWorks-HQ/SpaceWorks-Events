@@ -116,7 +116,7 @@ export default async function SuperAdminActivityPage() {
                 <tr>
                   <TH>Event</TH>
                   <TH>Starts</TH>
-                  <TH className="text-right">Registrations</TH>
+                  <TH className="text-right">Confirmed</TH>
                 </tr>
               </THead>
               <TBody>

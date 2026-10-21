@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,13 @@ export function SuperAdminMfaPrompt() {
           event.preventDefault();
           startTransition(async () => {
             setError(null);
-            const result = await verifySuperAdminMfa({ code });
+            let result: Awaited<ReturnType<typeof verifySuperAdminMfa>>;
+            try {
+              result = await verifySuperAdminMfa({ code });
+            } catch {
+              setError("Could not reach the server. Check your connection and try again.");
+              return;
+            }
             if (!result.ok) {
               setError(result.error);
               return;
@@ -53,7 +60,11 @@ export function SuperAdminMfaPrompt() {
         <Button type="submit" variant="primary" size="lg" fullWidth loading={pending} loadingLabel="Verifying…" disabled={code.length !== 6}>
           Verify and continue
         </Button>
-        <p className="text-caption text-ink-muted">MFA is required for this panel. Set it up from Account security if it is not enabled.</p>
+        <p className="text-caption text-ink-muted">
+          MFA is required for this panel. Set it up from{" "}
+          <Link href="/account/security" className="font-semibold text-ink underline underline-offset-4">Account security</Link>{" "}
+          if it is not enabled.
+        </p>
       </form>
     </div>
   );

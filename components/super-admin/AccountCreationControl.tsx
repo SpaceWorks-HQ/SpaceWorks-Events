@@ -12,7 +12,7 @@ export function AccountCreationControl({ initialEnabled }: { initialEnabled: boo
 
   return (
     <Card as="section" className="rounded-xl">
-      <CardHeader title="New account creation" description="When disabled, password and Google sign-in remain available only for existing users." />
+      <CardHeader title="New account creation" description="Applies immediately on every server. When disabled, password and Google sign-in remain available only for existing users; people without an account, including invitees, cannot create one." />
       <div className="flex flex-col gap-3">
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
         <SwitchRow
@@ -24,7 +24,12 @@ export function AccountCreationControl({ initialEnabled }: { initialEnabled: boo
             setEnabled(checked);
             setError(null);
             startTransition(async () => {
-              const result = await setNewUserRegistrationEnabled({ allowNewUserSignups: checked });
+              // A failed request (network or server error) must not leave the
+              // switch showing a value that was never saved.
+              const result = await setNewUserRegistrationEnabled({ allowNewUserSignups: checked }).catch(() => ({
+                ok: false as const,
+                error: "The setting could not be saved. Refresh the page and try again.",
+              }));
               if (!result.ok) {
                 setEnabled(previous);
                 setError(result.error);

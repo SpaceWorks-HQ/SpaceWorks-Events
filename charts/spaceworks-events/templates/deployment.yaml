@@ -5,7 +5,11 @@ metadata:
   labels:
     {{- include "spaceworks-events.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
+  # With autoscaling the HPA owns the replica count; setting it here would reset
+  # the HPA's choice on every upgrade.
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "spaceworks-events.selectorLabels" . | nindent 6 }}
