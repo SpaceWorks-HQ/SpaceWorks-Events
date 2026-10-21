@@ -64,7 +64,7 @@ The super-admin boundary is separate: access requires an authenticated email mat
 - Tenancy: `Organisation`, `Membership`, and `OrganisationInvite`.
 - Events: `Event` (including `listedPublicly` for listed approval-required events and an optional unique `shortCode`), `EventInvite`, `EventSeries`, `SeriesInvite`, and `EventInstance`.
 - Registration: `RSVP`, registration forms, fields (with help text, placeholder, and validated `settings` JSON), and typed answers.
-- Communications: `EventBroadcast` records each organiser email, including its chosen `design`; each recipient is a separate `OutboxMessage`.
+- Communications: `EventBroadcast` records each organiser email, including its chosen `design`; each recipient is a separate `OutboxMessage`. `EventBroadcastDraft` holds one organiser's unsent Emails-tab composer per event (unique on event and user, private to that user, cascading with both); the dashboard send deletes it in the send transaction. The draft actions (`app/actions/broadcasts.ts`, bodies in `app/actions/broadcasts/drafts.ts`) share the send's access check, and the Emails view reads the draft through the same helper.
 - Feedback: feedback forms, fields, responses, typed answers, and optional certificate linkage.
 - Operations: `OutboxMessage`, `OperationalHeartbeat`, `AuditEvent`, `CheckInEvent`, `RsvpDeletionUndo`, and `Asset`.
 - Instance administration: the singleton `InstanceSetting` holds the new-account policy plus encrypted SMTP and Google SSO secrets and non-secret backup posture. It is readable and mutable only through the super-admin boundary.
