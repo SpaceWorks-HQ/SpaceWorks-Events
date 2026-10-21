@@ -677,10 +677,19 @@ export async function publishEvent(input: unknown): Promise<ActionResult> {
   });
   if (!event) return { ok: false, error: "Event not found." };
 
-  await prisma.event.update({
-    where: { id: event.id },
-    data: { status: EventStatus.PUBLISHED },
-  });
+  // Website visibility follows the event's published status, as in the event
+  // form; without the release a published event's public page stays 404.
+  await prisma.$transaction([
+    prisma.event.update({
+      where: { id: event.id },
+      data: { status: EventStatus.PUBLISHED },
+    }),
+    prisma.eventPage.upsert({
+      where: { eventId: event.id },
+      create: { eventId: event.id, isPublished: true },
+      update: { isPublished: true },
+    }),
+  ]);
 
   await recordAuditEvent({
     action: "EVENT_PUBLISHED",
