@@ -17,7 +17,7 @@ Copy `.env.example` to `.env` for local development. For the default free-tier p
 | `NEXT_PUBLIC_BASE_URL` | Required | Public link origin; must exactly match `AUTH_URL`. Sent emails also use it to make site-relative images and links (event cover, organisation logo, event page) absolute; without it those are left out of delivered broadcasts, while the dashboard preview still renders them |
 | `AUTH_GOOGLE_ID` | Legacy fallback | Google OAuth client ID; configure new instances in Super admin → Settings |
 | `AUTH_GOOGLE_SECRET` | Legacy fallback | Google OAuth client secret; configure new instances in Super admin → Settings |
-| `SUPER_ADMIN_EMAIL` | Recommended | Sole email allowed into the instance administration area |
+| `SUPER_ADMIN_EMAIL` | Recommended | Sole email allowed into the instance administration area. Its password is set only from the server (`scripts/vps-recover.sh` or `docker/vps/recover-super-admin.mjs`): the app refuses its sign-up, never emails it a reset link and hides its password form |
 
 ### Deployment example
 

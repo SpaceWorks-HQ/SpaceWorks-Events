@@ -7,6 +7,7 @@ import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/permissions";
+import { isSuperAdminEmail, SUPER_ADMIN_PASSWORD_HINT } from "@/lib/superAdminEmail";
 import { hasRecentAuthentication } from "@/lib/reauth";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
@@ -107,6 +108,7 @@ export async function updateAccountPassword(
       ok: false,
       error: "An email address is required to set a password.",
     };
+  if (isSuperAdminEmail(user.email)) return { ok: false, error: SUPER_ADMIN_PASSWORD_HINT };
 
   if (user.passwordHash) {
     if (!(await hasRecentAuthentication())) return { ok: false, error: "Sign in again before changing your password." };

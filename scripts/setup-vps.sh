@@ -60,8 +60,10 @@ Space Works Events $version is running.
   Configuration:  $SWE_CONFIG_DIR (contains every secret; keep an encrypted off-server copy)
 
 Next steps
-  1. Open $origin/login and sign up with the super-admin email, verify it,
-     enable authenticator MFA, then open /super-admin.
+  1. Set the super-admin password (only possible from this server):
+       sudo bash $scripts_dir/vps-recover.sh
+     Open the link it prints, sign in, enable authenticator MFA, then open
+     /super-admin.
   2. Send a test email, upload an event cover and register for a private test event.
   3. Check backups: run the installer again and choose Backups (schedule,
      encryption, off-site copies), or back up now with
@@ -190,7 +192,7 @@ case $hosting_mode in
     site_host=$frontend_host
     ;;
 esac
-ask admin_email 'Super-admin email (sign up with it to administer this instance)' '' is_email 'Enter an email address.'
+ask admin_email 'Super-admin email (its password is set from this server)' '' is_email 'Enter an email address.'
 cat >/dev/tty <<'EOF'
 
 HTTPS

@@ -236,9 +236,13 @@ npx wrangler tail                     # expect "health 200" and "outbox 200" eac
 
 ## 9. First super-admin login
 
-1. Open `https://events.YOUR-DOMAIN/login`, create an account with the
-   `SUPER_ADMIN_EMAIL` address, and click the verification link in the email.
-   It arrives within a minute or two, through the outbox and Brevo.
+1. Set the super-admin password from your computer, with the database's
+   direct connection string (Supabase → Connect → Session pooler):
+   `DATABASE_URL="postgresql://..." NEXT_PUBLIC_BASE_URL=https://events.YOUR-DOMAIN node docker/vps/recover-super-admin.mjs you@example.com`
+   from a checkout of this repository after `npm ci`. It creates the account
+   and prints a one-hour link to set its password; run it again to reset the
+   password. The super-admin address can't sign up, use forgot password or
+   change its password in the app.
 2. Sign in, open `/account/security`, and enrol an authenticator app. Save
    the recovery codes.
 3. Open `/super-admin`, complete the fresh TOTP step-up, and review
