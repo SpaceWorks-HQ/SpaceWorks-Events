@@ -249,7 +249,10 @@ describe("outbox failures, alerts and requeue", () => {
   it("alerts on a failed delivery without the recipient address, then requeue resets attempts", async () => {
     expect(await saveInstanceServiceSettings({ ...smtpBase, smtpPort: smtpPort, smtpPassword: "wrong-password" })).toEqual({ ok: true });
     const recipient = `recipient-${suffix}@example.org`;
-    const message = await prisma.outboxMessage.create({ data: { kind: "collaborator-invite", payload: { to: recipient, eventTitle: "Ops test", inviteUrl: "https://example.test/i/x" } } });
+    // Older than anything other suites left queued (but within the 7-day retry
+    // window), so it is claimed first:
+    // their failures share this error and would be collapsed into one alert.
+    const message = await prisma.outboxMessage.create({ data: { kind: "collaborator-invite", createdAt: new Date(Date.now() - 6 * 86_400_000), payload: { to: recipient, eventTitle: "Ops test", inviteUrl: "https://example.test/i/x" } } });
     outboxIds.push(message.id);
     await deliverOutboxBatch(100);
     expect(await waitFor(() => posts.some((p) => /Email delivery failed/.test(p)))).toBe(true);
