@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   sendMail: vi.fn(),
   closeTransport: vi.fn(),
   reportOpsAlert: vi.fn(),
+  allowedWebhook: vi.fn(),
 }));
 
 vi.mock("@/lib/permissions", () => ({ requireSuperAdminMfa: mocks.requireSuperAdminMfa }));
@@ -30,6 +31,7 @@ vi.mock("@/lib/instanceConfigSecrets", async (importOriginal) => ({
   encryptInstanceConfigSecret: mocks.encrypt, decryptInstanceConfigSecret: mocks.decrypt,
 }));
 vi.mock("@/lib/audit", () => ({ recordAuditEvent: mocks.audit }));
+vi.mock("@/lib/opsWebhookAddress", () => ({ isAllowedOpsWebhook: mocks.allowedWebhook, PRIVATE_WEBHOOK_ERROR: "That webhook address points to a private or local network." }));
 vi.mock("@/lib/outbox", () => ({ deliverOutboxBatch: mocks.deliver }));
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("@/lib/email/transporter", async (importOriginal) => ({
@@ -57,6 +59,7 @@ beforeEach(() => {
   mocks.sendMail.mockResolvedValue({ accepted: ["operator@example.test"], rejected: [] });
   mocks.getTransport.mockResolvedValue({ from: "Space Works Events <noreply@example.test>", source: "database", transporter: { sendMail: mocks.sendMail, close: mocks.closeTransport } });
   mocks.rateLimit.mockResolvedValue(false);
+  mocks.allowedWebhook.mockResolvedValue(true);
   mocks.findSetting.mockResolvedValue(null);
   mocks.encrypt.mockImplementation((value: string) => `encrypted:${value}`);
   mocks.deliver.mockResolvedValue({ sent: 1, failed: 0 });
@@ -121,6 +124,12 @@ describe("super-admin alert webhook settings", () => {
     expect(upsert.create).toMatchObject({ opsWebhookEnabled: true, opsWebhookIncludeWarnings: false, opsWebhookUrlEncrypted: `encrypted:${url}` });
     expect(JSON.stringify(mocks.audit.mock.calls)).not.toContain("secret-hook-key");
     expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ action: "OPS_WEBHOOK_SETTINGS_UPDATED", metadata: expect.objectContaining({ urlChanged: true }) }));
+  });
+
+  it("refuses a webhook that points to a private network", async () => {
+    mocks.allowedWebhook.mockResolvedValue(false);
+    await expect(saveOpsWebhookSettings({ enabled: true, includeWarnings: true, url: "https://10.0.0.5/hooks/x" })).resolves.toMatchObject({ ok: false, error: expect.stringContaining("private") });
+    expect(mocks.upsertSetting).not.toHaveBeenCalled();
   });
 
   it("rejects non-http(s) URLs and enabling without a URL", async () => {

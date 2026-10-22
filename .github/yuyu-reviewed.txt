@@ -1,0 +1,22 @@
+# Yuyu commits reviewed and deliberately not ported, so the weekly Yuyu
+# upstream check (.github/workflows/yuyu-upstream.yml) stops listing them.
+# Ported commits need no entry here: the check skips every Yuyu hash named on
+# a "cherry picked from Yuyu <hash>" line in dev's history.
+#
+# One commit per line: its hash (7 to 40 characters), then why.
+
+d48358f Covered already: dev's Next.js, sanitize-html, sharp and source-map-js are as new or newer (30bd246, 3785167)
+a16fba1 Not needed: dev's validator fixtures don't use the fixed date
+3811915 Skipped: e2e journeys for Yuyu's own redesign and copy
+b4d2e15 Skipped: Yuyu's V1 release docs; the ported changes carry their own docs
+294ccfa Skipped: Yuyu's security-report channel and contribution policy
+e668935 Skipped: Yuyu's own branching policy
+
+# Deferred to its own project (docs/plans/yuyu-sync.md): the mobile API.
+945c05b Deferred: mobile API (session model and tokens)
+077bf71 Deferred: mobile API (shared action cores)
+75d227f Deferred: mobile API (routes and app links)
+15e142a Deferred: mobile API (OpenAPI contract)
+64117fc Deferred: mobile API (docs)
+7918e38 Deferred: mobile API (sign-up close, refresh grace)
+c005b96 Deferred: mobile API (Google azp, app links)

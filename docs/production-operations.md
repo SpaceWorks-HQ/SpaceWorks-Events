@@ -51,6 +51,7 @@ Apply these with `npm run db:deploy` before rolling out the matching application
 | `20261018000000_rsvp_user_index` | `RSVP(userId, createdAt)` index for account pages and the personal data export. A plain `CREATE INDEX` blocks RSVP writes while it builds, so run it in a quiet window on large installations |
 | `20261019000000_event_short_code` | Nullable `Event.shortCode` with a unique index |
 | `20261021000000_ops_alert_webhook` | `InstanceSetting` alert webhook columns (encrypted URL, enabled flag off by default, include-warnings flag); additive only |
+| `20261102000000_event_broadcast_drafts` | New `EventBroadcastDraft` table for saved Emails-tab drafts: one row per event and organiser (unique on `eventId`, `userId`), cascading on `Event` and `User`, with CHECKs bounding the subject to 150 characters and the audience to four statuses. Purely additive |
 
 ## Instance-managed services
 
@@ -58,7 +59,7 @@ Sign in as the super admin and use `/super-admin/settings` to configure SMTP, Go
 
 **Upgrade note (SMTP settings):** saved panel SMTP now replaces the environment as a whole. Earlier releases filled a missing saved username or password from `SMTP_USER`/`SMTP_PASSWORD`; that no longer happens, and production refuses unauthenticated SMTP unless the private-relay option is set. Before deploying, run `node scripts/check-instance-secrets.mjs`; after deploying, use **Send test email** in Super admin → Settings, and if it fails, re-enter the SMTP username and password there. **Retry failed email** requeues only failures from the last 7 days, so stale broadcasts are not resent after an outage.
 
-`MFA_ENCRYPTION_KEY` must be identical on every replica and job, and stable. A replica with a different key stays healthy but cannot send email, sign in with Google, post alerts, or verify TOTP. Before rotating or re-deploying, run `node scripts/check-instance-secrets.mjs` (or set `migration.checkInstanceSecrets=true` in Helm); it never prints decrypted values.
+`MFA_ENCRYPTION_KEY` must be identical on every replica and job, and stable. A replica with a different key stays healthy but cannot send email, sign in with Google, post alerts, verify TOTP, use organisations' payment keys and chat channels, or show station PINs. Before rotating or re-deploying, run `node scripts/check-instance-secrets.mjs` (or set `migration.checkInstanceSecrets=true` in Helm); it never prints decrypted values.
 
 ### Operational alerts webhook
 

@@ -15,7 +15,7 @@ export async function GuestsPanel({ ctx }: { ctx: EventDashboardContext; }) {
           value: "people",
           label: "People",
           content: permissions.canManageRegistrations ? (
-            <GuestsPeople organisationSlug={organisation.slug} target={{ kind: "event", eventId: event.id, eventTitle: event.title }} timeZone={event.timezone} now={ctx.now.toISOString()} attendees={attendees.attendees} truncated={attendees.truncated} registrationFields={fields} ticketTypes={ticketTypes} />
+            <GuestsPeople organisationSlug={organisation.slug} target={{ kind: "event", eventId: event.id, eventTitle: event.title }} timeZone={event.timezone} now={ctx.now.toISOString()} attendees={attendees.attendees} truncated={attendees.truncated} registrationFields={fields} ticketTypes={ticketTypes} canUndoCheckIn={permissions.canCheckIn} />
           ) : (
             <NoPermission>You do not have permission to view or manage attendee registrations.</NoPermission>
           ),

@@ -7,7 +7,7 @@ export async function loadFeedbackPanel({ ctx }: { ctx: EventDashboardContext; }
 
   const { event, permissions, organisation } = ctx;
   // The feedback form and its responses are organisation-admin only (see app/actions/feedback-form.ts).
-  if (!permissions.isAdmin) notFound();
+  if (!permissions.canManageFeedback) notFound();
   const record = await prisma.eventFeedbackForm.findUnique({ where: { eventId: event.id }, include: { fields: { orderBy: { sortOrder: "asc" } } } });
   const form = record ? { isOpen: record.isOpen, title: record.title, thankYouMessage: record.thankYouMessage, certificateEnabled: record.certificateEnabled, certificateTemplate: record.certificateTemplate } : null;
   const fields = (record?.fields ?? []).map((field) => ({
@@ -17,7 +17,7 @@ export async function loadFeedbackPanel({ ctx }: { ctx: EventDashboardContext; }
 
   // Responses are organisation-admin only. Only answer values are read: never
   // the RSVP, attendee identity or certificate token.
-  const canViewResponses = permissions.canEditDetails;
+  const canViewResponses = permissions.canViewFeedbackResponses;
   const [responseRecords, insights] = canViewResponses && record
     ? await Promise.all([
       prisma.eventFeedbackResponse.findMany({

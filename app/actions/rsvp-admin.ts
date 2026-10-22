@@ -3,7 +3,7 @@
 import { Prisma, RsvpStatus } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { canManageEvents, getMembership } from "@/lib/permissions";
+import { canManageRegistrationsFor } from "@/lib/eventAccess";
 import { deleteRsvpSchema, manualRsvpSchema, restoreRsvpSchema, updateRsvpRegistrationSchema } from "@/lib/validators";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
@@ -31,8 +31,7 @@ export async function addManualRsvp(
 
   const org = await prisma.organisation.findUnique({ where: { slug: parsed.data.organisationSlug } });
   if (!org) return { ok: false, error: "Organisation not found." };
-  const membership = await getMembership(session.user.id, org.id);
-  if (!canManageEvents(membership)) {
+  if (!(await canManageRegistrationsFor({ userId: session.user.id, organisationId: org.id, eventId: parsed.data.eventId }))) {
     return { ok: false, error: "You do not have permission to add attendees." };
   }
 
@@ -63,8 +62,9 @@ export async function updateRsvpRegistration(input: unknown): Promise<ActionResu
 
   const org = await prisma.organisation.findUnique({ where: { slug: parsed.data.organisationSlug } });
   if (!org) return { ok: false, error: "Organisation not found." };
-  const membership = await getMembership(session.user.id, org.id);
-  if (!canManageEvents(membership)) return { ok: false, error: "You do not have permission to edit registrations." };
+  if (!(await canManageRegistrationsFor({ userId: session.user.id, organisationId: org.id, eventId: parsed.data.eventId, eventInstanceId: parsed.data.eventInstanceId }))) {
+    return { ok: false, error: "You do not have permission to edit registrations." };
+  }
 
   const target = parsed.data.eventId
     ? { eventId: parsed.data.eventId, event: { organisationId: org.id } }
@@ -145,8 +145,9 @@ export async function deleteRsvp(input: unknown): Promise<ActionResult<{ undoId:
   const { organisationSlug, eventId, eventInstanceId, rsvpId } = parsed.data;
   const org = await prisma.organisation.findUnique({ where: { slug: organisationSlug } });
   if (!org) return { ok: false, error: "Organisation not found." };
-  const membership = await getMembership(session.user.id, org.id);
-  if (!canManageEvents(membership)) return { ok: false, error: "You do not have permission to manage attendees." };
+  if (!(await canManageRegistrationsFor({ userId: session.user.id, organisationId: org.id, eventId, eventInstanceId }))) {
+    return { ok: false, error: "You do not have permission to manage attendees." };
+  }
 
   const rsvp = await prisma.rSVP.findFirst({
     where: {
@@ -230,8 +231,6 @@ export async function restoreRsvp(input: unknown): Promise<ActionResult> {
 
   const org = await prisma.organisation.findUnique({ where: { slug: parsed.data.organisationSlug } });
   if (!org) return { ok: false, error: "Organisation not found." };
-  const membership = await getMembership(session.user.id, org.id);
-  if (!canManageEvents(membership)) return { ok: false, error: "You do not have permission to restore RSVPs." };
 
   const undo = await prisma.rsvpDeletionUndo.findFirst({
     where: {
@@ -244,6 +243,11 @@ export async function restoreRsvp(input: unknown): Promise<ActionResult> {
   if (!undo) return { ok: false, error: "This undo has expired or is unavailable." };
   const snapshot = snapshotSchema.safeParse(undo.payload);
   if (!snapshot.success) return { ok: false, error: "Could not restore this RSVP safely." };
+  // Re-checked against the snapshot's own event or occurrence: the undo row is
+  // the deleter's, but their access may have changed since.
+  if (!(await canManageRegistrationsFor({ userId: session.user.id, organisationId: org.id, eventId: snapshot.data.eventId, eventInstanceId: snapshot.data.eventInstanceId }))) {
+    return { ok: false, error: "You do not have permission to restore RSVPs." };
+  }
 
   const targetExists = snapshot.data.eventId
     ? await prisma.event.findFirst({ where: { id: snapshot.data.eventId, organisationId: org.id }, select: { id: true, slug: true } })

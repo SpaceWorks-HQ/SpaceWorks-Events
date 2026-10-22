@@ -30,6 +30,8 @@ export type GuestRowActions = {
   approve: (guest: AttendeeRow) => void;
   decline: (guest: AttendeeRow) => void;
   promote: (guest: AttendeeRow) => void;
+  /** Reverses a decline: confirmed, waitlisted, or (paid) sent a payment link. */
+  reaccept: (guest: AttendeeRow) => void;
   copyTicket: (guest: AttendeeRow) => void;
   edit: (guest: AttendeeRow) => void;
   /** Omitted where no undo-check-in action exists for the target (series dates). */
@@ -92,6 +94,11 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
         {guest.status === "WAITLISTED" ? (
           <Button size="sm" variant="secondary" disabled={disabled} loading={busy} onClick={() => actions.promote(guest)} aria-label={`Give ${name} a spot`}>
             Give a spot
+          </Button>
+        ) : null}
+        {guest.status === "REJECTED" ? (
+          <Button size="sm" variant="secondary" disabled={disabled} loading={busy} onClick={() => actions.reaccept(guest)} aria-label={`Re-accept ${name}`}>
+            Re-accept
           </Button>
         ) : null}
         <Menu>

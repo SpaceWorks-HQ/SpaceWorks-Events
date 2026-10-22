@@ -6,7 +6,7 @@ const eventFields = new Set([
   "id", "organisationId", "title", "slug", "description", "tags", "showRegistrationCount", "coverImageUrl",
   "startDateTime", "endDateTime", "timezone", "location", "mapLinkUrl", "isOnline", "capacity", "status", "privacyType",
   "listedPublicly", "registrationClosesAt", "registrationLeadMinutes", "shortCode", "createdAt",
-  "page", "highlights", "speakers", "sponsors", "resources", "faqs", "sessions", "organisation", "feedbackForm", "registrationForm", "badgeDesign", "_count",
+  "page", "highlights", "speakers", "sponsors", "resources", "faqs", "sessions", "scheduleTracks", "organisation", "feedbackForm", "registrationForm", "badgeDesign", "_count",
 ]);
 type SecretField = "checkInStationPinHash" | "checkInStationPinEncrypted" | "checkInStationSecretVersion";
 

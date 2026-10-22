@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ findSetting: vi.fn(), decrypt: vi.fn() }));
+const mocks = vi.hoisted(() => ({ findSetting: vi.fn(), decrypt: vi.fn(), allowed: vi.fn() }));
 
 vi.mock("@/lib/db", () => ({ prisma: { instanceSetting: { findUnique: mocks.findSetting } } }));
 vi.mock("@/lib/instanceConfigSecrets", () => ({ decryptInstanceConfigSecret: mocks.decrypt }));
+vi.mock("@/lib/opsWebhookAddress", () => ({ isAllowedOpsWebhook: mocks.allowed, PRIVATE_WEBHOOK_ERROR: "private" }));
 
 import {
   deliverOpsAlert,
@@ -15,6 +16,7 @@ import {
   parseOpsWebhookUrl,
   redactAlertText,
   sanitizeAlertPath,
+  sendOpsWebhookTestMessage,
 } from "@/lib/opsAlerts";
 
 const WEBHOOK = "https://chat.example.test/hooks/abc123";
@@ -36,6 +38,7 @@ beforeEach(() => {
   mocks.decrypt.mockReturnValue(WEBHOOK);
   fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
   vi.stubGlobal("fetch", fetchMock);
+  mocks.allowed.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -122,6 +125,13 @@ describe("alert delivery", () => {
     expect(url).toBe(WEBHOOK);
     expect((init as RequestInit).method).toBe("POST");
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ username: "Space Works Events", text: expect.stringContaining("Sign-in failed") });
+  });
+
+  it("never posts to a webhook whose host is private", async () => {
+    mocks.allowed.mockResolvedValue(false);
+    await deliverOpsAlert({ level: "error", source: "auth", title: "Sign-in failed" });
+    await expect(sendOpsWebhookTestMessage(WEBHOOK)).resolves.toEqual({ ok: false, error: "private" });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("sends nothing when alerts are off or no URL is saved", async () => {

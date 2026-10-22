@@ -4,7 +4,7 @@ import { recordAuditEvent } from "@/lib/audit";
 import { buildCsv } from "@/lib/csv";
 import { minorToDecimalString } from "@/lib/payments/money";
 import { prisma } from "@/lib/db";
-import { getMembership, isOrgAdmin } from "@/lib/permissions";
+import { canAccessEvent } from "@/lib/eventAccess";
 import { getRequestOrigin } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
@@ -59,12 +59,9 @@ export async function GET(_request: Request, context: RouteContext) {
   });
   if (!event) return missing();
 
-  const membership = await getMembership(session.user.id, event.organisationId);
-  const collaborator = membership ? null : await prisma.eventCollaborator.findFirst({
-    where: { eventId: event.id, userId: session.user.id, permissions: { has: EventPermission.MANAGE_REGISTRATIONS } },
-    select: { id: true },
-  });
-  if ((!membership || !isOrgAdmin(membership.role)) && !collaborator) return missing();
+  // Organisation owners/admins, or anyone (member or not) holding the exact
+  // MANAGE_REGISTRATIONS grant on this event, as in lib/eventDashboard/capabilities.ts.
+  if (!(await canAccessEvent({ userId: session.user.id, organisationId: event.organisationId, eventId: event.id, permission: EventPermission.MANAGE_REGISTRATIONS }))) return missing();
 
   const fields = event.registrationForm?.fields ?? [];
   const origin = await getRequestOrigin();

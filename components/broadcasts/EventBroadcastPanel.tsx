@@ -9,28 +9,26 @@ import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
 import { Tooltip } from "@/components/ui/menu";
 import { countBroadcastRecipients, previewEventBroadcast, sendEventBroadcast, sendEventBroadcastTest } from "@/app/actions/broadcasts";
-import {
-  BROADCAST_STARTER_TEMPLATES,
-  BROADCAST_SUBJECT_MAX,
-  broadcastHtmlToText,
-  defaultBroadcastTemplate,
-  describeBroadcastAudience,
-} from "@/lib/broadcastTemplate";
+import { BROADCAST_STARTER_TEMPLATES, BROADCAST_SUBJECT_MAX, broadcastHtmlToText, describeBroadcastAudience } from "@/lib/broadcastTemplate";
+import type { EventBroadcastDraftDto } from "@/lib/broadcastDraftAutosave";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { SendConfirmDialog } from "./SendConfirmDialog";
 import { recipientDots, recipientSummary, sendBarLabel } from "@/components/event-dashboard/emails/recipients";
 import { BroadcastEmailEditor } from "./BroadcastEmailEditor";
-import { DEFAULT_BROADCAST_DESIGN, type BroadcastDesignId } from "@/lib/email/broadcastDesigns";
+import type { BroadcastDesignId } from "@/lib/email/broadcastDesigns";
 import { AudienceSection } from "./EventBroadcastPanel/AudienceSection";
 import { HistorySection } from "./EventBroadcastPanel/HistorySection";
 import { PreviewSection } from "./EventBroadcastPanel/PreviewSection";
 import { MORE_TEMPLATES, StepHeading, SUBJECT_PLACEHOLDERS, cardClass, type BroadcastHistoryRow } from "./EventBroadcastPanel/shared";
 import { TemplateSection } from "./EventBroadcastPanel/TemplateSection";
+import { DraftStatusBar, ReplaceDraftDialog } from "./EventBroadcastPanel/DraftControls";
+import { initialComposer, type ComposerContent } from "./EventBroadcastPanel/draft";
+import { useBroadcastDraft } from "./EventBroadcastPanel/useBroadcastDraft";
 
 export type { BroadcastHistoryRow } from "./EventBroadcastPanel/shared";
 
 const UNDO_SECONDS = 5;
-type SendPayload = { statuses: RsvpStatus[]; attendance: BroadcastAttendanceFilter; subject: string; body: string; design: BroadcastDesignId; count: number };
+type SendPayload = ComposerContent & { statuses: RsvpStatus[]; count: number };
 
 export function EventBroadcastPanel(props: {
   organisationSlug: string;
@@ -39,28 +37,52 @@ export function EventBroadcastPanel(props: {
   history: BroadcastHistoryRow[];
   /** Event branding for the design thumbnails; the server renders the real thing. */
   brand: { accentColor: string | null; coverImageUrl: string | null };
+  /** The signed-in organiser's own saved draft for this event, restored into the composer. */
+  draft: EventBroadcastDraftDto | null;
 }) {
-  const { organisationSlug, eventId, statusCounts, history, brand } = props;
+  const { organisationSlug, eventId, statusCounts, history, brand, draft } = props;
   const router = useRouter();
   const { showToast } = useToast();
-  const initial = useMemo(() => defaultBroadcastTemplate(), []);
+  // Only the first render's draft matters: later server renders (after a send)
+  // must not overwrite what the organiser is editing.
+  const [initial] = useState(() => initialComposer(draft));
 
-  const [templateId, setTemplateId] = useState<string>(BROADCAST_STARTER_TEMPLATES[0]!.id);
+  const [templateId, setTemplateId] = useState<string>(initial.templateId ?? "");
   const [showAllTemplates, setShowAllTemplates] = useState(false);
-  const [statuses, setStatuses] = useState<RsvpStatus[]>([...BROADCAST_STARTER_TEMPLATES[0]!.audience.statuses]);
-  const [attendance, setAttendance] = useState<BroadcastAttendanceFilter>(BROADCAST_STARTER_TEMPLATES[0]!.audience.attendance);
+  const [statuses, setStatuses] = useState<RsvpStatus[]>([...initial.statuses]);
+  const [attendance, setAttendance] = useState<BroadcastAttendanceFilter>(initial.attendance);
   const [subject, setSubject] = useState(initial.subject);
   const [body, setBody] = useState(initial.body);
   const [countState, setCountState] = useState<{ key: string; count: number; error: string | null }>({ key: "", count: 0, error: null });
   const [preview, setPreview] = useState<{ key: string; subject: string; html: string; error: string | null }>({ key: "", subject: "", html: "", error: null });
   const [previewWidth, setPreviewWidth] = useState<"desktop" | "mobile">("desktop");
-  const [design, setDesign] = useState<BroadcastDesignId>(DEFAULT_BROADCAST_DESIGN);
+  const [design, setDesign] = useState<BroadcastDesignId>(initial.design);
   const [confirmOpen, setConfirmOpen] = useState(false);
   // After confirming, sending waits UNDO_SECONDS so a mistake can still be undone.
   const [countdown, setCountdown] = useState<{ left: number; count: number } | null>(null);
   const sendTimer = useRef<{ interval: ReturnType<typeof setInterval>; payload: SendPayload } | null>(null);
   const [pending, startTransition] = useTransition();
   const subjectRef = useRef<HTMLInputElement | null>(null);
+
+  const content = useMemo<ComposerContent>(
+    () => ({ subject, body, design, statuses, attendance, templateId: templateId || null }),
+    [subject, body, design, statuses, attendance, templateId],
+  );
+  const drafts = useBroadcastDraft({
+    organisationSlug,
+    eventId,
+    draft,
+    initial,
+    content,
+    apply: (next) => {
+      setTemplateId(next.templateId ?? "");
+      setSubject(next.subject);
+      setBody(next.body);
+      setStatuses([...next.statuses]);
+      setAttendance(next.attendance);
+      setDesign(next.design);
+    },
+  });
 
   const audienceText = describeBroadcastAudience(statuses, attendance);
   const audienceKey = `${[...statuses].sort().join(",")}|${attendance}`;
@@ -119,13 +141,7 @@ export function EventBroadcastPanel(props: {
 
   function applyTemplate(id: string) {
     const template = BROADCAST_STARTER_TEMPLATES.find((candidate) => candidate.id === id);
-    if (!template) return;
-    setTemplateId(id);
-    setSubject(template.subject);
-    setBody(template.bodyHtml);
-    setStatuses([...template.audience.statuses]);
-    setAttendance(template.audience.attendance);
-    showToast(`Loaded the “${template.name}” template. Edit anything before sending.`, "success");
+    if (template) drafts.requestReplace({ kind: "template", id, name: template.name });
   }
 
   function insertSubjectPlaceholder(token: string) {
@@ -142,19 +158,14 @@ export function EventBroadcastPanel(props: {
   }
 
   function loadFromHistory(row: BroadcastHistoryRow) {
-    setTemplateId("");
-    setSubject(row.subject);
-    setBody(row.body);
-    setStatuses(row.statuses);
-    setAttendance(row.attendance);
-    setDesign(row.design);
-    showToast("Loaded the previous email into the editor", "success");
+    drafts.requestReplace({ kind: "history", row });
   }
 
   // Sending waits for the preview of the current edit, so the review step
   // always shows the subject and design that will actually go out.
   const canSend = !pending && statuses.length > 0 && hasContent && (recipientCount ?? 0) > 0 && previewReady && !preview.error;
   function startCountdown(payload: SendPayload) {
+    drafts.sendStarted();
     let left = UNDO_SECONDS;
     setCountdown({ left, count: payload.count });
     const interval = setInterval(() => {
@@ -165,7 +176,11 @@ export function EventBroadcastPanel(props: {
       setCountdown(null);
       startTransition(async () => {
         const result = await sendEventBroadcast({ organisationSlug, eventId, statuses: payload.statuses, attendance: payload.attendance, subject: payload.subject, body: payload.body, design: payload.design });
-        if (!result.ok) return showToast(result.error, "error");
+        if (!result.ok) {
+          drafts.sendStopped();
+          return showToast(result.error, "error");
+        }
+        drafts.sent(payload);
         showToast(`Queued for ${result.data?.recipientCount ?? 0} recipients`, "success");
         router.refresh();
       });
@@ -177,6 +192,7 @@ export function EventBroadcastPanel(props: {
     if (sendTimer.current) clearInterval(sendTimer.current.interval);
     sendTimer.current = null;
     setCountdown(null);
+    drafts.sendStopped();
     showToast("Sending cancelled. Nothing was sent.", "success");
   }
 
@@ -232,6 +248,14 @@ export function EventBroadcastPanel(props: {
               ))}
             </div>
             <BroadcastEmailEditor value={body} onChange={setBody} disabled={pending} />
+            <DraftStatusBar
+              state={drafts.state}
+              statusText={drafts.statusText}
+              busy={pending || countdown !== null}
+              replacing={drafts.replacing}
+              onSave={drafts.saveNow}
+              onDiscard={() => drafts.requestReplace({ kind: "discard" })}
+            />
           </section>
         </div>
 
@@ -279,6 +303,8 @@ export function EventBroadcastPanel(props: {
       </div>
       )}
 
+      <ReplaceDraftDialog pending={drafts.pendingReplace} replacing={drafts.replacing} onCancel={drafts.cancelReplace} onConfirm={drafts.confirmReplace} />
+
       <SendConfirmDialog
         open={confirmOpen}
         recipientCount={recipientCount ?? 0}
@@ -288,7 +314,7 @@ export function EventBroadcastPanel(props: {
         onConfirm={() => {
           setConfirmOpen(false);
           // Snapshot what was reviewed; later edits during the countdown don't change it.
-          startCountdown({ statuses, attendance, subject, body, design, count: recipientCount ?? 0 });
+          startCountdown({ ...content, statuses: [...statuses], count: recipientCount ?? 0 });
         }}
       />
     </div>

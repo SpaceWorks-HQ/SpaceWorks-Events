@@ -33,7 +33,8 @@ export async function loadSeriesManageView({ params }: Props) {
     select: { permissions: true },
   });
   const granted = (permission: EventPermission) => isAdmin || Boolean(currentGrant?.permissions.includes(permission));
-  const canManageRegistrations = isAdmin;
+  // Guest list and registration numbers: admins, or the MANAGE_REGISTRATIONS grant on this series.
+  const canManageRegistrations = granted(EventPermission.MANAGE_REGISTRATIONS);
   const canManageInvites = granted(EventPermission.MANAGE_INVITATIONS);
   const canManageSchedule = granted(EventPermission.PUBLISH_AND_SCHEDULE);
   // Ticket types, passes, promo codes and the refund policy: as on an event.
