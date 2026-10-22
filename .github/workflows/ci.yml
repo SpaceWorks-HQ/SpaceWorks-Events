@@ -34,7 +34,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://build:build@localhost:5432/swevents
           AUTH_SECRET: ci-placeholder-not-used-at-build
-      - run: node scripts/npm-audit.mjs --omit=dev --audit-level=high
+      - name: npm audit --omit=dev --audit-level=high
+        run: node scripts/npm-audit.mjs --omit=dev --audit-level=high
 
   migration-integrity:
     runs-on: ubuntu-latest
