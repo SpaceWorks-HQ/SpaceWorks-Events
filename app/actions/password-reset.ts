@@ -5,10 +5,13 @@ import bcrypt from "bcryptjs";
 import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { isSuperAdminEmail } from "@/lib/superAdminEmail";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPassword } from "@/lib/pwnedPasswords";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { enqueuePasswordReset } from "@/lib/outbox";
+import { noticeEach } from "@/lib/notices";
 
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -48,8 +51,9 @@ export async function requestPasswordReset(
     select: { id: true, passwordHash: true },
   });
 
-  // Always return success to prevent email enumeration
-  if (!user || !user.passwordHash) {
+  // Always return success to prevent email enumeration. The super admin's
+  // password is reset only from the server, so no link is ever emailed for it.
+  if (!user || !user.passwordHash || isSuperAdminEmail(email)) {
     return { ok: true, data: { sent: true } };
   }
 
@@ -112,6 +116,7 @@ export async function confirmPasswordReset(
   }
   const tokenHash = hashToken(token);
 
+  if (await isBreachedPassword(password)) return { ok: false, error: BREACHED_PASSWORD_MESSAGE, fieldErrors: { password: [BREACHED_PASSWORD_MESSAGE] } };
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT "id" FROM "User" WHERE "email" = ${email} FOR UPDATE`;
@@ -133,6 +138,7 @@ export async function confirmPasswordReset(
     await tx.session.deleteMany({ where: { userId: user.id } });
     await tx.verificationToken.deleteMany({ where: { identifier: { in: [`mfa:${user.id}`, `email-verification:${user.id}`] } } });
     await tx.auditEvent.create({ data: { action: "ACCOUNT_PASSWORD_RESET", actorUserId: user.id, targetType: "User", targetId: user.id } });
+    await noticeEach(tx, [email], { subject: "Your password was changed", lines: ["The password for your Space Works Events account was just changed, and every other session was signed out.", "If this wasn't you, reset your password from the sign-in page straight away and contact your administrator."] });
     await tx.verificationToken.deleteMany({ where: { identifier: `reset:${email}` } });
     return true;
   });

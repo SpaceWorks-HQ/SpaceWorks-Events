@@ -1,13 +1,16 @@
+import { loadRevenue } from "@/lib/payments/revenue";
 import type { EventDashboardContext } from "@/lib/eventDashboard/context";
 import { loadRsvpStatusCounts } from "@/lib/eventDashboard/data";
 import { loadAllSignupDates, loadFeedbackCount } from "@/lib/eventDashboard/overview";
 import { type MixPart } from "@/components/event-dashboard/analytics/AnalyticsSections";
-import { busiestDay, capacityStatus, funnelSentence, funnelSteps, percentOf, signupsLastWeek, signupTimeline } from "@/components/event-dashboard/analytics/metrics";
+import { arrivalWindows, busiestDay, capacityStatus, clickSeries, funnelSentence, funnelSteps, localDateKey, percentOf, signupsLastWeek, signupTimeline } from "@/components/event-dashboard/analytics/metrics";
+import { prisma } from "@/lib/db";
+import { countCheckInSources, summariseQuestions } from "@/lib/eventReport";
 export async function loadAnalyticsPanel({ ctx }: { ctx: EventDashboardContext; }) {
   ctx = await loadEventDashboard(ctx.organisation.slug, ctx.event.id);
 
   const { event, permissions, now } = ctx;
-  if (!permissions.canManageRegistrations) notFound();
+  if (!permissions.canViewAnalytics) notFound();
 
   const [counts, feedback, signupDates] = await Promise.all([loadRsvpStatusCounts(event.id), loadFeedbackCount(event.id), loadAllSignupDates(event.id)]);
   const ended = event.endDateTime < now;
@@ -72,7 +75,33 @@ export async function loadAnalyticsPanel({ ctx }: { ctx: EventDashboardContext; 
   const lastWeek = ended ? null : signupsLastWeek(signupDates, until, event.timezone);
 
 
-  return { event, permissions, now, counts, feedback, signupDates, ended, steps, checkedIn, summary, parts, capacity, turnout, keyNumbers, timeline, busiest, lastWeek };
+  // Door, questions, waitlist and short link: counts and times only, never who.
+  const [confirmed, form, waitlistJoined, waitlistPromoted, shortLink] = await Promise.all([
+    prisma.rSVP.findMany({
+      where: { eventId: event.id, status: "CONFIRMED" },
+      select: {
+        id: true,
+        checkedInAt: true,
+        answers: { select: { fieldId: true, valueText: true, valueBool: true } },
+        checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
+      },
+    }),
+    prisma.eventRegistrationForm.findUnique({ where: { eventId: event.id }, select: { fields: { orderBy: { sortOrder: "asc" }, select: { id: true, label: true, type: true, options: true } } } }),
+    prisma.rSVP.count({ where: { eventId: event.id, waitlistedAt: { not: null } } }),
+    prisma.rSVP.count({ where: { eventId: event.id, promotedAt: { not: null } } }),
+    prisma.event.findUnique({ where: { id: event.id }, select: { shortCode: true, shortLinkClickDays: { select: { day: true, count: true } } } }),
+  ]);
+  const arrivedRsvps = confirmed.filter((rsvp) => rsvp.checkedInAt);
+  const arrivals = arrivalWindows(arrivedRsvps.map((rsvp) => rsvp.checkedInAt!), event.timezone);
+  const sources = arrivedRsvps.length ? countCheckInSources(arrivedRsvps.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)) : null;
+  const questions = summariseQuestions(form?.fields ?? [], confirmed.flatMap((rsvp) => rsvp.answers.map((answer) => ({ ...answer, respondentId: rsvp.id }))));
+  const waitlist = waitlistJoined > 0 ? { joined: waitlistJoined, promoted: waitlistPromoted, waiting: counts.waitlisted, percent: percentOf(waitlistPromoted, waitlistJoined) } : null;
+  const clicks = shortLink?.shortCode
+    ? { code: shortLink.shortCode, series: clickSeries(shortLink.shortLinkClickDays.map((row) => ({ day: row.day.toISOString().slice(0, 10), count: row.count })), localDateKey(now, event.timezone)) }
+    : null;
+
+  const revenue = await loadRevenue({ eventId: event.id }, event.timezone, now);
+  return { event, permissions, now, counts, feedback, signupDates, ended, steps, checkedIn, summary, parts, capacity, turnout, keyNumbers, timeline, busiest, lastWeek, arrivals, sources, questions, waitlist, clicks, revenue };
 }
 
 import { notFound } from "next/navigation";

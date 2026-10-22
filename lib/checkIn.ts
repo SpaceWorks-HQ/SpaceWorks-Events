@@ -64,6 +64,14 @@ export function gateCheckInForStatus(
       needsForce: true,
     };
   }
+  if (status === "PENDING_PAYMENT") {
+    return {
+      ok: false,
+      reason: "Payment pending: this ticket isn't paid yet, so it can't be checked in.",
+      needsForce: false,
+      blocked: true,
+    };
+  }
   if (status === "PENDING_APPROVAL") {
     return {
       ok: false,

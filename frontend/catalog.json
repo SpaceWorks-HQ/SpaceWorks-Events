@@ -106,9 +106,24 @@
       "id": "app__dashboard__orgSlug__settings__api__page:loadApiAccessView"
     },
     {
+      "module": "lib/views/app__dashboard__orgSlug__settings__chat__page",
+      "name": "loadChatSettingsView",
+      "id": "app__dashboard__orgSlug__settings__chat__page:loadChatSettingsView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__settings__email__page",
+      "name": "loadOrganisationEmailView",
+      "id": "app__dashboard__orgSlug__settings__email__page:loadOrganisationEmailView"
+    },
+    {
       "module": "lib/views/app__dashboard__orgSlug__settings__page",
       "name": "loadOrgSettingsView",
       "id": "app__dashboard__orgSlug__settings__page:loadOrgSettingsView"
+    },
+    {
+      "module": "lib/views/app__dashboard__orgSlug__settings__payments__page",
+      "name": "loadPaymentSettingsView",
+      "id": "app__dashboard__orgSlug__settings__payments__page:loadPaymentSettingsView"
     },
     {
       "module": "lib/views/app__dashboard__page",
@@ -134,6 +149,16 @@
       "module": "lib/views/app__join__org__token__page",
       "name": "loadJoinOrganisationView",
       "id": "app__join__org__token__page:loadJoinOrganisationView"
+    },
+    {
+      "module": "lib/views/app__order__token__page",
+      "name": "loadRouteMetadata",
+      "id": "app__order__token__page:loadRouteMetadata"
+    },
+    {
+      "module": "lib/views/app__order__token__page",
+      "name": "loadOrderView",
+      "id": "app__order__token__page:loadOrderView"
     },
     {
       "module": "lib/views/app__orgSlug__eventSlug__check-in__page",
@@ -236,11 +261,6 @@
       "id": "app__page:loadView"
     },
     {
-      "module": "lib/views/app__super-admin-mfa__page",
-      "name": "loadSuperAdminMfaView",
-      "id": "app__super-admin-mfa__page:loadSuperAdminMfaView"
-    },
-    {
       "module": "lib/views/app__super-admin__activity__page",
       "name": "loadSuperAdminActivityView",
       "id": "app__super-admin__activity__page:loadSuperAdminActivityView"
@@ -334,6 +354,11 @@
       "module": "lib/views/app__ticket__token__page",
       "name": "loadTicketView",
       "id": "app__ticket__token__page:loadTicketView"
+    },
+    {
+      "module": "lib/views/app__verify-mfa__page",
+      "name": "loadVerifyMfaView",
+      "id": "app__verify-mfa__page:loadVerifyMfaView"
     },
     {
       "module": "lib/views/app__verify__token__page",
@@ -478,6 +503,21 @@
       "id": "broadcasts:sendEventBroadcastTest"
     },
     {
+      "module": "app/actions/broadcasts",
+      "name": "loadEventBroadcastDraft",
+      "id": "broadcasts:loadEventBroadcastDraft"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "saveEventBroadcastDraft",
+      "id": "broadcasts:saveEventBroadcastDraft"
+    },
+    {
+      "module": "app/actions/broadcasts",
+      "name": "discardEventBroadcastDraft",
+      "id": "broadcasts:discardEventBroadcastDraft"
+    },
+    {
       "module": "app/actions/certificate",
       "name": "uploadCertificateBackground",
       "id": "certificate:uploadCertificateBackground"
@@ -491,6 +531,26 @@
       "module": "app/actions/certificate",
       "name": "previewCertificate",
       "id": "certificate:previewCertificate"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "addChatChannel",
+      "id": "chat-channels:addChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "updateChatChannel",
+      "id": "chat-channels:updateChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "removeChatChannel",
+      "id": "chat-channels:removeChatChannel"
+    },
+    {
+      "module": "app/actions/chat-channels",
+      "name": "testChatChannel",
+      "id": "chat-channels:testChatChannel"
     },
     {
       "module": "app/actions/checkin-station",
@@ -678,6 +738,11 @@
       "id": "event:publishEvent"
     },
     {
+      "module": "app/actions/event",
+      "name": "cancelEvent",
+      "id": "event:cancelEvent"
+    },
+    {
       "module": "app/actions/feedback-form",
       "name": "applyFeedbackTemplate",
       "id": "feedback-form:applyFeedbackTemplate"
@@ -704,8 +769,28 @@
     },
     {
       "module": "app/actions/instance-settings",
+      "name": "setPaidEventsEnabled",
+      "id": "instance-settings:setPaidEventsEnabled"
+    },
+    {
+      "module": "app/actions/instance-settings",
       "name": "saveInstanceServiceSettings",
       "id": "instance-settings:saveInstanceServiceSettings"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "sendSettingsTestEmail",
+      "id": "instance-settings:sendSettingsTestEmail"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "saveOpsWebhookSettings",
+      "id": "instance-settings:saveOpsWebhookSettings"
+    },
+    {
+      "module": "app/actions/instance-settings",
+      "name": "sendOpsWebhookTest",
+      "id": "instance-settings:sendOpsWebhookTest"
     },
     {
       "module": "app/actions/instance",
@@ -878,6 +963,26 @@
       "id": "membership:deleteOrganisation"
     },
     {
+      "module": "app/actions/mfa-step-up",
+      "name": "verifyStepUpMfa",
+      "id": "mfa-step-up:verifyStepUpMfa"
+    },
+    {
+      "module": "app/actions/orders",
+      "name": "updateOrderAttendee",
+      "id": "orders:updateOrderAttendee"
+    },
+    {
+      "module": "app/actions/orders",
+      "name": "cancelMyOrder",
+      "id": "orders:cancelMyOrder"
+    },
+    {
+      "module": "app/actions/orders",
+      "name": "transferOrderTicket",
+      "id": "orders:transferOrderTicket"
+    },
+    {
       "module": "app/actions/org-invites",
       "name": "createOrgInvite",
       "id": "org-invites:createOrgInvite"
@@ -903,6 +1008,21 @@
       "id": "org:checkSlugAvailability"
     },
     {
+      "module": "app/actions/organisation-email",
+      "name": "saveOrganisationEmail",
+      "id": "organisation-email:saveOrganisationEmail"
+    },
+    {
+      "module": "app/actions/organisation-email",
+      "name": "sendOrganisationTestEmail",
+      "id": "organisation-email:sendOrganisationTestEmail"
+    },
+    {
+      "module": "app/actions/organisation-email",
+      "name": "stopOwnEmailServer",
+      "id": "organisation-email:stopOwnEmailServer"
+    },
+    {
       "module": "app/actions/password-reset",
       "name": "requestPasswordReset",
       "id": "password-reset:requestPasswordReset"
@@ -911,6 +1031,61 @@
       "module": "app/actions/password-reset",
       "name": "confirmPasswordReset",
       "id": "password-reset:confirmPasswordReset"
+    },
+    {
+      "module": "app/actions/payment-operations",
+      "name": "refundPaidOrder",
+      "id": "payment-operations:refundPaidOrder"
+    },
+    {
+      "module": "app/actions/payment-operations",
+      "name": "settlePaidOrder",
+      "id": "payment-operations:settlePaidOrder"
+    },
+    {
+      "module": "app/actions/payment-operations",
+      "name": "sendOrderPaymentLink",
+      "id": "payment-operations:sendOrderPaymentLink"
+    },
+    {
+      "module": "app/actions/payment-operations",
+      "name": "correctOfflinePayment",
+      "id": "payment-operations:correctOfflinePayment"
+    },
+    {
+      "module": "app/actions/payment-operations",
+      "name": "addTicketGuest",
+      "id": "payment-operations:addTicketGuest"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "savePaymentSettings",
+      "id": "payment-settings:savePaymentSettings"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "disconnectPaymentProvider",
+      "id": "payment-settings:disconnectPaymentProvider"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "testPaymentConnection",
+      "id": "payment-settings:testPaymentConnection"
+    },
+    {
+      "module": "app/actions/payment-settings",
+      "name": "saveReceiptDetails",
+      "id": "payment-settings:saveReceiptDetails"
+    },
+    {
+      "module": "app/actions/promo",
+      "name": "checkPromoCode",
+      "id": "promo:checkPromoCode"
+    },
+    {
+      "module": "app/actions/promo",
+      "name": "unlockTickets",
+      "id": "promo:unlockTickets"
     },
     {
       "module": "app/actions/registration-form",
@@ -961,6 +1136,11 @@
       "module": "app/actions/rsvp-lifecycle",
       "name": "rejectRsvp",
       "id": "rsvp-lifecycle:rejectRsvp"
+    },
+    {
+      "module": "app/actions/rsvp-lifecycle",
+      "name": "reacceptRsvp",
+      "id": "rsvp-lifecycle:reacceptRsvp"
     },
     {
       "module": "app/actions/rsvp-lifecycle",
@@ -1018,6 +1198,16 @@
       "id": "series:deleteEventSeries"
     },
     {
+      "module": "app/actions/series",
+      "name": "setSeriesDateCapacity",
+      "id": "series:setSeriesDateCapacity"
+    },
+    {
+      "module": "app/actions/series",
+      "name": "cancelSeriesDate",
+      "id": "series:cancelSeriesDate"
+    },
+    {
       "module": "app/actions/shortLink",
       "name": "createEventShortLink",
       "id": "shortLink:createEventShortLink"
@@ -1028,9 +1218,44 @@
       "id": "shortLink:regenerateEventShortLink"
     },
     {
-      "module": "app/actions/super-admin-mfa",
-      "name": "verifySuperAdminMfa",
-      "id": "super-admin-mfa:verifySuperAdminMfa"
+      "module": "app/actions/ticket-types",
+      "name": "saveTicketType",
+      "id": "ticket-types:saveTicketType"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "archiveTicketType",
+      "id": "ticket-types:archiveTicketType"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "createPromoCode",
+      "id": "ticket-types:createPromoCode"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "archivePromoCode",
+      "id": "ticket-types:archivePromoCode"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveRefundPolicy",
+      "id": "ticket-types:saveRefundPolicy"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveAddOn",
+      "id": "ticket-types:saveAddOn"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "archiveAddOn",
+      "id": "ticket-types:archiveAddOn"
+    },
+    {
+      "module": "app/actions/ticket-types",
+      "name": "saveTransferPolicy",
+      "id": "ticket-types:saveTransferPolicy"
     }
   ]
 }

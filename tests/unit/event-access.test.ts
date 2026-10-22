@@ -13,6 +13,8 @@ vi.mock("@/lib/db", () => ({ prisma: {
   eventSeries: { findFirst: mocks.seriesFind },
   eventCollaborator: { findFirst: mocks.grantFind },
 } }));
+const staff = vi.hoisted(() => ({ satisfied: vi.fn() }));
+vi.mock("@/lib/staffMfa", () => ({ staffMfaSatisfied: staff.satisfied }));
 vi.mock("@/lib/permissions", () => ({
   getMembership: mocks.membership,
   isOrgAdmin: (role: string) => role === "OWNER" || role === "ADMIN",
@@ -26,6 +28,19 @@ beforeEach(() => {
   mocks.seriesFind.mockResolvedValue({ id: "series_a" });
   mocks.grantFind.mockResolvedValue(null);
   mocks.membership.mockResolvedValue({ role: "ADMIN" });
+  staff.satisfied.mockResolvedValue(true);
+});
+
+describe("co-organisers and the authenticator rule", () => {
+  it("withholds a co-organiser grant until the signed-in co-organiser has passed an authenticator check", async () => {
+    mocks.membership.mockResolvedValue(null);
+    mocks.grantFind.mockResolvedValue({ id: "grant_1" });
+    staff.satisfied.mockResolvedValue(false);
+    expect(await canAccessEvent({ userId: "user_1", organisationId: "org_a", eventId: "event_a", permission: EventPermission.CHECK_IN })).toBe(false);
+    expect(await canViewEventDashboard({ userId: "user_1", organisationId: "org_a", eventId: "event_a" })).toBe(false);
+    staff.satisfied.mockResolvedValue(true);
+    expect(await canViewEventDashboard({ userId: "user_1", organisationId: "org_a", eventId: "event_a" })).toBe(true);
+  });
 });
 
 describe("event access tenant binding", () => {

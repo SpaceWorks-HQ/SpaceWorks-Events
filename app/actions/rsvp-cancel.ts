@@ -10,6 +10,11 @@ import type { ActionResult } from "./org";
 import { z } from "zod";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { EventPrivacyType } from "@prisma/client";
+import { NOT_FROM_PAID_ORDER } from "@/lib/rsvpCapacity";
+import { fillFromWaitlist } from "@/lib/payments/operations";
+import { lockSeriesDates, seatTargetOf } from "@/lib/payments/targets";
+import { noticeEach, noticeSubject, personEmail } from "@/lib/notices";
+import { notifyChat } from "@/lib/chat/notify";
 
 const revalidatePath = trackedRevalidation(nextRevalidatePath);
 
@@ -46,6 +51,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
       eventInstance: {
         select: {
           id: true,
+          eventSeriesId: true,
           series: {
             select: { title: true, privacyType: true, organisation: { select: { id: true, slug: true } } },
           },
@@ -72,18 +78,49 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
   const cancellation = await prisma.$transaction(async (tx) => {
     if (rsvp.eventId) {
       await tx.$queryRaw`SELECT "id" FROM "Event" WHERE "id" = ${rsvp.eventId} FOR UPDATE`;
-    } else if (rsvp.eventInstanceId) {
-      await tx.$queryRaw`SELECT "id" FROM "EventInstance" WHERE "id" = ${rsvp.eventInstanceId} FOR UPDATE`;
+    } else if (rsvp.eventInstanceId && rsvp.eventInstance) {
+      await lockSeriesDates(tx, rsvp.eventInstance.eventSeriesId, [rsvp.eventInstanceId], new Date());
     }
-    const current = await tx.rSVP.findUnique({ where: { id: rsvp.id } });
+    const current = await tx.rSVP.findUnique({ where: { id: rsvp.id }, include: { user: { select: { email: true } }, order: { select: { id: true, status: true, buyerEmail: true, payments: { where: { status: { in: ["PAID_ONLINE", "PAID_OFFLINE"] } }, select: { id: true } } } } } });
     if (!current) return { error: "RSVP not found." };
     if (current.checkedInAt) return { error: "Cannot cancel — you have already checked in." };
+    // Money was taken: refunds follow the order's policy, from the order page.
+    if (current.order && current.order.payments.length > 0) return { error: "Paid tickets are cancelled from the order page, under the event's refund policy." };
+    const title = rsvp.event?.title ?? rsvp.eventInstance!.series.title;
+    const organisationId = rsvp.event?.organisation.id ?? rsvp.eventInstance!.series.organisation.id;
+    if (current.order?.status === "REQUESTED") {
+      // A paid request is withdrawn as a whole; nothing was charged.
+      await tx.order.update({ where: { id: current.order.id }, data: { status: "CANCELLED" } });
+      await tx.rSVP.deleteMany({ where: { orderId: current.order.id } });
+      await noticeEach(tx, [current.order.buyerEmail], { organisationId, subject: noticeSubject("Request withdrawn", title), lines: [`Your request to join ${title} was withdrawn. Nothing was charged.`] });
+      return { error: null };
+    }
+    if (current.order?.status === "PENDING") {
+      // A held order is released as a whole: ending its hold lets the
+      // scheduler close the payment page before the seats go back on sale.
+      const now = new Date();
+      await tx.order.update({ where: { id: current.order.id }, data: { holdExpiresAt: now } });
+      await tx.rSVP.updateMany({ where: { orderId: current.order.id, status: "PENDING_PAYMENT" }, data: { holdExpiresAt: now } });
+      return { error: null };
+    }
     await tx.rSVP.delete({ where: { id: current.id } });
+    const to = personEmail(current);
+    if (to) {
+      const what = current.status === "WAITLISTED" ? "left the waitlist for" : current.status === "PENDING_APPROVAL" ? "withdrawn your request to join" : "cancelled your place at";
+      await notifyChat(tx, organisationId, "cancellation", `${current.guestName?.trim() || "A guest"} cancelled their place at ${title}.`);
+      await noticeEach(tx, [to], { organisationId, subject: noticeSubject("Cancelled", title), lines: [`You've ${what} ${title}. Your ticket no longer works.`, "Changed your mind? Register again from the event page if places are still open."] });
+    }
     const privacyType = rsvp.event?.privacyType ?? rsvp.eventInstance?.series.privacyType;
+    // A freed seat on an event, or on a date of a series that sells tickets,
+    // is offered after commit, paid requests included.
+    const sold = current.eventInstanceId ? await tx.ticketType.count({ where: { eventSeriesId: rsvp.eventInstance!.eventSeriesId } }) > 0 : true;
+    const freed = seatTargetOf(current);
+    if (current.status === "CONFIRMED" && freed && (current.eventId || sold)) return { error: null, freed };
     if (current.status === "CONFIRMED" && privacyType !== EventPrivacyType.APPROVAL_REQUIRED) {
       const target = current.eventId ? { eventId: current.eventId } : { eventInstanceId: current.eventInstanceId! };
       const nextWaitlisted = await tx.rSVP.findFirst({
-        where: { ...target, status: "WAITLISTED" },
+        // Tickets from paid orders are confirmed only by payment, never by promotion.
+        where: { ...target, status: "WAITLISTED", ...NOT_FROM_PAID_ORDER },
         orderBy: { createdAt: "asc" },
         include: { user: { select: { email: true } } },
       });
@@ -106,6 +143,7 @@ export async function cancelRsvp(input: unknown): Promise<ActionResult<{ cancell
     return { error: null };
   });
   if (cancellation.error) return { ok: false, error: cancellation.error };
+  if ("freed" in cancellation && cancellation.freed) await fillFromWaitlist(cancellation.freed);
 
   await recordAuditEvent({
     action: "RSVP_CANCELLED",

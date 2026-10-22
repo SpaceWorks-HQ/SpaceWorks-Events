@@ -10,7 +10,10 @@ nameOverride: ""
 fullnameOverride: ""
 
 # Create this Secret outside Helm (External Secrets, Sealed Secrets, or kubectl).
-# It must contain every production runtime variable in .env.example.
+# It must contain every production runtime variable in .env.example. It is
+# mounted with envFrom on every app pod and on the migration Job, so all of them
+# share one MFA_ENCRYPTION_KEY; keep that key stable, because it decrypts the
+# SMTP/Google/alert-webhook secrets saved in Super admin -> Settings.
 existingSecret: spaceworks-events-runtime
 
 service:
@@ -47,6 +50,30 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 1
 
+background:
+  # Run email delivery (worker) and the timed jobs (beat) in their own
+  # Deployments; the web pods then only serve requests. Turn off to run
+  # everything in the web pods, as one-container installs do.
+  enabled: true
+  worker:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 384Mi
+      limits:
+        cpu: "1"
+        memory: 1Gi
+  beat:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 384Mi
+      limits:
+        cpu: 500m
+        memory: 1Gi
+
 migration:
   # Runs the backend image's `migrate` role once per release.
   enabled: true
@@ -56,6 +83,11 @@ migration:
     pullPolicy: IfNotPresent
   backoffLimit: 1
   activeDeadlineSeconds: 300
+  # After migrating, run scripts/check-instance-secrets.mjs and fail the release
+  # if MFA_ENCRYPTION_KEY cannot decrypt secrets already saved in Super admin ->
+  # Settings (rotated or mismatched key). Needs a backend image from this version
+  # or later, which includes the script.
+  checkInstanceSecrets: false
 
 nodeSelector: {}
 tolerations: []

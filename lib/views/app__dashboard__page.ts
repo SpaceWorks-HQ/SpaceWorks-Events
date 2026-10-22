@@ -4,6 +4,8 @@ export async function loadDashboardView() {
 
   const session = await requireAuth();
   const userId = session.user.id;
+  // Staff set up and confirm their authenticator before any dashboard.
+  await requireStaffMfa(userId, "/dashboard");
   const now = new Date();
 
   const [home, collaboratorGrants] = await Promise.all([
@@ -40,3 +42,4 @@ export async function loadDashboardView() {
 }
 
 import { requireAuth } from "@/lib/permissions";
+import { requireStaffMfa } from "@/lib/staffMfa";

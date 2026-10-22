@@ -1,17 +1,19 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
 import { prisma } from "@/lib/db";
+import { readPageParam, readSearchParam } from "@/lib/superAdminInsights";
 type Props = {
-  searchParams: Promise<{ q?: string; page?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; page?: string | string[]; }>;
 };
 
 export async function loadSuperAdminOrgsView({ searchParams }: Props) {
   await requireSuperAdminMfa();
   const sp = await searchParams;
-  const q = (sp.q ?? "").trim();
-  const page = Math.max(0, Number.parseInt(sp.page ?? "0", 10) || 0);
+  const q = readSearchParam(sp.q);
+  const page = readPageParam(sp.page);
   const take = 50;
   const skip = page * take;
-  const orgs = await prisma.organisation.findMany({
+  // One extra row tells the pager whether a next page exists.
+  const rows = await prisma.organisation.findMany({
     where: q
       ? {
         OR: [
@@ -21,7 +23,7 @@ export async function loadSuperAdminOrgsView({ searchParams }: Props) {
       }
       : undefined,
     orderBy: { createdAt: "desc" },
-    take,
+    take: take + 1,
     skip,
     select: {
       id: true,
@@ -33,5 +35,5 @@ export async function loadSuperAdminOrgsView({ searchParams }: Props) {
       },
     },
   });
-  return { q, orgs, page };
+  return { q, orgs: rows.slice(0, take), page, hasNext: rows.length > take };
 }

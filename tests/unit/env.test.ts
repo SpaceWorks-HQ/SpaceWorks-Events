@@ -44,6 +44,33 @@ describe("production environment validation", () => {
     process.env.S3_ACCESS_KEY_ID = "access";
     expect(validateRuntimeEnvironment).toThrow(/S3_SECRET_ACCESS_KEY/);
   });
+  it("refuses the fake payment provider override in production", () => {
+    process.env.PAYMENTS_FAKE_PROVIDER_URL = "http://127.0.0.1:4010";
+    expect(validateRuntimeEnvironment).toThrow(/PAYMENTS_FAKE_PROVIDER_URL/);
+  });
+  it("does not require SMTP or Google SSO environment values, which the super-admin panel can supply", () => {
+    for (const name of ["EMAIL_FROM", "SMTP_SERVICE", "SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_ALLOW_UNAUTHENTICATED", "AUTH_GOOGLE_ID", "AUTH_GOOGLE_SECRET"]) {
+      delete process.env[name];
+    }
+    expect(validateRuntimeEnvironment).not.toThrow();
+  });
+  it("treats blank optional values copied from .env.example as unset", () => {
+    Object.assign(process.env, {
+      SMTP_SERVICE: "", SMTP_HOST: "", SMTP_USER: "", SMTP_PASSWORD: "", S3_ENDPOINT: "",
+      S3_ACCESS_KEY_ID: "", S3_SECRET_ACCESS_KEY: "", BACKUP_LAST_SUCCESS_AT: "", AUTH_GOOGLE_ID: "",
+    });
+    expect(validateRuntimeEnvironment).not.toThrow();
+  });
+  it("still rejects a blank required value", () => {
+    process.env.MFA_ENCRYPTION_KEY = "  ";
+    expect(validateRuntimeEnvironment).toThrow(/MFA_ENCRYPTION_KEY/);
+  });
+  it("requires MFA_ENCRYPTION_KEY to be canonical base64 for exactly 32 bytes", () => {
+    process.env.MFA_ENCRYPTION_KEY = Buffer.alloc(16, 1).toString("base64");
+    expect(validateRuntimeEnvironment).toThrow(/MFA_ENCRYPTION_KEY/);
+    process.env.MFA_ENCRYPTION_KEY = "not base64!";
+    expect(validateRuntimeEnvironment).toThrow(/MFA_ENCRYPTION_KEY/);
+  });
   it("accepts only exact HTTPS embed origins in production", () => {
     process.env.ALLOWED_EMBED_ORIGINS = "https://host.example.test,https://www.example.test";
     expect(validateRuntimeEnvironment).not.toThrow();

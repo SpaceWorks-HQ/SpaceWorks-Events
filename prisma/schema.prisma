@@ -71,6 +71,8 @@ enum RsvpStatus {
   WAITLISTED
   PENDING_APPROVAL
   REJECTED
+  /// A paid ticket whose seat is held until `holdExpiresAt` while its order is paid.
+  PENDING_PAYMENT
 }
 
 enum RegistrationFieldType {
@@ -104,6 +106,114 @@ enum BroadcastAttendanceFilter {
   NOT_CHECKED_IN
 }
 
+enum OrderStatus {
+  /// A paid request waiting for approval or a waitlist place; nothing is held or charged.
+  REQUESTED
+  /// Waiting for payment while its seats are held.
+  PENDING
+  /// Paid, free, or settled by hand: its tickets are issued.
+  CONFIRMED
+  /// The hold ended unpaid.
+  EXPIRED
+  /// Declined before payment, or cancelled (and refunded) afterwards.
+  CANCELLED
+}
+
+/** A chargeback, as the payment provider reports it. */
+enum DisputeStatus {
+  OPEN
+  UNDER_REVIEW
+  WON
+  LOST
+  CLOSED
+}
+
+/** Who can see and buy a ticket type. */
+enum TicketVisibility {
+  PUBLIC
+  /// Hidden until the buyer enters its access code.
+  CODE
+  /// Only signed-in members of the organisation.
+  MEMBERS
+}
+
+/** A fixed price, or pay what you want from the price upwards. */
+enum TicketPricing {
+  FIXED
+  FLEXIBLE
+}
+
+enum OrderLineKind {
+  TICKET
+  ADD_ON
+  FEE
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID_ONLINE
+  PAID_OFFLINE
+  WAIVED
+  CANCELED
+  EXPIRED
+}
+
+enum CheckoutAttemptStatus {
+  OPEN
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentRefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+/// How an organiser collected money by hand.
+enum OfflinePaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD_TERMINAL
+  OTHER
+}
+
+enum PromoDiscountKind {
+  PERCENT
+  FIXED
+}
+
+enum PromoAppliesPer {
+  TICKET
+  ORDER
+}
+
+/// What attendees get back if they cancel a paid ticket themselves.
+/// A ticket for one event or one date of a series, or a pass for every remaining date.
+enum TicketTypeKind {
+  SINGLE
+  PASS
+}
+
+enum RefundPolicyKind {
+  /// The organiser handles refunds.
+  NONE
+  /// A full refund until `refundPolicyHours` before the start.
+  FULL_UNTIL
+  /// `refundPolicyPercent` back until `refundPolicyHours` before the start.
+  PERCENT_UNTIL
+}
+
+/// Who collected a payment. Organisations connect RAZORPAY or STRIPE; OFFLINE
+/// marks money an organiser recorded by hand and is never a settings choice.
+enum PaymentProvider {
+  RAZORPAY
+  STRIPE
+  OFFLINE
+}
+
 model User {
   id                 String    @id @default(cuid())
   name               String?
@@ -124,6 +234,7 @@ model User {
 
   accounts          Account[]
   sessions          Session[]
+  devices           UserDevice[]
   memberships       Membership[]
   rsvps             RSVP[]
   orgInvitesCreated OrganisationInvite[] @relation("OrgInviteCreatedBy")
@@ -134,8 +245,14 @@ model User {
   eventCollaborations EventCollaborator[]
   eventCollaboratorInvitesUsed EventCollaboratorInvite[] @relation("EventCollaboratorInviteUsedBy")
   eventBroadcasts   EventBroadcast[]
+  broadcastDrafts   EventBroadcastDraft[]
   badgeDesignsUpdated EventBadgeDesign[]
   idMemberships     IdMember[]
+  orders            Order[]           @relation("OrderBuyer")
+  paymentRefunds    PaymentRefund[]
+  paymentsSettled   Payment[]          @relation("PaymentSettledBy")
+  paymentAmendments PaymentAmendment[] @relation("PaymentAmendmentActor")
+  promoCodesCreated PromoCode[]        @relation("PromoCodeCreatedBy")
 }
 
 model Account {
@@ -165,6 +282,25 @@ model Session {
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+/// A browser this account signed in from with a password. A sign-in from a
+/// device it hasn't used before needs an emailed code (unless an
+/// authenticator code was given) and sends a "new sign-in" alert.
+model UserDevice {
+  id         String   @id @default(cuid())
+  userId     String
+  /// SHA-256 of the random id the browser keeps; the id itself is never stored.
+  deviceHash String
+  /// A short description of the browser, for the alert and the account page.
+  userAgent  String   @default("")
+  lastIp     String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceHash])
+}
+
 model VerificationToken {
   identifier String
   token      String   @unique
@@ -190,6 +326,118 @@ model Organisation {
   rsvpDeletionUndos RsvpDeletionUndo[]
   apiClients        ApiClient[]
   idProgrammes      IdProgramme[]
+  paymentSettings   OrganisationPaymentSettings?
+  emailSettings     OrganisationEmailSettings?
+  chatChannels      ChatChannel[]
+  processedWebhookEvents ProcessedWebhookEvent[]
+  orders            Order[]
+  payments          Payment[]
+  paymentDisputes   PaymentDispute[]
+}
+
+/// The organisation's own payment provider account. Money goes straight to
+/// the organiser; the platform never holds it. Secrets are AES-256-GCM
+/// ciphertext (lib/payments/secrets.ts), write-only, and never leave the
+/// server. Only the owner may view or change this row.
+enum ChatChannelKind {
+  SLACK
+  DISCORD
+  MATTERMOST
+  TELEGRAM
+  WHATSAPP
+}
+
+/// A team chat the organisation's notifications go to (new registrations,
+/// requests, payments, refunds...). Its webhook address or bot token is
+/// encrypted (lib/orgSecrets.ts) and never shown again.
+model ChatChannel {
+  id              String          @id @default(cuid())
+  organisationId  String
+  kind            ChatChannelKind
+  name            String
+  /// JSON with the webhook address, or the bot or WhatsApp credentials.
+  secretEncrypted String
+  /// Notification types it receives (lib/chat/events.ts).
+  events          String[]
+  enabled         Boolean         @default(true)
+  lastDeliveredAt DateTime?
+  lastFailedAt    DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId])
+}
+
+/// How an organisation's event email is sent (tickets, reminders, broadcasts,
+/// receipts, notices). Account email (sign-up, forgot password) always uses the
+/// platform server. The SMTP password is encrypted and never shown again.
+model OrganisationEmailSettings {
+  organisationId        String    @id
+  /// The sender's name; empty uses the organisation's name.
+  fromName              String?
+  /// Where replies go; empty means replies go to the sending address.
+  replyTo               String?
+  /// Send through the organisation's own server (tested before it can be on).
+  useOwnServer          Boolean   @default(false)
+  fromAddress           String?
+  smtpHost              String?
+  smtpPort              Int?
+  /// Port 465: TLS from the start; otherwise STARTTLS is required.
+  smtpSecure            Boolean   @default(false)
+  smtpUser              String?
+  smtpPasswordEncrypted String?
+  /// The last successful connection test of the server settings as saved.
+  verifiedAt            DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+model OrganisationPaymentSettings {
+  organisationId                 String           @id
+  /// The provider new checkouts use. Never OFFLINE.
+  provider                       PaymentProvider?
+  /// Uppercase ISO 4217 code for new ticket types.
+  currency                       String           @default("INR")
+  /// Razorpay's public key id (rzp_test_… or rzp_live_…).
+  razorpayKeyId                  String?
+  razorpayKeySecretEncrypted     String?
+  razorpayWebhookSecretEncrypted String?
+  stripeSecretKeyEncrypted       String?
+  stripeWebhookSecretEncrypted   String?
+  /// Derived from the Stripe key prefix when it is saved (sk_test_/rk_test_).
+  stripeTestMode                 Boolean          @default(false)
+  /// Random path segment that addresses webhooks without revealing the slug.
+  webhookPathId                  String           @unique
+  /// Last successful "Test connection" for the selected provider.
+  verifiedAt                     DateTime?
+  /// Shown on receipts: the registered name, registration number and address.
+  receiptLegalName               String?
+  receiptRegistrationNumber      String?
+  receiptAddress                 String?
+  createdAt                      DateTime         @default(now())
+  updatedAt                      DateTime         @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+}
+
+/// Idempotency record for verified provider webhooks. The raw payload is never
+/// stored. Rows older than the retention window are purged.
+model ProcessedWebhookEvent {
+  id             String          @id @default(cuid())
+  organisationId String
+  provider       PaymentProvider
+  eventId        String
+  eventType      String
+  processedAt    DateTime        @default(now())
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, provider, eventId])
+  @@index([processedAt])
 }
 
 /// A tenant-bound machine identity. It never authenticates through Auth.js.
@@ -302,6 +550,18 @@ model Event {
   /// Encrypted solely so organisation admins can retrieve the current venue PIN.
   checkInStationPinEncrypted String?
   checkInStationSecretVersion Int @default(0)
+  /// Uppercase ISO 4217 code for every ticket and order of this event, set
+  /// with the first ticket type and locked after the first sale.
+  currency              String?
+  /// Paid tickets: what attendees get back when they cancel. After the first
+  /// sale it can only become more generous; each order keeps a copy.
+  refundPolicyKind      RefundPolicyKind @default(NONE)
+  refundPolicyHours     Int?
+  refundPolicyPercent   Int?
+  refundPolicyText      String           @default("")
+  /// Ticket holders may pass their ticket to someone else until this many hours before the start.
+  allowTransfers        Boolean          @default(false)
+  transferCutoffHours   Int              @default(24)
   /// Optional 7-character share code served at /{shortCode}. Always contains
   /// an uppercase letter so it can never equal a (lowercase) organisation slug.
   shortCode             String?          @unique
@@ -324,12 +584,301 @@ model Event {
   faqs             EventFaq[]
   resources        EventResource[]
   broadcasts       EventBroadcast[]
+  broadcastDrafts  EventBroadcastDraft[]
   badgeDesign      EventBadgeDesign?
+  ticketTypes      TicketType[]
+  addOns           AddOn[]
+  orders           Order[]
+  shortLinkClickDays ShortLinkClickDay[]
+  promoCodes       PromoCode[]
 
   @@unique([organisationId, slug])
   @@index([organisationId])
   @@index([organisationId, status])
   @@index([organisationId, status, privacyType])
+}
+
+/// A ticket an attendee chooses when registering. `priceMinor` 0 is free.
+/// The event's capacity stays the overall cap; `capacity` limits this type
+/// within it. Types with registrations are archived, never deleted.
+model TicketType {
+  id           String    @id @default(cuid())
+  /// Exactly one of eventId and eventSeriesId (checked in the database).
+  eventId      String?
+  eventSeriesId String?
+  /// PASS only on a series: one seat on every remaining date.
+  kind         TicketTypeKind @default(SINGLE)
+  visibility   TicketVisibility @default(PUBLIC)
+  /// CODE: digest and first letters of the access code (never stored in clear).
+  accessCodeDigest String?
+  accessCodeHint   String?
+  /// FLEXIBLE: priceMinor is the minimum (0 allows free); buyers choose from there.
+  pricing      TicketPricing @default(FIXED)
+  suggestedMinor BigInt?
+  maxPriceMinor  BigInt?
+  /// A group ticket seats this many people (each gets their own registration).
+  seatsPerTicket Int @default(1)
+  /// Booking fee per ticket, paid by the buyer on top of the price.
+  feeMinor     BigInt @default(0)
+  /// Buyers may reserve and pay at the desk instead of online.
+  payAtDesk    Boolean @default(false)
+  name         String
+  description  String    @default("")
+  /// Tax-inclusive price in integer minor units of the event's currency.
+  priceMinor   BigInt    @default(0)
+  capacity     Int?
+  minPerOrder  Int       @default(1)
+  maxPerOrder  Int       @default(10)
+  salesStartAt DateTime?
+  salesEndAt   DateTime?
+  sortOrder    Int       @default(0)
+  archivedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
+  rsvps      RSVP[]
+  orderLines OrderLine[]
+  promoCodes PromoCode[]
+
+  @@index([eventId, sortOrder])
+  @@index([eventSeriesId, sortOrder])
+}
+
+/// One purchase: its lines are priced by us, the provider only charges the
+/// total. It creates one registration per attendee and may have several
+/// payments. Orders are ledger rows and outlive their event.
+model Order {
+  id             String      @id @default(cuid())
+  organisationId String
+  eventId        String?
+  /// A series order: a pass (no date) or one date's tickets.
+  eventSeriesId   String?
+  eventInstanceId String?
+  /// Short order number shown on receipts.
+  reference      String      @unique
+  /// The buyer's bearer link to the order (attendee details, receipts).
+  accessToken    String      @unique @default(cuid(2))
+  buyerUserId    String?
+  buyerEmail     String
+  buyerName      String
+  status         OrderStatus @default(PENDING)
+  currency       String
+  subtotalMinor  BigInt      @default(0)
+  discountMinor  BigInt      @default(0)
+  feeMinor       BigInt      @default(0)
+  taxMinor       BigInt      @default(0)
+  totalMinor     BigInt      @default(0)
+  testMode       Boolean     @default(false)
+  /// While PENDING: the seats are held until then.
+  holdExpiresAt  DateTime?
+  /// The latest a hold may be extended to so a provider page can open.
+  holdCapAt      DateTime?
+  promoCodeId    String?
+  /// The event's refund policy when the order was placed: { kind, hours, percent, text }.
+  refundPolicy   Json?
+  /// A day-long payment link's reminder was emailed (once).
+  paymentReminderSentAt DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  series       EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: SetNull)
+  instance     EventInstance? @relation(fields: [eventInstanceId], references: [id], onDelete: SetNull)
+  buyer        User?        @relation("OrderBuyer", fields: [buyerUserId], references: [id], onDelete: SetNull)
+  promoCode    PromoCode?   @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  lines        OrderLine[]
+  payments     Payment[]
+  rsvps        RSVP[]
+
+  @@index([organisationId, createdAt])
+  @@index([eventId, status])
+  @@index([eventSeriesId, status])
+  @@index([eventInstanceId])
+  @@index([status, holdExpiresAt])
+  @@index([buyerUserId, createdAt])
+}
+
+/// One priced line of an order. Amounts are frozen at purchase.
+model OrderLine {
+  id            String        @id @default(cuid())
+  orderId       String
+  kind          OrderLineKind @default(TICKET)
+  ticketTypeId  String?
+  addOnId       String?
+  /// The name shown to the buyer when it was sold.
+  description   String
+  quantity      Int
+  unitMinor     BigInt
+  discountMinor BigInt        @default(0)
+  /// Tax-exclusive value and tax for GST invoices (0 when not registered).
+  taxableMinor  BigInt        @default(0)
+  taxMinor      BigInt        @default(0)
+  cgstMinor     BigInt        @default(0)
+  sgstMinor     BigInt        @default(0)
+  igstMinor     BigInt        @default(0)
+  taxRateBps    Int           @default(0)
+  /// What the buyer pays for this line.
+  totalMinor    BigInt
+  createdAt     DateTime      @default(now())
+
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: SetNull)
+  addOn      AddOn?      @relation(fields: [addOnId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([ticketTypeId])
+}
+
+/// One attempt to collect money for an order. It is a ledger row: once
+/// settled its amount, provider and status are immutable (database trigger).
+model Payment {
+  id                String          @id @default(cuid())
+  organisationId    String
+  orderId           String
+  amountMinor       BigInt
+  currency          String
+  status            PaymentStatus   @default(PENDING)
+  provider          PaymentProvider
+  externalPaymentId String?
+  testMode          Boolean         @default(false)
+  /// What the buyer paid for, as shown on receipts.
+  description       String
+  paidAt            DateTime?
+  /// PAID_OFFLINE only. Corrections are PaymentAmendment rows, never edits.
+  offlineMethod     OfflinePaymentMethod?
+  offlineReference  String?
+  /// Who marked it paid offline or waived it.
+  settledByUserId   String?
+  /// How an online payment was made, read from the provider once paid (e.g. "card", "Visa •••• 4242").
+  methodType        String?
+  methodSummary     String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organisation Organisation             @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  order        Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  attempts     PaymentCheckoutAttempt[]
+  refunds      PaymentRefund[]
+  amendments   PaymentAmendment[]
+  disputes     PaymentDispute[]
+  settledBy    User?                    @relation("PaymentSettledBy", fields: [settledByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, externalPaymentId])
+  @@index([organisationId, createdAt])
+  @@index([orderId, status])
+  @@index([status, createdAt])
+}
+
+/// One hosted checkout page (a Razorpay Payment Link or Stripe Checkout
+/// Session). Its id is the reference sent to the provider, so every retry is
+/// a new attempt with a unique reference.
+model PaymentCheckoutAttempt {
+  id         String                @id @default(cuid())
+  paymentId  String
+  provider   PaymentProvider
+  /// The provider's link or session id, once created.
+  externalId String?
+  url        String?
+  expiresAt  DateTime
+  status     CheckoutAttemptStatus @default(OPEN)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalId])
+  @@index([paymentId, status])
+  @@index([status, expiresAt])
+}
+
+/// Money returned on a payment. Pending plus succeeded refunds never exceed
+/// the payment (database trigger under a row lock on the payment).
+model PaymentRefund {
+  id               String              @id @default(cuid())
+  paymentId        String
+  amountMinor      BigInt
+  status           PaymentRefundStatus @default(PENDING)
+  externalRefundId String?
+  /// Recorded by hand (cash, bank transfer) without calling the provider.
+  offline          Boolean             @default(false)
+  /// Issued by the system, e.g. a payment that arrived after its seats were released.
+  automatic        Boolean             @default(false)
+  reason           String              @default("")
+  createdByUserId  String?
+  /// When the provider was last asked; a retry first looks the refund up by our id.
+  submittedAt      DateTime?
+  settledAt        DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([paymentId, externalRefundId])
+  @@index([paymentId, status])
+  @@index([status, createdAt])
+}
+
+/// An append-only correction to an offline payment's method or reference.
+/// The newest row for a field is its current value.
+model PaymentAmendment {
+  id          String   @id @default(cuid())
+  paymentId   String
+  field       String
+  oldValue    String?
+  newValue    String?
+  reason      String
+  actorUserId String?
+  createdAt   DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  actor   User?   @relation("PaymentAmendmentActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId, createdAt])
+}
+
+/// A discount code for one event. Only a SHA-256 digest of the normalised
+/// code is stored, with a short hint so organisers can tell codes apart.
+model PromoCode {
+  id              String            @id @default(cuid())
+  /// Exactly one of eventId and eventSeriesId (checked in the database).
+  eventId         String?
+  eventSeriesId   String?
+  codeDigest      String
+  hint            String
+  kind            PromoDiscountKind
+  appliesPer      PromoAppliesPer   @default(TICKET)
+  /// PERCENT: 1 to 100. 100 makes the tickets free, with no checkout.
+  percentOff      Int?
+  /// FIXED: minor units of the event's currency, per ticket or per order.
+  amountOffMinor  BigInt?
+  /// Only this ticket type, when set.
+  ticketTypeId    String?
+  /// The order needs at least this many eligible tickets.
+  minQuantity     Int               @default(1)
+  /// At most this many tickets in one order are discounted (TICKET codes).
+  perOrderLimit   Int?
+  /// Orders that may use it (held or confirmed); a released hold frees its use.
+  maxRedemptions  Int?
+  validFrom       DateTime?
+  validUntil      DateTime?
+  archivedAt      DateTime?
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
+  ticketType TicketType? @relation(fields: [ticketTypeId], references: [id], onDelete: NoAction)
+  createdBy  User?       @relation("PromoCodeCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  orders     Order[]
+
+  @@unique([eventId, codeDigest])
+  @@unique([eventSeriesId, codeDigest])
+  @@index([eventId, archivedAt])
+  @@index([eventSeriesId, archivedAt])
 }
 
 /// An organiser email sent to a selected set of existing registrations.
@@ -356,6 +905,34 @@ model EventBroadcast {
   @@index([eventId, createdAt])
 }
 
+/// One organiser's unsent email in an event's Emails tab, autosaved while
+/// they write. Private to its author (unique on event and user) and removed
+/// when that organiser sends from the dashboard. Holds only what the organiser
+/// entered: the body is sanitised exactly as the send path does.
+model EventBroadcastDraft {
+  id         String                    @id @default(cuid())
+  eventId    String
+  userId     String
+  subject    String                    @default("")
+  /// Sanitised HTML template with {{placeholders}}, as it would be sent.
+  body       String                    @default("")
+  /// Visual design id from lib/email/broadcastDesigns.ts.
+  design     String                    @default("classic")
+  /// Selected registration statuses; may be empty while the draft is being written.
+  statuses   RsvpStatus[]              @default([])
+  attendance BroadcastAttendanceFilter @default(ANY)
+  /// Starter template the draft began from (lib/broadcastTemplate.ts), if any.
+  templateId String?
+  createdAt  DateTime                  @default(now())
+  updatedAt  DateTime                  @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
 model EventInvite {
   id        String   @id @default(cuid())
   eventId   String
@@ -379,11 +956,24 @@ model EventSeries {
   instanceDurationMs Int              @default(3600000)
   timezone           String
   privacyType        EventPrivacyType @default(PUBLIC)
+  /// Seats per date, unless a date sets its own.
   capacity           Int?
   status             EventStatus      @default(DRAFT)
+  /// As on Event: every ticket and order of the series, locked after the first sale.
+  currency           String?
+  refundPolicyKind   RefundPolicyKind @default(NONE)
+  refundPolicyHours  Int?
+  refundPolicyPercent Int?
+  refundPolicyText   String           @default("")
+  allowTransfers     Boolean          @default(false)
+  transferCutoffHours Int             @default(24)
   createdAt          DateTime         @default(now())
 
   organisation Organisation    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  ticketTypes  TicketType[]
+  addOns       AddOn[]
+  promoCodes   PromoCode[]
+  orders       Order[]
   instances    EventInstance[]
   invites      SeriesInvite[]
   collaborators EventCollaborator[]
@@ -680,10 +1270,15 @@ model EventInstance {
   eventSeriesId String
   startDateTime DateTime
   endDateTime   DateTime
+  /// This date's seats; null uses the series capacity.
+  capacity      Int?
+  /// Cancelled dates take no registrations; their paid orders are refunded.
+  cancelledAt   DateTime?
   createdAt     DateTime @default(now())
 
   series EventSeries @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
   rsvps  RSVP[]
+  orders Order[]
 
   @@index([eventSeriesId, startDateTime])
 }
@@ -702,8 +1297,23 @@ model RSVP {
   checkInToken    String     @unique @default(cuid(2))
   checkedInAt     DateTime?
   createdAt       DateTime   @default(now())
+  /// Paid events: the order that bought this ticket, and its ticket type.
+  orderId         String?
+  ticketTypeId    String?
+  /// PENDING_PAYMENT only: mirrors the order's hold; the seat counts until then.
+  holdExpiresAt   DateTime?
+  /// When the registration joined the waitlist, and when it was offered a
+  /// place. Set by the rsvp_waitlist_dates trigger, for waitlist conversion.
+  waitlistedAt    DateTime?
+  /// The beat emailed this guest's reminder (about a day before the start), once.
+  reminderSentAt  DateTime?
+  promotedAt      DateTime?
 
   event             Event?                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  /// Orders are only deleted with their organisation; their tickets go with them.
+  order             Order?                  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// The ticket's event or series matches this registration's (trigger rsvp_ticket_type_target).
+  ticketType        TicketType?             @relation(fields: [ticketTypeId], references: [id], onDelete: NoAction)
   eventInstance     EventInstance?          @relation(fields: [eventInstanceId], references: [id], onDelete: Cascade)
   user              User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   answers           RsvpAnswer[]
@@ -718,6 +1328,9 @@ model RSVP {
   @@index([eventId, attendeeKey])
   @@index([eventInstanceId, attendeeKey])
   @@index([checkInToken])
+  @@index([orderId])
+  @@index([ticketTypeId, status])
+  @@index([status, holdExpiresAt])
 }
 
 /// Short-lived, server-created snapshots used to undo an organiser deletion.
@@ -960,6 +1573,13 @@ model InstanceSetting {
   backupProvider        String?
   backupLastSuccessAt   DateTime?
   backupRetentionDays   Int?
+  /// Organisations may sell tickets only while this is on.
+  paidEventsEnabled     Boolean  @default(false)
+  /// Incoming-webhook URL (e.g. Mattermost) for operational alerts. The URL
+  /// embeds its own credential, so it is encrypted and write-only.
+  opsWebhookUrlEncrypted String?
+  opsWebhookEnabled      Boolean  @default(false)
+  opsWebhookIncludeWarnings Boolean @default(true)
   updatedAt             DateTime @updatedAt
 }
 
@@ -1105,4 +1725,66 @@ model IdMember {
   @@index([organisationId, lastEmailedAt])
   @@index([userId])
   @@index([email])
+}
+
+/// Short-link visits per event per day, in the event's timezone. Counts only:
+/// no IP address, browser, referrer or person is stored.
+model ShortLinkClickDay {
+  eventId String
+  day     DateTime @db.Date
+  count   Int      @default(0)
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, day])
+}
+
+/// Something bought alongside tickets (a T-shirt, lunch, a donation). It
+/// takes no seat. Exactly one of eventId and eventSeriesId (checked).
+model AddOn {
+  id            String    @id @default(cuid())
+  eventId       String?
+  eventSeriesId String?
+  name          String
+  description   String    @default("")
+  priceMinor    BigInt
+  /// How many can be sold in all; null is unlimited.
+  capacity      Int?
+  maxPerOrder   Int       @default(10)
+  sortOrder     Int       @default(0)
+  archivedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  event      Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  series     EventSeries? @relation(fields: [eventSeriesId], references: [id], onDelete: Cascade)
+  orderLines OrderLine[]
+
+  @@index([eventId, sortOrder])
+  @@index([eventSeriesId, sortOrder])
+}
+
+/// A dispute (chargeback) on a captured payment, from the provider's
+/// webhooks. Nothing is cancelled automatically; the owner is emailed.
+model PaymentDispute {
+  id                String          @id @default(cuid())
+  organisationId    String
+  paymentId         String
+  provider          PaymentProvider
+  externalDisputeId String
+  status            DisputeStatus
+  amountMinor       BigInt
+  currency          String
+  reason            String          @default("")
+  /// The provider's deadline for evidence.
+  respondBy         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  payment      Payment      @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, externalDisputeId])
+  @@index([paymentId])
+  @@index([organisationId, status])
 }

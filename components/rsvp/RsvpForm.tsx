@@ -2,88 +2,69 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { RsvpStatus } from "@prisma/client";
-import { CheckCircle2, Download } from "lucide-react";
 import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/display";
 import { Field, Input } from "@/components/ui/field";
 import { RegistrationQuestions, focusQuestion, useRegistrationAnswers } from "@/components/rsvp/QuestionField";
 import { identityErrors } from "@/components/rsvp/registrationAnswers";
-
-async function postRsvp(body: unknown) {
-  const res = await fetch("/api/rsvp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  let data: { ok?: boolean; error?: string; data?: { ticketToken?: string; status?: RsvpStatus } } = {};
-  try {
-    data = (await res.json()) as {
-      ok?: boolean;
-      error?: string;
-      data?: { ticketToken?: string; status?: RsvpStatus };
-    };
-  } catch {
-    /* empty */
-  }
-  if (res.status === 429) {
-    return {
-      ok: false as const,
-      error: data.error ?? "Too many requests. Try again later.",
-    };
-  }
-  if (!res.ok) {
-    return {
-      ok: false as const,
-      error: data.error ?? "Could not save your RSVP.",
-    };
-  }
-  if (data.ok) {
-    return {
-      ok: true as const,
-      ticketToken: data.data?.ticketToken ?? "",
-      status: data.data?.status ?? null,
-    };
-  }
-  return {
-    ok: false as const,
-    error: data.error ?? "Could not save your RSVP.",
-  };
-}
-
-function storageKey(params: {
-  orgSlug: string;
-  eventSlug?: string;
-  eventInstanceId?: string;
-}) {
-  const suffix = params.eventInstanceId
-    ? `i:${params.eventInstanceId}`
-    : `e:${params.eventSlug ?? ""}`;
-  return `swe:rsvp:${params.orgSlug}:${suffix}`;
-}
-
-function safeJsonParse<T>(v: string | null): T | null {
-  if (!v) return null;
-  try {
-    return JSON.parse(v) as T;
-  } catch {
-    return null;
-  }
-}
+import { AddOnPicker, TicketPicker, ticketAvailable } from "@/components/rsvp/TicketPicker";
+import { AccessCodeField, PromoCodeField, previewOrderTotal, type AppliedPromo, type TicketingInfo } from "@/components/rsvp/PromoCodeField";
+import { formatMoney } from "@/lib/payments/money";
+import type { PublicAddOn, PublicTicketType } from "@/lib/payments/tickets";
+import { Radio, RadioGroup } from "@/components/ui/choice";
+import { AttendeeFields } from "./RsvpForm/AttendeeFields";
+import { postRsvp, safeJsonParse, storageKey } from "./RsvpForm/helpers";
+import { FramedCheckoutNotice, RsvpDone } from "./RsvpForm/states";
 
 export function RsvpForm(props: {
   orgSlug: string;
   eventSlug?: string;
   eventInstanceId?: string;
   registrationFields?: RegistrationFieldDefinition[];
+  /** Ticket types to buy; registration without tickets when empty. */
+  tickets?: PublicTicketType[];
+  /** Extras to buy alongside tickets. */
+  addOns?: PublicAddOn[];
+  paidSalesOpen?: boolean;
+  /** Paid tickets: whether promo codes exist, and the refund terms. */
+  ticketing?: TicketingInfo | null;
+  /** A paid order is only a request first: it needs approval, or waits for a place. */
+  paidRequest?: "approval" | "waitlist" | null;
   /** Lets a containing event page update immediately after this tab saves an RSVP. */
   onRsvpSaved?: (rsvp: { ticketToken: string; status: RsvpStatus | null }) => void;
 }) {
-  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved } = props;
+  const { orgSlug, eventSlug, eventInstanceId, registrationFields, onRsvpSaved, tickets: listed = [], paidSalesOpen = false, ticketing = null, paidRequest = null } = props;
+  const addOns = useMemo(() => props.addOns ?? ticketing?.addOns ?? [], [props.addOns, ticketing]);
+  // Tickets an access code revealed join the public ones.
+  const [unlocked, setUnlocked] = useState<PublicTicketType[]>([]);
+  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const tickets = useMemo(() => [...listed, ...unlocked.filter((ticket) => !listed.some((other) => other.id === ticket.id))], [listed, unlocked]);
+  const sellsTicketTypes = tickets.length > 0 || Boolean(ticketing?.accessCodes);
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [addOnQuantities, setAddOnQuantities] = useState<Record<string, number>>({});
+  const [payAtDesk, setPayAtDesk] = useState(false);
+  const [quantities, setQuantities] = useState<Record<string, number>>(() => {
+    // Start with one of the first ticket that can be bought.
+    const first = tickets.find((ticket) => ticketAvailable(ticket, paidSalesOpen));
+    return first ? { [first.id]: first.minPerOrder } : {};
+  });
+  const [ticketError, setTicketError] = useState<string | undefined>();
+  // Inside the embed widget's frame, provider pages must open in a new top-level tab.
+  const [framedCheckout, setFramedCheckout] = useState<{ checkoutUrl: string; orderToken: string | null } | null>(null);
+  const [attendees, setAttendees] = useState<Array<{ name: string; email: string }>>([]);
+  // People, not tickets: a group ticket seats several.
+  const seats = Object.entries(quantities).reduce((sum, [id, quantity]) => sum + quantity * (tickets.find((ticket) => ticket.id === id)?.seatsPerTicket ?? 1), 0);
+  const [promo, setPromo] = useState<AppliedPromo | null>(null);
+  const { totalMinor, discountMinor, feeMinor, promoProblem, priceProblem } = previewOrderTotal(tickets, quantities, promo, { amounts, addOns: addOnQuantities, addOnTypes: addOns });
+  // Paying at the desk is offered when every chosen ticket allows it.
+  const chosen = tickets.filter((ticket) => (quantities[ticket.id] ?? 0) > 0);
+  const deskOffered = totalMinor > 0 && !paidRequest && chosen.length > 0 && chosen.every((ticket) => ticket.payAtDesk);
+  const atDesk = deskOffered && payAtDesk;
+  const currency = tickets[0]?.currency ?? addOns[0]?.currency ?? "INR";
+  const sellsPaid = tickets.some((ticket) => ticket.priceMinor > 0 || ticket.flexible || ticket.feeMinor > 0) || addOns.some((addOn) => addOn.priceMinor > 0);
   const { data: session, status } = useSession();
   const router = useRouter();
   const lsKey = storageKey({ orgSlug, eventSlug, eventInstanceId });
@@ -118,8 +99,11 @@ export function RsvpForm(props: {
     const who = identityErrors({ name, email: guestEmail, requireName: isGuest || requireName, requireEmail: isGuest });
     const questionErrors = questionsState.validate();
     setIdentity(who);
+    const missingTicket = sellsTicketTypes && seats === 0;
+    const ticketProblem = missingTicket ? "Choose at least one ticket." : priceProblem ?? undefined;
+    setTicketError(ticketProblem);
     const firstQuestion = fields.find((field) => questionErrors[field.key])?.key;
-    const first = who.name ? "__name" : who.email ? "__email" : firstQuestion;
+    const first = ticketProblem ? "__ticket" : who.name ? "__name" : who.email ? "__email" : firstQuestion;
     if (first) focusQuestion(formRef.current, first);
     return !first;
   }
@@ -132,15 +116,26 @@ export function RsvpForm(props: {
         orgSlug,
         ...(eventInstanceId ? { eventInstanceId } : { eventSlug: eventSlug! }),
         ...(isGuest ? { guestEmail } : {}),
+        ...(sellsTicketTypes ? {
+          items: Object.entries(quantities).filter(([, quantity]) => quantity > 0).map(([ticketTypeId, quantity]) => ({
+            ticketTypeId, quantity,
+            ...(tickets.find((ticket) => ticket.id === ticketTypeId)?.flexible && amounts[ticketTypeId] != null ? { amountMinor: amounts[ticketTypeId] } : {}),
+          })),
+          attendees: attendees.slice(0, Math.min(19, Math.max(0, seats - 1))).map((attendee) => ({ name: attendee.name.trim() || undefined, email: attendee.email.trim() })),
+          ...(promo ? { promoCode: promo.code } : {}),
+          ...(accessCode ? { accessCode } : {}),
+          ...(atDesk ? { payAtDesk: true } : {}),
+          ...(Object.values(addOnQuantities).some((quantity) => quantity > 0) ? { addOns: Object.entries(addOnQuantities).filter(([, quantity]) => quantity > 0).map(([addOnId, quantity]) => ({ addOnId, quantity })) } : {}),
+        } : {}),
         name,
         answers: questionsState.payload(),
       });
       if (!res.ok) setError(res.error);
-      else saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status });
+      else saveSuccessfulRsvp({ ticketToken: res.ticketToken, status: res.status }, res);
     });
   }
 
-  function saveSuccessfulRsvp(rsvp: { ticketToken: string; status: RsvpStatus | null }) {
+  function saveSuccessfulRsvp(rsvp: { ticketToken: string; status: RsvpStatus | null }, order: { orderToken?: string | null; checkoutUrl?: string | null } = {}) {
     setTicketToken(rsvp.ticketToken);
     setRsvpStatus(rsvp.status);
     if (rsvp.ticketToken) {
@@ -158,6 +153,18 @@ export function RsvpForm(props: {
         // this browser has disabled local storage.
       }
     }
+    // A paid order continues on the provider's hosted page, or on the order
+    // page ("Pay now") if that page couldn't open yet. Orders for several
+    // people go to the order page to name each attendee.
+    if (rsvp.status === "PENDING_PAYMENT" && order.checkoutUrl) {
+      if (window.self !== window.top) setFramedCheckout({ checkoutUrl: order.checkoutUrl, orderToken: order.orderToken ?? null });
+      else window.location.assign(order.checkoutUrl);
+      return;
+    }
+    if (order.orderToken && (rsvp.status === "PENDING_PAYMENT" || seats > 1)) {
+      router.push(`/order/${order.orderToken}`);
+      return;
+    }
     onRsvpSaved?.(rsvp);
     setDone(true);
     // Re-read the going count and spots left, which now include this registration.
@@ -168,38 +175,64 @@ export function RsvpForm(props: {
     return <p className="text-body-ui text-ink-muted">Loading…</p>;
   }
 
+  if (framedCheckout) {
+    return <FramedCheckoutNotice framedCheckout={framedCheckout} />;
+  }
+
   if (done) {
-    const href = ticketToken ? `/ticket/${ticketToken}` : null;
-    const ticketDownloadUrl = ticketToken ? `/api/ticket/${ticketToken}/download` : null;
-    const isConfirmed = rsvpStatus === "CONFIRMED";
-    return (
-      <div role="status" className="flex flex-col items-start gap-3 rounded-lg bg-success-bg p-5 text-success-fg">
-        <CheckCircle2 aria-hidden className="yy-success-in size-8" />
-        <p className="text-body font-semibold">
-          {isConfirmed
-            ? "Registration confirmed. Download and save your ticket now — you’ll need it for check-in."
-            : "Registration received. We’ll let you know when its status changes."}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {isConfirmed && ticketDownloadUrl ? (
-            <Button asChild variant="primary" size="sm">
-              <a href={ticketDownloadUrl} download>
-                <Download aria-hidden className="size-4" />
-                Download and save ticket
-              </a>
-            </Button>
-          ) : null}
-          {href ? (
-            <Button asChild variant="secondary" size="sm">
-              <Link href={href}>{isConfirmed ? "View ticket" : "View status"}</Link>
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    );
+    return <RsvpDone ticketToken={ticketToken} rsvpStatus={rsvpStatus} sellsPaid={sellsPaid} />;
   }
 
   const questions = <RegistrationQuestions controller={questionsState} />;
+  const ticketSection = sellsTicketTypes ? (
+    <div data-question-key="__ticket" className="flex flex-col gap-3">
+      {tickets.length > 0 ? (
+        <TicketPicker
+          tickets={tickets}
+          quantities={quantities}
+          onChange={(next) => { setQuantities(next); setTicketError(undefined); }}
+          error={ticketError}
+          paidSalesOpen={paidSalesOpen}
+          amounts={amounts}
+          onAmountChange={(id, amount) => { setAmounts((current) => { const next = { ...current }; if (amount == null) delete next[id]; else next[id] = amount; return next; }); setTicketError(undefined); }}
+        />
+      ) : ticketError ? <p role="alert" className="text-caption text-danger-fg">{ticketError}</p> : null}
+      {ticketing?.accessCodes ? (
+        <AccessCodeField orgSlug={orgSlug} eventSlug={eventSlug} eventInstanceId={eventInstanceId} applied={accessCode} onUnlocked={(code, revealed) => { setAccessCode(code); setUnlocked(revealed); setTicketError(undefined); }} />
+      ) : null}
+      <AddOnPicker addOns={addOns} quantities={addOnQuantities} onChange={setAddOnQuantities} />
+      {seats > 1 ? (
+        <AttendeeFields seats={seats} attendees={attendees} setAttendees={setAttendees} />
+      ) : null}
+      {ticketing?.promoCodes && (eventSlug || eventInstanceId) ? (
+        <PromoCodeField orgSlug={orgSlug} eventSlug={eventSlug} eventInstanceId={eventInstanceId} applied={promo} onApplied={setPromo} problem={promoProblem} />
+      ) : null}
+      {discountMinor > 0 ? (
+        <p className="text-body-ui text-ink">Discount: −{formatMoney(discountMinor, currency)} · Total {formatMoney(totalMinor, currency)}</p>
+      ) : null}
+      {feeMinor > 0 ? <p className="text-caption text-ink-muted">Includes {formatMoney(feeMinor, currency)} in booking fees.</p> : null}
+      {deskOffered ? (
+        <RadioGroup value={payAtDesk ? "desk" : "online"} onValueChange={(value) => setPayAtDesk(value === "desk")} aria-label="How you'll pay">
+          <Radio value="online" label="Pay online now" />
+          <Radio value="desk" label="Pay at the desk" description="Your places are reserved now; pay when you arrive." />
+        </RadioGroup>
+      ) : null}
+      {sellsPaid && ticketing ? (
+        <p className="text-caption text-ink-muted">
+          {ticketing.refundPolicy}{ticketing.refundPolicyText ? ` ${ticketing.refundPolicyText}` : ""}
+        </p>
+      ) : null}
+    </div>
+  ) : null;
+  const submitLabel = totalMinor <= 0
+    ? "Register"
+    : atDesk
+      ? `Reserve, pay ${formatMoney(totalMinor, currency)} at the desk`
+    : paidRequest === "approval"
+      ? `Request tickets · ${formatMoney(totalMinor, currency)}`
+      : paidRequest === "waitlist"
+        ? "Join the waitlist"
+        : `Continue to payment · ${formatMoney(totalMinor, currency)}`;
   const problems = problemCount > 0 ? (
     <Callout tone="danger" role="alert">
       {problemCount === 1 ? "One answer needs a quick fix before you can register." : `${problemCount} answers need a quick fix before you can register.`}
@@ -211,6 +244,7 @@ export function RsvpForm(props: {
       <div ref={formRef} className="flex flex-col gap-3.5">
         {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
         {problems}
+        {ticketSection}
         <div data-question-key="__name">
           <Field label="Name" optional={!requireName} required={requireName} error={identity.name} helperText={!requireName ? `Leave blank to use ${session.user.name}.` : undefined}>
             <Input
@@ -228,7 +262,7 @@ export function RsvpForm(props: {
         </div>
         {questions}
         <Button variant="accent" size="lg" fullWidth loading={pending} loadingLabel="Registering…" onClick={submit}>
-          Register
+          {submitLabel}
         </Button>
       </div>
     );
@@ -246,7 +280,8 @@ export function RsvpForm(props: {
     >
       {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
       {problems}
-      <p className="text-body-ui text-ink-muted">Register with your email</p>
+      {ticketSection}
+      <p className="text-body-ui text-ink-muted">Your details</p>
       <div data-question-key="__name">
         <Field label="Name" required error={identity.name}>
           <Input
@@ -280,7 +315,7 @@ export function RsvpForm(props: {
       </div>
       {questions}
       <Button variant="accent" size="lg" fullWidth type="submit" loading={pending} loadingLabel="Registering…">
-        Register
+        {submitLabel}
       </Button>
     </form>
   );

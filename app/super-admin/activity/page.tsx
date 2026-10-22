@@ -26,6 +26,7 @@ const rsvpStatusLabels: Record<RsvpStatus, string> = {
   WAITLISTED: "Waitlisted",
   PENDING_APPROVAL: "Waiting for approval",
   REJECTED: "Rejected",
+  PENDING_PAYMENT: "Awaiting payment",
 };
 
 export default async function SuperAdminActivityPage() {
@@ -115,7 +116,7 @@ export default async function SuperAdminActivityPage() {
                 <tr>
                   <TH>Event</TH>
                   <TH>Starts</TH>
-                  <TH className="text-right">Registrations</TH>
+                  <TH className="text-right">Confirmed</TH>
                 </tr>
               </THead>
               <TBody>

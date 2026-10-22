@@ -216,8 +216,9 @@ How the Blueprint fits the free plan:
 
 ### Scheduler Worker
 
-The free Render instance sleeps after 15 minutes without traffic, which also
-stops the in-process email worker. The Worker in
+The free Render instance runs everything in one process
+(`SWE_PROCESS_ROLE=all`). It sleeps after 15 minutes without traffic, which
+also stops its email worker and timed jobs. The Worker in
 [`deploy/cloudflare-cron`](../deploy/cloudflare-cron/README.md) runs every
 minute, wakes the app through `/api/health`, then calls
 `POST /api/internal/outbox` with `Authorization: Bearer $CRON_SECRET`.
@@ -236,12 +237,17 @@ npx wrangler tail                     # expect "health 200" and "outbox 200" eac
 
 ## 9. First super-admin login
 
-1. Open `https://events.YOUR-DOMAIN/login`, create an account with the
-   `SUPER_ADMIN_EMAIL` address, and click the verification link in the email.
-   It arrives within a minute or two, through the outbox and Brevo.
-2. Sign in, open `/account/security`, and enrol an authenticator app. Save
-   the recovery codes.
-3. Open `/super-admin`, complete the fresh TOTP step-up, and review
+1. Set the super-admin password from your computer, with the database's
+   direct connection string (Supabase → Connect → Session pooler):
+   `DATABASE_URL="postgresql://..." NEXT_PUBLIC_BASE_URL=https://events.YOUR-DOMAIN node docker/vps/recover-super-admin.mjs you@example.com`
+   from a checkout of this repository after `npm ci`. It creates the account
+   and prints a one-hour link to set its password; run it again to reset the
+   password. The super-admin address can't sign up, use forgot password or
+   change its password in the app.
+2. Sign in with the email and password. We recommend you then open
+   `/account/security` and enrol an authenticator app, which is then asked for
+   at every sign-in. Save the recovery codes.
+3. Open `/super-admin` (there is no separate step-up) and review
    **Settings**: send a test email, and optionally configure Google SSO
    (callback `https://events.YOUR-DOMAIN/api/auth/callback/google`).
 

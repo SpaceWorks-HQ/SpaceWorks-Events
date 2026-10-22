@@ -16,4 +16,11 @@ describe("super-admin pages", () => {
   it.each(pages("app/super-admin"))("%s checks super-admin MFA itself", (file) => {
     expect(readFileSync(file, "utf8")).toMatch(/await requireSuperAdminMfa\(\)/);
   });
+
+  // Insights are read-only views: opaque link tokens must never be loaded,
+  // neither by a page nor by the view reader that feeds it across hosts.
+  const readers = readdirSync("lib/views").filter((name) => name.startsWith("app__super-admin")).map((name) => join("lib/views", name));
+  it.each([...pages("app/super-admin"), ...readers])("%s never selects opaque tokens", (file) => {
+    expect(readFileSync(file, "utf8")).not.toMatch(/\btoken(Hash)?:\s*true/);
+  });
 });

@@ -3,47 +3,17 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { EventPrivacyType, EventStatus } from "@prisma/client";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { createEvent } from "@/app/actions/event";
 import { zonedInputToIso } from "@/lib/timeZone";
-import { RichTextEditor } from "@/components/editor/RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { SwitchRow } from "@/components/ui/choice";
 import { Callout } from "@/components/ui/display";
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
-import { Field, Input, Dropdown } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
-
-const timezones = [
-  "UTC",
-  "America/New_York",
-  "America/Los_Angeles",
-  "Europe/London",
-  "Europe/Paris",
-  "Asia/Kolkata",
-  "Asia/Tokyo",
-  "Australia/Sydney",
-];
-
-function toDatetimeLocalValue(d: Date) {
-  const t = new Date(d);
-  const off = t.getTimezoneOffset() * 60000;
-  return new Date(t.getTime() - off).toISOString().slice(0, 16);
-}
-
-/** Parse a datetime-local value as browser-local wall time, like the previous picker. */
-function fromDatetimeLocalValue(value: string) {
-  if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-const STEP_TITLES = ["New event: the basics", "New event: when it happens", "New event: where it happens"];
-const STEP_LABELS = ["Basics", "Schedule", "Location & platform"];
-
-function isRichTextEmpty(html: string) {
-  return !new DOMParser().parseFromString(html, "text/html").body.textContent?.trim();
-}
+import { STEP_LABELS, STEP_TITLES, isRichTextEmpty, toDatetimeLocalValue } from "./CreateEventDialog/helpers";
+import { BasicsStep, ScheduleStep } from "./CreateEventDialog/steps";
 
 export function CreateEventDialog(props: {
   organisationSlug: string;
@@ -199,85 +169,10 @@ export function CreateEventDialog(props: {
               {error ? <Callout tone="danger" role="alert">{error}</Callout> : null}
 
               {/* Step 1: Basics */}
-              <div className={cn("flex-col gap-4", activeStep === 0 ? "flex" : "hidden")}>
-                <Field label="Title" required>
-                  <Input name="title" autoFocus />
-                </Field>
-                <RichTextEditor
-                  name="aboutHtml"
-                  label="About the event"
-                  helperText="Required. Share the key details attendees should know."
-                  minHeight={160}
-                />
-                <Field label="Tags" helperText="Press Enter or Comma to add up to 12 tags (e.g. workshop, meetup, ai).">
-                  <Input
-                    value={tagInput}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val.endsWith(",")) addTag(val.slice(0, -1));
-                      else setTagInput(val);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addTag(tagInput);
-                      }
-                    }}
-                    placeholder="Type a tag and press Enter or Comma"
-                  />
-                </Field>
-                <input type="hidden" name="tags" value={tagsPreview.join(",")} />
-                {tagsPreview.length > 0 ? (
-                  <ul className="flex flex-wrap gap-1.5">
-                    {tagsPreview.map((t) => (
-                      <li key={t} className="inline-flex items-center gap-1 rounded-full bg-muted py-0.5 pl-3 pr-1 text-[13px] font-semibold text-ink-secondary">
-                        {t}
-                        <button
-                          type="button"
-                          aria-label={`Remove tag ${t}`}
-                          onClick={() => setTagsPreview(tagsPreview.filter((x) => x !== t))}
-                          className="inline-flex size-6 items-center justify-center rounded-full hover:bg-emphasis hover:text-ink"
-                        >
-                          <X aria-hidden className="size-3.5" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </div>
+              <BasicsStep activeStep={activeStep} tagInput={tagInput} setTagInput={setTagInput} addTag={addTag} tagsPreview={tagsPreview} setTagsPreview={setTagsPreview} />
 
               {/* Step 2: Schedule */}
-              <div className={cn("flex-col gap-4", activeStep === 1 ? "flex" : "hidden")}>
-                <Field label="Start" required helperText="Pick date and time">
-                  <Input
-                    type="datetime-local"
-                    value={start ? toDatetimeLocalValue(start) : ""}
-                    min={toDatetimeLocalValue(new Date())}
-                    onChange={(e) => {
-                      const v = fromDatetimeLocalValue(e.target.value);
-                      setStart(v);
-                      if (v) setEnd(new Date(v.getTime() + 60 * 60 * 1000));
-                    }}
-                  />
-                </Field>
-                <Field label="End" required helperText="Must be after start">
-                  <Input
-                    type="datetime-local"
-                    value={end ? toDatetimeLocalValue(end) : ""}
-                    min={start ? toDatetimeLocalValue(start) : undefined}
-                    onChange={(e) => setEnd(fromDatetimeLocalValue(e.target.value))}
-                  />
-                </Field>
-                <Field label="Timezone" required>
-                  <Dropdown name="timezone" defaultValue="Asia/Kolkata">
-                    {timezones.map((tz) => (
-                      <option key={tz} value={tz}>
-                        {tz}
-                      </option>
-                    ))}
-                  </Dropdown>
-                </Field>
-              </div>
+              <ScheduleStep activeStep={activeStep} start={start} setStart={setStart} end={end} setEnd={setEnd} />
 
               {/* Step 3: Location */}
               <div className={cn("flex-col gap-4", activeStep === 2 ? "flex" : "hidden")}>

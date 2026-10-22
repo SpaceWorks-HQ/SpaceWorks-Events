@@ -1,5 +1,6 @@
 import type { RegistrationFieldType } from "@prisma/client";
 import { fieldSettingsSchema, fieldTypeMeta, generateFieldKey, settingsForType, triggerChoices, type FieldSettings } from "@/lib/registrationFields";
+import { cleanChoices, MAX_CHOICE, MAX_CHOICES, norm } from "./builderModel/choices";
 
 /*
  * Pure helpers for the organiser's registration form builder: summaries,
@@ -23,134 +24,19 @@ export type BuilderField = {
 export const MAX_LABEL = 200;
 export const MAX_HELP = 300;
 export const MAX_PLACEHOLDER = 120;
-export const MAX_CHOICE = 200;
-export const MAX_CHOICES = 100;
 
-/* ---------- Summaries ---------- */
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "2026-10-15" → "15 Oct 2026" without going through Date (no time-zone drift). */
-export function formatIsoDay(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return value;
-  const month = MONTHS[Number(match[2]) - 1];
-  return month ? `${Number(match[3])} ${month} ${match[1]}` : value;
-}
-
-function rangeText(min: string | undefined, max: string | undefined, unit = ""): string | null {
-  const suffix = unit ? ` ${unit}` : "";
-  if (min != null && max != null) return `${min}–${max}${suffix}`;
-  if (min != null) return `At least ${min}${suffix}`;
-  if (max != null) return `Up to ${max}${suffix}`;
-  return null;
-}
-
-export function joinOr(values: readonly string[]): string {
-  if (values.length <= 1) return values[0] ?? "";
-  return `${values.slice(0, -1).join(", ")} or ${values[values.length - 1]}`;
-}
-
-/** One-line extras for a question card, e.g. ["4 choices", "Other allowed", "Up to 2"]. */
-export function summarizeField(field: Pick<BuilderField, "type" | "options" | "settings">, all: readonly Pick<BuilderField, "key" | "label">[] = []): string[] {
-  const caps = fieldTypeMeta(field.type);
-  const settings = settingsForType(field.type, field.settings);
-  const parts: string[] = [];
-  if (caps.hasOptions) {
-    parts.push(`${field.options.length} ${field.options.length === 1 ? "choice" : "choices"}`);
-    if (settings.allowOther) parts.push("Other allowed");
-    if (settings.maxSelections != null) parts.push(`Up to ${settings.maxSelections}`);
-  }
-  if (caps.isText) {
-    const text = rangeText(settings.minLength?.toString(), settings.maxLength?.toString(), "characters");
-    if (text) parts.push(text);
-  }
-  if (caps.supportsRange) {
-    const text = rangeText(settings.min?.toString(), settings.max?.toString());
-    if (text) parts.push(text);
-  }
-  if (caps.supportsDateRange) {
-    const from = settings.minDate ? formatIsoDay(settings.minDate) : undefined;
-    const to = settings.maxDate ? formatIsoDay(settings.maxDate) : undefined;
-    if (from && to) parts.push(`${from} – ${to}`);
-    else if (from) parts.push(`From ${from}`);
-    else if (to) parts.push(`Until ${to}`);
-  }
-  if (settings.showIf) {
-    const trigger = all.find((item) => item.key === settings.showIf!.fieldKey);
-    parts.push(`Shows if: ${trigger ? trigger.label : "a removed question"} is ${joinOr(settings.showIf.values)}`);
-  }
-  return parts;
-}
-
-/* ---------- Choice lists ---------- */
-
-export function moveItem<T>(list: readonly T[], index: number, direction: -1 | 1): T[] {
-  const target = index + direction;
-  if (index < 0 || index >= list.length || target < 0 || target >= list.length) return [...list];
-  const next = [...list];
-  [next[index], next[target]] = [next[target]!, next[index]!];
-  return next;
-}
-
-export function removeAt<T>(list: readonly T[], index: number): T[] {
-  return list.filter((_, i) => i !== index);
-}
-
-export function replaceAt<T>(list: readonly T[], index: number, value: T): T[] {
-  return list.map((item, i) => (i === index ? value : item));
-}
-
-/** Splits pasted text into choices: one per line (or tab), bullets and numbering removed. */
-export function splitChoiceList(text: string): string[] {
-  return text
-    .split(/\r?\n|\t/)
-    .map((line) => line.replace(/^\s*(?:[-*•·]|\d+[.)])\s+/, "").trim())
-    .filter(Boolean)
-    .map((line) => line.slice(0, MAX_CHOICE));
-}
-
-const norm = (value: string) => value.trim().toLocaleLowerCase();
-
-/** Inserts pasted choices at `index` (replacing that row), skipping ones already on the list. */
-export function insertChoices(list: readonly string[], index: number, pasted: readonly string[], replace = true): string[] {
-  const keep = list.filter((_, i) => !(replace && i === index));
-  const seen = new Set(keep.map(norm).filter(Boolean));
-  const fresh: string[] = [];
-  for (const choice of pasted) {
-    if (seen.has(norm(choice))) continue;
-    seen.add(norm(choice));
-    fresh.push(choice);
-  }
-  const at = Math.min(Math.max(index, 0), keep.length);
-  return [...keep.slice(0, at), ...fresh, ...keep.slice(at)].slice(0, MAX_CHOICES);
-}
-
-/** Indexes of rows that repeat an earlier choice (ignoring case and spaces). */
-export function duplicateChoiceIndexes(list: readonly string[]): Set<number> {
-  const seen = new Set<string>();
-  const dupes = new Set<number>();
-  list.forEach((choice, index) => {
-    const key = norm(choice);
-    if (!key) return;
-    if (seen.has(key)) dupes.add(index);
-    else seen.add(key);
-  });
-  return dupes;
-}
-
-/** Trimmed, non-empty, first-wins unique choices: what actually gets saved. */
-export function cleanChoices(list: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const raw of list) {
-    const choice = raw.trim();
-    if (!choice || seen.has(norm(choice))) continue;
-    seen.add(norm(choice));
-    out.push(choice);
-  }
-  return out;
-}
+export { formatIsoDay, joinOr, summarizeField } from "./builderModel/summaries";
+export {
+  cleanChoices,
+  duplicateChoiceIndexes,
+  insertChoices,
+  MAX_CHOICE,
+  MAX_CHOICES,
+  moveItem,
+  removeAt,
+  replaceAt,
+  splitChoiceList,
+} from "./builderModel/choices";
 
 /* ---------- Labels ---------- */
 

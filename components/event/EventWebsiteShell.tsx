@@ -3,98 +3,10 @@ import { ArrowRight, ArrowUpRight, ChevronDown, MapPin, Video } from "lucide-rea
 import { accentStyle } from "@/lib/theme/accent";
 import { formatDateBlock, formatDayLong, formatTime, formatTimeRange, formatTimeZoneName } from "@/lib/format/datetime";
 import { Avatar, Callout, Chip, DateBlock } from "@/components/ui/display";
-import type { RegistrationFieldDefinition } from "@/components/rsvp/registrationTypes";
-import type { RsvpStatus } from "@prisma/client";
 import { RegistrationCard } from "./RegistrationCard";
 import { SectionNav } from "./SectionNav";
-
-type Props = {
-  orgSlug: string;
-  organisation: { name: string; logoUrl: string | null };
-  preview: boolean;
-  event: {
-    slug: string;
-    title: string;
-    coverImageUrl: string | null;
-    location: string;
-    isOnline: boolean;
-    status: string;
-    start: string;
-    end: string;
-    timezone: string;
-    capacity: number | null;
-  };
-  page: {
-    tagline: string;
-    logoUrl: string | null;
-    accentColor: string | null;
-    aboutHtml: string;
-    sections: Array<{ type: string; isVisible: boolean }>;
-  };
-  highlights: Array<{ id: string; title: string; description: string }>;
-  sessions: Array<{
-    id: string;
-    slug: string;
-    title: string;
-    start: string;
-    end: string;
-    type: string;
-    trackId: string;
-    trackName: string;
-    trackSortOrder: number;
-    speakers: Array<{ slug: string; name: string }>;
-  }>;
-  speakers: Array<{ id: string; slug: string; name: string; photoUrl: string | null; websiteUrl: string | null; headline: string; organisation: string }>;
-  sponsors: Array<{ id: string; name: string; logoUrl: string | null; description: string; websiteUrl: string | null; tier: string }>;
-  venue: { location: string; mapLinkUrl: string | null } | null;
-  faqs: Array<{ id: string; question: string; answerHtml: string }>;
-  resources: Array<{ id: string; title: string; description: string; href: string }>;
-  registrationFields: RegistrationFieldDefinition[];
-  confirmedCount: number | null;
-  registrationOpen: boolean;
-  /** At capacity: new registrations join the waitlist. Derived server-side. */
-  registrationFull: boolean;
-  approvalRequired: boolean;
-  /** The signed-in viewer's own registration, so the card shows it on any device. */
-  viewerRsvp?: { token: string; status: RsvpStatus } | null;
-};
-
-const SECTION_LABELS: Record<string, string> = {
-  ABOUT: "About",
-  SCHEDULE: "Schedule",
-  SPEAKERS: "Speakers",
-  SPONSORS: "Partners",
-  VENUE: "Venue",
-  FAQ: "FAQ",
-  RESOURCES: "Resources",
-};
-
-const TIER_LABELS: Record<string, string> = { PLATINUM: "Platinum", GOLD: "Gold", SILVER: "Silver", PARTNER: "Partner", COMMUNITY_PARTNER: "Community" };
-
-function mapSearchQuery(location: string, mapLinkUrl: string | null) {
-  if (mapLinkUrl) {
-    try {
-      const url = new URL(mapLinkUrl);
-      const urlQuery = url.searchParams.get("query") || url.searchParams.get("q") || url.searchParams.get("destination");
-      if (urlQuery) return urlQuery;
-    } catch {
-      // The server rejects invalid URLs, but retain a safe rendering fallback.
-    }
-  }
-  return location.trim() || null;
-}
-
-function duration(start: string, end: string) {
-  const minutes = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000));
-  if (minutes === 0) return null;
-  if (minutes < 60) return `${minutes} min`;
-  const hours = minutes / 60;
-  return Number.isInteger(hours) ? `${hours} hr` : `${Math.floor(hours)} hr ${minutes % 60} min`;
-}
-
-function Rich({ html }: { html: string }) {
-  return html ? <div className="yy-prose" dangerouslySetInnerHTML={{ __html: html }} /> : null;
-}
+import type { Props } from "./EventWebsiteShell/types";
+import { duration, mapSearchQuery, Rich, SECTION_LABELS, TIER_LABELS } from "./EventWebsiteShell/helpers";
 
 export function EventWebsiteShell(p: Props) {
   const shown = new Set(p.page.sections.filter((x) => x.isVisible).map((x) => x.type));
@@ -138,7 +50,8 @@ export function EventWebsiteShell(p: Props) {
         {/* Title block */}
         <header className="flex min-w-0 flex-col gap-5 md:col-start-1 md:row-start-1">
           <div className="flex flex-wrap gap-1.5">
-            <Chip tone="accent" size="sm">Free</Chip>
+            {/* Anything sold for money (tickets, extras, fees) makes this a ticketed event. */}
+            <Chip tone="accent" size="sm">{p.ticketing?.sellsPaid || p.tickets?.some((ticket) => ticket.priceMinor > 0) ? "Tickets" : "Free"}</Chip>
             <Chip size="sm">{p.event.isOnline ? "Online" : "In person"}</Chip>
             {countLabel ? <Chip size="sm">{countLabel}</Chip> : null}
           </div>
@@ -181,6 +94,10 @@ export function EventWebsiteShell(p: Props) {
               state={{ cancelled: p.event.status === "CANCELLED", open: p.registrationOpen, full: p.registrationFull, approvalRequired: p.approvalRequired }}
               accentColor={p.page.accentColor}
               viewerRsvp={p.viewerRsvp ?? null}
+              tickets={p.tickets ?? []}
+              heldCount={p.heldCount ?? 0}
+              paidSalesOpen={p.paidSalesOpen ?? false}
+              ticketing={p.ticketing ?? null}
             />
           </div>
         </aside>

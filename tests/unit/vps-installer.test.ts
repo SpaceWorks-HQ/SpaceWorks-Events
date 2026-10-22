@@ -255,7 +255,13 @@ describe("VPS installer", () => {
   });
 
   it("encodes off-site credentials and validates backup settings", () => {
-    expect(lib("urlencode 'ab/c+d=e f'").stdout).toBe("ab%2Fc%2Bd%3De%20f");
+    // Keys go into mc's own config as JSON strings, unchanged: "/" and "+" stay as they are.
+    expect(lib(`json_string 'ab/c+d=e f'`).stdout).toBe('"ab/c+d=e f"');
+    expect(lib(`json_string 'say "hi"'`).stdout).toBe('"say \\"hi\\""');
+    const lib_ = readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8");
+    expect(lib_).not.toContain("MC_HOST_offsite");
+    // The Silo image sets MC_CONFIG_DIR itself, so HOME alone would hide the alias.
+    expect(lib_).toContain("--env MC_CONFIG_DIR=/mc-home/.mc");
     for (const [check, good, bad] of [
       ["is_days", "14", "0"], ["is_prefix", "spaceworks-events", "a/b"],
       ["is_https_endpoint", "https://acct.r2.cloudflarestorage.com", "http://bucket.example.com"],
@@ -263,6 +269,12 @@ describe("VPS installer", () => {
       expect(lib(`${check} '${good}'`).status).toBe(0);
       expect(lib(`${check} '${bad}'`).status).not.toBe(0);
     }
+    // A private off-site endpoint's CA: a readable PEM file, or "none" for public certificates.
+    expect(lib(`is_ca_file none`).status).toBe(0);
+    expect(lib(`pem=$(mktemp); printf -- '-----BEGIN CERTIFICATE-----\\nMIIB\\n-----END CERTIFICATE-----\\n' > "$pem"; is_ca_file "$pem"`).status).toBe(0);
+    expect(lib(`plain=$(mktemp); echo not-a-certificate > "$plain"; is_ca_file "$plain"`).status).not.toBe(0);
+    expect(lib(`is_ca_file /no/such/ca.crt`).status).not.toBe(0);
+    expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).toContain("--env SSL_CERT_FILE=/offsite-ca.crt");
     const backup = readFileSync(path.join(root, "scripts/vps-backup.sh"), "utf8");
     // Encrypted backups keep only the version and kind readable, and only encrypted ones leave the server.
     expect(backup).toContain('age --encrypt --recipient "$recipient"');
@@ -291,14 +303,17 @@ describe("VPS installer", () => {
     expect(readFileSync(path.join(root, "scripts/vps-lib.sh"), "utf8")).toContain("vps-renew-certs.sh --if-due");
   });
 
-  it("runs the scheduler from the backend image and shows the app only the backup status", () => {
+  it("runs the email worker and the beat from the backend image, and shows them only the backup status", () => {
     const compose = readFileSync(path.join(root, "compose.production.yml"), "utf8");
     expect(compose).not.toContain("node:22-alpine");
-    expect(compose).toMatch(/ {2}scheduler:\n {4}image: \$\{SWE_BACKEND_IMAGE:-swevents-backend\}/);
-    expect(compose).toContain('command: ["node", "docker/vps/scheduler.mjs"]');
-    // The image's web health check would mark the scheduler unhealthy, and `up --wait` refuses a
-    // running service without one: it checks that it can reach the app instead.
-    expect(compose).toMatch(/scheduler\.mjs"\]\n(?: +#.*\n)* +healthcheck:\n +test: \["CMD", "node", "-e", "fetch\('http:\/\/app:3000\/api\/health'\)/);
+    expect(compose).not.toContain("scheduler.mjs");
+    // The web container serves requests only; the worker sends email and the beat runs timed jobs.
+    expect(compose).toMatch(/ {2}app:\n(?: +.*\n)*? +SWE_PROCESS_ROLE: web\n/);
+    expect(compose).toMatch(/ {2}worker:\n {4}<<: \*backend\n {4}command: \["worker"\]/);
+    expect(compose).toMatch(/ {2}beat:\n {4}<<: \*backend\n {4}command: \["beat"\]/);
+    const entrypoint = readFileSync(path.join(root, "scripts/docker-entrypoint.sh"), "utf8");
+    expect(entrypoint).toContain('export SWE_PROCESS_ROLE="$1" HOSTNAME=127.0.0.1');
+    expect(readFileSync(path.join(root, "scripts/vps-restore.sh"), "utf8")).toContain("serving=(app worker beat)");
     expect(compose).toContain("${SWE_CONFIG_DIR}/status:/status:ro");
     expect(compose).not.toMatch(/\$\{SWE_CONFIG_DIR\}\/backups:\/[a-z]+:ro/);
   });

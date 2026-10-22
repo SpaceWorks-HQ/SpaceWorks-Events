@@ -1,0 +1,69 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+import type { CheckInResultData } from "@/app/actions/checkin";
+import { Chip, type ChipTone } from "@/components/ui/display";
+
+function DetailRows({ rows }: { rows: Array<{ key: string; label: string; value: string }> }) {
+  if (rows.length === 0) return null;
+  return (
+    <dl className="m-0 flex flex-col gap-0.5 pt-1">
+      {rows.map((detail) => (
+        <div key={detail.key} className="flex flex-wrap items-baseline gap-1.5 text-sm">
+          <dt className="opacity-75">{detail.label}:</dt>
+          <dd className="m-0 font-semibold">{detail.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function CheckInDetailsList({ details }: { details: CheckInResultData["checkInDetails"] }) {
+  return <DetailRows rows={details.map((detail) => ({ key: detail.label, label: detail.label, value: detail.value }))} />;
+}
+
+export function RegistrationDetailsList({ details }: { details: CheckInResultData["registrationDetails"] }) {
+  return <DetailRows rows={details.map((detail) => ({ key: detail.key, label: detail.label, value: detail.value }))} />;
+}
+
+const statusChips: Record<string, { label: string; tone: ChipTone }> = {
+  CONFIRMED: { label: "Confirmed", tone: "success" },
+  WAITLISTED: { label: "Waitlisted", tone: "warning" },
+  PENDING_APPROVAL: { label: "Pending approval", tone: "warning" },
+  REJECTED: { label: "Rejected", tone: "danger" },
+  CANCELLED: { label: "Cancelled", tone: "neutral" },
+};
+
+export function StatusChip({ status }: { status: string }) {
+  const chip = statusChips[status] ?? { label: status, tone: "neutral" as ChipTone };
+  return <Chip size="sm" tone={chip.tone}>{chip.label}</Chip>;
+}
+
+/** Render a stable server/client value first, then adapt to the device locale. */
+export function CheckInTimestamp({ value }: { value: string }) {
+  const isClient = useSyncExternalStore(() => () => {}, () => true, () => false);
+  return <>{isClient ? new Date(value).toLocaleString() : `${value.slice(0, 16).replace("T", " ")} UTC`}</>;
+}
+
+export function playSuccessFeedback() {
+  if (typeof window === "undefined") return;
+  try {
+    const ctx = new AudioContext();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.value = 0.08;
+    o.start();
+    setTimeout(() => {
+      o.stop();
+      ctx.close();
+    }, 120);
+  } catch {
+    /* ignore */
+  }
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    navigator.vibrate(40);
+  }
+}

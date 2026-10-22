@@ -1,7 +1,8 @@
 import "server-only";
 
-import type { EventPrivacyType, MembershipRole, Prisma } from "@prisma/client";
+import type { MembershipRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { returningShare } from "@/components/event-dashboard/analytics/metrics";
 import {
   countsFor,
   eventSelect,
@@ -10,15 +11,14 @@ import {
   loadNextUp,
   loadRsvpCounts,
   toEventRow,
-  type DashboardHome,
-  type HomeEventRow,
-  type HomeLiveEvent,
   type HomeStat,
 } from "@/lib/dashboardHome";
 import { monthGrid, monthKey, parseMonth, shiftMonth, toDotLevels, turnout, weekOverWeek, windowCounts } from "@/lib/dashboardHomeMetrics";
 import { describeRecurrence } from "@/lib/format/recurrence";
 import { getAccentTokens } from "@/lib/theme/accent";
-import { safeTimeZone } from "@/lib/timeZone";
+import { loadOrganisationRevenue } from "@/lib/payments/revenue";
+import { DAY_MS, INSIGHT_DAYS, LISTED, PAGE_SIZE, PRIVACY_LABELS, SAMPLE_LIMIT, initialsOf, localDay } from "./orgDashboard/helpers";
+import type { OrgCalendar, OrgDashboard, OrgEventRow, OrgEventView, OrgInsights, OrgRevenue, OrgSeriesCard } from "./orgDashboard/types";
 
 /*
  * Data for one organisation's workspace (app/dashboard/[orgSlug]/page.tsx).
@@ -27,64 +27,9 @@ import { safeTimeZone } from "@/lib/timeZone";
  * manage events; ordinary members get the read-only parts.
  */
 
-const DAY_MS = 86_400_000;
-const PAGE_SIZE = 8;
-const SAMPLE_LIMIT = 5000;
-const LISTED = ["PUBLISHED", "HIDDEN"] as const;
-
-export type OrgEventView = "upcoming" | "draft" | "past";
-
-export type OrgEventRow = HomeEventRow & {
-  privacy: string;
-  publicPath: string | null;
-  checkInHref: string | null;
-  linkable: boolean;
-  /** Past events: "34 of 40 came" and feedback responses. */
-  outcome: { came: number; going: number; feedback: number; } | null;
-};
-
-export type OrgSeriesCard = { id: string; title: string; rule: string; isDraft: boolean; next: { start: Date; timezone: string; going: number; } | null; };
-
-export type OrgCalendar = {
-  label: string;
-  prevKey: string;
-  nextKey: string;
-  cells: Array<{ day: number | null; dots: string[]; today: boolean; }>;
-  events: number;
-  seriesDates: number;
-};
-
-export type OrgDashboard = {
-  members: { total: number; owners: number; admins: number; members: number; initials: string[]; };
-  needsYou: DashboardHome["needsYou"];
-  next: DashboardHome["next"];
-  live: HomeLiveEvent | null;
-  calendar: OrgCalendar;
-  stats: HomeStat[];
-  events: { view: OrgEventView; rows: OrgEventRow[]; total: number; hasMore: boolean; counts: { upcoming: number; draft: number; past: number; }; };
-  series: { cards: OrgSeriesCard[]; total: number; };
-  setup: { hasProfile: boolean; hasEvent: boolean; hasTeam: boolean; hasPublished: boolean; } | null;
-};
-
-const PRIVACY_LABELS: Record<EventPrivacyType, string> = {
-  PUBLIC: "Public",
-  HIDDEN_LINK: "Hidden link",
-  APPROVAL_REQUIRED: "Approval required",
-  INVITE_ONLY: "Invite only",
-};
+export type { OrgCalendar, OrgDashboard, OrgEventRow, OrgEventView, OrgInsights, OrgRevenue, OrgSeriesCard } from "./orgDashboard/types";
 
 export { roleLabel } from "./permissionRoles";
-
-/** "2026-10-15" for an instant in a timezone. */
-function localDay(date: Date, timeZone: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: safeTimeZone(timeZone), year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-}
-
-function initialsOf(name: string | null | undefined) {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
-}
 
 export async function getOrgDashboard(input: {
   organisation: { id: string; slug: string; logoUrl: string | null; description: string; };
@@ -320,7 +265,37 @@ export async function getOrgDashboard(input: {
     ? { hasProfile: Boolean(organisation.logoUrl && organisation.description.trim()), hasEvent: Boolean(anyEvent), hasTeam: members.total > 1, hasPublished: false }
     : null;
 
+  // Insights (organisers only): counts across finished events, never people.
+  let insights: OrgInsights | null = null;
+  if (canManage) {
+    const since = new Date(now.getTime() - INSIGHT_DAYS * DAY_MS);
+    const attended = await prisma.rSVP.findMany({
+      where: { status: "CONFIRMED", checkedInAt: { not: null }, event: { organisationId: organisation.id, endDateTime: { gte: since, lt: now } } },
+      select: { eventId: true, attendeeKey: true },
+    });
+    const byEvent = new Map<string, string[]>();
+    for (const row of attended) byEvent.set(row.eventId!, [...(byEvent.get(row.eventId!) ?? []), row.attendeeKey]);
+    const topIds = [...byEvent].sort((a, b) => b[1].length - a[1].length).slice(0, 5).map(([id]) => id);
+    const [topRows, goingRows] = topIds.length
+      ? await Promise.all([
+        prisma.event.findMany({ where: { id: { in: topIds } }, select: { id: true, title: true } }),
+        prisma.rSVP.groupBy({ by: ["eventId"], where: { eventId: { in: topIds }, status: "CONFIRMED" }, _count: { _all: true } }),
+      ])
+      : [[], []];
+    const titles = new Map(topRows.map((row) => [row.id, row.title]));
+    const goingBy = new Map(goingRows.map((row) => [row.eventId as string, row._count._all]));
+    insights = {
+      windowDays: INSIGHT_DAYS,
+      topEvents: topIds.map((id) => ({ id, title: titles.get(id) ?? "Event", href: `/dashboard/${organisation.slug}/event/${id}`, came: byEvent.get(id)!.length, going: goingBy.get(id) ?? 0 })),
+      returning: returningShare([...byEvent.values()]),
+    };
+  }
+  const takings = canManage ? await loadOrganisationRevenue(organisation.id, { since: new Date(now.getTime() - INSIGHT_DAYS * DAY_MS), timeZone: "UTC", now }) : [];
+  const revenue: OrgRevenue | null = takings.length ? { windowDays: INSIGHT_DAYS, currencies: takings } : null;
+
   return {
+    insights,
+    revenue,
     members,
     needsYou,
     next,

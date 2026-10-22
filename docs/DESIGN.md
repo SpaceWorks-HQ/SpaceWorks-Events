@@ -16,8 +16,9 @@
 
 ## 1. What the design must do
 
-Space Works Events is a self-hosted platform for running **free** community events (no tickets, payments
-or ad trackers). Most organisers are volunteers and small groups. Most attendees open an event link on a
+Space Works Events is a self-hosted platform for running community events, free by default, with
+optional tickets paid straight to the organiser's own Razorpay or Stripe account (no platform fee, no ad
+trackers). Most organisers are volunteers and small groups. Most attendees open an event link on a
 phone.
 
 1. **Calm in the product, warm in public.** Dashboards are quiet cream, white panels and hairlines.

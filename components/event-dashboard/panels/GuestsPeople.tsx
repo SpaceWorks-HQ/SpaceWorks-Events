@@ -15,7 +15,8 @@ import type { RegistrationFieldRow } from "@/components/registration/EventRegist
 import { ConfirmationDialog } from "@/components/feedback/ConfirmationDialog";
 import { useToast } from "@/components/feedback/ToastProvider";
 import { deleteRsvp, restoreRsvp } from "@/app/actions/rsvp-admin";
-import { approveRsvp, promoteFromWaitlist, rejectRsvp } from "@/app/actions/rsvp-lifecycle";
+import { PaymentDialog } from "@/components/attendees/PaymentDialog";
+import { approveRsvp, promoteFromWaitlist, reacceptRsvp, rejectRsvp } from "@/app/actions/rsvp-lifecycle";
 import { undoCheckIn } from "@/app/actions/checkin";
 import { GuestRow, type GuestRowActions } from "@/components/event-dashboard/guests/GuestRow";
 import {
@@ -27,29 +28,9 @@ import {
   type GuestKindFilter,
   type GuestStatusFilter,
 } from "@/components/event-dashboard/guests/guestList";
+import { FILTER_DOTS, PAGE_SIZE, type ActionResult, type GuestListTarget } from "./GuestsPeople/constants";
 
-const PAGE_SIZE = 25;
-
-const FILTER_DOTS: Record<GuestStatusFilter, string> = {
-  all: "bg-ink",
-  going: "bg-success-solid",
-  waitlist: "bg-warning-solid",
-  approve: "bg-highlight",
-  declined: "bg-danger-fg",
-  checkedIn: "bg-primary",
-};
-
-type ActionResult = { ok: true } | { ok: false; error: string };
-
-/**
- * Whose registrations the list shows. A one-off event gets the full toolset;
- * a series date (RSVPs keyed by `eventInstanceId`) only gets the actions that
- * accept an instance id, so manual add, the CSV/email exports and undo
- * check-in are hidden there.
- */
-export type GuestListTarget =
-  | { kind: "event"; eventId: string; eventTitle: string }
-  | { kind: "instance"; instanceId: string; seriesId: string };
+export type { GuestListTarget } from "./GuestsPeople/constants";
 
 export function GuestsPeople({
   organisationSlug,
@@ -60,6 +41,8 @@ export function GuestsPeople({
   attendees,
   truncated,
   registrationFields,
+  ticketTypes = [],
+  canUndoCheckIn = true,
 }: {
   organisationSlug: string;
   target: GuestListTarget;
@@ -70,6 +53,10 @@ export function GuestsPeople({
   attendees: AttendeeRow[];
   truncated: boolean;
   registrationFields: RegistrationFieldRow[];
+  /** Events that sell tickets: what a manually added guest can be given. */
+  ticketTypes?: Array<{ id: string; name: string; priceMinor: number; currency: string; }>;
+  /** Undo check-in is a CHECK_IN operation, separate from managing registrations. */
+  canUndoCheckIn?: boolean;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -81,6 +68,7 @@ export function GuestsPeople({
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editGuest, setEditGuest] = useState<AttendeeRow | null>(null);
+  const [paymentGuest, setPaymentGuest] = useState<AttendeeRow | null>(null);
   const [removeGuest, setRemoveGuest] = useState<AttendeeRow | null>(null);
   const [undoGuest, setUndoGuest] = useState<AttendeeRow | null>(null);
 
@@ -92,7 +80,7 @@ export function GuestsPeople({
   const range = pageRange(visible.length, page, PAGE_SIZE);
   const pageRows = visible.slice(range.page * PAGE_SIZE, range.page * PAGE_SIZE + PAGE_SIZE);
 
-  function run(guest: AttendeeRow, action: () => Promise<ActionResult>, success: string) {
+  function run<R extends ActionResult>(guest: AttendeeRow, action: () => Promise<R>, success: string | ((res: R) => string)) {
     setBusyId(guest.id);
     startTransition(async () => {
       const res = await action();
@@ -101,7 +89,7 @@ export function GuestsPeople({
         showToast(res.error, "error");
         return;
       }
-      showToast(success, "success");
+      showToast(typeof success === "string" ? success : success(res), "success");
       router.refresh();
     });
   }
@@ -110,6 +98,11 @@ export function GuestsPeople({
     approve: (guest) => run(guest, () => approveRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), "Approved"),
     decline: (guest) => run(guest, () => rejectRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), "Declined"),
     promote: (guest) => run(guest, () => promoteFromWaitlist({ organisationSlug, rsvpId: guest.id, ...scope }), "Spot given"),
+    reaccept: (guest) => run(guest, () => reacceptRsvp({ organisationSlug, rsvpId: guest.id, ...scope }), (res) => {
+      const status = "data" in res ? res.data?.status : undefined;
+      if (status === "PAYMENT_REQUESTED") return "Re-accepted. They've been sent a payment link; their ticket confirms once they pay.";
+      return status === "WAITLISTED" ? "Re-accepted. The event is full, so they're on the waitlist." : "Re-accepted";
+    }),
     copyTicket: async (guest) => {
       try {
         await navigator.clipboard.writeText(guest.ticketUrl);
@@ -119,8 +112,10 @@ export function GuestsPeople({
       }
     },
     edit: (guest) => setEditGuest(guest),
-    undoCheckIn: eventId ? (guest) => setUndoGuest(guest) : undefined,
+    undoCheckIn: eventId && canUndoCheckIn ? (guest) => setUndoGuest(guest) : undefined,
     remove: (guest) => setRemoveGuest(guest),
+    // Orders on an event, or on a series date or pass, are refunded the same way.
+    payment: (guest) => setPaymentGuest(guest),
   };
 
   function resetPage<T>(setter: (value: T) => void) {
@@ -237,7 +232,21 @@ export function GuestsPeople({
         </>
       )}
 
-      {manualRsvpOpen && eventId ? <ManualRsvpDialog organisationSlug={organisationSlug} eventId={eventId} fields={registrationFields} onClose={() => setManualRsvpOpen(false)} onAdded={() => router.refresh()} /> : null}
+      {paymentGuest?.order ? (
+        <PaymentDialog
+          organisationSlug={organisationSlug}
+          target={target.kind === "event" ? { eventId: target.eventId } : { seriesId: target.seriesId }}
+          guest={paymentGuest}
+          onClose={() => setPaymentGuest(null)}
+          onDone={(message) => {
+            setPaymentGuest(null);
+            showToast(message, "success");
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {manualRsvpOpen && eventId ? <ManualRsvpDialog organisationSlug={organisationSlug} eventId={eventId} fields={registrationFields} ticketTypes={ticketTypes} onClose={() => setManualRsvpOpen(false)} onAdded={() => router.refresh()} /> : null}
 
       {editGuest ? (
         <EditRsvpDialog

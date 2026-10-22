@@ -7,11 +7,13 @@ const prismaMock = vi.hoisted(() => ({
 const rateLimitMock = vi.hoisted(() => vi.fn());
 const enqueueResetMock = vi.hoisted(() => vi.fn());
 const bcryptMock = vi.hoisted(() => ({ hash: vi.fn() }));
+const noticeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/actionRateLimit", () => ({ isActionRateLimited: rateLimitMock }));
 vi.mock("@/lib/outbox", () => ({ enqueuePasswordReset: enqueueResetMock }));
 vi.mock("bcryptjs", () => ({ default: bcryptMock }));
+vi.mock("@/lib/notices", () => ({ noticeEach: noticeMock }));
 
 import { confirmPasswordReset, requestPasswordReset } from "@/app/actions/password-reset";
 
@@ -56,6 +58,8 @@ describe("confirmPasswordReset", () => {
       data: { passwordHash: "new-password-hash", emailVerified: expect.any(Date), sessionVersion: { increment: 1 } },
       select: { id: true },
     });
+    // The account owner hears that the password changed, in the same transaction.
+    expect(noticeMock).toHaveBeenCalledWith(tx, ["person@example.com"], expect.objectContaining({ subject: "Your password was changed" }));
   });
 
   it("does not update a user when the token was already consumed", async () => {
@@ -66,6 +70,7 @@ describe("confirmPasswordReset", () => {
       password: "new-password",
     })).resolves.toEqual({ ok: false, error: "Invalid or expired reset link." });
     expect(tx.user.update).not.toHaveBeenCalled();
+    expect(noticeMock).not.toHaveBeenCalled();
   });
 });
 
@@ -85,5 +90,13 @@ describe("requestPasswordReset", () => {
     expect(enqueueResetMock.mock.invocationCallOrder[0]).toBeGreaterThan(
       tx.verificationToken.create.mock.invocationCallOrder[0],
     );
+  });
+
+  it("never emails the super admin a reset link, and answers exactly as for anyone else", async () => {
+    vi.stubEnv("SUPER_ADMIN_EMAIL", "Admin@Example.com");
+    await expect(requestPasswordReset({ email: "admin@example.com" })).resolves.toEqual({ ok: true, data: { sent: true } });
+    vi.unstubAllEnvs();
+    expect(tx.verificationToken.create).not.toHaveBeenCalled();
+    expect(enqueueResetMock).not.toHaveBeenCalled();
   });
 });

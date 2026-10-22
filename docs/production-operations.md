@@ -20,9 +20,9 @@ The default production deployment is the
 [free-tier cloud stack](DEPLOYMENT_CLOUD.md): Render builds `render.yaml`'s
 Docker service on every commit that passes CI, the container applies
 migrations on start (`MIGRATE_ON_START=1`, through `DIRECT_URL`), and the
-Cloudflare Worker in `deploy/cloudflare-cron` is the independent per-minute
-outbox scheduler from step 4 below. Steps 1–2 are then automatic; still
-review migrations and take a backup before merging one.
+Cloudflare Worker in `deploy/cloudflare-cron` calls the outbox endpoint every
+minute (step 4 below), which keeps the free instance awake. Steps 1–2 are then
+automatic; still review migrations and take a backup before merging one.
 
 For a complete single-host stack, follow the
 [Docker VPS guide](DEPLOYMENT_VPS.md) and `compose.production.yml`. For an app
@@ -35,7 +35,7 @@ production topology. Kubernetes operators should use the
 1. Build and test the immutable image in CI. The [releases and container images guide](CONTAINER_IMAGES.md) covers automated publication of the application, migration and operator images.
 2. Run `npm run db:status`, then `npm run db:deploy` once as a release job using the migration database role. Run `npm run storage:migrate` when legacy database assets remain.
 3. Deploy application instances using a least-privileged runtime database role and production secrets from a secrets manager.
-4. Verify the in-process outbox worker has recorded a fresh heartbeat after deployment. Configure an independent scheduler to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET` as a recovery path; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.
+4. Verify the email worker and the beat have recorded fresh heartbeats after deployment (Super admin → Operations). Where the platform cannot keep them running, such as a sleeping free instance, configure a cron service to call `POST /api/internal/outbox` every minute with `Authorization: Bearer $CRON_SECRET`; also configure an authenticated readiness probe to call `GET /api/health/db` with `Authorization: Bearer $HEALTHCHECK_SECRET`.
 5. Verify readiness, error rate, email queue depth, database connections, and Redis health before shifting traffic.
 
 ### Recent schema migrations
@@ -50,10 +50,28 @@ Apply these with `npm run db:deploy` before rolling out the matching application
 | `20261017000000_broadcast_design` | `EventBroadcast.design` (default `classic`) |
 | `20261018000000_rsvp_user_index` | `RSVP(userId, createdAt)` index for account pages and the personal data export. A plain `CREATE INDEX` blocks RSVP writes while it builds, so run it in a quiet window on large installations |
 | `20261019000000_event_short_code` | Nullable `Event.shortCode` with a unique index |
+| `20261021000000_ops_alert_webhook` | `InstanceSetting` alert webhook columns (encrypted URL, enabled flag off by default, include-warnings flag); additive only |
+| `20261102000000_event_broadcast_drafts` | New `EventBroadcastDraft` table for saved Emails-tab drafts: one row per event and organiser (unique on `eventId`, `userId`), cascading on `Event` and `User`, with CHECKs bounding the subject to 150 characters and the audience to four statuses. Purely additive |
 
 ## Instance-managed services
 
-Use `/super-admin/settings` with a fresh super-admin TOTP proof to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source.
+Sign in as the super admin and use `/super-admin/settings` to configure SMTP, Google SSO, and displayed backup posture. Stored SMTP and Google client secrets are write-only and encrypted at rest; retain a source-of-truth copy in the deployment secrets manager for disaster recovery. Environment values are legacy fallbacks, so migrate deliberately and verify sign-in and outbox delivery after changing their source. Panel settings are read from PostgreSQL at send and sign-in time, so they apply on every replica, in Docker, Helm, and plain Node deployments, without a restart or rebuild.
+
+**Upgrade note (SMTP settings):** saved panel SMTP now replaces the environment as a whole. Earlier releases filled a missing saved username or password from `SMTP_USER`/`SMTP_PASSWORD`; that no longer happens, and production refuses unauthenticated SMTP unless the private-relay option is set. Before deploying, run `node scripts/check-instance-secrets.mjs`; after deploying, use **Send test email** in Super admin → Settings, and if it fails, re-enter the SMTP username and password there. **Retry failed email** requeues only failures from the last 7 days, so stale broadcasts are not resent after an outage.
+
+`MFA_ENCRYPTION_KEY` must be identical on every replica and job, and stable. A replica with a different key stays healthy but cannot send email, sign in with Google, post alerts, verify TOTP, use organisations' payment keys and chat channels, or show station PINs. Before rotating or re-deploying, run `node scripts/check-instance-secrets.mjs` (or set `migration.checkInstanceSecrets=true` in Helm); it never prints decrypted values.
+
+### Operational alerts webhook
+
+The same page holds an optional **Alerts webhook**: a Mattermost (or Slack-compatible) incoming-webhook URL. When enabled, each app process posts to it:
+
+- uncaught server errors from page renders, route handlers, Server Actions, and the proxy (Next.js `onRequestError`), with the route pattern rather than the request path;
+- every server `console.error` line, and `console.warn` lines when **Include warnings** is on, which covers Next.js' own uncaught-exception and unhandled-rejection logging;
+- Auth.js sign-in failures with their error type (for example `OAuthCallbackError`), outbox email delivery failures with the SMTP error code (a retried failure is a warning, a permanent one an error), and failed scheduler runs;
+- browser crashes caught by the app error boundaries, through `POST /api/client-errors`;
+- an *Instance started* note each time a process boots, which marks deploys and restarts.
+
+The URL embeds its own credential, so it is encrypted like the SMTP password and only its host is shown. Use **Send test message** after saving. Alert text is redacted before it leaves the instance (URLs and connection strings, email addresses, bearer values, `token=`-style parameters, and long opaque strings), identical alerts are collapsed for five minutes with a repeat count afterwards, and each process sends at most 30 alerts a minute. Delivery is best effort with a 5-second timeout and never fails the request that raised it. With several replicas, expect one *Instance started* note per replica; each process re-reads the webhook setting at most every 60 seconds, so a change saved on one replica reaches the others within a minute. Every app process needs outbound HTTPS to the webhook host.
 
 The backup fields do not run, retain, or restore backups. Keep those controls with the database provider and record successful backups and restore drills in the instance operations area.
 

@@ -9,7 +9,7 @@ const MAX_BROWSER_FEEDBACK_RESPONSES = 250;
 
 export async function FeedbackPanel({ ctx }: { ctx: EventDashboardContext; }) {
   const { permissions } = ctx;
-  if (!permissions.isAdmin) return <NoPermission>Only organisation owners and admins can manage feedback for this event.</NoPermission>;
+  if (!permissions.canManageFeedback) return <NoPermission>Only organisation owners and admins can manage feedback for this event.</NoPermission>;
   const { event, organisation, form, fields, canViewResponses, responseRecords, insights, responses } = await loadFeedbackPanel({ ctx });
   return (
     <FeedbackFormEditor

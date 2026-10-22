@@ -12,6 +12,8 @@ export const SECURITY_ACTIVITY_LABELS = {
   ACCOUNT_PASSWORD_CHANGED: "Password changed",
   ACCOUNT_PASSWORD_RESET: "Password reset by email link",
   SESSIONS_REVOKED: "Signed out everywhere",
+  SIGN_IN_NEW_DEVICE: "Signed in from a new device",
+  MFA_STEP_UP_VERIFIED: "Authenticator code confirmed",
 } as const satisfies Record<string, string>;
 
 export type SecurityActivityAction = keyof typeof SECURITY_ACTIVITY_LABELS;

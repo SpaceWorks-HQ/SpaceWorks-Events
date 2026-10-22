@@ -20,5 +20,7 @@ describe("public visibility and identifier utilities", () => {
     expect(gateCheckInForStatus("WAITLISTED", true).ok).toBe(true);
     expect(gateCheckInForStatus("PENDING_APPROVAL", false)).toMatchObject({ ok: false, blocked: true });
     expect(gateCheckInForStatus("PENDING_APPROVAL", true)).toMatchObject({ ok: false, blocked: true });
+    // An unpaid ticket shows "Payment pending" at the desk and can't be overridden.
+    expect(gateCheckInForStatus("PENDING_PAYMENT", true)).toMatchObject({ ok: false, blocked: true, reason: expect.stringContaining("Payment pending") });
   });
 });

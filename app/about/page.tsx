@@ -4,7 +4,7 @@ import { AboutPage } from "@/components/landing/about/AboutPage";
 
 export const metadata: Metadata = {
   title: "About",
-  description: "Space Works Events is the open-source event platform from Space Works, built for free events run by maker communities: the build night, the workshop, the meetup.",
+  description: "Space Works Events is the open-source event platform from Space Works, built for events run by maker communities: the build night, the workshop, the meetup. Free to use, with tickets paid straight to the organiser when they charge.",
 };
 
 export default async function Page() {

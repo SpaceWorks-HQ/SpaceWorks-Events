@@ -5,12 +5,14 @@ A Cloudflare Worker with a Cron Trigger (`* * * * *`). Every minute it:
 1. `GET {APP_URL}/api/health` wakes the app if the Render free instance is
    asleep (cold starts take about 30–60 s; the Worker waits up to 90 s).
 2. `POST {APP_URL}/api/internal/outbox` with `Authorization: Bearer
-   {CRON_SECRET}` sends queued email and runs retention cleanup.
+   {CRON_SECRET}` runs every timed job once (payment holds and reminders,
+   waitlists, event reminders, retention, backup alerts), then sends queued email.
 
-The app also runs this worker in-process while it is awake. Both paths can
-run at once safely, because outbox rows are claimed atomically. The Worker
-covers the time the instance would otherwise sleep, and its once-a-minute
-database query keeps a free Supabase project from pausing.
+While it is awake, the app also sends email within seconds and runs the same
+jobs itself (`SWE_PROCESS_ROLE=all`). Both paths can run at once safely,
+because outbox rows are claimed atomically and every job is safe to repeat.
+The Worker covers the time the instance would otherwise sleep, and its
+once-a-minute database query keeps a free Supabase project from pausing.
 
 This folder is a separate package: it is excluded from the app's TypeScript,
 ESLint, Vitest and Docker build, and its only dependency is `wrangler`.
@@ -35,8 +37,8 @@ It only runs on its schedule.
   every minute. Only status codes are logged, never the secret or response
   bodies.
 - `outbox 404`: `CRON_SECRET` differs from the app's value.
-- `outbox 500`: the app could not run the scheduler (database or SMTP). Check
-  the Render logs and the outbox heartbeat under Super admin.
+- `outbox 500`: the app could not complete the pass (database or SMTP). Check
+  the Render logs and the worker and beat heartbeats under Super admin.
 - After rotating the app's `CRON_SECRET`, run `wrangler secret put
   CRON_SECRET` again.
 - `npm run check` bundles the Worker without deploying it (`wrangler deploy

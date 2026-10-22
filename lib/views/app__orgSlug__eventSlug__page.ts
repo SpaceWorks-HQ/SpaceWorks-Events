@@ -6,7 +6,11 @@ import { prisma } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { isEventPublished, shouldIndexPublicEvent } from "@/lib/eventVisibility";
 import { resolvePublicEventAccess } from "@/lib/publicEventAccess";
-import { countConfirmedForEvent } from "@/lib/rsvpCapacity";
+import { countConfirmedForEvent, countHeldForEvent } from "@/lib/rsvpCapacity";
+import { listPublicTicketTypes } from "@/lib/payments/tickets";
+import { DEFAULT_CURRENCY } from "@/lib/payments/money";
+import { canAcceptOnlinePayments } from "@/lib/payments/settings";
+import { ticketingInfo, viewerIsMember } from "@/lib/payments/ticketing";
 type Props = { params: Promise<{ orgSlug: string; eventSlug: string; }>; };
 export async function loadRouteMetadata({ params }: Props): Promise<Metadata> {
   const { orgSlug, eventSlug } = await params;
@@ -85,6 +89,8 @@ export async function loadEventView({ params }: Props) {
     form,
     confirmed,
     viewerRsvp,
+    held,
+    tickets,
   ] = await Promise.all([
     prisma.eventPage.findUnique({
       where: { eventId: event.id },
@@ -134,6 +140,14 @@ export async function loadEventView({ params }: Props) {
         })
         : null,
     ),
+    countHeldForEvent(event.id),
+    // Members also see members-only tickets.
+    viewerIsMember(org.id).then((member) => listPublicTicketTypes({ eventId: event.id }, event.currency ?? DEFAULT_CURRENCY, new Date(), { member })),
   ]);
-  return { org, preview, event: eventForView(event), page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp };
+  // What the form needs beyond the tickets: codes, add-ons, the refund terms.
+  const ticketing = await ticketingInfo({ eventId: event.id }, tickets, event.currency ?? DEFAULT_CURRENCY, event);
+  // Paid tickets are on sale only while the installation allows it and the
+  // organisation's account is fully connected.
+  const paidSalesOpen = ticketing?.sellsPaid ? await canAcceptOnlinePayments(org.id) : false;
+  return { org, preview, event: eventForView(event), page, highlights, sessions, speakers, sponsors, faqs, resources, form, confirmed, viewerRsvp, held, tickets, paidSalesOpen, ticketing };
 }

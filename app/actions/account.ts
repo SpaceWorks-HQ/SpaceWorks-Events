@@ -7,9 +7,12 @@ import { newPasswordSchema } from "@/lib/passwordPolicy";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/permissions";
+import { isSuperAdminEmail, SUPER_ADMIN_PASSWORD_HINT } from "@/lib/superAdminEmail";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPassword } from "@/lib/pwnedPasswords";
 import { hasRecentAuthentication } from "@/lib/reauth";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
 import { recordAuditEvent } from "@/lib/audit";
+import { noticeEach } from "@/lib/notices";
 import { flattenZodErrors } from "./utils";
 import type { ActionResult } from "./org";
 import { isUploadedImageUrl, isUserUploadUrl } from "@/lib/uploadUrl";
@@ -107,6 +110,7 @@ export async function updateAccountPassword(
       ok: false,
       error: "An email address is required to set a password.",
     };
+  if (isSuperAdminEmail(user.email)) return { ok: false, error: SUPER_ADMIN_PASSWORD_HINT };
 
   if (user.passwordHash) {
     if (!(await hasRecentAuthentication())) return { ok: false, error: "Sign in again before changing your password." };
@@ -124,6 +128,7 @@ export async function updateAccountPassword(
     };
   }
 
+  if (await isBreachedPassword(parsed.data.newPassword)) return { ok: false, error: BREACHED_PASSWORD_MESSAGE };
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const changed = await prisma.$transaction(async (tx) => {
     const updated = await tx.user.updateMany({
@@ -143,6 +148,9 @@ export async function updateAccountPassword(
         targetId: session.user.id,
       },
     });
+    await noticeEach(tx, [user.email!], user.passwordHash
+      ? { subject: "Your password was changed", lines: ["The password for your Space Works Events account was just changed, and every other session was signed out.", "If this wasn't you, reset your password from the sign-in page straight away and contact your administrator."] }
+      : { subject: "A password was added to your account", lines: ["You can now sign in to Space Works Events with your email address and password, as well as with Google.", "If this wasn't you, reset your password from the sign-in page straight away and contact your administrator."] });
     return true;
   });
   if (!changed) return { ok: false, error: "Account security changed. Sign in again and retry." };

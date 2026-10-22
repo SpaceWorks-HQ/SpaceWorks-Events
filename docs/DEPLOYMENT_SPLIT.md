@@ -11,7 +11,7 @@ thin action/API proxies, so this is a Next.js deployment rather than a static SP
 | Host | Services |
 | --- | --- |
 | Netlify, `events.example.com` | Shared UI, server rendering, browser-origin API proxy, thin Server Action wrappers |
-| VPS, `api.events.example.com` | Guarded view/action API, Auth.js persistence, HTTP APIs, jobs and scheduler |
+| VPS, `api.events.example.com` | Guarded view/action API, Auth.js persistence, HTTP APIs, the email worker and the beat (timed jobs) |
 | VPS private Docker network | TLS PostgreSQL, TLS/password Redis, private Silo S3 storage |
 | External operator services | Authenticated SMTP relay, monitoring, encrypted off-server backup/PITR |
 
@@ -105,9 +105,9 @@ Auth.js secret with Netlify. MFA and station cookies follow the same rule.
 
 Uploads, controlled image delivery, exports, PDFs and normal APIs use frontend
 `/api/*`. Mutating browser calls require the canonical Origin; machine API calls
-retain their tenant-bound bearer validation. The proxy blocks internal scheduler,
-readiness and private peer routes. The scheduler calls the VPS internally every
-minute; it never depends on a Netlify scheduled function.
+retain their tenant-bound bearer validation. The proxy blocks the internal outbox,
+readiness and private peer routes. The worker and the beat run on the VPS; they
+never depend on a Netlify scheduled function.
 
 Ticket state streams connect straight to the API hostname so long-lived SSE does
 not occupy a Netlify function. Only ticket status/events routes return CORS for
@@ -120,11 +120,11 @@ back through the frontend API proxy. Preserve streaming flushes in Caddy/CDNs.
 Before accepting registrations, verify public HTTPS on both hosts and run the
 VPS checks. Then exercise these flows through the frontend domain:
 
-1. Create and verify an account, sign in/out, password reset, session revocation and MFA. Confirm cookies are HttpOnly and Secure in HTTPS production.
+1. Create and verify an account, sign in/out, password reset, session revocation and MFA, including the emailed code for a new browser and the staff authenticator check on `/verify-mfa`. Confirm cookies are HttpOnly and Secure in HTTPS production.
 2. Create an organisation and event, edit settings, upload a cover and badge image, and verify another tenant cannot read or mutate them.
 3. Publish a page, RSVP, open/download its ticket and scan it from a staff session. Confirm the attendee sees live check-in without reloading, including after reconnect.
 4. Send a real verification/broadcast email; check canonical frontend links, private image delivery and the independent VPS outbox heartbeat.
-5. Exercise invitation, feedback/certificate, exports and super-admin MFA navigation; direct private peer/readiness/scheduler paths on the frontend must return 404.
+5. Exercise invitation, feedback/certificate, exports and super-admin navigation; direct private peer/readiness/scheduler paths on the frontend must return 404.
 6. Complete the off-server backup and isolated restore drill in the VPS guide.
 
 Run `npm run test:e2e:split` for two actual Next.js production servers with

@@ -1,5 +1,5 @@
 import { requireSuperAdminMfa } from "@/lib/permissions";
-import { EventStatus } from "@prisma/client";
+import { EventStatus, RsvpStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ACTIVITY_SERIES, loadDailyActivity, loadTopOrganisationsByRsvps } from "@/lib/superAdminData";
 import { fillDailySeries, windowStart, DAY_MS } from "@/lib/superAdminInsights";
@@ -21,7 +21,7 @@ export async function loadSuperAdminActivityView() {
       where: { status: EventStatus.PUBLISHED, startDateTime: { gte: now, lt: nextWeek } },
       orderBy: { startDateTime: "asc" },
       take: 15,
-      select: { id: true, title: true, startDateTime: true, capacity: true, organisation: { select: { id: true, name: true } }, _count: { select: { rsvps: true } } },
+      select: { id: true, title: true, startDateTime: true, capacity: true, organisation: { select: { id: true, name: true } }, _count: { select: { rsvps: { where: { status: RsvpStatus.CONFIRMED } } } } },
     }),
     prisma.organisation.count({ where: { events: { none: {} }, eventSeries: { none: {} } } }),
     prisma.organisation.findMany({

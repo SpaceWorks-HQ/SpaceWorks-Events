@@ -8,10 +8,11 @@ without Kubernetes, use the
 
 The chart uses one image, `ghcr.io/spaceworks-hq/spaceworks-events-backend`,
 which every green build of `main` publishes (see
-[Releases and container images](../../docs/CONTAINER_IMAGES.md)). The
-Deployment runs it as the application and the migration Job runs its `migrate`
-role. Use an immutable version tag such as `0.9.1-main.42.a1b2c3d4e5f6`. The
-Secret must provide `NEXT_PUBLIC_BASE_URL` and the installation's own
+[Releases and container images](../../docs/CONTAINER_IMAGES.md)). The web
+Deployment runs it as the application, the worker and beat Deployments run its
+`worker` and `beat` roles, and the migration Job runs its `migrate` role. Use
+an immutable version tag such as `0.9.1-main.42.a1b2c3d4e5f6`. The Secret must
+provide `NEXT_PUBLIC_BASE_URL` and the installation's own
 `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`; the container applies the origin at start
 and refuses to start without the key.
 
@@ -59,3 +60,20 @@ helm upgrade --install spaceworks-events charts/spaceworks-events --namespace sw
 ```
 
 The migration Job is a Helm pre-install/pre-upgrade hook. A failed migration blocks the application rollout.
+
+## Email worker and beat
+
+With `background.enabled: true` (the default), the chart adds two Deployments
+from the same image and Secret:
+
+- **worker** (`background.worker`): sends queued email within seconds.
+- **beat** (`background.beat`): runs the timed jobs (payment holds and
+  reminders, waitlists, event reminders, retention, backup alerts) and queues their email for the worker.
+  It is replaced with the `Recreate` strategy, so only one runs at a time.
+
+Each has its own `replicaCount` and `resources`. Their pods listen on loopback
+only, have no Service and are probed from inside the container. The web pods
+then get `SWE_PROCESS_ROLE=web` and only serve requests. Set
+`background.enabled: false` to run everything in the web pods
+(`SWE_PROCESS_ROLE=all`). Check the worker and beat heartbeats under Super
+admin → Operations after each rollout.

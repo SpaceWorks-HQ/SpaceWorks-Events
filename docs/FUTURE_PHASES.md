@@ -31,7 +31,6 @@ This page contains only work that is not currently implemented. Current behavior
 
 ## Scale and reliability
 
-- Dedicated asynchronous workers instead of scheduler-driven HTTP batches.
 - Load and soak testing with documented capacity targets.
 - Queue-depth, latency, object-store, and email-delivery service-level objectives.
 - Multi-region/read-replica planning if real traffic requires it.

@@ -1,11 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
-import { ChevronDown, Copy, MoreHorizontal, Pencil, RotateCcw, Trash2, UserX } from "lucide-react";
+import { ChevronDown, Copy, CreditCard, MoreHorizontal, Pencil, RotateCcw, Trash2, UserX } from "lucide-react";
 import { Button, IconButton } from "@/components/ui/button";
 import { Avatar, Chip, type ChipTone } from "@/components/ui/display";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@/components/ui/menu";
 import type { AttendeeRow } from "@/components/attendees/types";
+import { orderPaymentChip } from "@/components/attendees/PaymentDialog";
 import { cn } from "@/lib/cn";
 import { GUEST_STATUS_LABELS, describeCheckIn, describeGuestWhen, guestDisplayName, guestEmail } from "./guestList";
 
@@ -14,6 +15,7 @@ const CHIP_TONES: Record<AttendeeRow["status"], ChipTone> = {
   WAITLISTED: "warning",
   PENDING_APPROVAL: "warning",
   REJECTED: "danger",
+  PENDING_PAYMENT: "warning",
 };
 
 const AVATAR_TONES: Record<AttendeeRow["status"], "success" | "warning" | "neutral"> = {
@@ -21,17 +23,22 @@ const AVATAR_TONES: Record<AttendeeRow["status"], "success" | "warning" | "neutr
   WAITLISTED: "neutral",
   PENDING_APPROVAL: "warning",
   REJECTED: "neutral",
+  PENDING_PAYMENT: "warning",
 };
 
 export type GuestRowActions = {
   approve: (guest: AttendeeRow) => void;
   decline: (guest: AttendeeRow) => void;
   promote: (guest: AttendeeRow) => void;
+  /** Reverses a decline: confirmed, waitlisted, or (paid) sent a payment link. */
+  reaccept: (guest: AttendeeRow) => void;
   copyTicket: (guest: AttendeeRow) => void;
   edit: (guest: AttendeeRow) => void;
   /** Omitted where no undo-check-in action exists for the target (series dates). */
   undoCheckIn?: (guest: AttendeeRow) => void;
   remove: (guest: AttendeeRow) => void;
+  /** Paid tickets: refunds, payments taken in person, complimentary tickets and payment links. */
+  payment?: (guest: AttendeeRow) => void;
 };
 
 export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { guest: AttendeeRow; timeZone: string; now: string; busy: boolean; disabled: boolean; actions: GuestRowActions }) {
@@ -42,6 +49,7 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
   const when = describeGuestWhen(guest, timeZone, now);
   const checkIn = describeCheckIn(guest, timeZone, now);
   const answers = guest.answers ?? [];
+  const payment = orderPaymentChip(guest.order);
 
   return (
     <li className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2.5 rounded-xl border border-line bg-panel px-4 py-3">
@@ -55,6 +63,7 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
         <Chip size="sm" tone={CHIP_TONES[guest.status]}>{GUEST_STATUS_LABELS[guest.status]}</Chip>
+        {payment ? <Chip size="sm" tone={payment.tone}>{payment.label}</Chip> : null}
         <span className={cn("text-caption sm:w-[150px]", guest.checkedInAt ? "font-semibold text-success-fg" : "text-ink-muted")}>
           {checkIn ?? <span aria-label="Not applicable">—</span>}
         </span>
@@ -87,6 +96,11 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
             Give a spot
           </Button>
         ) : null}
+        {guest.status === "REJECTED" ? (
+          <Button size="sm" variant="secondary" disabled={disabled} loading={busy} onClick={() => actions.reaccept(guest)} aria-label={`Re-accept ${name}`}>
+            Re-accept
+          </Button>
+        ) : null}
         <Menu>
           <MenuTrigger asChild>
             <IconButton size="sm" variant="secondary" label={`More actions for ${name}`} disabled={disabled}>
@@ -97,6 +111,11 @@ export function GuestRow({ guest, timeZone, now, busy, disabled, actions }: { gu
             <MenuItem icon={<Copy />} onSelect={() => actions.copyTicket(guest)}>
               Copy ticket link
             </MenuItem>
+            {payment && actions.payment ? (
+              <MenuItem icon={<CreditCard />} onSelect={() => actions.payment?.(guest)}>
+                Payment
+              </MenuItem>
+            ) : null}
             <MenuItem icon={<Pencil />} onSelect={() => actions.edit(guest)}>
               {guest.user ? "View registration" : "Edit registration or transfer ticket"}
             </MenuItem>

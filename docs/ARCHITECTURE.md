@@ -54,15 +54,17 @@ External applications authenticate under `/api/v1` with tenant-bound `ApiClient`
 
 `Organisation` is the tenant boundary. Events, series, invitations, assets, and audit events resolve through an organisation. `Membership` connects a user to a tenant with an owner, admin, or member role. Permission helpers and action-specific checks enforce access before mutation.
 
+Organisation staff (any membership or event/series co-organiser grant) must also pass an authenticator check in the current session (`lib/staffMfa.ts`). Staff pages redirect to `/account/security?mfa=required` or `/verify-mfa`, and the staff checks in actions (`getMembership`, `canAccessEvent`, `canViewEventDashboard`) return no access until then. The check is either a TOTP code at the password sign-in (carried in the session token) or the signed `swe.mfa-proof.v1` cookie set by `/verify-mfa` (`lib/mfaProof.ts`). Password sign-in protections (address and account failure limits, emailed new-device codes, new-sign-in alerts) live in `lib/loginSecurity.ts`; the breached-password check in `lib/pwnedPasswords.ts`.
+
 The super-admin boundary is separate: access requires an authenticated email matching `SUPER_ADMIN_EMAIL`, and unauthorized requests behave as not found.
 
 ## Main data areas
 
-- Identity: `User`, `Account`, `Session`, and `VerificationToken`.
+- Identity: `User`, `Account`, `Session`, `VerificationToken` (also holds hashed sign-in codes), and `UserDevice` (a SHA-256 of each browser's random id, a short browser description, and the last IP).
 - Tenancy: `Organisation`, `Membership`, and `OrganisationInvite`.
 - Events: `Event` (including `listedPublicly` for listed approval-required events and an optional unique `shortCode`), `EventInvite`, `EventSeries`, `SeriesInvite`, and `EventInstance`.
 - Registration: `RSVP`, registration forms, fields (with help text, placeholder, and validated `settings` JSON), and typed answers.
-- Communications: `EventBroadcast` records each organiser email, including its chosen `design`; each recipient is a separate `OutboxMessage`.
+- Communications: `EventBroadcast` records each organiser email, including its chosen `design`; each recipient is a separate `OutboxMessage`. `EventBroadcastDraft` holds one organiser's unsent Emails-tab composer per event (unique on event and user, private to that user, cascading with both); the dashboard send deletes it in the send transaction. The draft actions (`app/actions/broadcasts.ts`, bodies in `app/actions/broadcasts/drafts.ts`) share the send's access check, and the Emails view reads the draft through the same helper.
 - Feedback: feedback forms, fields, responses, typed answers, and optional certificate linkage.
 - Operations: `OutboxMessage`, `OperationalHeartbeat`, `AuditEvent`, `CheckInEvent`, `RsvpDeletionUndo`, and `Asset`.
 - Instance administration: the singleton `InstanceSetting` holds the new-account policy plus encrypted SMTP and Google SSO secrets and non-secret backup posture. It is readable and mutable only through the super-admin boundary.
@@ -72,7 +74,12 @@ Refer to `prisma/schema.prisma` for the authoritative fields, constraints, index
 
 ## Background and scheduled work
 
-Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. Every self-hosted Node.js instance starts a singleton one-minute worker that claims and sends a batch, retries failures, purges expired operational records, and updates a one-row `OperationalHeartbeat`. Queue row claims keep concurrent replicas safe. The protected `POST /api/internal/outbox` endpoint remains available as an external scheduler or recovery trigger.
+Request handlers enqueue transactional messages in `OutboxMessage`; they do not wait for SMTP delivery. `lib/outbox.ts` is a facade over `lib/outbox/` (`payloads`, `enqueue`, `context`, `deliver`). Background work runs in two roles, both in `lib/outboxWorker.ts` and selected per process by `SWE_PROCESS_ROLE`:
+
+- The **worker** polls the outbox every `OUTBOX_POLL_MS` (default 3 seconds), claims and sends batches of 50 until the queue is empty, and retries failures. It records the `outbox-scheduler` heartbeat.
+- The **beat** checks every 15 seconds which timed jobs are due and runs them: payment maintenance (hold expiry, refunds, payment-link reminders) and waitlist filling every minute, event reminders (a day before each event or series date, once per guest) and backup alerts every 5 minutes, and the retention purge every hour. Its jobs queue email for the worker. It records the `beat` heartbeat.
+
+With the default role, `all`, one process serves requests and runs both loops, as the Render free instance does. The VPS stack and the Helm chart run `web` containers that only serve requests, beside separate `worker` and `beat` containers from the same backend image. Queue row claims keep concurrent workers safe, and every timed job is safe to run twice. Heartbeats live in `OperationalHeartbeat`; the super-admin Operations page treats either as stale after 3 minutes. The protected `POST /api/internal/outbox` endpoint runs every timed job once and then drains the queue, for cron services (the Cloudflare Worker on free hosting) and manual recovery.
 
 ## Realtime ticket check-in
 
@@ -80,7 +87,7 @@ When an RSVP transitions to checked in, `commitCheckInProjection` (`lib/checkInM
 
 ## Instance service configuration
 
-Super-admins with a current TOTP step-up can configure SMTP, Google SSO, and backup posture at `/super-admin/settings`. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
+The super admin can configure SMTP, Google SSO, backup posture, and an operational alerts webhook (`lib/opsAlerts.ts`, fed by `instrumentation.ts`) at `/super-admin/settings`. These are read from PostgreSQL per send or sign-in; every process that serves requests or runs the worker or beat forwards its own alerts. Instance-managed values take precedence over legacy environment fallbacks. SMTP and Google client secrets are encrypted at rest with an AES-GCM key domain-separated from `MFA_ENCRYPTION_KEY`; the application never renders stored secrets back to the browser. Backup posture is display-only—backup execution, encryption, retention enforcement, and restore access remain infrastructure responsibilities.
 
 ## Storage
 
@@ -94,7 +101,7 @@ This per-request nonce makes application pages dynamically rendered. There is de
 
 ## Deployment shape
 
-`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, scheduling, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage, Caddy and the recovery scheduler alongside the application; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The default deployment shares one Next.js runtime. The [split deployment](DEPLOYMENT_SPLIT.md) builds a separate rendering workspace for Netlify; guarded view readers, authentication persistence, domain actions, HTTP APIs and jobs run on the VPS.
+`next.config.ts` produces standalone output. The Docker image copies the standalone server, public assets, static chunks, and Prisma migrations into a non-root runtime image. PostgreSQL, Redis, S3, SMTP, TLS termination, monitoring, and backup services are separate production dependencies. The [single-VPS Compose stack](DEPLOYMENT_VPS.md) bundles PostgreSQL, Redis, private Silo storage and Caddy alongside the application, its email worker and its beat; SMTP delivery, monitoring and off-server backup/PITR remain operator-managed. The default deployment shares one Next.js runtime. The [split deployment](DEPLOYMENT_SPLIT.md) builds a separate rendering workspace for Netlify; guarded view readers, authentication persistence, domain actions, HTTP APIs and jobs run on the VPS.
 
 
 ### Separate rendering workspace

@@ -2,8 +2,9 @@ import { EventPermission } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { recordAuditEvent } from "@/lib/audit";
 import { buildCsv } from "@/lib/csv";
+import { minorToDecimalString } from "@/lib/payments/money";
 import { prisma } from "@/lib/db";
-import { getMembership, isOrgAdmin } from "@/lib/permissions";
+import { canAccessEvent } from "@/lib/eventAccess";
 import { getRequestOrigin } from "@/lib/publicUrl";
 
 export const dynamic = "force-dynamic";
@@ -58,12 +59,9 @@ export async function GET(_request: Request, context: RouteContext) {
   });
   if (!event) return missing();
 
-  const membership = await getMembership(session.user.id, event.organisationId);
-  const collaborator = membership ? null : await prisma.eventCollaborator.findFirst({
-    where: { eventId: event.id, userId: session.user.id, permissions: { has: EventPermission.MANAGE_REGISTRATIONS } },
-    select: { id: true },
-  });
-  if ((!membership || !isOrgAdmin(membership.role)) && !collaborator) return missing();
+  // Organisation owners/admins, or anyone (member or not) holding the exact
+  // MANAGE_REGISTRATIONS grant on this event, as in lib/eventDashboard/capabilities.ts.
+  if (!(await canAccessEvent({ userId: session.user.id, organisationId: event.organisationId, eventId: event.id, permission: EventPermission.MANAGE_REGISTRATIONS }))) return missing();
 
   const fields = event.registrationForm?.fields ?? [];
   const origin = await getRequestOrigin();
@@ -79,7 +77,7 @@ export async function GET(_request: Request, context: RouteContext) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        controller.enqueue(encoder.encode(`\uFEFF${buildCsv([["Name", "Email", "Status", "Registration Date", "Checked In At", "Ticket URL", ...fields.map((field) => field.label)]])}\n`));
+        controller.enqueue(encoder.encode(`\uFEFF${buildCsv([["Name", "Email", "Status", "Registration Date", "Checked In At", "Ticket URL", "Ticket", "Order", "Order status", "Order total", ...fields.map((field) => field.label)]])}\n`));
         let cursor: string | undefined;
 
         while (true) {
@@ -90,6 +88,8 @@ export async function GET(_request: Request, context: RouteContext) {
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: {
               user: { select: { name: true, email: true } },
+              ticketType: { select: { name: true } },
+              order: { select: { reference: true, status: true, totalMinor: true, currency: true } },
               answers: { select: { fieldId: true, valueText: true, valueBool: true, valueNumber: true, valueDate: true } },
             },
           });
@@ -104,6 +104,10 @@ export async function GET(_request: Request, context: RouteContext) {
               rsvp.createdAt.toISOString(),
               rsvp.checkedInAt?.toISOString() ?? "",
               `${origin}/ticket/${rsvp.checkInToken}`,
+              rsvp.ticketType?.name ?? "",
+              rsvp.order?.reference ?? "",
+              rsvp.order?.status ?? "",
+              rsvp.order ? `${rsvp.order.currency} ${minorToDecimalString(rsvp.order.totalMinor, rsvp.order.currency)}` : "",
               ...fields.map((field) => answers.get(field.id) ?? ""),
             ];
           });

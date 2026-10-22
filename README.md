@@ -23,8 +23,9 @@
 **Space Works Events is a free, open-source event platform from Space Works for maker and community
 events.** Publish an event page, take registrations, send live QR tickets, check people in at the door,
 print ID cards, run a member programme and follow up with feedback and certificates, all from one
-self-hosted app you control. It's for free events only: no payments, no ticket sales, no ads and no
-third-party trackers, and your guests' data stays in your own database. It's built on
+self-hosted app you control. Events are free by default; when you charge, tickets are paid straight to
+your own Razorpay or Stripe account with no platform fee. No ads, no third-party trackers, and your
+guests' data stays in your own database. It's built on
 [Yuyu](https://github.com/twilighty-abhi/yuyu) by Abhiram N J (see [Credits](#credits)).
 
 ## What you can do
@@ -43,6 +44,12 @@ Grouped the way an organiser's week actually goes.
 - Custom registration forms with ten question types, help text and "show only if" logic.
 - Capacity limits, waitlists and approvals, with undo when you remove someone by mistake.
 - Confirmation emails with a calendar invite, sent through a durable outbox.
+
+### Sell tickets (optional)
+
+- **Your own Razorpay or Stripe account**: buyers pay on the provider's page and the money goes straight to you, with no platform fee.
+- Ticket types with fixed or pay-what-you-want prices, group tickets, extras, promo codes, access codes, members-only tickets and series passes.
+- Refund policies, refunds and transfers, pay-at-the-desk, PDF receipts, chargeback alerts, and money reports with an orders CSV. See [Paid tickets](docs/PAYMENTS.md).
 
 ### Tickets and the door
 
@@ -72,7 +79,9 @@ Grouped the way an organiser's week actually goes.
 
 ### Run it safely
 
-- A separate **super admin** area behind authenticator-app **MFA** step-up, with instance settings and read-only insights.
+- Organisation staff must use an authenticator app (**MFA**), checked each session.
+- Sign-in protections: failure limits, an emailed code for a new device, new-sign-in alerts, and a breached-password check.
+- A separate **super admin** area, whose password is set only from the server, with instance settings and read-only insights.
 - Organisation isolation, role checks, audit events, rate limits, CSP nonces and private object storage.
 - A tenant-bound **machine API** with scoped, rotating credentials. See [Machine API v1](docs/API.md).
 - Personal data export, light and dark modes, and accessible defaults throughout.
@@ -117,7 +126,10 @@ The full list lives in [Features](docs/FEATURES.md).
       <img src="docs/readme/screens/member-id-wallet-dark.webp" alt="A member's ID card in the account wallet, in dark mode" />
       <p><strong>ID wallet, dark mode.</strong> Tilt it, flip it, verify it.</p>
     </td>
-    <td width="50%" valign="top"></td>
+    <td width="50%" valign="top">
+      <img src="docs/readme/screens/event-report.webp" alt="An event's analytics: places, waitlist and turnout, and the funnel from sign-up through check-in to feedback, with a PDF report download" />
+      <p><strong>Event report.</strong> From sign-up to thank-you, with a PDF to share.</p>
+    </td>
   </tr>
 </table>
 
@@ -129,9 +141,9 @@ database migrations and operator tools) and a **frontend** image (the website).
 The production Docker Compose stack runs them with **PostgreSQL 16**,
 **Redis 7**, private **[Silo](https://github.com/pgsty/silo)** object storage (the
 maintained, S3-compatible fork of the archived MinIO) for images and files,
-automatic public HTTPS with Caddy, database migrations and an email-queue
-scheduler. Only a domain and an authenticated SMTP relay are external; Render,
-Supabase, Upstash and Cloudflare are optional hosting choices.
+automatic public HTTPS with Caddy, database migrations, an email worker and a
+beat for timed jobs. Only a domain and an authenticated SMTP relay are external;
+Render, Supabase, Upstash and Cloudflare are optional hosting choices.
 
 ### Install in one line
 
@@ -229,8 +241,8 @@ For a Docker app with managed dependencies, use the
 ## Run it for free
 
 The optional cloud production setup runs on free plans. One Docker service on Render serves the app;
-everything else is a managed free tier, and a Cloudflare Worker keeps the instance awake and sends the
-email queue every minute.
+everything else is a managed free tier, and a Cloudflare Worker calls the app every minute to keep the
+instance awake, run the timed jobs and send the email queue.
 
 ```mermaid
 flowchart LR
@@ -364,7 +376,7 @@ Bug reports, ideas and pull requests are all welcome.
   not in a public issue.
 
 Read the [contributing guide](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before your first pull request.
-Contributions that add payments, ticket sales, ads or trackers won't be accepted.
+Contributions that add ads, third-party trackers or a platform cut of ticket money won't be accepted.
 
 ## Credits
 

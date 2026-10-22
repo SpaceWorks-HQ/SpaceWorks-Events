@@ -33,6 +33,7 @@ export const GUEST_STATUS_LABELS: Record<RsvpStatus, string> = {
   WAITLISTED: "Waitlist",
   PENDING_APPROVAL: "To approve",
   REJECTED: "Declined",
+  PENDING_PAYMENT: "Unpaid",
 };
 
 export function matchesGuestFilter(guest: GuestLike, filter: GuestStatusFilter) {
@@ -89,6 +90,7 @@ const WHEN_VERB: Record<RsvpStatus, string> = {
   WAITLISTED: "joined waitlist",
   PENDING_APPROVAL: "asked",
   REJECTED: "asked",
+  PENDING_PAYMENT: "started paying",
 };
 
 /** "asked 2 hours ago", "registered yesterday", "joined waitlist on 13 Oct 2026". */

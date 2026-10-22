@@ -2,12 +2,13 @@ import "server-only";
 
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { EventPermission, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { getRequestOrigin } from "@/lib/publicUrl";
 import { isOrgAdmin, requireOrgDashboardAccess } from "@/lib/permissions";
 import { eventForView } from "@/lib/frontend/eventView";
 import { canViewEventDashboard } from "@/lib/eventAccess";
+import { eventCapabilities, type EventCapabilities } from "@/lib/eventDashboard/capabilities";
 
 /*
  * Shared context for the event dashboard (app/dashboard/[orgSlug]/event/[eventId]).
@@ -28,17 +29,8 @@ export const eventDashboardInclude = {
 type DashboardEventRecord = Prisma.EventGetPayload<{ include: typeof eventDashboardInclude; }>;
 export type DashboardEvent = Omit<DashboardEventRecord, "checkInStationPinHash" | "checkInStationPinEncrypted" | "checkInStationSecretVersion"> & { stationEnabled: boolean; };
 
-export type EventDashboardPermissions = {
-  /** Organisation OWNER/ADMIN. */
-  isAdmin: boolean;
-  /** RSVP lifecycle actions are organisation-admin operations (matches the server actions). */
-  canManageRegistrations: boolean;
-  canManageInvitations: boolean;
-  canCheckIn: boolean;
-  canEditDetails: boolean;
-  canManageSchedule: boolean;
-  canManageCollaborators: boolean;
-};
+/** What the viewer may see and do; computed once by `eventCapabilities` (lib/eventDashboard/capabilities.ts). */
+export type EventDashboardPermissions = EventCapabilities;
 
 export type EventDashboardContext = {
   organisation: { id: string; slug: string; name: string; };
@@ -65,7 +57,6 @@ export const loadEventDashboard = cache(async (orgSlug: string, eventId: string)
   const grant = isAdmin
     ? null
     : await prisma.eventCollaborator.findFirst({ where: { eventId: event.id, userId: access.userId }, select: { permissions: true } });
-  const has = (permission: EventPermission) => isAdmin || Boolean(grant?.permissions.includes(permission));
 
   return {
     organisation: { id: organisation.id, slug: organisation.slug, name: organisation.name },
@@ -73,14 +64,6 @@ export const loadEventDashboard = cache(async (orgSlug: string, eventId: string)
     userId: access.userId,
     origin: await getRequestOrigin(),
     now: new Date(),
-    permissions: {
-      isAdmin,
-      canManageRegistrations: isAdmin,
-      canManageInvitations: has(EventPermission.MANAGE_INVITATIONS),
-      canCheckIn: has(EventPermission.CHECK_IN),
-      canEditDetails: isAdmin,
-      canManageSchedule: has(EventPermission.PUBLISH_AND_SCHEDULE),
-      canManageCollaborators: isAdmin,
-    },
+    permissions: eventCapabilities(access.membership?.role ?? null, grant?.permissions ?? []),
   };
 });

@@ -5,7 +5,11 @@ metadata:
   labels:
     {{- include "spaceworks-events.labels" . | nindent 4 }}
 spec:
+  {{- if not .Values.autoscaling.enabled }}
+  # With autoscaling the HPA owns the replica count; setting it here would reset
+  # the HPA's choice on every upgrade.
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "spaceworks-events.selectorLabels" . | nindent 6 }}
@@ -44,6 +48,9 @@ spec:
               value: "3000"
             - name: HOSTNAME
               value: 0.0.0.0
+            # With the worker and beat Deployments, the web pods only serve requests.
+            - name: SWE_PROCESS_ROLE
+              value: {{ ternary "web" "all" .Values.background.enabled | quote }}
           envFrom:
             - secretRef:
                 name: {{ required "existingSecret is required" .Values.existingSecret }}

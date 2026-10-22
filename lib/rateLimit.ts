@@ -16,6 +16,7 @@ export type Bucket =
   | "invite"
   | "broadcast"
   | "broadcastTest"
+  | "broadcastDraft"
   | "checkin"
   | "checkinStationPin"
   | "search"
@@ -24,7 +25,15 @@ export type Bucket =
   | "dataExport"
   | "ticketStatus"
   | "ticketEvents"
-  | "shortLink";
+  | "shortLink"
+  | "paymentWebhook"
+  | "loginFailureIp"
+  | "loginFailureAccount"
+  | "loginCode"
+  | "paymentSettings"
+  | "paymentStatus"
+  | "ticketCheckout"
+  | "clientError";
 
 const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   global: { max: 300, windowMs: 60_000 },
@@ -42,6 +51,9 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   broadcast: { max: 10, windowMs: 60 * 60_000 },
   // Tests only reach the organiser's own inbox; kept apart so testing never blocks the real send.
   broadcastTest: { max: 20, windowMs: 60 * 60_000 },
+  // Draft autosave and discard in the Emails tab. Saves fire about 1.5s after
+  // typing stops, so a steady writer stays well under this.
+  broadcastDraft: { max: 60, windowMs: 60_000 },
   checkin: { max: 180, windowMs: 60_000 },
   checkinStationPin: { max: 5, windowMs: 60_000 },
   search: { max: 60, windowMs: 60_000 },
@@ -54,6 +66,25 @@ const limits: Record<Bucket, { max: number; windowMs: number; }> = {
   ticketEvents: { max: 60, windowMs: 60_000 },
   // Public short-link lookups. Kept tight so the code space cannot be scanned.
   shortLink: { max: 30, windowMs: 60_000 },
+  // Provider webhooks arrive from a few shared provider addresses, often in
+  // bursts after an outage. Kept out of the global bucket so attendee traffic
+  // can never starve settlement, while still bounding a flood.
+  paymentWebhook: { max: 600, windowMs: 60_000 },
+  // Saving keys and "Test connection" call the provider with the owner's keys.
+  paymentSettings: { max: 30, windowMs: 60 * 60_000 },
+  // Return-page status reads, per order: the webhook is the authority.
+  paymentStatus: { max: 6, windowMs: 60_000 },
+  // Failed sign-ins (counted only, see recordFailure): an address with this
+  // many in an hour is blocked from signing in until the hour is up.
+  loginFailureIp: { max: 20, windowMs: 60 * 60_000 },
+  // An account with this many in 15 minutes needs an emailed code even with the right password.
+  loginFailureAccount: { max: 5, windowMs: 15 * 60_000 },
+  // Sign-in codes emailed to one account.
+  loginCode: { max: 5, windowMs: 60 * 60_000 },
+  // "Pay now" on a pending order or ticket, per IP.
+  ticketCheckout: { max: 20, windowMs: 60_000 },
+  // Browser crash reports forwarded to the operator alert webhook.
+  clientError: { max: 10, windowMs: 60_000 },
 };
 
 // Local fallback store
@@ -187,4 +218,44 @@ export async function checkRateLimitById(bucket: Bucket, id: string): Promise<bo
     if (process.env.NODE_ENV === "production" && !allowTestMemoryFallback()) return false;
     return checkRateLimitMemory(bucket, id);
   }
+}
+
+/**
+ * Failure counters: `recordFailure` counts one, `failureCount` reads without
+ * counting. Over its bucket's `max` within the window means "too many".
+ */
+export async function recordFailure(bucket: Bucket, id: string): Promise<number> {
+  const redis = getRedisClient();
+  const k = keyFor(bucket, id);
+  const { windowMs } = limits[bucket];
+  if (redis) {
+    try {
+      return Number(await redis.eval(
+        "local c = redis.call('INCR', KEYS[1]); if c == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]); end; return c",
+        1, k, String(windowMs),
+      ));
+    } catch {
+      console.warn("[rateLimit] Redis failure count failed");
+    }
+  }
+  checkRateLimitMemory(bucket, id);
+  return memoryStore.get(k)?.count ?? 0;
+}
+
+export async function failureCount(bucket: Bucket, id: string): Promise<number> {
+  const redis = getRedisClient();
+  const k = keyFor(bucket, id);
+  if (redis) {
+    try {
+      return Number(await redis.get(k) ?? 0);
+    } catch {
+      console.warn("[rateLimit] Redis failure read failed");
+    }
+  }
+  const entry = memoryStore.get(k);
+  return entry && Date.now() < entry.resetAt ? entry.count : 0;
+}
+
+export function isOverLimit(bucket: Bucket, count: number) {
+  return count >= limits[bucket].max;
 }

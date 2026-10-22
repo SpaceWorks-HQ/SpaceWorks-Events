@@ -1,8 +1,6 @@
 "use server";
 
 import { EventStatus, RsvpStatus } from "@prisma/client";
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { buildRecurrenceIcs, materializeInstances } from "@/lib/recurrence";
@@ -17,21 +15,11 @@ import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
-
-function revalidateAllSeriesPaths(
-  orgSlug: string,
-  seriesId: string,
-  instanceIds: string[],
-) {
-  revalidatePath(`/dashboard/${orgSlug}`);
-  revalidatePath(`/dashboard/${orgSlug}/series/${seriesId}`);
-  revalidatePath(`/${orgSlug}`);
-  for (const id of instanceIds) {
-    revalidatePath(`/${orgSlug}/i/${id}`);
-  }
-}
+import { hasPaidOrders, peopleWithPlaces } from "@/lib/payments/eventCancellation";
+import { noticeEach, noticeSubject, uniqueEmails } from "@/lib/notices";
+import { cancelOccurrence, setOccurrenceCapacity } from "@/lib/payments/occurrences";
+import { PaymentOperationError } from "@/lib/payments/operations";
+import { cancelDateSchema, capacitySchema, dateAccess, revalidateAllSeriesPaths, revalidatePath } from "./series/helpers";
 
 export async function createEventSeries(
   input: unknown,
@@ -189,7 +177,8 @@ export async function updateEventSeriesMeta(
     if (data.capacity != null) {
       const counts = await tx.rSVP.groupBy({
         by: ["eventInstanceId"],
-        where: { eventInstance: { eventSeriesId: series.id }, status: RsvpStatus.CONFIRMED },
+        // Dates with their own capacity aren't bound by the series one.
+        where: { eventInstance: { eventSeriesId: series.id, capacity: null }, status: RsvpStatus.CONFIRMED },
         _count: { _all: true },
       });
       if (counts.some((row) => row._count._all > data.capacity!)) return false;
@@ -208,6 +197,16 @@ export async function updateEventSeriesMeta(
     return true;
   });
   if (!saved) return { ok: false, error: "Capacity cannot be lower than confirmed attendance for an occurrence." };
+
+  // Cancelling the series cancels each upcoming date: refunds, and an email to everyone on it.
+  if (data.status === EventStatus.CANCELLED && series.status !== EventStatus.CANCELLED) {
+    const upcoming = await prisma.eventInstance.findMany({ where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null }, select: { id: true }, orderBy: { startDateTime: "asc" } });
+    for (const date of upcoming) {
+      await cancelOccurrence({ organisationId: org.id, seriesId: series.id, instanceId: date.id, actorUserId: session.user.id, reason: "The series was cancelled." }).catch((error: unknown) => {
+        if (!(error instanceof PaymentOperationError)) throw error;
+      });
+    }
+  }
 
   await recordAuditEvent({
     action: "EVENT_SERIES_UPDATED",
@@ -262,12 +261,26 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
   });
   if (!series) return { ok: false, error: "Series not found." };
 
+  // Deleting would erase the tickets of people who paid: cancel dates instead,
+  // which refunds them.
+  if (await hasPaidOrders({ eventSeriesId: series.id })) {
+    return { ok: false, error: "People have paid for this series. Cancel its dates instead, which refunds them." };
+  }
+
   const instances = await prisma.eventInstance.findMany({
     where: { eventSeriesId: series.id },
     select: { id: true },
   });
 
-  await prisma.eventSeries.delete({ where: { id: series.id } });
+  await prisma.$transaction(async (tx) => {
+    // People booked on upcoming dates are told the series won't go ahead.
+    if (series.status === EventStatus.PUBLISHED) {
+      const upcoming = await tx.eventInstance.findMany({ where: { eventSeriesId: series.id, endDateTime: { gt: new Date() }, cancelledAt: null }, select: { id: true } });
+      const people = uniqueEmails((await Promise.all(upcoming.map((date) => peopleWithPlaces(tx, { eventInstanceId: date.id })))).flat());
+      await noticeEach(tx, people, { organisationId: org.id, subject: noticeSubject("Cancelled", series.title), lines: [`${series.title} has been cancelled by the organiser, with all its upcoming dates.`] });
+    }
+    await tx.eventSeries.delete({ where: { id: series.id } });
+  });
 
   await recordAuditEvent({
     action: "EVENT_SERIES_DELETED",
@@ -283,4 +296,36 @@ export async function deleteEventSeries(input: unknown): Promise<ActionResult> {
     revalidatePath(`/${org.slug}/i/${i.id}`);
   }
   return { ok: true };
+}
+
+/** One date's own capacity, or null to use the series capacity. */
+export async function setSeriesDateCapacity(input: unknown): Promise<ActionResult> {
+  const parsed = capacitySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a capacity of at least 1, or leave it blank." };
+  const access = await dateAccess(parsed.data.organisationSlug);
+  if ("error" in access) return { ok: false, error: access.error ?? "Organisation not found." };
+  try {
+    await setOccurrenceCapacity({ organisationId: access.org.id, seriesId: parsed.data.eventSeriesId, instanceId: parsed.data.instanceId, capacity: parsed.data.capacity, actorUserId: access.userId });
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    throw error;
+  }
+  revalidateAllSeriesPaths(access.org.slug, parsed.data.eventSeriesId, [parsed.data.instanceId]);
+  return { ok: true };
+}
+
+/** Cancel one date: its orders are refunded (a pass, its share) and everyone on it is emailed. */
+export async function cancelSeriesDate(input: unknown): Promise<ActionResult<{ refunded: number; failed: number; notified: number; }>> {
+  const parsed = cancelDateSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose a date to cancel." };
+  const access = await dateAccess(parsed.data.organisationSlug);
+  if ("error" in access) return { ok: false, error: access.error ?? "Organisation not found." };
+  try {
+    const result = await cancelOccurrence({ organisationId: access.org.id, seriesId: parsed.data.eventSeriesId, instanceId: parsed.data.instanceId, actorUserId: access.userId, reason: parsed.data.reason });
+    revalidateAllSeriesPaths(access.org.slug, parsed.data.eventSeriesId, [parsed.data.instanceId]);
+    return { ok: true, data: { refunded: result.refunded, failed: result.failed, notified: result.notified } };
+  } catch (error) {
+    if (error instanceof PaymentOperationError) return { ok: false, error: error.message };
+    throw error;
+  }
 }

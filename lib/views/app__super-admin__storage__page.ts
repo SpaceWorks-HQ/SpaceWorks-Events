@@ -11,17 +11,23 @@ export async function loadSuperAdminStorageView() {
     const dbRows = await prisma.$queryRaw<Array<{ bytes: bigint; }>>`
       select pg_database_size(current_database()) as bytes
     `;
-    dbSizeBytes = dbRows?.[0]?.bytes ? Number(dbRows[0].bytes) : null;
+    dbSizeBytes = dbRows?.[0]?.bytes != null ? Number(dbRows[0].bytes) : null;
+  } catch {
+    // Some managed Postgres setups restrict size functions; degrade gracefully.
+  }
 
+  try {
+    // relid (an OID) avoids resolving names through search_path, which
+    // can miss tables outside the default schema.
     tableSizes = await prisma.$queryRaw<
       Array<{ table_name: string; total_bytes: bigint; total_pretty: string; }>
     >`
       select
-        relname as table_name,
-        pg_total_relation_size(quote_ident(relname)) as total_bytes,
-        pg_size_pretty(pg_total_relation_size(quote_ident(relname))) as total_pretty
+        case when schemaname = 'public' then relname::text else schemaname || '.' || relname end as table_name,
+        pg_total_relation_size(relid) as total_bytes,
+        pg_size_pretty(pg_total_relation_size(relid)) as total_pretty
       from pg_stat_user_tables
-      order by pg_total_relation_size(quote_ident(relname)) desc
+      order by pg_total_relation_size(relid) desc
       limit 25
     `.then((rows) =>
       rows.map((r) => ({
@@ -47,7 +53,8 @@ export async function loadSuperAdminStorageView() {
     .groupBy({
       by: ["organisationId"],
       _sum: { byteSize: true },
-      where: { organisationId: { not: null }, byteSize: { not: null } },
+      // Only the organisations listed below, so the grouping stays capped.
+      where: { organisationId: { in: perOrgCounts.map((o) => o.id) }, byteSize: { not: null } },
     })
     .then((rows) => {
       const m = new Map<string, number>();

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BadgeCanvas, BadgeFontFaces, elementHeightForMove } from "@/components/checkin/id-card/BadgeCanvas";
-import { FitArea, Inspector, NumberSlider, SaveStatusPill, Section, SwatchGroup, SwitchLine, ToggleField } from "@/components/checkin/id-card/IdCardDesigner";
+import { FitArea, Inspector, SaveStatusPill, Section, SwatchGroup, SwitchLine, ToggleField } from "@/components/checkin/id-card/IdCardDesigner";
 import { ELEMENT_LABELS, SAFE_MARGIN_MM, type BadgeSaveStatus } from "@/components/checkin/id-card/shared";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/choice";
@@ -16,15 +16,12 @@ import {
   layoutFlags,
   layoutForPaper,
   normalizeIdCardPrintSettings,
-  WATERMARK_OPACITY_MAX,
-  WATERMARK_OPACITY_MIN,
   type IdCardLayoutElement,
   type IdCardLayoutFlags,
   type IdCardPrintSettings,
 } from "@/lib/idCardPrint";
 import { BADGE_ACCENT_KEYS, BADGE_BACKGROUND_KEYS, BADGE_TEXT_KEYS, BRAND, resolveBadgePalette } from "@/lib/badge/palette";
-import type { BadgeBranding, IdCardAttendee } from "@/lib/badge/types";
-import type { FieldPlacement, FieldType } from "@/lib/memberIds/core";
+import type { BadgeBranding } from "@/lib/badge/types";
 import {
   applyMemberIdPreset,
   sideSettings,
@@ -34,8 +31,8 @@ import {
   type MemberIdSide,
 } from "@/lib/memberIds/design";
 import { PresetPicker } from "./PresetPicker";
-
-type DesignerField = { key: string; label: string; placement: FieldPlacement; type: FieldType };
+import { samplePerson, type DesignerField } from "./MemberIdDesigner/samplePerson";
+import { WatermarkSection } from "./MemberIdDesigner/WatermarkSection";
 
 const SAVE_DELAY_MS = 900;
 const LABELS = { ...ELEMENT_LABELS, name: "Name", details: "Answers", qr: "Check QR code", header: "Heading", footer: "Footer or note" };
@@ -43,19 +40,6 @@ const TEXT_LIMITS = [["heading", 120], ["badgeLabel", 40], ["footerText", FOOTER
 // Member cards never use the event accent.
 const BACKGROUNDS = BADGE_BACKGROUND_KEYS.filter((key) => key !== "event");
 const ACCENTS = BADGE_ACCENT_KEYS.filter((key) => key !== "event");
-
-function samplePerson(fields: DesignerField[], idPrefix: string): IdCardAttendee {
-  return {
-    displayName: "Priya Raman",
-    email: "priya@example.com",
-    checkInQrToken: "https://example.com/verify/preview",
-    checkInDetails: [],
-    registrationDetails: fields.map((field) => ({ key: field.key, label: field.label, value: field.type === "DATE" ? "14 Feb 1998" : /blood/i.test(field.label) ? "O+" : /role|title|position/i.test(field.label) ? "Volunteer lead" : /dep|team/i.test(field.label) ? "Workshops" : "Sample answer" })),
-    photoUrl: null,
-    idNumber: `${idPrefix}-${new Date().getUTCFullYear()}-0042`,
-    validUntil: "31 Dec 2026",
-  };
-}
 
 /**
  * Front and back designer for a programme's cards. Each side is an ordinary
@@ -302,41 +286,7 @@ export function MemberIdDesigner({
             </p>
           </Section>
 
-          <Section title="Watermark">
-            <SegmentedControl<IdCardPrintSettings["watermark"]["kind"]>
-              ariaLabel="Watermark"
-              size="sm"
-              value={mark.kind}
-              onValueChange={(kind) => update({ watermark: { ...mark, kind } })}
-              options={[{ value: "none", label: "None" }, { value: "text", label: "Text" }, { value: "image", label: "Image" }]}
-              className="self-start"
-            />
-            {mark.kind === "text" ? (
-              <Field label="Watermark text"><Input maxLength={32} value={mark.text} placeholder="MEMBER" onChange={(event) => update({ watermark: { ...mark, text: event.target.value } })} /></Field>
-            ) : null}
-            {mark.kind === "image" ? (
-              <div className="flex flex-col gap-2">
-                <Field label="Watermark image" helperText={branding.watermarkUrl ? "Shared by both sides. Choose a file to replace it." : "A simple mark works best. PNG with transparency, up to 5 MB."}>
-                  <input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={(event) => void uploadWatermark(event.target.files?.[0] ?? null)} className="block w-full text-[14px] text-ink-secondary file:mr-3 file:min-h-11 file:rounded-[10px] file:border file:border-line file:bg-panel file:px-4 file:font-semibold file:text-ink hover:file:bg-muted" />
-                </Field>
-                {branding.watermarkUrl ? <Button size="sm" variant="quiet" className="self-start" disabled={uploading} onClick={() => void uploadWatermark(null)}>Remove image</Button> : null}
-              </div>
-            ) : null}
-            {mark.kind !== "none" ? (
-              <>
-                <NumberSlider label="Strength" unit="%" min={WATERMARK_OPACITY_MIN} max={WATERMARK_OPACITY_MAX} step={1} value={mark.opacityPct} onChange={(opacityPct) => update({ watermark: { ...mark, opacityPct } })} />
-                <SegmentedControl<IdCardPrintSettings["watermark"]["colour"]>
-                  ariaLabel="Watermark colour"
-                  size="sm"
-                  value={mark.colour}
-                  onValueChange={(colour) => update({ watermark: { ...mark, colour } })}
-                  options={[{ value: "accent", label: "Accent colour" }, { value: "text", label: "Text colour" }]}
-                  className="self-start"
-                />
-                {mark.kind === "text" ? <NumberSlider label="Angle" unit="°" min={-60} max={60} step={5} value={mark.angleDeg} onChange={(angleDeg) => update({ watermark: { ...mark, angleDeg } })} /> : null}
-              </>
-            ) : null}
-          </Section>
+          <WatermarkSection mark={mark} branding={branding} uploading={uploading} update={update} uploadWatermark={uploadWatermark} />
         </aside>
 
         <section aria-label="Card preview" className="order-1 flex min-h-[360px] min-w-0 flex-col bg-subtle lg:order-none">

@@ -9,7 +9,6 @@ export async function loadSuperAdminInvitesView() {
       take: 200,
       select: {
         id: true,
-        token: true,
         role: true,
         createdAt: true,
         expiresAt: true,

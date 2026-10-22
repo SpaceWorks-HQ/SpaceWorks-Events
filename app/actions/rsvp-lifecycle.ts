@@ -1,102 +1,18 @@
 "use server";
 
 import { RsvpStatus } from "@prisma/client";
-import { revalidatePath as nextRevalidatePath } from "next/cache";
-import { trackedRevalidation } from "@/lib/frontend/revalidation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { enqueueRsvpStatusNotification } from "@/lib/outbox";
-import { canManageEvents, getMembership } from "@/lib/permissions";
 import { confirmRsvpWithinCapacity } from "@/lib/rsvpCapacity";
 import { rsvpTransitionSchema } from "@/lib/validators";
 import type { ActionResult } from "./org";
 import { flattenZodErrors } from "./utils";
 import { recordAuditEvent } from "@/lib/audit";
 import { isActionRateLimited } from "@/lib/actionRateLimit";
-
-const revalidatePath = trackedRevalidation(nextRevalidatePath);
-
-function revalidateRsvpPaths(params: {
-  orgSlug: string;
-  eventSlug?: string;
-  eventId?: string;
-  eventInstanceId?: string;
-}) {
-  const { orgSlug, eventSlug, eventId, eventInstanceId } = params;
-  revalidatePath(`/${orgSlug}`);
-  revalidatePath(`/dashboard/${orgSlug}`);
-  if (eventSlug && eventId) {
-    revalidatePath(`/${orgSlug}/${eventSlug}`);
-    revalidatePath(`/dashboard/${orgSlug}/event/${eventId}`);
-  }
-  if (eventInstanceId) {
-    revalidatePath(`/${orgSlug}/i/${eventInstanceId}`);
-  }
-}
-
-async function loadRsvpContext(
-  organisationSlug: string,
-  userId: string,
-  rsvpId: string,
-  eventId: string | undefined,
-  eventInstanceId: string | undefined,
-) {
-  const org = await prisma.organisation.findUnique({
-    where: { slug: organisationSlug },
-  });
-  if (!org) return { error: "Organisation not found." as const };
-
-  const membership = await getMembership(userId, org.id);
-  if (!canManageEvents(membership)) {
-    return { error: "You do not have permission to manage attendees." as const };
-  }
-
-  if (eventId) {
-    const event = await prisma.event.findFirst({
-      where: { id: eventId, organisationId: org.id },
-    });
-    if (!event) return { error: "Event not found." as const };
-    const rsvp = await prisma.rSVP.findFirst({
-      where: { id: rsvpId, eventId: event.id },
-      include: { user: { select: { email: true, name: true } } },
-    });
-    if (!rsvp) return { error: "RSVP not found." as const };
-    return { org, event, rsvp, instance: null as null };
-  }
-
-  if (eventInstanceId) {
-    const instance = await prisma.eventInstance.findFirst({
-      where: {
-        id: eventInstanceId,
-        series: { organisationId: org.id },
-      },
-      include: { series: true },
-    });
-    if (!instance) return { error: "Instance not found." as const };
-    const rsvp = await prisma.rSVP.findFirst({
-      where: { id: rsvpId, eventInstanceId: instance.id },
-      include: { user: { select: { email: true, name: true } } },
-    });
-    if (!rsvp) return { error: "RSVP not found." as const };
-    return { org, event: null, instance, rsvp };
-  }
-
-  return { error: "Event not found." as const };
-}
-
-function attendeeEmail(rsvp: {
-  guestEmail: string | null;
-  user: { email: string | null; } | null;
-}): string | null {
-  return rsvp.user?.email?.trim() || rsvp.guestEmail;
-}
-
-function attendeeName(rsvp: {
-  guestName: string | null;
-  user: { name: string | null; } | null;
-}): string | undefined {
-  return rsvp.user?.name?.trim() || rsvp.guestName?.trim() || undefined;
-}
+import { declineRequestedOrder, offerRequestedOrder } from "@/lib/payments/operations";
+import { attendeeEmail, attendeeName, loadRsvpContext, paidRequest, paymentOperation, revalidateRsvpPaths } from "./rsvp-lifecycle/helpers";
+import { reacceptRsvpFor, type ReacceptStatus } from "./rsvp-lifecycle/reaccept";
 
 export async function approveRsvp(input: unknown): Promise<ActionResult> {
   const session = await auth();
@@ -128,6 +44,16 @@ export async function approveRsvp(input: unknown): Promise<ActionResult> {
   const { org, rsvp } = ctx;
   if (rsvp.status !== RsvpStatus.PENDING_APPROVAL) {
     return { ok: false, error: "Only pending requests can be approved." };
+  }
+
+  const request = await paidRequest(rsvp);
+  if (request) {
+    // Approval offers a paid order its seats; the tickets confirm once it's paid.
+    const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!offered.ok) return offered;
+    await recordAuditEvent({ action: "RSVP_APPROVED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
+    return { ok: true };
   }
 
   if (ctx.event) {
@@ -221,6 +147,15 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     return { ok: false, error: "This RSVP cannot be rejected." };
   }
 
+  const request = await paidRequest(rsvp);
+  if (request) {
+    const declined = await paymentOperation(() => declineRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!declined.ok) return declined;
+    await recordAuditEvent({ action: "RSVP_REJECTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
+    return { ok: true };
+  }
+
   const to = attendeeEmail(rsvp);
   const rejected = await prisma.$transaction(async (tx) => {
     const result = await tx.rSVP.updateMany({
@@ -230,6 +165,7 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     if (result.count === 1 && to) {
       await enqueueRsvpStatusNotification(tx, {
         to,
+        organisationId: org.id,
         eventTitle: ctx.event?.title ?? ctx.instance!.series.title,
         approved: false,
         recipientName: attendeeName(rsvp),
@@ -256,6 +192,13 @@ export async function rejectRsvp(input: unknown): Promise<ActionResult> {
     eventInstanceId: instance.id,
   });
   return { ok: true };
+}
+
+/** Reverses a decline; a paid registration goes back through the payment flow. */
+export async function reacceptRsvp(input: unknown): Promise<ActionResult<{ status: ReacceptStatus; }>> {
+  const session = await auth();
+  if (!session?.user?.id) return { ok: false, error: "You must be signed in." };
+  return reacceptRsvpFor(session.user.id, input);
 }
 
 export async function promoteFromWaitlist(input: unknown): Promise<ActionResult> {
@@ -288,6 +231,15 @@ export async function promoteFromWaitlist(input: unknown): Promise<ActionResult>
   const { org, rsvp } = ctx;
   if (rsvp.status !== RsvpStatus.WAITLISTED) {
     return { ok: false, error: "Only waitlisted attendees can be promoted." };
+  }
+
+  const request = await paidRequest(rsvp);
+  if (request) {
+    const offered = await paymentOperation(() => offerRequestedOrder({ orderId: request.id, organisationId: org.id, actorUserId: session.user.id }));
+    if (!offered.ok) return offered;
+    await recordAuditEvent({ action: "RSVP_WAITLIST_PROMOTED", actorUserId: session.user.id, organisationId: org.id, targetType: "RSVP", targetId: rsvp.id });
+    revalidateRsvpPaths(ctx.event ? { orgSlug: org.slug, eventSlug: ctx.event.slug, eventId: ctx.event.id } : { orgSlug: org.slug, eventInstanceId: ctx.instance!.id });
+    return { ok: true };
   }
 
   if (ctx.event) {

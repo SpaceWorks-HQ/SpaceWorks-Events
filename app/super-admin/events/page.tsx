@@ -6,12 +6,12 @@ import { Input } from "@/components/ui/field";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 
 type Props = {
-  searchParams: Promise<{ q?: string; org?: string; page?: string; }>;
+  searchParams: Promise<{ q?: string | string[]; org?: string | string[]; page?: string | string[]; }>;
 };
 
 export default async function SuperAdminEventsPage({ searchParams }: Props) {
   await requireSuperAdminMfa();
-  const { q, org, events, checkedIn, page } = await loadSuperAdminEventsView({ searchParams });
+  const { q, org, events, checkedIn, page, hasNext } = await loadSuperAdminEventsView({ searchParams });
   return (
     <div className="flex flex-col gap-6">
       <PageHeader title="Events" description="Events across every organisation, newest first." />
@@ -57,7 +57,7 @@ export default async function SuperAdminEventsPage({ searchParams }: Props) {
         </TBody>
       </Table>
 
-      <AdminPager basePath="/super-admin/events" query={q} page={page} extra={`&org=${encodeURIComponent(org)}`} />
+      <AdminPager basePath="/super-admin/events" query={q} page={page} extra={`&org=${encodeURIComponent(org)}`} hasNext={hasNext} />
     </div>
   );
 }

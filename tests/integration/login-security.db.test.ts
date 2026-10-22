@@ -1,0 +1,121 @@
+import { randomUUID } from "node:crypto";
+import { MembershipRole } from "@prisma/client";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const session = vi.hoisted(() => ({ value: null as null | { user: { id: string; }; mfaVerified?: boolean; }, proof: undefined as string | undefined }));
+vi.mock("@/lib/auth", () => ({ auth: async () => session.value }));
+vi.mock("next/headers", () => ({ cookies: async () => ({ get: () => (session.proof ? { value: session.proof } : undefined) }) }));
+
+import { prisma } from "@/lib/db";
+import {
+  accountUnderAttack, consumeSignInCode, deviceHash, isAddressBlocked, knownDevice, noteFailedSignIn, rememberSignIn, sendSignInCode,
+} from "@/lib/loginSecurity";
+import { createMfaProof } from "@/lib/mfaProof";
+import { getMembership } from "@/lib/permissions";
+import { staffMfaState } from "@/lib/staffMfa";
+
+const suffix = randomUUID().replace(/-/g, "").slice(0, 12);
+const email = (name: string) => `${name}-${suffix}@example.test`;
+const users: Record<string, string> = {};
+let organisationId = "";
+
+beforeAll(async () => {
+  vi.stubEnv("AUTH_SECRET", "integration-auth-secret-with-at-least-32-characters");
+  for (const name of ["person", "member", "attendee"]) {
+    users[name] = (await prisma.user.create({ data: { name, email: email(name), emailVerified: new Date() } })).id;
+  }
+  organisationId = (await prisma.organisation.create({ data: { name: "Secure Makers", slug: `secure-${suffix}` } })).id;
+  await prisma.membership.create({ data: { userId: users.member!, organisationId, role: MembershipRole.ADMIN } });
+});
+
+beforeEach(() => {
+  session.value = null;
+  session.proof = undefined;
+});
+
+afterAll(async () => {
+  vi.unstubAllEnvs();
+  await prisma.outboxMessage.deleteMany({ where: { payload: { path: ["to"], string_contains: suffix } } });
+  await prisma.organisation.deleteMany({ where: { id: organisationId } });
+  await prisma.user.deleteMany({ where: { id: { in: Object.values(users) } } });
+});
+
+describe("sign-in protections", () => {
+  it("trusts the first device silently, then alerts on a new one", async () => {
+    const first = deviceHash("a".repeat(64));
+    expect(await knownDevice(users.person!, first)).toEqual({ known: false, firstDevice: true });
+    await rememberSignIn({ userId: users.person!, email: email("person"), hash: first, ip: "203.0.113.5", userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/130.0", firstDevice: true });
+    expect(await knownDevice(users.person!, first)).toEqual({ known: true, firstDevice: false });
+    const alerts = () => prisma.outboxMessage.count({ where: { kind: "operator-notice", payload: { path: ["to"], equals: email("person") } } });
+    expect(await alerts()).toBe(0);
+
+    const second = deviceHash("b".repeat(64));
+    expect(await knownDevice(users.person!, second)).toEqual({ known: false, firstDevice: false });
+    await rememberSignIn({ userId: users.person!, email: email("person"), hash: second, ip: "203.0.113.9", userAgent: "Mozilla/5.0 (iPhone) Safari/604.1", firstDevice: false });
+    expect(await alerts()).toBe(1);
+    const [device] = await prisma.userDevice.findMany({ where: { userId: users.person!, deviceHash: second! } });
+    // Only a hash of the browser's id is kept.
+    expect(device).toMatchObject({ userAgent: "Safari on iOS", lastIp: "203.0.113.9" });
+    expect(device!.deviceHash).not.toContain("b".repeat(64));
+  });
+
+  it("emails a code that works once, and never stores the code itself", async () => {
+    expect(await sendSignInCode({ id: users.person!, email: email("person") })).toBe(true);
+    const message = await prisma.outboxMessage.findFirstOrThrow({ where: { kind: "sign-in-code", payload: { path: ["to"], equals: email("person") } }, orderBy: { createdAt: "desc" } });
+    const code = (message.payload as { code: string; }).code;
+    const token = await prisma.verificationToken.findFirstOrThrow({ where: { identifier: `sign-in:${users.person}` } });
+    expect(token.token).not.toContain(code);
+    expect(await consumeSignInCode(users.person!, code === "000000" ? "000001" : "000000")).toBe(false);
+    expect(await consumeSignInCode(users.person!, code)).toBe(true);
+    expect(await consumeSignInCode(users.person!, code)).toBe(false);
+  });
+
+  it("counts failures per account and per address, and never blocks an unknown address", async () => {
+    const victim = email("victim");
+    for (let attempt = 0; attempt < 5; attempt += 1) await noteFailedSignIn("198.51.100.77", victim);
+    expect(await accountUnderAttack(victim)).toBe(true);
+    expect(await accountUnderAttack(email("someone-else"))).toBe(false);
+    for (let attempt = 0; attempt < 15; attempt += 1) await noteFailedSignIn("198.51.100.77", email(`spray-${attempt}`));
+    expect(await isAddressBlocked("198.51.100.77")).toBe(true);
+    expect(await isAddressBlocked("198.51.100.78")).toBe(false);
+    for (let attempt = 0; attempt < 25; attempt += 1) await noteFailedSignIn("unknown", email(`unknown-${attempt}`));
+    expect(await isAddressBlocked("unknown")).toBe(false);
+  });
+});
+
+describe("staff authenticator rule", () => {
+  beforeAll(() => vi.stubEnv("STAFF_MFA_REQUIRED", "true"));
+  afterAll(() => vi.stubEnv("STAFF_MFA_REQUIRED", "false"));
+
+  it("holds a member's staff powers until they set up and confirm an authenticator", async () => {
+    session.value = { user: { id: users.member! } };
+    expect(await staffMfaState(users.member!)).toBe("enrol");
+    expect(await getMembership(users.member!, organisationId)).toBeNull();
+
+    await prisma.user.update({ where: { id: users.member! }, data: { mfaEnabledAt: new Date() } });
+    session.value = { user: { id: users.member! } };
+    expect(await staffMfaState(users.member!)).toBe("verify");
+
+    session.value = { user: { id: users.member! }, mfaVerified: true };
+    expect(await getMembership(users.member!, organisationId)).toMatchObject({ role: "ADMIN" });
+
+    // A Google sign-in confirms with a code afterwards: the proof cookie.
+    const { sessionVersion } = await prisma.user.findUniqueOrThrow({ where: { id: users.member! }, select: { sessionVersion: true } });
+    session.value = { user: { id: users.member! } };
+    session.proof = createMfaProof(users.member!, sessionVersion);
+    expect(await staffMfaState(users.member!)).toBe("ok");
+  });
+
+  it("leaves attendees, other people's checks and the super admin alone", async () => {
+    session.value = { user: { id: users.attendee! } };
+    expect(await staffMfaState(users.attendee!)).toBe("ok");
+    // Checking someone else's membership (removing a member) is never affected.
+    expect(await getMembership(users.member!, organisationId)).toMatchObject({ role: "ADMIN" });
+
+    vi.stubEnv("SUPER_ADMIN_EMAIL", email("member"));
+    await prisma.user.update({ where: { id: users.member! }, data: { mfaEnabledAt: null } });
+    session.value = { user: { id: users.member! } };
+    expect(await staffMfaState(users.member!)).toBe("ok");
+    vi.stubEnv("SUPER_ADMIN_EMAIL", "");
+  });
+});

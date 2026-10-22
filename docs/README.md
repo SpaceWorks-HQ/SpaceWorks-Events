@@ -13,11 +13,13 @@ New here? Start with [Features](FEATURES.md) for what it does, then [Local devel
 | [Design system](DESIGN.md) | V1 visual design brief: tokens, the dot-sign brand (§2.3), typography, components, motion, page patterns, dark mode, and voice |
 | [Contributing](../CONTRIBUTING.md) | How to report bugs, suggest ideas, and prepare a pull request |
 | [Features](FEATURES.md) | Current user-facing and administrative capabilities |
+| [Paid tickets](PAYMENTS.md) | Turning paid events on, connecting Razorpay or Stripe, selling, refunds, receipts and reporting |
 | [Architecture](ARCHITECTURE.md) | System boundaries, request flows, data model, and background work |
 | [Local development](DEVELOPMENT.md) | Installation, database setup, and everyday commands |
 | [Configuration](CONFIGURATION.md) | Environment-variable reference for development and production |
 | [Routes](ROUTES.md) | Public pages, dashboards, APIs, and protected endpoints |
 | [Security](SECURITY.md) | Authentication, authorization, privacy, abuse protection, and known boundaries |
+| [Permissions](PERMISSIONS.md) | Event and series dashboard matrix: every control, its server check, and what owners, admins, members and each co-organiser grant see |
 | [Machine API v1](API.md) | Server-to-server authentication, scopes, contracts, and credential lifecycle |
 | [Testing](TESTING.md) | Test suites, CI checks, coverage, and release verification |
 
@@ -30,7 +32,7 @@ New here? Start with [Features](FEATURES.md) for what it does, then [Local devel
 | [Production operations](production-operations.md) | Deployments, probes, schedulers, backups, incidents, and privacy operations |
 | [Releases and container images](CONTAINER_IMAGES.md) | VERSION and GitHub Releases, the public multi-platform images on GitHub Packages, and how one image serves every installation |
 | [Netlify frontend + VPS backend](DEPLOYMENT_SPLIT.md) | Separate frontend workspace, private API gateway, setup and verification |
-| [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS and scheduler on one VPS; setup, checks, upgrades and backups |
+| [Complete Docker VPS deployment](DEPLOYMENT_VPS.md) | App, PostgreSQL, Redis, private storage, HTTPS, email worker and beat on one VPS; setup, checks, upgrades and backups |
 | [Production Docker deployment](DEPLOYMENT_DOCKER.md) | Current single-host/container deployment, migrations, upgrades, and image limitations |
 | [Isolated staging deployment](DEPLOYMENT_STAGING.md) | Single-VM Docker Compose staging/test setup behind host Nginx |
 | [Helm chart](../charts/spaceworks-events/README.md) | Kubernetes installation, migration hook, secrets, probes, and ingress configuration |

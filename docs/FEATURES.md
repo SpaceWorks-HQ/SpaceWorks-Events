@@ -8,11 +8,14 @@
 - Account area with Profile (name, photo, email status, Light/Dark/System appearance), Registrations (your upcoming and past tickets with cancel, certificates, and a personal JSON data export that never includes passwords, security codes or ticket links), Organisations (memberships and roles, event co-organiser roles, pending co-organiser invites, and leaving an organisation, blocked for the only owner), and Security (password, two-step verification, sign-in methods, recent security activity, sign out everywhere).
 - Optional Google OAuth.
 - Password-reset requests delivered through the transactional outbox.
-- Authenticator-app MFA for credential accounts, including recovery codes.
+- Authenticator-app MFA, including recovery codes.
+- Organisation staff (any organisation role, or an event or series co-organiser) must use an authenticator app. Until one is set up they are sent to Account security; after that, each session needs an authenticator check, given at the password sign-in or, after Google sign-in, on `/verify-mfa` (valid 12 hours). Attendees and the super admin are exempt. `STAFF_MFA_REQUIRED=false` turns this off for local development and tests.
+- Sign-in protections: an address with 20 failed sign-ins in an hour is blocked for the rest of that hour; an account with 5 failures in 15 minutes needs a code emailed to it, and at 15 failures codes are refused too; a password sign-in from a device the account hasn't used before (after its first) needs a six-digit emailed code (10 minutes, single use) unless an authenticator code was given; and a sign-in from a new device sends a "New sign-in to your account" email. Recent security activity lists new-device sign-ins and confirmed authenticator codes.
+- Sign-up, password reset and password change refuse passwords found in Have I Been Pwned, checked by k-anonymity (only the first five characters of the password's SHA-1 are sent). If the service can't be reached, the password is accepted.
 - Account pages at `/account`, `/account/registrations`, `/account/organisations`, and `/account/security`. The personal data export (`GET /api/exports/account`) returns only the signed-in user's own allow-listed data as JSON, is limited to five downloads per hour, and is audited as `ACCOUNT_DATA_EXPORTED`. Leaving an organisation removes only your own membership, is refused for the sole owner, and is audited as `ORGANISATION_MEMBER_LEFT`.
 - JWT session-version invalidation after sensitive account operations.
 
-Google OAuth users rely on the Google account's MFA policy; the application TOTP prompt applies to password authentication.
+Google OAuth users rely on the Google account's MFA policy; the application TOTP prompt and the new-device code apply to password authentication. Organisation staff who sign in with Google still confirm an authenticator code on `/verify-mfa`.
 
 ## Organisations and permissions
 
@@ -21,6 +24,7 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 - Organisation profile, slug, description, and logo management.
 - Member role changes and removals with owner-protection rules.
 - Expiring, revocable organisation invitation links.
+- Event and series co-organisers with exact grants: `EDIT_DETAILS` (page content, tickets and pricing), `MANAGE_REGISTRATIONS` (the guest list, approvals, manual guests, edits and removals, payment operations, the attendee CSV and registration numbers), `MANAGE_INVITATIONS` (the invite list), `CHECK_IN` (the check-in desk and badges) and `PUBLISH_AND_SCHEDULE` (the programme). Publishing, short links, the Details and registration forms, emails, feedback, reports and deleting stay with owners and admins (see [Permissions](PERMISSIONS.md)).
 - Organisation deletion and audited administrative changes.
 
 ## Events
@@ -55,11 +59,18 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 - Duplicate RSVP prevention per event or instance.
 - Capacity-aware confirmation and waitlisting.
 - Pending approval, approval, rejection, cancellation, and waitlist promotion.
+- Re-accepting a declined registration from the Guests list (with the same permission as approving). A free registration goes through the same locked capacity check as an approval and must still be open: it is confirmed when there is room and otherwise waitlisted, never oversold. A paid request goes back through the payment flow instead: with room for the whole order it is offered its places with a payment link, otherwise it waits on the waitlist; its tickets confirm only once paid. The guest is emailed and the change is audited (`RSVP_REACCEPTED`, and `ORDER_REACCEPTED` for paid orders).
 - Removing an RSVP creates a short-lived, server-owned undo snapshot.
 - Confirmation and lifecycle emails are queued through a durable outbox.
+- Each organisation owner sets the sender name and reply-to address of its guests' email (tickets, reminders, updates, broadcasts, receipts), under **Settings → Email**, and can connect its own SMTP server (tested before use, password encrypted and never shown again). Without one, the platform server sends under the organisation's name. Sign-up, verification and password emails always come from the platform.
+- Owners and admins connect team chats under **Settings → Chat notifications**: Slack, Discord and Mattermost incoming webhooks, a Telegram bot, or WhatsApp through Meta's Cloud API (with an approved template for messages outside a 24-hour conversation). Each chat chooses what it hears about: new registrations, join requests, payments, refunds and refused refunds, guest cancellations, chargebacks, and cancelled events or dates. Messages go out with the outbox (retried, and dropped when a chat is switched off), and a test can be sent from the settings page.
 - Confirmed RSVP emails include an `.ics` calendar invitation with the event or occurrence time and location.
+- Guests are emailed at every step: registration (confirmed, waitlisted or awaiting approval), approval or decline, a place from the waitlist, their own cancellation, removal by the organiser (after the five-minute undo window, and never if it is undone), a change of time or place, and cancellation of the event, a series or a series date (everyone with a place, a request or a waitlist spot, paid or free). Changing a guest's email address sends the ticket to the new one.
+- A reminder goes to each confirmed guest about a day before an event or series date, once, with the ticket link built at send time; people who registered in the last 12 hours are skipped. Waitlists fill every free seat in order, within a minute of a capacity increase or a removed guest.
+- Organisers (owners and admins) get one email per half hour while join requests wait on an approval-only event, and an email when a payment provider refuses a refund. Account holders are told when their password is changed or added.
 - Event dashboard invitations are queued through the same durable outbox and link invitees to the event registration page.
 - Organisation admins can email selected groups of existing registrations from the event's **Emails** tab: choose any combination of confirmed, waitlisted, pending-approval, and rejected registrations, optionally narrowed to people who did or did not check in. Thirteen starter templates (reminders, know-before-you-go logistics, agenda updates, speaker announcements, schedule or venue changes, cancellation, waitlist and approval updates, on-the-day notes, thank-you, missed-you, and slides/resources) prefill the subject, a rich-text message, and a suggested audience. The editor supports headings, bold/italic, lists, quotes, links, call-to-action buttons, and placeholders for `{{name}}`, `{{event}}`, `{{eventDate}}`, `{{location}}`, `{{eventUrl}}`, `{{ticketLink}}`, `{{feedbackUrl}}`, `{{scheduleUrl}}`, and `{{organisation}}`. Message HTML is reduced to a small sanitised subset on the server, a plain-text alternative is generated automatically, and the dashboard preview is rendered by the server with the real email template at desktop and mobile widths. Five visual designs (Classic, Minimal, Accent band in the event colour, Photo header with the event cover, and Letter) frame the same content; the choice is stored with each broadcast and used for the preview, tests and delivery. Organisers can send themselves a test, review the recipient count and subject in a confirmation step that must be ticked before sending, undo within five seconds, and reuse any previously sent email with its design. Each recipient is a separate outbox message rendered at delivery time, one per email address; ticket links are only inserted for confirmed registrations, and a registration that leaves the audience before delivery is skipped. Sends are rate limited and audited without recipient data. Test sends link `{{ticketLink}}` to the organiser's own ticket when they are confirmed for the event, and otherwise to the event page. Sent emails build image and site links from `NEXT_PUBLIC_BASE_URL`; without it, the photo header falls back to the colour band and site-relative images are left out (the dashboard preview works either way).
+- Custom emails in the **Emails** tab are kept as a draft on the server, one per organiser and event, so they survive a reload, another device, or a closed tab. The draft (subject, sanitised message, design, audience, and the template it started from) autosaves about 1.5 seconds after typing stops, with a **Save draft** button for unsaved changes and a quiet status line ("Unsaved changes", "Saving…", "Draft saved · 2:41 PM", or "Couldn't save · Retry"). Opening the tab restores it. Loading a template or reusing a sent email asks before replacing a draft, **Discard draft…** asks before removing it, and the browser warns before closing the page with unsaved changes. Drafts are private to their author (teammates never see them), need the same owner/admin access (and staff authenticator check) as sending, are rate limited but not audited, and are removed when that organiser sends the email, after the five-second undo window; test sends keep the draft. Drafts are deleted with their event or their author's account.
 
 ## Tickets and check-in
 
@@ -72,6 +83,16 @@ Google OAuth users rely on the Google account's MFA policy; the application TOTP
 - Immutable check-in event history for online and offline actions.
 
 Only eligible confirmed attendees receive a scannable ticket by default. Organisers can explicitly handle exceptional status cases where supported by the check-in workflow.
+
+## Paid tickets
+
+See [Paid tickets](PAYMENTS.md) for setup. Off until the super admin turns paid events on.
+
+- Each organisation connects its own Razorpay or Stripe account (owner only, keys write-only and encrypted, its own webhook address, test mode). Buyers pay on the provider's page; the money goes straight to the organisation with no platform fee.
+- Ticket types: fixed or pay-what-you-want prices, capacity, sales windows, per-order limits, group tickets, booking fees, pay at the desk, and visibility (public, access code, members only). Extras, promo codes, single-date tickets and passes for series.
+- Seats are held for 30 minutes at checkout; approval requests and waitlist places get a 24-hour payment link with one reminder.
+- Refund policies (none, full or a percentage until a cut-off), refunds in part or in full, buyer self-cancellation within the policy, ticket transfers, settle by hand or complimentary, PDF receipts with the organisation's registered details, chargeback tracking, and full refunds when an event or date is cancelled.
+- Money reporting: the event and series Money cards, the organisation's takings, an orders CSV, the PDF report's Money section, the `orders:read` API, and orders in the buyer's data export.
 
 ## Member IDs
 
@@ -96,25 +117,32 @@ Only eligible confirmed attendees receive a scannable ticket by default. Organis
 ## Event analytics
 
 - The event dashboard's analytics include a registration funnel. Each step has a plain-language hint, a bar sized as a share of everyone who responded, and a percentage of the previous step, never over 100%.
+- Alongside the funnel: key numbers, where every response stands, and sign-ups over time. Arrivals by time window (15 minutes to 8 hours, sized to the door's busy period) and how people were checked in (desk, door station, offline) use the same calculations as the PDF report.
+- Answers to registration questions: choice and yes/no questions are charted as counts from the people going; written answers are only counted, never shown.
+- Waitlist conversion: who joined the waitlist and how many got a place, from `RSVP.waitlistedAt` and `promotedAt`, which a database trigger sets whichever code path changes the status.
+- Short link visits: a daily count per event (in its timezone) and the last 14 days. Only the number is stored, in `ShortLinkClickDay`: no IP address, browser, referrer or person. Prefetches and link-preview bots are not counted.
+- Email delivery per broadcast in the "Sent before" list: delivered, waiting, failed and skipped, from the outbox, until the outbox retention period removes the rows.
+- Recurring series: attendance across finished occurrences (came of going, and average turnout).
+- Organisation dashboard (organisers only): the most-attended events of the last six months and the share of people who came back for another event, withheld below 10 people.
+- The PDF report adds waitlist conversion and short-link visits. Page views, referrers and email-open tracking are deliberately not collected.
 
 ## Discovery and public pages
 
 - Landing, About, and Features pages, organisation pages, event pages, and recurring-instance pages.
-- Privacy policy (`/privacy`) and terms of use (`/terms`) describing what the product actually does: guest registrations and custom questions, roles and API access, third-party services (Google Maps, Gravatar), cookies and offline rosters, organiser emails, retention windows, the free-events-only rule, organiser duties, check-in stations, and certificates. Deployments should review them against their own jurisdiction and providers.
+- Privacy policy (`/privacy`) and terms of use (`/terms`) describing what the product actually does: guest registrations and custom questions, roles and API access, third-party services (Google Maps, Gravatar), cookies and offline rosters, organiser emails, retention windows, free events and paid tickets (the organiser is the seller), organiser duties, check-in stations, and certificates. Deployments should review them against their own jurisdiction and providers.
 - Public-event discovery with paginated, database-bounded search.
 - Search by event title, tags, and organisation name.
 - Public sitemap and crawler controls; ticket and administrative paths are not intended for indexing.
 
 ## Administration and operations
 
-- Instance-wide super-admin area restricted by `SUPER_ADMIN_EMAIL`, with its own top bar instead of the dashboard sidebar. Every super-admin page checks super-admin access and the MFA step-up itself.
+- Instance-wide super-admin area restricted by `SUPER_ADMIN_EMAIL`, with its own top bar instead of the dashboard sidebar. Every super-admin page checks super-admin access itself. The super admin signs in with email and password, with no separate authenticator step-up; its password is set only from the server, and the sign-in protections still apply.
 - Super-admin control to disable new password and Google account creation while preserving existing-user sign-in.
 - Super-admin instance settings for SMTP delivery, Google SSO, and display-only backup posture; instance-managed service secrets are encrypted at rest and never displayed after saving.
 - Read-only super-admin insights: 30-day activity and growth (signups, organisations, events, registrations, check-ins, feedback, broadcasts), email outbox health by message kind and recent broadcasts (subject and audience only), security posture (MFA adoption, owners/admins without MFA, unverified accounts, sign-in methods, sensitive audit actions, machine API clients with credential lifecycle but never secrets), storage breakdowns, and per-user and per-organisation support pages. Tokens, password and credential hashes, registration answers, storage keys, and message bodies are never shown.
-- Separate TOTP step-up verification for super-admin access; verification lasts 10 minutes and requires an enrolled authenticator.
 - Organisation, user, event, invitation, authentication, monitoring, operations, storage, and searchable audit-log views.
 - Public liveness and secret-protected database readiness endpoints.
-- Outbox delivery, retries, retention cleanup, scheduler-heartbeat monitoring, and safe failed-email diagnostics.
+- Outbox delivery within seconds from a separate worker, timed jobs from a beat, retries, retention cleanup, worker and beat heartbeat monitoring, and safe failed-email diagnostics.
 - Private S3-compatible object storage with database asset accounting.
 - Application audit events plus database-triggered fallback audit records for important mutations.
 - Owner-managed, tenant-bound machine API clients with explicit scopes, one-time credentials, expiry, rotation, revocation, and disablement.

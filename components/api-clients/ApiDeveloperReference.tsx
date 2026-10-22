@@ -146,6 +146,29 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
 }`,
     },
   ];
+  endpoints.push({
+    title: "List orders",
+    scope: "orders:read",
+    description: "Lists an event's orders with their totals, newest first. Amounts are decimal strings in the order's currency.",
+    request: `curl --request GET --url "${apiBaseUrl}/events/${eventId}/orders?limit=50" --header "Authorization: Bearer ${token}"`,
+    response: `{
+  "data": [
+    {
+      "id": "order-id",
+      "reference": "SW-7F3K2",
+      "status": "CONFIRMED",
+      "currency": "INR",
+      "total": "1500.00",
+      "paid": "1500.00",
+      "refunded": "0.00",
+      "tickets": 2,
+      "testMode": false,
+      "placedAt": "2030-01-01T10:00:00.000Z"
+    }
+  ],
+  "pagination": { "nextCursor": "opaque-cursor-or-null" }
+}`,
+  });
   const scopes: ScopeReference[] = [
     {
       scope: "events:read",
@@ -164,6 +187,12 @@ export function ApiDeveloperReference({ apiBaseUrl }: { apiBaseUrl: string }) {
       capability: "Filter by attendance state and opt in to check-in timestamps for the minimal participant roster.",
       includes: "checked_in/not_checked_in filtering and the nullable checkedInAt timestamp when include=attendance is sent. It also requires participants:read.",
       excludes: "Email addresses, user IDs, answers, invitations, check-in tokens, and all write operations.",
+    },
+    {
+      scope: "orders:read",
+      capability: "Read the orders placed for an event owned by this organisation.",
+      includes: "Order ID, reference, status, currency, total, amount paid and refunded, ticket count, test flag and when it was placed.",
+      excludes: "Buyer names and email addresses, order links, receipts, card details, payment provider IDs, and all write operations.",
     },
   ];
 

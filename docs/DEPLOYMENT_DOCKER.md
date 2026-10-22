@@ -29,6 +29,12 @@ load balancer. Supply these production services separately:
 - a CDN/WAF or reverse proxy that overwrites the configured trusted client-IP
   header.
 
+The application container needs outbound network access to all of these, and
+to the operational alert webhook (for example Mattermost) over HTTPS when
+alerts are enabled in Super admin → Settings. Every application process,
+including separate `worker` and `beat` containers, posts alerts itself. Docker's default bridge network allows this egress;
+check any host firewall or egress proxy.
+
 The live ticket page holds a Server-Sent Events stream at
 `/api/ticket/:token/events`. Configure the reverse proxy not to buffer
 `text/event-stream` responses (nginx: `proxy_buffering off` for
@@ -61,7 +67,10 @@ docker build \
 Export `NEXT_PUBLIC_BASE_URL` with the production HTTPS origin before building;
 it is compiled into the image and must match the runtime canonical URL. (Build
 with `https://spaceworks-events-origin.invalid` instead for an image that takes
-its origin at start, like the published one.)
+its origin at start, like the published one.) It is the only build-visible
+setting: SMTP, Google SSO, backup posture, and alerts
+saved in Super admin → Settings are read from the database at runtime and never
+require a rebuild or restart.
 
 The Server Actions key is passed through a BuildKit secret mount and is required
 only by the application build. (Builders without BuildKit secrets, such as
@@ -94,8 +103,12 @@ At minimum, verify that:
 - `REDIS_URL` starts with `rediss://`;
 - a custom `S3_ENDPOINT`, when used, starts with `https://`;
 - the S3 bucket is private;
-- `EMAIL_FROM` and an authenticated `SMTP_SERVICE` or `SMTP_HOST` fallback are
-  configured for bootstrap and disaster recovery;
+- `MFA_ENCRYPTION_KEY` is set, stable, and identical for the application and
+  every migrator or one-off container: it decrypts the SMTP, Google, and alert
+  secrets saved in the panel, so reuse the existing value on upgrades;
+- optionally, `EMAIL_FROM` and an authenticated `SMTP_SERVICE` or `SMTP_HOST`
+  fallback for bootstrap and disaster recovery (once SMTP is saved in the
+  panel these variables are ignored entirely);
 - `TRUSTED_PROXY_IP_HEADER` names a header overwritten by the edge; and
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is this installation's stable key (for
   your own build, the value it was built with; published images take it at
@@ -123,7 +136,12 @@ docker run --rm \
   ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} migrate
 
 node --env-file=/secure/path/swevents.env scripts/verify-production-schema.mjs
+node --env-file=/secure/path/swevents.env scripts/check-instance-secrets.mjs
 ```
+
+The backend image includes `scripts/verify-production-schema.mjs` and
+`scripts/check-instance-secrets.mjs`, so both can also run inside it with
+exactly the application's environment file.
 
 Start the application on a loopback-only port when the reverse proxy runs on
 the host:
@@ -152,11 +170,17 @@ Also call `GET /api/health/db` from the monitoring system with the
 `Authorization` header set to `Bearer $HEALTHCHECK_SECRET`. Do not place that
 bearer value in a URL.
 
-After the first sign-in, enroll authenticator MFA for the super-admin account,
-then verify or replace the bootstrap SMTP fallback and configure optional
-Google SSO under `/super-admin/settings`. Test email delivery before accepting
-registrations. Keep the environment SMTP credentials in the deployment secret
-store as a disaster-recovery fallback.
+Set the super-admin password from the server with
+`docker/vps/recover-super-admin.mjs` (the app refuses that address's sign-up
+and password reset). After the first sign-in, we recommend enrolling
+authenticator MFA for the super-admin account; there is no separate step-up for
+`/super-admin`. Then configure SMTP (replacing any environment fallback),
+optional Google SSO, and optional operational alerts under
+`/super-admin/settings`. Saved values take effect on the next send or sign-in;
+no restart is needed. Test email delivery before accepting registrations.
+Keeping environment SMTP credentials in the deployment secret store as a
+disaster-recovery fallback is recommended; they apply only while the panel has
+no SMTP configured.
 
 ## Upgrade an existing installation
 
@@ -166,6 +190,10 @@ Use this order for every release:
 2. Take and verify a database backup and record the current application image.
 3. Pull the new backend image.
 4. Run it once with the command `migrate`. A failed migration blocks the rollout.
+   Then run `node scripts/check-instance-secrets.mjs` in the same image and
+   environment; it fails if `MFA_ENCRYPTION_KEY` cannot decrypt the settings
+   saved in the panel (see
+   [Configuration](CONFIGURATION.md#application-secrets)).
 5. Replace the application container with the new immutable image.
 6. Verify liveness, authenticated database readiness, outbox heartbeat, email
    delivery, Redis health, and error rate before completing the deployment.
@@ -189,12 +217,30 @@ application image does not reverse a database migration; migrations must be
 reviewed for backward compatibility and restored from a verified backup when a
 database rollback is genuinely required.
 
-## Outbox scheduling and readiness
+## Email worker, timed jobs and readiness
 
-Each application process runs the outbox worker once per minute. In production,
-also configure an independent scheduler to call `POST /api/internal/outbox`
-with `Authorization: Bearer $CRON_SECRET` as a recovery path. Monitor the
-worker heartbeat and failed queue items.
+By default (`SWE_PROCESS_ROLE=all`) the application container also sends queued
+email within seconds (the worker) and runs the timed jobs: payment holds and
+reminders, waitlists, event reminders, retention and backup alerts (the beat). To run them separately, set
+`SWE_PROCESS_ROLE=web` on the application container and start two more
+containers from the same image with the commands `worker` and `beat`. They
+listen on loopback only and need no published port:
+
+```bash
+docker run -d --name swevents-worker --restart unless-stopped \
+  --env-file /secure/path/swevents.env \
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} worker
+docker run -d --name swevents-beat --restart unless-stopped \
+  --env-file /secure/path/swevents.env \
+  ghcr.io/spaceworks-hq/spaceworks-events-backend:${SWE_VERSION} beat
+```
+
+Replace them with the application container on every upgrade. Monitor the
+worker and beat heartbeats and failed queue items under Super admin →
+Operations. `POST /api/internal/outbox` with `Authorization: Bearer
+$CRON_SECRET` runs every timed job once and then sends the queue; use it for
+manual recovery or from a cron service on a platform that cannot run the
+background roles.
 
 Use `/api/health` for dependency-free liveness. Use the bearer-protected
 `/api/health/db` endpoint for readiness. Never expose either bearer secret in

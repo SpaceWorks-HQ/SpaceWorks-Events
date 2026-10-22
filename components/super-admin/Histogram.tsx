@@ -6,7 +6,11 @@ export function Histogram(props: {
   return (
     <div className="rounded-xl border border-line bg-panel p-4">
       <p className="mb-2 text-sm text-ink-muted">{props.title}</p>
-      <div className="flex h-14 items-end gap-1">
+      <div
+        className="flex h-14 items-end gap-1"
+        role="img"
+        aria-label={`${props.title}: ${props.buckets.map((b) => `${b.label} ms ${b.count}`).join(", ")}`}
+      >
         {props.buckets.map((b) => (
           <span
             key={b.label}
@@ -16,7 +20,7 @@ export function Histogram(props: {
           />
         ))}
       </div>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div aria-hidden className="mt-2 flex flex-wrap gap-1.5">
         {props.buckets.map((b) => (
           <span key={b.label} className="text-caption text-ink-muted">
             {b.label}

@@ -1,19 +1,12 @@
 import { ArrowRight } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { OpenTabButton } from "../EventDashboardTabs";
-import { percentOf, type FunnelStep, type SignupTimeline } from "./metrics";
+import type { FunnelStep, SignupTimeline } from "./metrics";
+import { Bar, card } from "./AnalyticsSections/primitives";
 
-const card = "flex flex-col gap-4 rounded-xl border border-line bg-panel p-5 sm:p-6";
-
-/** A rounded track with a filled share (0..1). Decorative: the number sits beside it. */
-function Bar({ share, tone, className }: { share: number; tone: string; className?: string }) {
-  const width = share > 0 ? Math.max(2, Math.round(share * 100)) : 0;
-  return (
-    <span aria-hidden className={cn("block h-2.5 w-full overflow-hidden rounded-full bg-track", className)}>
-      <span className={cn("block h-full rounded-full", tone)} style={{ width: `${width}%` }} />
-    </span>
-  );
-}
+export { ArrivalsCard, CheckInMethodsCard, StatusMixCard, WaitlistCard, type Arrivals, type MixPart } from "./AnalyticsSections/attendanceCards";
+export { QuestionsCard, ShortLinkCard } from "./AnalyticsSections/reachCards";
+export { MoneyCard } from "./AnalyticsSections/MoneyCard";
 
 /* ---------- Key numbers ---------- */
 
@@ -92,47 +85,6 @@ export function FunnelCard({ steps, summary }: { steps: FunnelStep[]; summary: s
           </li>
         ))}
       </ol>
-    </section>
-  );
-}
-
-/* ---------- Status mix ---------- */
-
-export type MixPart = { key: string; label: string; hint: string; value: number; tone: string };
-
-export function StatusMixCard({ parts }: { parts: MixPart[] }) {
-  const responded = parts.reduce((sum, part) => sum + part.value, 0);
-  const shown = parts.filter((part) => part.value > 0);
-  return (
-    <section aria-labelledby="analytics-mix-title" className={card}>
-      <div>
-        <h2 id="analytics-mix-title" className="text-h4 text-ink">
-          Where every response stands
-        </h2>
-        <p className="text-caption text-ink-muted">
-          {responded} {responded === 1 ? "response" : "responses"} in total, split by status.
-        </p>
-      </div>
-      <span aria-hidden className="flex h-3.5 w-full gap-[3px] overflow-hidden rounded-full">
-        {shown.map((part) => (
-          <span key={part.key} className={cn("h-full first:rounded-l-full last:rounded-r-full", part.tone)} style={{ flexGrow: part.value, flexBasis: 0, minWidth: 6 }} />
-        ))}
-      </span>
-      <ul className="flex flex-col divide-y divide-line">
-        {parts.map((part) => (
-          <li key={part.key} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 py-2.5 first:pt-0 last:pb-0">
-            <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", part.tone)} />
-            <span className="flex flex-col">
-              <span className="text-sm font-semibold text-ink">{part.label}</span>
-              <span className="text-caption text-ink-muted">{part.hint}</span>
-            </span>
-            <span className="text-right">
-              <strong className="text-ink">{part.value}</strong>
-              <span className="block text-caption text-ink-muted">{percentOf(part.value, responded) ?? 0}%</span>
-            </span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

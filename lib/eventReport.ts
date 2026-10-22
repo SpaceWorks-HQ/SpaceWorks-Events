@@ -1,78 +1,22 @@
 import "server-only";
 
-import type { EventPrivacyType, RegistrationFieldType, RsvpStatus, SponsorTier } from "@prisma/client";
+import type { RegistrationFieldType } from "@prisma/client";
 import { prisma } from "@/lib/db";
+import { loadRevenue } from "@/lib/payments/revenue";
+import type { EventReportMetrics, ReportCheckInSources, ReportQuestion, ReportRsvp, ReportRsvpMetrics } from "./eventReport/types";
 
 export { createEventReportPdf } from "@/lib/eventReportPdf";
-
-export type ReportRsvp = { status: RsvpStatus; checkedInAt: Date | null };
-
-export type ReportRsvpMetrics = {
-  total: number;
-  confirmed: number;
-  waitlisted: number;
-  pendingApproval: number;
-  rejected: number;
-  checkedIn: number;
-  noShows: number;
-};
-
-/** One question from a registration or feedback form, reduced to counts. */
-export type ReportQuestion = {
-  label: string;
-  type: RegistrationFieldType;
-  /** People who answered it. */
-  answered: number;
-  /** Per-option counts for choice questions; null for free-text, number, date, email and phone. */
-  choices: Array<{ label: string; count: number }> | null;
-};
-
-export type ReportSession = { title: string; type: string; track: string; start: Date; end: Date; delayMinutes: number; speakers: string[] };
-export type ReportSpeaker = { name: string; detail: string };
-export type ReportSponsor = { name: string; tier: SponsorTier };
-export type ReportBroadcast = { subject: string; sentAt: Date; recipientCount: number };
-export type ReportCheckInSources = { organiser: number; offline: number; station: number };
-
-/**
- * Everything the PDF shows. Attendee data is reduced to counts and timestamps
- * before it gets here: no names, emails, tickets or written answers.
- */
-export type EventReportMetrics = ReportRsvpMetrics & {
-  targetType: "event" | "occurrence";
-  targetId: string;
-  organisationId: string;
-  organisationName: string;
-  title: string;
-  startDateTime: Date;
-  endDateTime: Date;
-  timeZone: string;
-  location: string;
-  isOnline: boolean;
-  capacity: number | null;
-  invitationCount: number;
-  feedbackResponseCount: number | null;
-  accentColor?: string | null;
-  privacyType?: EventPrivacyType;
-  tags?: string[];
-  tagline?: string;
-  venueName?: string;
-  registrationClosesAt?: Date | null;
-  /** When each registration was made, for the sign-up timeline. */
-  signupDates?: Date[];
-  /** When each confirmed guest was checked in. */
-  checkInTimes?: Date[];
-  checkInSources?: ReportCheckInSources | null;
-  registrationQuestions?: ReportQuestion[];
-  feedbackTitle?: string;
-  feedbackQuestions?: ReportQuestion[];
-  certificatesEnabled?: boolean;
-  sessions?: ReportSession[];
-  speakers?: ReportSpeaker[];
-  sponsors?: ReportSponsor[];
-  resourceCount?: number;
-  broadcasts?: ReportBroadcast[];
-  coOrganiserCount?: number;
-};
+export type {
+  EventReportMetrics,
+  ReportBroadcast,
+  ReportCheckInSources,
+  ReportQuestion,
+  ReportRsvp,
+  ReportRsvpMetrics,
+  ReportSession,
+  ReportSpeaker,
+  ReportSponsor,
+} from "./eventReport/types";
 
 export function calculateReportRsvpMetrics(rsvps: ReportRsvp[]): ReportRsvpMetrics {
   const metrics: ReportRsvpMetrics = {
@@ -186,6 +130,8 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
           status: true,
           checkedInAt: true,
           createdAt: true,
+          waitlistedAt: true,
+          promotedAt: true,
           answers: { select: { fieldId: true, valueText: true, valueBool: true } },
           checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
         },
@@ -216,6 +162,8 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
       sponsors: { where: published, orderBy: [{ tier: "asc" }, { sortOrder: "asc" }], select: { name: true, tier: true } },
       resources: { where: published, select: { id: true } },
       broadcasts: { orderBy: { createdAt: "asc" }, select: { subject: true, createdAt: true, recipientCount: true } },
+      shortCode: true,
+      shortLinkClickDays: { select: { count: true } },
       _count: { select: { invites: true, collaborators: true } },
     },
   });
@@ -267,6 +215,9 @@ export async function getEventReportMetrics(eventId: string): Promise<EventRepor
     resourceCount: event.resources.length,
     broadcasts: event.broadcasts.map((broadcast) => ({ subject: broadcast.subject, sentAt: broadcast.createdAt, recipientCount: broadcast.recipientCount })),
     coOrganiserCount: event._count.collaborators,
+    waitlist: { joined: event.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: event.rsvps.filter((rsvp) => rsvp.promotedAt).length },
+    shortLinkVisits: event.shortCode ? event.shortLinkClickDays.reduce((sum, day) => sum + day.count, 0) : null,
+    money: await loadRevenue({ eventId: event.id }, event.timezone),
     ...calculateReportRsvpMetrics(event.rsvps),
   };
 }
@@ -283,6 +234,8 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
           status: true,
           checkedInAt: true,
           createdAt: true,
+          waitlistedAt: true,
+          promotedAt: true,
           checkInEvents: { where: { action: "CHECKED_IN" }, orderBy: { occurredAt: "desc" }, take: 1, select: { source: true } },
         },
       },
@@ -322,6 +275,8 @@ export async function getOccurrenceReportMetrics(instanceId: string): Promise<Ev
     checkInTimes: checkedIn.map((rsvp) => rsvp.checkedInAt!),
     checkInSources: countCheckInSources(checkedIn.map((rsvp) => rsvp.checkInEvents[0]?.source ?? null)),
     coOrganiserCount: instance.series._count.collaborators,
+    waitlist: { joined: instance.rsvps.filter((rsvp) => rsvp.waitlistedAt).length, promoted: instance.rsvps.filter((rsvp) => rsvp.promotedAt).length },
+    money: await loadRevenue({ eventInstanceId: instance.id }, instance.series.timezone),
     ...calculateReportRsvpMetrics(instance.rsvps),
   };
 }

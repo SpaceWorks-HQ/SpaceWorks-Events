@@ -4,7 +4,7 @@
 
 Run Space Works Events on one Linux VPS with Docker Engine and Docker Compose.
 The production stack uses two images of its own: the **backend** (the API, the
-one-shot migrations, the email outbox worker and its recovery scheduler, live
+one-shot migrations, the email worker, the beat that runs timed jobs, live
 check-in and the operator tools) and the **frontend** (the website). PostgreSQL
 16, Redis 7, private Silo S3-compatible storage and Caddy HTTPS run from their
 standard images in the same Compose file. Node.js, PostgreSQL and Redis do not
@@ -34,6 +34,9 @@ with the transport and privacy requirements of this Events application. Use
 - An authenticated SMTP relay and a verified sending domain with SPF, DKIM and
   DMARC. Outgoing mail uses this relay; the stack does not operate a public mail
   server. Confirm that the VPS permits outbound SMTP on your relay's TLS port.
+- Outbound HTTPS to `api.pwnedpasswords.com`, so new passwords can be checked
+  against known breaches. Without it the check quietly lets every password
+  through; set `PWNED_PASSWORDS_CHECK=false` on air-gapped hosts.
 - Encrypted host disks and an encrypted, off-server backup destination. A single
   VPS is a single failure domain; Docker volumes alone are not backups or
   automatic point-in-time recovery.
@@ -75,7 +78,7 @@ records the configuration directory and the repository to update from.
 Like SpaceWorks, the stack runs a backend and a frontend image (see
 [Releases and container images](CONTAINER_IMAGES.md)), with PostgreSQL, Redis,
 Silo storage, one-shot migrations (the backend image's `migrate` role), the
-email scheduler and Caddy:
+email worker and the beat (its `worker` and `beat` roles) and Caddy:
 
 | Choice | Layout | Containers | DNS |
 | --- | --- | --- | --- |
@@ -272,9 +275,9 @@ and SMTP are runtime inputs, not build arguments.
 
 Compose waits for PostgreSQL and Redis health, creates the private storage
 bucket and application policy, and applies Prisma migrations before starting the
-app. Migration failure blocks app startup. Caddy and the scheduler wait for app
-health. Caddy obtains and renews the public TLS certificate; it needs working DNS
-and reachable ports 80/443. This can take a short time on first startup.
+app, the worker and the beat. Migration failure blocks their startup. Caddy
+waits for app health. Caddy obtains and renews the public TLS certificate; it
+needs working DNS and reachable ports 80/443. This can take a short time on first startup.
 
 The database rejects non-TLS TCP connections. Redis accepts TLS and password
 authentication only. The app verifies internal certificates through the private
@@ -297,9 +300,13 @@ the schema contract, authenticated Redis over TLS, access to the storage bucket
 and bearer-protected `/api/health/db`. It never prints credentials or response
 bodies. The storage initializer explicitly disables anonymous bucket access.
 
-Open `https://events.example.com/login`, create an account with the configured
-`SUPER_ADMIN_EMAIL`, verify its inbox, enable authenticator MFA, and enter
-`/super-admin`. A fresh TOTP step-up is required there. Under **Settings**, verify
+Set the super-admin password with `sudo bash scripts/vps-recover.sh`: it
+creates the `SUPER_ADMIN_EMAIL` account the first time and prints a one-hour
+link to set its password. That address can't sign up, use forgot password or
+change its password in the app; run the same script again to reset it. Sign in with
+the email and password and enter `/super-admin`; there is no separate step-up.
+We recommend enabling authenticator MFA from `/account/security`, which is then
+asked for at every sign-in. Under **Settings**, verify
 SMTP and optionally configure Google SSO. Do not use the demo seed on production.
 
 Before taking registrations, verify a real confirmation email and password-reset
@@ -307,8 +314,11 @@ email, upload an event cover, register for a private test event, and check that 
 ticket updates immediately when scanned. The proxy flushes streaming responses
 for live check-in and overwrites `X-Real-IP`, which is the header this deployment
 trusts. Review outbox heartbeat and failed delivery status in the operations area.
-The separate scheduler calls the protected outbox endpoint every minute; it needs
-no Cloudflare Worker or host cron.
+The `app` container only serves requests. The `worker` container sends queued
+email within seconds, and the `beat` container runs the timed jobs (payment
+holds and reminders, waitlists, event reminders, retention, backup alerts); both serve no traffic. The
+operations area shows a heartbeat for each. No Cloudflare Worker or host cron is
+needed.
 
 ## Upgrades and rollback
 
@@ -323,7 +333,8 @@ Run the one-liner again and choose **1) Update to the latest release** (or pass
 4. changes only the version and image names in `compose.env`, downloads the new
    images (or builds them for `--ref`) while the site keeps running, runs
    preflight, applies migrations and verifies the schema;
-5. recreates the services, waits for them to be healthy and runs the VPS checks;
+5. recreates the services (removing any the new release no longer runs, such as
+   the old `scheduler`), waits for them to be healthy and runs the VPS checks;
 6. points `current` at the new release and keeps the three newest releases and
    their images.
 
@@ -394,7 +405,7 @@ saved in `/etc/spaceworks-events/backup.env`. Setup asks about the first three:
 | --- | --- |
 | **Nightly backups** | A systemd timer (`swevents-backup.timer`) runs a full backup at about 02:30 UTC. |
 | **Encryption** | Every backup becomes `backup.tar.age`, encrypted with [age](https://age-encryption.org) to a public key. The private key (`AGE-SECRET-KEY-…`) is shown **once** and is not stored on the server: keep it in your password manager. Only `version` and `kind` stay readable. |
-| **Off-site copies** | After each backup, an encrypted copy goes to an S3-compatible bucket at another provider (R2, B2, S3…), kept for its own number of days (default 90). Only encrypted backups are sent. |
+| **Off-site copies** | After each backup, an encrypted copy goes to an S3-compatible bucket at another provider (R2, B2, S3…), kept for its own number of days (default 90). Only encrypted backups are sent. A private endpoint (for example your own Silo or MinIO) can use its own certificate authority: give the CA file when asked, and the installer keeps a copy beside `backup.env`. Keys may contain any characters, including `/` and `+`. |
 | **Retention** | Days a backup stays on this server. |
 
 Each run writes `/etc/spaceworks-events/status/backup.json` (no secrets), which the
@@ -414,8 +425,8 @@ For an encrypted backup it asks you to paste the key (or pass `--identity FILE`)
 `vps-restore.sh offsite:<time>` first downloads that backup from the off-site
 bucket; the installer menu's **Backups → List off-site backups** shows the names.
 It shows what will be replaced and asks you to type `RESTORE`. It backs up the
-current database first, stops the app, Caddy and the scheduler, and replaces the
-database in one transaction. It then copies the backup's files back into Silo
+current database first, stops the app, the worker, the beat and Caddy, and
+replaces the database in one transaction. It then copies the backup's files back into Silo
 (newer files stay), runs migrations if the backup came from an older release,
 starts everything and runs the VPS checks.
 
@@ -533,7 +544,7 @@ logs can hold email and IP addresses, so read it before sharing.
 ## A separate frontend on Netlify
 
 Choose mode 2 in the installer and follow [Netlify frontend + Docker VPS backend](DEPLOYMENT_SPLIT.md).
-The same data services, private TLS, migrations, scheduler, backups and renewal
-procedures apply. `PUBLIC_HOST` is the VPS API hostname; `PUBLIC_ORIGIN`, `AUTH_URL`
+The same data services, private TLS, migrations, worker and beat, backups and
+renewal procedures apply. `PUBLIC_HOST` is the VPS API hostname; `PUBLIC_ORIGIN`, `AUTH_URL`
 and `NEXT_PUBLIC_BASE_URL` are the frontend HTTPS origin. Public variables require
 rebuilding the appropriate application image/workspace when changed.

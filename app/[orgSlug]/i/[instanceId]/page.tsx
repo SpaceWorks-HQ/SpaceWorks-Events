@@ -16,7 +16,7 @@ type Props = { params: Promise<{ orgSlug: string; instanceId: string; }>; };
 export async function generateMetadata({ params }: Props): Promise<Metadata> { return loadRouteMetadata({ params }); }
 
 export default async function InstanceEventPage({ params }: Props) {
-  const { org, series, access, dateBlock, instance, timeZone, showRsvp, full, confirmedCount, spotsLeft, isPast } = await loadInstanceEventView({ params });
+  const { org, series, access, dateBlock, instance, timeZone, showRsvp, full, confirmedCount, capacity, spotsLeft, isPast, cancelled, tickets, paidSalesOpen, ticketing, paidRequest } = await loadInstanceEventView({ params });
   return (
     <div style={accentStyle(INK_ACCENT)} className="yy-accent-scope grid gap-10 md:grid-cols-[minmax(0,1fr)_360px] md:gap-14">
       <article className="flex min-w-0 flex-col gap-5">
@@ -63,17 +63,17 @@ export default async function InstanceEventPage({ params }: Props) {
             <>
               <div className="flex flex-col gap-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="font-semibold text-ink">{series.capacity != null ? `${confirmedCount} / ${series.capacity} confirmed` : `${confirmedCount} going`}</span>
+                  <span className="font-semibold text-ink">{capacity != null ? `${confirmedCount} / ${capacity} confirmed` : `${confirmedCount} going`}</span>
                   {spotsLeft != null ? <span className="text-ink-muted">{spotsLeft} {spotsLeft === 1 ? "spot" : "spots"} left</span> : null}
                 </div>
-                {series.capacity != null ? <ProgressBar value={confirmedCount} max={series.capacity} tone="ink" label="Places taken" /> : null}
+                {capacity != null ? <ProgressBar value={confirmedCount} max={capacity} tone="ink" label="Places taken" /> : null}
                 {full ? <p className="text-caption text-ink-muted">Join the waitlist below.</p> : null}
               </div>
-              <RsvpForm orgSlug={org.slug} eventInstanceId={instance.id} />
+              <RsvpForm orgSlug={org.slug} eventInstanceId={instance.id} tickets={tickets} paidSalesOpen={paidSalesOpen} ticketing={ticketing} paidRequest={ticketing?.sellsPaid ? paidRequest : null} />
             </>
           ) : (
             <p className="text-body-ui text-ink-muted">
-              {isPast ? "Registration for this occurrence has ended." : "RSVP opens when the series is published."}
+              {cancelled ? "This date was cancelled." : isPast ? "Registration for this occurrence has ended." : "RSVP opens when the series is published."}
             </p>
           )}
         </section>

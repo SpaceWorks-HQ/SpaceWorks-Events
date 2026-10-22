@@ -90,7 +90,14 @@ services:
     env_file: .env.staging
     ports:
       - "127.0.0.1:3001:3000"
+    # The app reads Super admin -> Settings (SMTP, Google SSO, alert webhook)
+    # from the database on every send/sign-in, so the schema must be migrated
+    # first. It shares .env.staging with `migrate`, so MFA_ENCRYPTION_KEY (which
+    # decrypts those settings) is identical for both. The in-process outbox
+    # worker sends email from this container; there is no separate worker.
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

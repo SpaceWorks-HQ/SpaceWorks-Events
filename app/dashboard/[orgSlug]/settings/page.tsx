@@ -1,6 +1,6 @@
 import { loadOrgSettingsView } from "@/lib/views/app__dashboard__orgSlug__settings__page";
 import Link from "next/link";
-import { ExternalLink, KeyRound } from "lucide-react";
+import { CreditCard, ExternalLink, KeyRound, Mail, MessageSquare } from "lucide-react";
 import { EditOrgForm } from "@/components/org/EditOrgForm";
 import { CopyOrganisationUrl } from "@/components/org/CopyOrganisationUrl";
 import { DeleteOrganisationButton } from "@/components/dashboard/DeleteOrganisationButton";
@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 const sectionCard = "rounded-xl border border-line bg-panel p-5 sm:p-6";
 
 export default async function OrgSettingsPage({ params }: Props) {
-  const { org, isOwner, canDelete, totalApiClients, activeApiClients } = await loadOrgSettingsView({ params });
+  const { org, isOwner, canDelete, totalApiClients, activeApiClients, payments, email, chatChannels } = await loadOrgSettingsView({ params });
   return (
     <div className="flex flex-col gap-7">
       <OrgPageHeader
@@ -82,6 +82,61 @@ export default async function OrgSettingsPage({ params }: Props) {
             </div>
           </section>
         ) : null}
+
+        {isOwner ? (
+          <section id="payments" aria-labelledby="payments-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+            <div className="min-w-0 flex-1">
+              <h2 id="payments-title" className="text-h4 text-ink">Payments</h2>
+              <p className="mt-0.5 text-body-ui text-ink-muted">Connect your own Razorpay or Stripe account to sell tickets. Money goes straight to you.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Chip tone={payments.provider ? "success" : "neutral"}>
+                {payments.provider ? `${payments.provider === "RAZORPAY" ? "Razorpay" : "Stripe"} connected` : "Not connected"}
+              </Chip>
+              {payments.testMode ? <Chip tone="warning">Test mode</Chip> : null}
+              <Button asChild variant="secondary">
+                <Link href={`/dashboard/${org.slug}/settings/payments`}>
+                  <CreditCard aria-hidden className="size-4" />
+                  Manage payments
+                </Link>
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        {isOwner ? (
+          <section id="email" aria-labelledby="email-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+            <div className="min-w-0 flex-1">
+              <h2 id="email-title" className="text-h4 text-ink">Email</h2>
+              <p className="mt-0.5 text-body-ui text-ink-muted">The sender name and reply-to on your guests&apos; email, or your own mail server.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Chip tone={email.useOwnServer ? "success" : "neutral"}>{email.useOwnServer ? "Your mail server" : "Platform mail"}</Chip>
+              <Button asChild variant="secondary">
+                <Link href={`/dashboard/${org.slug}/settings/email`}>
+                  <Mail aria-hidden className="size-4" />
+                  Manage email
+                </Link>
+              </Button>
+            </div>
+          </section>
+        ) : null}
+
+        <section id="chat" aria-labelledby="chat-title" className={cn(sectionCard, "flex flex-col gap-4 md:flex-row md:items-center")}>
+          <div className="min-w-0 flex-1">
+            <h2 id="chat-title" className="text-h4 text-ink">Chat notifications</h2>
+            <p className="mt-0.5 text-body-ui text-ink-muted">Tell your team&apos;s Slack, Discord, Mattermost, Telegram or WhatsApp about registrations, requests, payments and refunds.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Chip tone={chatChannels > 0 ? "success" : "neutral"}>{chatChannels > 0 ? `${chatChannels} connected` : "None connected"}</Chip>
+            <Button asChild variant="secondary">
+              <Link href={`/dashboard/${org.slug}/settings/chat`}>
+                <MessageSquare aria-hidden className="size-4" />
+                Manage chats
+              </Link>
+            </Button>
+          </div>
+        </section>
 
         {canDelete ? (
           <section

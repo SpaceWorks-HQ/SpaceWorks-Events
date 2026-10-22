@@ -25,8 +25,11 @@ Invalid, expired, revoked, and disabled credentials all receive the same generic
 | `events:read` | Read standalone event metadata belonging to the client's organisation |
 | `participants:read` | Read the minimal confirmed-participant roster for an event belonging to the client's organisation; can filter it by attendance without returning attendance data |
 | `participants:attendance:read` | With `participants:read`, opt in to the `checkedInAt` timestamp with `include=attendance` |
+| `orders:read` | Read an event's orders as totals: reference, status, amounts paid and refunded, ticket count |
 
 `participants:attendance:read` does not grant roster access by itself. Participant access does not include email, user IDs, registration answers, invitation data, feedback linkage, or ticket/check-in/certificate tokens.
+
+Order access does not include buyer names or email addresses, order links, receipts, card details, or payment provider IDs.
 
 ## Endpoints
 
@@ -62,6 +65,36 @@ Requires `participants:read`. Only confirmed standalone-event RSVPs are returned
       "displayName": "Participant name",
       "registeredAt": "2030-01-01T10:00:00.000Z",
       "checkedInAt": "2030-01-01T10:15:00.000Z"
+    }
+  ],
+  "pagination": {
+    "nextCursor": null
+  }
+}
+```
+
+### List orders
+
+```http
+GET /api/v1/events/:eventId/orders?limit=50&cursor=<cursor>
+```
+
+Requires `orders:read`. Returns the standalone event's orders, newest first. Amounts are decimal strings in the order's currency; `paid` counts settled payments and `refunded` counts completed refunds.
+
+```json
+{
+  "data": [
+    {
+      "id": "example-order-id",
+      "reference": "SW-7F3K2",
+      "status": "CONFIRMED",
+      "currency": "INR",
+      "total": "1500.00",
+      "paid": "1500.00",
+      "refunded": "0.00",
+      "tickets": 2,
+      "testMode": false,
+      "placedAt": "2030-01-01T10:00:00.000Z"
     }
   ],
   "pagination": {

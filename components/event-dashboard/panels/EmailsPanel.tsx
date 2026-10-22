@@ -7,14 +7,15 @@ import { DEFAULT_BROADCAST_DESIGN, isBroadcastDesign } from "@/lib/email/broadca
 
 export async function EmailsPanel({ ctx }: { ctx: EventDashboardContext; }) {
   const { permissions } = ctx;
-  if (!permissions.canManageRegistrations) return <NoPermission>You do not have permission to email attendees.</NoPermission>;
-  const { event, organisation, now, records, brand, statusCounts } = await loadEmailsPanel({ ctx });
+  if (!permissions.canSendEmails) return <NoPermission>You do not have permission to email attendees.</NoPermission>;
+  const { event, organisation, now, records, brand, statusCounts, delivery, draft } = await loadEmailsPanel({ ctx });
   return (
     <EventBroadcastPanel
       organisationSlug={organisation.slug}
       eventId={event.id}
       statusCounts={statusCounts}
       brand={brand}
+      draft={draft}
       history={records.map((row) => ({
         id: row.id,
         subject: row.subject,
@@ -26,6 +27,7 @@ export async function EmailsPanel({ ctx }: { ctx: EventDashboardContext; }) {
         createdAt: row.createdAt.toISOString(),
         sentLabel: formatRelativeTime(row.createdAt, event.timezone, now),
         createdByName: row.createdBy?.name ?? null,
+        delivery: delivery.get(row.id) ?? null,
       }))}
     />
   );
